@@ -1,0 +1,233 @@
+// Ethara.AI enterprise budget dashboard mock data
+export const CURRENT_USER = {
+  id: "u1",
+  name: "Vikram Kumar",
+  title: "CTO / Project Lead",
+  role: "CTO",
+  avatarUrl: "https://images.pexels.com/photos/36645466/pexels-photo-36645466.jpeg",
+};
+
+export const ROLES = ["Admin", "CTO", "COO", "Project Lead", "Finance"];
+
+export const TEAM = [
+  { id: "u1", name: "Vikram Kumar", role: "CTO", email: "vikram@ethara.ai" },
+  { id: "u2", name: "Aanya Sharma", role: "Project Lead", email: "aanya@ethara.ai" },
+  { id: "u3", name: "Maria Lopez", role: "Project Lead", email: "maria@ethara.ai" },
+  { id: "u4", name: "Arjun Mehta", role: "Project Lead", email: "arjun@ethara.ai" },
+  { id: "u5", name: "Rahul Verma", role: "Engineer", email: "rahul@ethara.ai" },
+  { id: "u6", name: "Priya Kapoor", role: "Finance", email: "priya@ethara.ai" },
+  { id: "u7", name: "Nikhil Rao", role: "COO", email: "nikhil@ethara.ai" },
+  { id: "u8", name: "Sara Chen", role: "Engineer", email: "sara@ethara.ai" },
+];
+
+export const CLIENTS = ["Acme AI", "Northwind Data", "Helix Bio", "Ironclad", "Meridian", "Voltek"];
+
+const mkExpense = (i, project, category, vendor, amount, extra = false) => ({
+  id: `e-${project}-${i}`,
+  projectId: project,
+  date: new Date(2026, 5, ((i * 3) % 28) + 1).toISOString(),
+  category,
+  vendor,
+  employee: TEAM[i % TEAM.length].name,
+  amount,
+  status: i % 5 === 0 ? "pending" : "approved",
+  financeStatus: i % 4 === 0 ? "processing" : "reimbursed",
+  extra,
+  billUrl: "#",
+  remarks: extra ? "Overage — needs top-up review" : "Within plan",
+});
+
+const mkAudit = (project) => [
+  { id: `a-${project}-1`, ts: "2026-06-01T09:12:00Z", actor: "Aanya Sharma", action: "Budget request submitted", detail: "Initial budget of $48k requested for Q2 sprint" },
+  { id: `a-${project}-2`, ts: "2026-06-02T13:44:00Z", actor: "Vikram Kumar", action: "CTO reviewed", detail: "Recommended reducing inference cost estimate by 8%" },
+  { id: `a-${project}-3`, ts: "2026-06-03T17:20:00Z", actor: "Nikhil Rao", action: "COO approved", detail: "Approved at $48k. Locked for execution." },
+  { id: `a-${project}-4`, ts: "2026-06-18T11:02:00Z", actor: "System", action: "Alert triggered", detail: "Utilization crossed 80% threshold" },
+];
+
+const mkComments = (project) => [
+  { id: `c-${project}-1`, author: "Aanya Sharma", ts: "2026-06-10T10:04:00Z", body: "Infra usage looks stable — Opus fallback engaged twice this week." },
+  { id: `c-${project}-2`, author: "Vikram Kumar", ts: "2026-06-14T15:22:00Z", body: "Please move heavy classification runs to Gemini 2.5 Pro for the next sprint." },
+];
+
+const mkBudgetHistory = (project, base) => [
+  { id: `bh-${project}-1`, version: "v1.0", date: "2026-06-03", amount: base, action: "Initial approval", approver: "Nikhil Rao" },
+  { id: `bh-${project}-2`, version: "v1.1", date: "2026-06-19", amount: base + 4000, action: "Top-up +$4k", approver: "Vikram Kumar" },
+];
+
+const mkTopups = (project) => [
+  { id: `t-${project}-1`, date: "2026-06-18", amount: 4000, reason: "Additional GPU hours for eval sweep", requester: "Aanya Sharma", approver: "Vikram Kumar", status: "approved" },
+  { id: `t-${project}-2`, date: "2026-06-24", amount: 2500, reason: "Extended Claude context window testing", requester: "Aanya Sharma", approver: "Pending", status: "pending" },
+];
+
+const mkPhases = (approved, actual) => [
+  { id: "p1", name: "Phase 1 · Discovery", dates: "Jun 1 – 8", estimated: Math.round(approved * 0.22), actual: Math.round(actual * 0.22), health: "healthy" },
+  { id: "p2", name: "Phase 2 · Model tuning", dates: "Jun 9 – 16", estimated: Math.round(approved * 0.28), actual: Math.round(actual * 0.32), health: "over" },
+  { id: "p3", name: "Phase 3 · Integration", dates: "Jun 17 – 24", estimated: Math.round(approved * 0.28), actual: Math.round(actual * 0.26), health: "watch" },
+  { id: "p4", name: "Phase 4 · Rollout", dates: "Jun 25 – 30", estimated: Math.round(approved * 0.22), actual: Math.round(actual * 0.20), health: "healthy" },
+];
+
+const buildProject = (id, name, client, pl, approved, estimated, actual, status) => {
+  const remaining = approved - actual;
+  const variance = estimated - actual; // positive = under estimate
+  const utilization = Math.round((actual / approved) * 100);
+  const burnRate = Math.round((actual / 30 / 1000) * 10) / 10;
+  const forecast = Math.round(actual + (actual / 30) * 8);
+  const health = utilization >= 100 ? "over" : utilization >= 85 ? "watch" : "healthy";
+  const expenses = [
+    mkExpense(1, id, "Infrastructure", "AWS EC2", Math.round(actual * 0.18)),
+    mkExpense(2, id, "Infrastructure", "AWS S3", Math.round(actual * 0.03)),
+    mkExpense(3, id, "AI Models", "OpenAI · GPT-4o", Math.round(actual * 0.14)),
+    mkExpense(4, id, "AI Models", "Anthropic · Opus 4.7", Math.round(actual * 0.22)),
+    mkExpense(5, id, "AI Models", "Google · Gemini 2.5 Pro", Math.round(actual * 0.11)),
+    mkExpense(6, id, "Licenses", "Cursor Pro", 240),
+    mkExpense(7, id, "Licenses", "Claude Max", 800),
+    mkExpense(8, id, "Employee", "Payroll allocation", Math.round(actual * 0.14)),
+    mkExpense(9, id, "Reimbursements", "Aanya Sharma · Travel", 420, true),
+    mkExpense(10, id, "Dinner", "Team dinner · Bengaluru", 320),
+    mkExpense(11, id, "Hardware", "Dell workstation", 2400),
+    mkExpense(12, id, "Miscellaneous", "Domain + assets", 180, true),
+  ];
+  return {
+    id,
+    name,
+    client,
+    pl,
+    status,
+    approvedBudget: approved,
+    estimatedBudget: estimated,
+    actualSpend: actual,
+    remaining,
+    variance,
+    utilization,
+    burnRate,
+    forecast,
+    infrastructureCost: Math.round(actual * 0.24),
+    aiModelCost: Math.round(actual * 0.47),
+    employeeCost: Math.round(actual * 0.14),
+    purchaseCost: Math.round(actual * 0.06),
+    reimbursements: Math.round(actual * 0.04),
+    dinnerExpenses: Math.round(actual * 0.02),
+    miscExpenses: Math.round(actual * 0.03),
+    topupsTotal: 4000,
+    health,
+    topModel: id === "atlas" ? "Opus 4.8" : id === "kaiju" ? "Opus 4.8" : id === "sourcing" ? "Kimi" : id === "nimbus" ? "1P-Eval" : id === "vesper" ? "Opus" : id === "orion" ? "Gemini" : "Opus 4.8",
+    phases: mkPhases(approved, actual),
+    expenses,
+    budgetHistory: mkBudgetHistory(id, approved - 4000),
+    topupHistory: mkTopups(id),
+    auditLog: mkAudit(id),
+    comments: mkComments(id),
+  };
+};
+
+export const PROJECTS = [
+  buildProject("crowley-gen", "Crowley Generation", "Acme AI", "Aanya Sharma", 48000, 44000, 41000, "Execution"),
+  buildProject("talos", "Talos", "Northwind Data", "Maria Lopez", 46000, 38000, 31000, "Execution"),
+  buildProject("sourcing", "Crowley Sourcing", "Acme AI", "Aanya Sharma", 26000, 24000, 26400, "Execution"),
+  buildProject("kaiju", "Kaiju Eval", "Helix Bio", "Arjun Mehta", 30000, 18000, 16000, "Execution"),
+  buildProject("atlas", "Atlas Ingest", "Ironclad", "Arjun Mehta", 11000, 12000, 12100, "Execution"),
+  buildProject("nimbus", "Nimbus QC", "Meridian", "Maria Lopez", 14000, 9000, 7000, "Execution"),
+  buildProject("orion", "Orion Stub", "Voltek", "Vikram Kumar", 9000, 7000, 2200, "Discovery"),
+  buildProject("vesper", "Vesper Docker", "Ironclad", "Aanya Sharma", 13000, 5400, 15600, "Execution"),
+];
+
+// Portfolio aggregates
+export const PORTFOLIO = (() => {
+  const approved = PROJECTS.reduce((s, p) => s + p.approvedBudget, 0);
+  const estimated = PROJECTS.reduce((s, p) => s + p.estimatedBudget, 0);
+  const actual = PROJECTS.reduce((s, p) => s + p.actualSpend, 0);
+  const overCount = PROJECTS.filter((p) => p.utilization >= 100).length;
+  return {
+    portfolioBudget: 122500000, // shown as $122.5M in hero
+    approvedBudget: approved,
+    estimatedBudget: estimated,
+    actualSpend: actual,
+    remaining: approved - actual,
+    utilization: Math.round((actual / approved) * 100),
+    variance: estimated - actual,
+    accuracy: 71,
+    healthScore: 58,
+    projectsOverBudget: overCount,
+    activeProjects: PROJECTS.length,
+    pendingApprovals: 4,
+    pendingTopups: 3,
+    amountAtRisk: 1180000,
+    approvedRisk: 987200,
+    flagged: 3,
+    total: PROJECTS.length,
+  };
+})();
+
+export const MONTHLY_SPEND = [
+  { month: "Jan", budget: 120000, estimated: 118000, actual: 112000 },
+  { month: "Feb", budget: 130000, estimated: 128000, actual: 126000 },
+  { month: "Mar", budget: 140000, estimated: 138000, actual: 134000 },
+  { month: "Apr", budget: 150000, estimated: 148000, actual: 152000 },
+  { month: "May", budget: 160000, estimated: 158000, actual: 161000 },
+  { month: "Jun", budget: 197000, estimated: 148200, actual: 119800 },
+];
+
+export const CATEGORY_BREAKDOWN = [
+  { name: "AI Models", value: 47, color: "#7C3AED" },
+  { name: "Infrastructure", value: 24, color: "#3B82F6" },
+  { name: "Employee", value: 14, color: "#10B981" },
+  { name: "Purchase", value: 6, color: "#F59E0B" },
+  { name: "Reimbursements", value: 4, color: "#EC4899" },
+  { name: "Misc", value: 3, color: "#94A3B8" },
+  { name: "Dinner", value: 2, color: "#F97316" },
+];
+
+export const MODELS_USAGE = [
+  { name: "Opus 4.7", vendor: "Anthropic", budget: 20000, estimated: 17000, actual: 14400 },
+  { name: "Gemini 2.5 Pro", vendor: "Google", budget: 15000, estimated: 13000, actual: 11200 },
+  { name: "GPT-4o", vendor: "OpenAI", budget: 12000, estimated: 10800, actual: 9800 },
+  { name: "Sonnet", vendor: "Anthropic", budget: 8000, estimated: 6900, actual: 6100 },
+  { name: "Kimi", vendor: "Moonshot", budget: 4000, estimated: 3600, actual: 2400 },
+];
+
+export const INFRA_BY_PROJECT = PROJECTS.slice(0, 6).map((p) => ({
+  name: p.name.split(" ")[0],
+  EC2: Math.round(p.infrastructureCost * 0.62),
+  S3: Math.round(p.infrastructureCost * 0.09),
+  RDS: Math.round(p.infrastructureCost * 0.18),
+  SES: Math.round(p.infrastructureCost * 0.11),
+}));
+
+export const SUBSCRIPTIONS = [
+  { id: "s1", name: "Claude Max", price: 200, cadence: "/mo", seats: 8, initials: "CM", color: "#7C3AED", users: ["Aanya Sharma", "Maria Lopez", "Arjun Mehta", "Rahul Verma", "Priya Kapoor", "Sara Chen", "Vikram Kumar", "Nikhil Rao"] },
+  { id: "s2", name: "Cursor Pro", price: 60, cadence: "/mo", seats: 6, initials: "CU", color: "#3B82F6", users: ["Aanya Sharma", "Maria Lopez", "Sara Chen", "Rahul Verma", "Arjun Mehta", "Vikram Kumar"] },
+  { id: "s3", name: "GitHub Copilot", price: 95, cadence: "/mo", seats: 9, initials: "GH", color: "#0F172A", users: ["Aanya Sharma", "Maria Lopez", "Arjun Mehta", "Rahul Verma", "Priya Kapoor", "Sara Chen", "Vikram Kumar", "Nikhil Rao", "Aanya Sharma"] },
+  { id: "s4", name: "ChatGPT", price: 120, cadence: "/mo", seats: 5, initials: "CG", color: "#10B981", users: ["Aanya Sharma", "Rahul Verma", "Sara Chen", "Priya Kapoor", "Arjun Mehta"] },
+];
+
+export const NOTIFICATIONS = [
+  { id: "n1", type: "danger", title: "Vesper Docker exceeded budget", detail: "Actual $10.6k vs approved $13k · 82% used, forecast overrun.", ts: "2026-06-24T10:14:00Z", read: false },
+  { id: "n2", type: "warning", title: "Crowley Sourcing utilization at 86%", detail: "Consider pre-approving a top-up before end of sprint.", ts: "2026-06-24T09:02:00Z", read: false },
+  { id: "n3", type: "info", title: "Top-up request pending", detail: "Aanya Sharma requested +$2.5k for Claude context testing.", ts: "2026-06-23T18:22:00Z", read: false },
+  { id: "n4", type: "warning", title: "Infrastructure spike detected", detail: "Atlas Ingest EC2 cost up 34% week-over-week.", ts: "2026-06-23T14:41:00Z", read: true },
+  { id: "n5", type: "info", title: "Reimbursement approval pending", detail: "3 dinner bills awaiting Finance review.", ts: "2026-06-22T11:18:00Z", read: true },
+  { id: "n6", type: "success", title: "Talos on-track", detail: "67% utilization, forecast $2k under budget.", ts: "2026-06-21T09:30:00Z", read: true },
+];
+
+export const APPROVALS = [
+  { id: "ap1", project: "Crowley Sourcing", requester: "Aanya Sharma", type: "Top-up", amount: 2500, stage: "CTO Review", ts: "2026-06-23T18:22:00Z" },
+  { id: "ap2", project: "Vesper Docker", requester: "Aanya Sharma", type: "Top-up", amount: 5000, stage: "COO Approval", ts: "2026-06-23T09:11:00Z" },
+  { id: "ap3", project: "Orion Stub", requester: "Vikram Kumar", type: "Budget Request", amount: 12000, stage: "COO Approval", ts: "2026-06-22T15:44:00Z" },
+  { id: "ap4", project: "Atlas Ingest", requester: "Arjun Mehta", type: "Budget Modification", amount: 3500, stage: "CTO Review", ts: "2026-06-22T11:03:00Z" },
+];
+
+export const REIMBURSEMENTS = [
+  { id: "r1", employee: "Aanya Sharma", project: "Crowley Generation", type: "Travel", amount: 420, date: "2026-06-14", approval: "approved", finance: "reimbursed", extra: false, remarks: "Client kickoff · Bengaluru" },
+  { id: "r2", employee: "Maria Lopez", project: "Talos", type: "Dinner", amount: 320, date: "2026-06-16", approval: "approved", finance: "processing", extra: false, remarks: "Team offsite dinner" },
+  { id: "r3", employee: "Arjun Mehta", project: "Kaiju Eval", type: "Travel", amount: 890, date: "2026-06-18", approval: "pending", finance: "—", extra: true, remarks: "Overage — client site visit" },
+  { id: "r4", employee: "Rahul Verma", project: "Crowley Sourcing", type: "Dinner", amount: 240, date: "2026-06-19", approval: "approved", finance: "reimbursed", extra: false, remarks: "Sprint retro dinner" },
+  { id: "r5", employee: "Sara Chen", project: "Atlas Ingest", type: "Travel", amount: 1120, date: "2026-06-20", approval: "pending", finance: "—", extra: true, remarks: "Emergency vendor meeting" },
+  { id: "r6", employee: "Priya Kapoor", project: "Nimbus QC", type: "Dinner", amount: 180, date: "2026-06-21", approval: "approved", finance: "reimbursed", extra: false, remarks: "QA milestone" },
+];
+
+export const AI_INSIGHTS = [
+  { id: "ai1", title: "Vesper Docker forecast overrun", body: "Actual burn ($10.6k) already exceeds estimate. At current pace, project will finish 22% over approved budget. Recommend moving eval workloads from Opus 4.8 to Gemini 2.5 Pro (~34% cheaper for the current task mix).", tag: "Overrun risk", tone: "danger" },
+  { id: "ai2", title: "Consolidate Cursor Pro seats", body: "Only 4 of 6 Cursor Pro seats have been active this month. Reclaiming 2 seats saves $120/mo across the portfolio.", tag: "Cost optimization", tone: "info" },
+  { id: "ai3", title: "Crowley Generation Phase 2 variance", body: "Phase 2 ran $1.1k over estimate (Opus 4.8 inference volumes up 18%). Consider pre-caching frequent prompt prefixes to cut cost by ~9% next sprint.", tag: "Variance explanation", tone: "warning" },
+  { id: "ai4", title: "Talos will finish under budget", body: "Trailing 7-day burn is $0.9k/day vs plan of $1.4k/day. High-confidence forecast: $34k final actual vs $46k approved.", tag: "Forecast", tone: "success" },
+];

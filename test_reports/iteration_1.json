@@ -1,0 +1,54 @@
+{
+  "summary": "Frontend-only demo (Ethara.AI Budget Consolidation). Completed comprehensive e2e testing of all 11 routes, dashboard KPIs, charts, workflow strip, projects table with row expansion, projects grid + filters, project detail with 6 tabs, sidebar nav (8 items), role switcher (5 roles), notifications drawer (6 alerts), AI panel (4 insights + 4 suggestion chips + chat), approvals, topups, reimbursements, audit log and settings. All flows work and there are ZERO console errors / unhandled promise rejections.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [
+    "OPTIONAL (naming consistency, non-blocking): Review request spec references testids that differ from actual implementation. If spec is source of truth, consider renaming — otherwise document actual naming. Mismatches:\n  - 'kpi-estimation-accuracy' (spec) vs 'kpi-accuracy' (code) in KpiGrid.jsx\n  - 'phases-{id}' (spec) vs 'project-expand-{id}' (code) in ProjectsTable.jsx\n  - 'approve-{id}'/'reject-{id}' (spec) vs 'btn-approve-{id}'/'btn-reject-{id}' (code)\n  - 'topup-stat-*' and 'topups-table' (spec) — not present in TopUps.jsx (rows use 'topup-{id}')\n  - 'reimb-row-{id}' (spec) vs 'reimb-{id}' (code)\n  - 'audit-entry-{id}' (spec) vs 'audit-{id}' (code)\n  - 'member-{id}' (spec) vs 'team-{id}' (code); 'curr-usd/curr-inr' (spec) vs 'cur-usd/cur-inr' (code)\n  - 'ai-insight-*'/'ai-suggest-*' (spec) vs 'insight-{id}'/'ai-suggestion-*' (code)"
+  ],
+  "critical_code_review_comments": [
+    "Recharts prints repeated warnings on mount: 'The width(-1) and height(-1) of chart should be greater than 0'. These are harmless (occur before ResponsiveContainer measures) but cluttered. Consider setting minHeight on chart containers to suppress.",
+    "ProjectsTable.jsx defaults expanded state to { 'crowley-gen': true } — this is fine UX-wise but tests that assume 'click toggle to expand' will actually collapse it. Consider documenting or making the initial expand a prop.",
+    "No file exceeds 700 lines. Code is modular and readable. No hardcoded URLs found in frontend business code.",
+    "No auth/backend touched — spec was frontend-only, confirmed."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only per spec)",
+    "frontend": "100% (all 17 feature checks pass, 0 console errors)"
+  },
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "None — all data is mocked in /app/frontend/src/data/mockData.js (8 projects, 4 approvals, 16 top-ups, 6 reimbursements, 32 audit entries, 6 notifications, 8 team members, 4 AI insights).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "App is a pure frontend Ethara.AI demo. Base URL: https://budget-forge-8.preview.emergentagent.com. Router in /app/frontend/src/App.js. Row expansion in ProjectsTable defaults 'crowley-gen' to expanded, so tests must query expand element BEFORE clicking the toggle, or use another project. All data-testid conventions differ slightly from the review spec; use the code as the source of truth (see naming list in action_items).",
+  "detailed_results": {
+    "dashboard": {
+      "hero-amount-at-risk": "FOUND — shows $1.18M / $987.2k approved · 3 of 8 flagged",
+      "kpi-cards_present": "kpi-portfolio-budget, kpi-estimated-cost, kpi-actual-spend, kpi-active-projects, kpi-over-budget, kpi-accuracy — all 6 KPIs render with correct values ($122.50M, $157.4k, $151.3k, 8, 3, 71%)",
+      "workflow-strip": "FOUND — 8 stages (Budget Request, CTO Review, COO Approval, Budget Locked, Execution, Monitoring, Top-up (if any), Closure). First three marked done/current per icons.",
+      "charts": "All 7 charts render: chart-budget-actual, chart-model-expenses, chart-infra, chart-monthly-spend, chart-category-donut, chart-utilization, panel-subscriptions",
+      "projects-table": "8 project rows + Portfolio total row. Each row shows budget, estimated, actual, variance, remaining, util%, run rate, health chip, PL, top model button.",
+      "row_expansion": "crowley-gen defaults to expanded showing 4 phases (Discovery, Model tuning, Integration, Rollout) with dates, estimated, actual, variance, health. Toggling talos also reveals 4 phases. Works as designed."
+    },
+    "sidebar_nav": "All 8 nav items navigate correctly: nav-projects→/projects (page-projects), nav-approvals→/approvals (page-approvals), nav-topups→/topups (page-topups), nav-reimb→/reimbursements (page-reimb), nav-audit→/audit (page-audit), nav-team→/team (page-team), nav-tasks→/tasks (page-tasks), nav-settings→/settings (page-settings). No errors.",
+    "projects_page": "8 project-card-* cards render. projects-search filters (typing 'crowley' → 2 cards). Filter buttons filter-all/healthy/watch/over all present. Clicking a card navigates to /projects/{id}.",
+    "project_detail": "All 6 tabs render and switch content: tab-phases, tab-expenses, tab-topups, tab-history, tab-audit, tab-comments.",
+    "role_switcher": "Dropdown opens and lists all 5 roles: role-option-admin, role-option-cto, role-option-coo, role-option-project-lead, role-option-finance. Selecting Finance updates top-bar label to 'Viewing as Finance'.",
+    "ai_panel": "btn-ai-panel opens right sheet 'ai-panel'. Contains 4 insight cards (insight-*) and 4 suggestion chips (ai-suggestion-*). Typing in ai-chat-input and clicking ai-chat-send appends the user message; mock AI response also rendered.",
+    "notifications": "btn-notifications opens notifications-drawer with 6 notification cards (different type chips visible).",
+    "approvals": "4 approval-row-* rows, each with btn-approve-{id} and btn-reject-{id}.",
+    "topups": "TopUps page renders 16 topup rows across projects. NOTE: Stat cards visible in the page but do not have testids matching 'topup-stat-*' nor is there a 'topups-table' testid — these are missing per spec but page renders.",
+    "reimbursements": "6 reimb-{id} rows with approval and finance status chips.",
+    "audit": "32 audit-{id} timeline entries across projects.",
+    "settings": "cur-usd/cur-inr currency toggle (works, INR click no error). 6 notification switch toggles. 8 team-{id} member rows. 3 export buttons (export-pdf, export-excel, export-csv).",
+    "console": "0 errors, 0 unhandled promise rejections. Only benign Recharts width warnings during initial mount."
+  }
+}
