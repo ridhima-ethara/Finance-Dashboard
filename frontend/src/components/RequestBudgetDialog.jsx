@@ -64,8 +64,8 @@ const RequestBudgetDialog = ({ open, onOpenChange }) => {
               className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
             >
               {PROJECTS.map((p) => (
-                <option key={p.id} value={p.id} className="bg-[#12121A]">
-                  {p.name} · {p.client}
+                <option key={p.id} value={p.id}>
+                  {p.name} — {p.client}
                 </option>
               ))}
             </select>

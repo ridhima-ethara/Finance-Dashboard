@@ -22,7 +22,14 @@ Frontend only (React + Tailwind + shadcn/ui + Recharts + react-router).
 - `components/dashboard/` — AmountAtRisk, KpiGrid, Charts (Budget/Actual/Estimated, Model expenses, Infra stacked, Monthly trend, Category donut, Utilization bars, Subscription usage, Workflow strip), ProjectsTable
 - `pages/` — Dashboard, Projects, ProjectDetail, Approvals, TopUps, Reimbursements, AuditLog, Team, Tasks, Settings
 
-## What's Implemented (2026-02-06)
+## What's Implemented (2026-02-06 · iteration 2)
+- [x] **Dark Ethara.AI theme** — near-black #08080C background with hot magenta (#E619B8) accent, matching ethara.ai website aesthetic (no longer copies the reference image)
+- [x] **Finance-grade KPI overhaul** — 8 KPIs curated as a finance specialist:
+  - Approved Budget, Actual Spend (with util %), EAC (Estimate at Completion), CPI (Cost Performance Index), Burn Rate ($/day), Cash Runway (days), AI Model Cost Ratio, Pending Approvals ($ value)
+  - Removed irrelevant/fake KPIs (Portfolio Budget $122.5M placeholder, generic "Active Projects")
+- [x] **Removed 'Budget Consolidation'** nav item · dashboard is now primary "/"
+- [x] **Role-gated 'Request Budget' CTA** — visible on Dashboard and Projects pages ONLY when role === "Project Lead"; opens `RequestBudgetDialog` with project selector, request type (Initial budget / Budget increase / Top-up), amount, justification, AI suggestion, submit → success toast
+- [x] Portfolio computes CPI, EAC, burn rate, cash runway, AI cost ratio from project data automatically
 - [x] Ethara.AI branded sidebar (Dashboard, Projects, Budget Consolidation, Approvals, Top-ups, Reimbursements, Audit Log, Team Overview, All Tasks, Settings)
 - [x] Top bar: global search, role switcher (dropdown), Ask-AI button, notifications bell with unread badge
 - [x] Budget Consolidation page — Amount at Risk hero (red gradient + grain texture), 6-card KPI grid, workflow strip, 7 charts (grouped bars, model expenses, infra stack, monthly area, donut, utilization bars, subscription usage panel), and expandable projects table
