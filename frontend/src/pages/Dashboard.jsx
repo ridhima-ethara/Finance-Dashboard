@@ -12,26 +12,48 @@ import {
 } from "../components/dashboard/Charts";
 import ProjectsTable from "../components/dashboard/ProjectsTable";
 import { Button } from "../components/ui/button";
-import { Download, RefreshCw } from "lucide-react";
+import { Download, RefreshCw, Plus } from "lucide-react";
+import { useApp } from "../context/AppContext";
+import { useState } from "react";
+import RequestBudgetDialog from "../components/RequestBudgetDialog";
 
 const Dashboard = () => {
+  const { role } = useApp();
+  const [requestOpen, setRequestOpen] = useState(false);
+  const isPL = role === "Project Lead";
+
   return (
     <div className="space-y-6" data-testid="page-dashboard">
       {/* Page header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="font-display font-semibold text-3xl tracking-tight text-slate-900">
-            Budget Consolidation
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
+            <span className="w-6 h-px bg-fuchsia-400" />
+            Portfolio Overview
+          </div>
+          <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">
+            Financial Command Center
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            Token spend across all projects &amp; models · June 2026
+          <p className="text-sm text-zinc-400 mt-1">
+            Real-time budget, forecast &amp; burn across all AI engagements · June 2026
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {isPL && (
+            <Button
+              size="sm"
+              onClick={() => setRequestOpen(true)}
+              className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+              data-testid="btn-request-budget"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Request Budget
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
-            className="h-9 rounded-lg gap-2 border-slate-200"
+            className="h-9 rounded-lg gap-2 border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200"
             data-testid="btn-refresh"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -40,7 +62,7 @@ const Dashboard = () => {
           <Button
             variant="outline"
             size="sm"
-            className="h-9 rounded-lg gap-2 border-slate-200"
+            className="h-9 rounded-lg gap-2 border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200"
             data-testid="btn-export"
           >
             <Download className="w-3.5 h-3.5" />
@@ -50,8 +72,8 @@ const Dashboard = () => {
       </div>
 
       {/* Hero + KPIs */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 animate-fade-up">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-fade-up">
+        <div className="lg:col-span-1">
           <AmountAtRisk />
         </div>
         <div className="lg:col-span-2">
@@ -77,6 +99,8 @@ const Dashboard = () => {
 
       {/* Projects table */}
       <ProjectsTable />
+
+      <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
     </div>
   );
 };

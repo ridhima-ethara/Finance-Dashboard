@@ -1,31 +1,49 @@
-import { ArrowUpRight, ArrowDownRight } from "lucide-react";
+import {
+  ArrowUpRight,
+  ArrowDownRight,
+  Wallet,
+  Activity,
+  Gauge,
+  Target,
+  Flame,
+  Clock3,
+  Cpu,
+  CheckSquare,
+} from "lucide-react";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { PORTFOLIO } from "../../data/mockData";
 
-const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", testid }) => {
+// Individual KPI card - finance-grade
+const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", icon: Icon, testid }) => {
   const toneMap = {
-    positive: "text-emerald-600 bg-emerald-50",
-    negative: "text-red-600 bg-red-50",
-    warning: "text-amber-600 bg-amber-50",
-    neutral: "text-slate-600 bg-slate-100",
+    positive: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
+    negative: "text-red-400 bg-red-500/10 border-red-500/20",
+    warning: "text-amber-400 bg-amber-500/10 border-amber-500/20",
+    neutral: "text-zinc-400 bg-white/5 border-white/10",
+    magenta: "text-fuchsia-300 bg-fuchsia-500/10 border-fuchsia-500/20",
   };
   return (
     <div
       data-testid={testid}
-      className="bg-white rounded-2xl border border-slate-200 p-5 card-hover cursor-pointer"
+      className="bg-[#12121A] rounded-2xl border border-white/5 p-5 card-hover cursor-pointer relative overflow-hidden"
     >
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">
-        {label}
-      </div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <div className="font-display font-semibold text-3xl tabular text-slate-900">
-          {value}
+      <div className="flex items-center justify-between">
+        <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+          {label}
         </div>
+        {Icon && (
+          <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center">
+            <Icon className="w-3.5 h-3.5 text-zinc-400" />
+          </div>
+        )}
       </div>
-      <div className="mt-2 flex items-center justify-between">
-        <div className="text-xs text-slate-500 tabular">{sublabel}</div>
+      <div className="mt-3 font-display font-semibold text-3xl tabular text-white">
+        {value}
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        <div className="text-xs text-zinc-500 tabular">{sublabel}</div>
         {delta && (
-          <div className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full ${toneMap[tone]}`}>
+          <div className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${toneMap[tone]}`}>
             {tone === "positive" ? (
               <ArrowUpRight className="w-3 h-3" />
             ) : tone === "negative" ? (
@@ -40,51 +58,80 @@ const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", testid }) =>
 };
 
 const KpiGrid = () => {
+  const cpiTone = PORTFOLIO.cpi >= 1 ? "positive" : "negative";
+  const varTone = PORTFOLIO.forecastVariance >= 0 ? "positive" : "negative";
+  const runwayTone = PORTFOLIO.cashRunwayDays >= 30 ? "positive" : PORTFOLIO.cashRunwayDays >= 14 ? "warning" : "negative";
+  const aiRatioTone = PORTFOLIO.aiCostRatio > 60 ? "warning" : "neutral";
+
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="kpi-grid">
       <KpiCard
-        testid="kpi-portfolio-budget"
-        label="Portfolio Budget"
-        value={fmtCurrency(PORTFOLIO.portfolioBudget)}
-        sublabel={`${PORTFOLIO.activeProjects} active projects`}
-      />
-      <KpiCard
-        testid="kpi-estimated-cost"
-        label="Estimated Cost"
-        value={fmtCurrency(PORTFOLIO.estimatedBudget)}
-        sublabel="Rolled-up from projects"
-        delta="+12.4% vs original"
-        tone="warning"
+        testid="kpi-approved-budget"
+        label="Approved Budget"
+        icon={Wallet}
+        value={fmtCurrency(PORTFOLIO.approvedBudget)}
+        sublabel={`${PORTFOLIO.activeProjects} active projects · locked`}
       />
       <KpiCard
         testid="kpi-actual-spend"
         label="Actual Spend"
+        icon={Activity}
         value={fmtCurrency(PORTFOLIO.actualSpend)}
-        sublabel={`vs est. ${fmtCurrency(PORTFOLIO.estimatedBudget)}`}
-        delta="19.5% over est."
-        tone="negative"
+        sublabel={`${fmtPct(PORTFOLIO.utilization)} of approved`}
+        delta={`${fmtPct(PORTFOLIO.utilization)} util`}
+        tone={PORTFOLIO.utilization >= 100 ? "negative" : PORTFOLIO.utilization >= 85 ? "warning" : "positive"}
       />
       <KpiCard
-        testid="kpi-active-projects"
-        label="Active Projects"
-        value={String(PORTFOLIO.activeProjects)}
-        sublabel="2 high · 1 critical"
+        testid="kpi-eac"
+        label="EAC · Forecast"
+        icon={Target}
+        value={fmtCurrency(PORTFOLIO.eac)}
+        sublabel="Estimate at completion"
+        delta={`${PORTFOLIO.forecastVariance >= 0 ? "+" : ""}${fmtCurrency(PORTFOLIO.forecastVariance)}`}
+        tone={varTone}
       />
       <KpiCard
-        testid="kpi-over-budget"
-        label="Over Budget"
-        value={String(PORTFOLIO.projectsOverBudget)}
-        sublabel="1 new this week"
-        delta="+1"
-        tone="negative"
+        testid="kpi-cpi"
+        label="Cost Performance (CPI)"
+        icon={Gauge}
+        value={PORTFOLIO.cpi.toFixed(2)}
+        sublabel={PORTFOLIO.cpi >= 1 ? "Under budget · efficient" : "Over budget · investigate"}
+        delta={PORTFOLIO.cpi >= 1 ? "Efficient" : "Overrun"}
+        tone={cpiTone}
       />
       <KpiCard
-        testid="kpi-accuracy"
-        label="Estimation Accuracy"
-        value={fmtPct(PORTFOLIO.accuracy)}
-        sublabel="+4pts vs last sprint"
-        delta="+4 pts"
-        tone="positive"
+        testid="kpi-burn-rate"
+        label="Burn Rate"
+        icon={Flame}
+        value={`${fmtCurrency(PORTFOLIO.burnRate, { compact: false })}/day`}
+        sublabel="Portfolio-wide 30-day avg"
+      />
+      <KpiCard
+        testid="kpi-runway"
+        label="Cash Runway"
+        icon={Clock3}
+        value={PORTFOLIO.cashRunwayDays ? `${PORTFOLIO.cashRunwayDays} days` : "—"}
+        sublabel="At current burn rate"
+        delta={PORTFOLIO.cashRunwayDays >= 30 ? "Comfortable" : PORTFOLIO.cashRunwayDays >= 14 ? "Monitor" : "Critical"}
+        tone={runwayTone}
+      />
+      <KpiCard
+        testid="kpi-ai-ratio"
+        label="AI Model Cost Ratio"
+        icon={Cpu}
+        value={`${PORTFOLIO.aiCostRatio}%`}
+        sublabel={`${fmtCurrency(PORTFOLIO.aiModelSpend)} on LLM APIs`}
+        delta={PORTFOLIO.aiCostRatio > 60 ? "Watch" : "Nominal"}
+        tone={aiRatioTone}
+      />
+      <KpiCard
+        testid="kpi-pending-approvals"
+        label="Pending Approvals"
+        icon={CheckSquare}
+        value={`${PORTFOLIO.pendingApprovals}`}
+        sublabel={`${fmtCurrency(PORTFOLIO.pendingApprovalValue)} awaiting decision`}
+        delta="Action needed"
+        tone="magenta"
       />
     </div>
   );

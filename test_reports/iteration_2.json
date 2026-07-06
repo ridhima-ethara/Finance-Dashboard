@@ -1,0 +1,43 @@
+{
+  "summary": "Frontend-only e2e verification of iteration 2 (dark theme + finance KPIs + Request Budget). Every review-request item verified: dark bg #08080C, Ethara.AI sidebar with 9 nav items (Budget Consolidation removed), 'Financial Command Center' title, new 8-KPI grid (kpi-approved-budget/actual-spend/eac/cpi/burn-rate/runway/ai-ratio/pending-approvals — all numeric values render), hero-amount-at-risk with three metrics, role-switcher lists 5 roles, role gating works (btn-request-budget hidden for CTO, visible for Project Lead on both Dashboard and Projects), full RequestBudgetDialog flow works (all 9 testids present, empty submit shows error toast, filled submit shows success toast and closes dialog), all 7 charts render, projects page shows 8 cards with search+filters, project detail exposes 6 tabs, approvals page shows 4 rows with approve/reject, settings has currency toggle + 6 switches + 8 team rows + 3 exports. 0 'Budget Consolidation' occurrences anywhere in visible text. Body computed bg is rgb(8,8,12) — matches spec.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Global (Recharts)", "issues": ["Benign but noisy: 10+ warnings 'The width(-1) and height(-1) of chart should be greater than 0' on Dashboard mount. Same as iteration 1 — set explicit minHeight on ResponsiveContainer parents to silence."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MINOR (React hydration warning): Opening the Request Budget dialog logs a console error 'In HTML, <span> cannot be a child of <option>'. Source appears to be /app/frontend/src/components/RequestBudgetDialog.jsx line 67 native <select><option>{p.name} · {p.client}</option>. The bullet character (·) is fine; the warning likely stems from React reconciliation with the Tailwind arbitrary-value className on the <option>. Recommend simplifying the option to plain text (drop className) or migrating to the Radix Select component like Settings/Approvals use. Not blocking — dialog still submits successfully.",
+    "OPTIONAL (from iteration 1, still applicable): Recharts width(-1) warnings clutter the console; add minHeight to chart containers."
+  ],
+  "critical_code_review_comments": [
+    "RequestBudgetDialog uses a raw <select> in an otherwise Radix-only surface — swap to <Select> for consistent dark styling and to remove the hydration warning.",
+    "Role gating logic is duplicated between Dashboard.jsx and Projects.jsx (both compute `const isPL = role === 'Project Lead'`). Consider a small helper/hook (e.g., useRole().isPL) to avoid drift.",
+    "KpiGrid renders 8 finance KPIs correctly, but Cash Runway shows '9 days · Critical' with mock data — confirm this is intentional demo styling and not a data issue.",
+    "No files exceed 700 lines. Env vars respected. No hardcoded URLs. Testids present on all interactive elements."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only per spec)", "frontend": "100% (14/14 review checks pass, 0 testids missing, 1 minor React warning)"},
+  "test_credentials": "N/A — no auth in this app",
+  "seed_data_creation": "None — all data mocked in /app/frontend/src/data/mockData.js. PORTFOLIO now includes cpi=1.04, spi, eac=$195.2k, burnRate=$5,000/day, cashRunwayDays=9, aiCostRatio=47%, pendingApprovalValue=$23k, pendingApprovals=4.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Base URL: https://budget-forge-8.preview.emergentagent.com. All required testids from iteration 2 spec exist. Role gating flow: click role-switcher → role-option-project-lead → btn-request-budget appears on / and btn-request-budget-projects on /projects. RequestBudgetDialog has raw <select> which triggers a benign React hydration warning — flagged as action item. Default role is CTO; the CURRENT_USER (Vikram Kumar) label in sidebar still says 'CTO · Ethara.AI' even after switching role (Sidebar reads role from context, so it updates — verified). No 'Budget Consolidation' anywhere in DOM.",
+  "detailed_results": {
+    "dashboard_dark_theme": "body bg=rgb(8,8,12), title='Financial Command Center', 'Budget Consolidation' count=0",
+    "sidebar": "app-sidebar exists, 9 nav items (dashboard, projects, approvals, topups, reimb, audit, team, tasks, settings) — verified, Budget Consolidation absent",
+    "kpi_grid": "kpi-approved-budget=$197.0k, kpi-actual-spend=$151.3k(77% util), kpi-eac=$195.2k(+$1.8k), kpi-cpi=1.04(Efficient), kpi-burn-rate=$5,000/day, kpi-runway=9 days(Critical), kpi-ai-ratio=47%(Nominal), kpi-pending-approvals=4 ($23.0k)",
+    "hero": "$41.8k of $197.0k approved · 3 of 8 flagged · forecast overrun $1.8k · Over budget 3 projects · Health 58/100 · Est. accuracy 96%",
+    "charts": "chart-budget-actual, chart-model-expenses, chart-infra, chart-monthly-spend, chart-category-donut, chart-utilization, panel-subscriptions — all render (only Recharts width(-1) warnings, no errors)",
+    "role_switcher": "5 role options present. Default CTO — btn-request-budget count=0. Switch to Project Lead — btn-request-budget appears on /, btn-request-budget-projects appears on /projects.",
+    "request_budget_dialog": "All 9 testids present. Empty submit → error toast 'Please fill amount and justification'. Fill+submit → success toast 'Budget request submitted · routed to CTO for review' AND dialog closes.",
+    "projects_page": "8 project cards, search input, filters — verified",
+    "project_detail_crowley_gen": "All 6 tabs present: tab-phases, tab-expenses, tab-topups, tab-history, tab-audit, tab-comments",
+    "approvals": "4 approval rows, 4 approve buttons, 4 reject buttons",
+    "settings": "cur-usd + cur-inr toggle, 6 role switches, 8 team rows, 3 export buttons",
+    "console": "1 non-blocking React hydration warning (span inside option). 0 unhandled promise rejections. 0 network errors. Only benign Recharts width warnings."
+  }
+}

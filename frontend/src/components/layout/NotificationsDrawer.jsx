@@ -13,10 +13,10 @@ const iconFor = (type) => {
 };
 
 const bgFor = (type) => {
-  if (type === "danger") return "bg-red-50 border-red-100";
-  if (type === "warning") return "bg-amber-50 border-amber-100";
-  if (type === "success") return "bg-emerald-50 border-emerald-100";
-  return "bg-blue-50 border-blue-100";
+  if (type === "danger") return "bg-red-500/10 border-red-500/20";
+  if (type === "warning") return "bg-amber-500/10 border-amber-500/20";
+  if (type === "success") return "bg-emerald-500/10 border-emerald-500/20";
+  return "bg-sky-500/10 border-sky-500/20";
 };
 
 const NotificationsDrawer = () => {
@@ -24,9 +24,9 @@ const NotificationsDrawer = () => {
   return (
     <Sheet open={notifOpen} onOpenChange={setNotifOpen}>
       <SheetContent side="right" className="w-full sm:max-w-md p-0" data-testid="notifications-drawer">
-        <SheetHeader className="px-6 py-5 border-b border-slate-100">
+        <SheetHeader className="px-6 py-5 border-b border-white/5">
           <SheetTitle className="font-display text-xl">Notifications</SheetTitle>
-          <p className="text-sm text-slate-500">Portfolio alerts across all projects</p>
+          <p className="text-sm text-zinc-500">Portfolio alerts across all projects</p>
         </SheetHeader>
         <div className="px-4 py-4 space-y-2 overflow-y-auto">
           {NOTIFICATIONS.map((n) => (
@@ -37,9 +37,9 @@ const NotificationsDrawer = () => {
             >
               <div className="mt-0.5">{iconFor(n.type)}</div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-semibold text-slate-900">{n.title}</div>
-                <div className="text-xs text-slate-600 mt-0.5">{n.detail}</div>
-                <div className="text-[11px] text-slate-400 mt-2 tabular">{fmtDate(n.ts)}</div>
+                <div className="text-sm font-semibold text-white">{n.title}</div>
+                <div className="text-xs text-zinc-400 mt-0.5">{n.detail}</div>
+                <div className="text-[11px] text-zinc-500 mt-2 tabular">{fmtDate(n.ts)}</div>
               </div>
             </div>
           ))}

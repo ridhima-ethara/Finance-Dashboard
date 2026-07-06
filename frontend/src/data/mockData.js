@@ -131,29 +131,53 @@ export const PROJECTS = [
   buildProject("vesper", "Vesper Docker", "Ironclad", "Aanya Sharma", 13000, 5400, 15600, "Execution"),
 ];
 
-// Portfolio aggregates
+// Portfolio aggregates — computed from projects, with finance-first KPIs
 export const PORTFOLIO = (() => {
   const approved = PROJECTS.reduce((s, p) => s + p.approvedBudget, 0);
   const estimated = PROJECTS.reduce((s, p) => s + p.estimatedBudget, 0);
   const actual = PROJECTS.reduce((s, p) => s + p.actualSpend, 0);
+  const infra = PROJECTS.reduce((s, p) => s + p.infrastructureCost, 0);
+  const ai = PROJECTS.reduce((s, p) => s + p.aiModelCost, 0);
+  const employee = PROJECTS.reduce((s, p) => s + p.employeeCost, 0);
   const overCount = PROJECTS.filter((p) => p.utilization >= 100).length;
+  const remaining = approved - actual;
+  const burnRate = PROJECTS.reduce((s, p) => s + p.burnRate, 0); // $k / day
+  const burnRateUsd = burnRate * 1000; // actual $/day
+  const cashRunwayDays = burnRateUsd > 0 ? Math.round(remaining / burnRateUsd) : null;
+  // Earned Value approximation: use estimated as EV, actual as AC
+  const cpi = estimated / actual; // >1 = cost efficient
+  const spi = 0.94; // schedule performance (mocked; would need planned value)
+  const eac = actual + (approved - actual) / cpi; // Estimate At Completion
+  const aiCostRatio = Math.round((ai / actual) * 100);
+  const forecastVariance = approved - eac; // + = under, - = over
+  const estimationAccuracy = Math.max(0, Math.min(100, Math.round(100 - (Math.abs(estimated - actual) / estimated) * 100)));
   return {
-    portfolioBudget: 122500000, // shown as $122.5M in hero
     approvedBudget: approved,
     estimatedBudget: estimated,
     actualSpend: actual,
-    remaining: approved - actual,
+    remaining,
     utilization: Math.round((actual / approved) * 100),
     variance: estimated - actual,
-    accuracy: 71,
+    forecastVariance,
+    cpi: Math.round(cpi * 100) / 100,
+    spi,
+    eac: Math.round(eac),
+    burnRate: Math.round(burnRateUsd),
+    cashRunwayDays,
+    aiCostRatio,
+    infrastructureSpend: infra,
+    aiModelSpend: ai,
+    employeeSpend: employee,
+    accuracy: estimationAccuracy,
     healthScore: 58,
     projectsOverBudget: overCount,
     activeProjects: PROJECTS.length,
     pendingApprovals: 4,
     pendingTopups: 3,
-    amountAtRisk: 1180000,
-    approvedRisk: 987200,
-    flagged: 3,
+    pendingApprovalValue: 23000,
+    amountAtRisk: 41800, // sum of over-budget projects' overrun (Sourcing 400 + Atlas 1100 + Vesper 2600 + Crowley Gen soft risk + others)
+    approvedRisk: 46000,
+    flagged: overCount,
     total: PROJECTS.length,
   };
 })();

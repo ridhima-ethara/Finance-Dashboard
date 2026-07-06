@@ -20,7 +20,7 @@ import { fmtCurrency, fmtPct } from "../../lib/format";
 
 // Palette
 const COLORS = {
-  budget: "#7C3AED",
+  budget: "#E619B8",
   estimated: "#F59E0B",
   actual: "#EF4444",
   under: "#10B981",
@@ -31,12 +31,12 @@ const COLORS = {
 const CardShell = ({ title, subtitle, right, children, testid }) => (
   <div
     data-testid={testid}
-    className="bg-white rounded-2xl border border-slate-200 p-5 card-hover"
+    className="bg-[#12121A] rounded-2xl border border-white/10 p-5 card-hover"
   >
     <div className="flex items-start justify-between gap-4 mb-4">
       <div>
-        <div className="text-[15px] font-semibold text-slate-900 font-display">{title}</div>
-        {subtitle && <div className="text-xs text-slate-500 mt-0.5">{subtitle}</div>}
+        <div className="text-[15px] font-semibold text-white font-display">{title}</div>
+        {subtitle && <div className="text-xs text-zinc-500 mt-0.5">{subtitle}</div>}
       </div>
       {right}
     </div>
@@ -47,16 +47,16 @@ const CardShell = ({ title, subtitle, right, children, testid }) => (
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-slate-200 rounded-xl shadow-lg px-3 py-2 tabular">
-      <div className="text-xs font-semibold text-slate-900">{label}</div>
+    <div className="bg-[#12121A] border border-white/10 rounded-xl shadow-lg px-3 py-2 tabular">
+      <div className="text-xs font-semibold text-white">{label}</div>
       <div className="mt-1 space-y-0.5">
         {payload.map((p, i) => (
           <div key={i} className="flex items-center justify-between gap-4 text-xs">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-sm" style={{ background: p.color }} />
-              <span className="text-slate-600 capitalize">{p.name}</span>
+              <span className="text-zinc-400 capitalize">{p.name}</span>
             </div>
-            <span className="font-semibold text-slate-900">{fmtCurrency(p.value)}</span>
+            <span className="font-semibold text-white">{fmtCurrency(p.value)}</span>
           </div>
         ))}
       </div>
@@ -81,19 +81,19 @@ export const BudgetActualChart = () => {
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barGap={2} barCategoryGap={16}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#F1F5F9" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} />
             <YAxis
-              tick={{ fontSize: 11, fill: "#64748B" }}
+              tick={{ fontSize: 11, fill: "#71717A" }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F8FAFC" }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Legend
               iconType="square"
               wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-              formatter={(v) => <span className="text-slate-600 text-xs">{v}</span>}
+              formatter={(v) => <span className="text-zinc-400 text-xs">{v}</span>}
             />
             <Bar dataKey="Budget" fill={COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={18} />
             <Bar dataKey="Estimated" fill={COLORS.estimated} radius={[4, 4, 0, 0]} maxBarSize={18} />
@@ -122,19 +122,19 @@ export const ModelExpensesChart = () => {
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} barGap={2} barCategoryGap={16}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#F1F5F9" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} />
             <YAxis
-              tick={{ fontSize: 11, fill: "#64748B" }}
+              tick={{ fontSize: 11, fill: "#71717A" }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F8FAFC" }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Legend iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-            <Bar dataKey="Budget" fill="#7C3AED" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="Estimated" fill="#A78BFA" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="Actual" fill="#DDD6FE" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="Budget" fill="#E619B8" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="Estimated" fill="#F472B6" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="Actual" fill="#FBCFE8" radius={[4, 4, 0, 0]} maxBarSize={18} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -153,17 +153,17 @@ export const InfraStackedChart = () => {
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={INFRA_BY_PROJECT}>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#F1F5F9" />
-            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+            <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} />
             <YAxis
-              tick={{ fontSize: 11, fill: "#64748B" }}
+              tick={{ fontSize: 11, fill: "#71717A" }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`}
             />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "#F8FAFC" }} />
+            <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Legend iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-            <Bar dataKey="EC2" stackId="a" fill="#7C3AED" maxBarSize={30} />
+            <Bar dataKey="EC2" stackId="a" fill="#E619B8" maxBarSize={30} />
             <Bar dataKey="S3" stackId="a" fill="#10B981" maxBarSize={30} />
             <Bar dataKey="RDS" stackId="a" fill="#3B82F6" maxBarSize={30} />
             <Bar dataKey="SES" stackId="a" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={30} />
@@ -187,18 +187,18 @@ export const MonthlySpendChart = () => {
           <AreaChart data={MONTHLY_SPEND}>
             <defs>
               <linearGradient id="gActual" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#7C3AED" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#7C3AED" stopOpacity={0} />
+                <stop offset="0%" stopColor="#E619B8" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#E619B8" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="gBudget" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#10B981" stopOpacity={0.25} />
                 <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#F1F5F9" />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#64748B" }} axisLine={false} tickLine={false} />
+            <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} />
             <YAxis
-              tick={{ fontSize: 11, fill: "#64748B" }}
+              tick={{ fontSize: 11, fill: "#71717A" }}
               axisLine={false}
               tickLine={false}
               tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
@@ -206,7 +206,7 @@ export const MonthlySpendChart = () => {
             <Tooltip content={<CustomTooltip />} />
             <Legend iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
             <Area type="monotone" dataKey="budget" name="Budget" stroke="#10B981" fill="url(#gBudget)" strokeWidth={2} />
-            <Area type="monotone" dataKey="actual" name="Actual" stroke="#7C3AED" fill="url(#gActual)" strokeWidth={2} />
+            <Area type="monotone" dataKey="actual" name="Actual" stroke="#E619B8" fill="url(#gActual)" strokeWidth={2} />
             <Line type="monotone" dataKey="estimated" name="Estimated" stroke="#F59E0B" strokeWidth={2} dot={false} />
           </AreaChart>
         </ResponsiveContainer>
@@ -250,8 +250,8 @@ export const CategoryDonut = () => {
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <div className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold">Total</div>
-            <div className="font-display text-xl font-semibold text-slate-900">100%</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Total</div>
+            <div className="font-display text-xl font-semibold text-white">100%</div>
           </div>
         </div>
         <div className="flex-1 grid grid-cols-1 gap-1.5">
@@ -259,9 +259,9 @@ export const CategoryDonut = () => {
             <div key={c.name} className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
                 <span className="w-2.5 h-2.5 rounded-sm" style={{ background: c.color }} />
-                <span className="text-slate-700">{c.name}</span>
+                <span className="text-zinc-200">{c.name}</span>
               </div>
-              <span className="font-semibold text-slate-900 tabular">{c.value}%</span>
+              <span className="font-semibold text-white tabular">{c.value}%</span>
             </div>
           ))}
         </div>
@@ -286,7 +286,7 @@ export const UtilizationBars = () => {
           return (
             <div key={d.name}>
               <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-slate-700 font-medium">{d.name}</span>
+                <span className="text-zinc-200 font-medium">{d.name}</span>
                 <span className="font-semibold tabular" style={{ color }}>
                   {fmtPct(d.util)}
                 </span>
@@ -315,15 +315,15 @@ export const SubscriptionsPanel = () => {
       testid="panel-subscriptions"
       title={
         <span className="inline-flex items-center gap-2">
-          <CreditCard className="w-4 h-4 text-slate-500" />
+          <CreditCard className="w-4 h-4 text-zinc-500" />
           Subscription usage · seat utilization
         </span>
       }
       subtitle="hover for people using each tool"
       right={
-        <div className="text-xs text-slate-500 tabular">
-          <span className="font-semibold text-slate-900">{SUBSCRIPTIONS.length}</span> subscriptions ·{" "}
-          <span className="font-semibold text-slate-900">{totalSeats}</span> people
+        <div className="text-xs text-zinc-500 tabular">
+          <span className="font-semibold text-white">{SUBSCRIPTIONS.length}</span> subscriptions ·{" "}
+          <span className="font-semibold text-white">{totalSeats}</span> people
         </div>
       }
     >
@@ -332,7 +332,7 @@ export const SubscriptionsPanel = () => {
           <div
             key={s.id}
             data-testid={`sub-${s.id}`}
-            className="flex items-center gap-3 p-3 rounded-xl border border-slate-100 hover:border-slate-200 hover:bg-slate-50/60 transition-all group"
+            className="flex items-center gap-3 p-3 rounded-xl border border-white/5 hover:border-white/10 hover:bg-white/5 transition-all group"
           >
             <div
               className="w-10 h-10 rounded-lg text-white text-xs font-semibold flex items-center justify-center flex-shrink-0"
@@ -341,8 +341,8 @@ export const SubscriptionsPanel = () => {
               {s.initials}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-slate-900">{s.name}</div>
-              <div className="text-xs text-slate-500 tabular">
+              <div className="text-sm font-semibold text-white">{s.name}</div>
+              <div className="text-xs text-zinc-500 tabular">
                 ${s.price}
                 {s.cadence} · {s.seats} seats
               </div>
@@ -351,14 +351,14 @@ export const SubscriptionsPanel = () => {
               {s.users.slice(0, 4).map((u, i) => (
                 <div
                   key={i}
-                  className="w-7 h-7 rounded-full border-2 border-white bg-gradient-to-br from-slate-200 to-slate-300 flex items-center justify-center text-[10px] font-semibold text-slate-700"
+                  className="w-7 h-7 rounded-full border-2 border-[#12121A] bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-[10px] font-semibold text-zinc-200"
                   title={u}
                 >
                   {u.split(" ").map((x) => x[0]).slice(0, 2).join("")}
                 </div>
               ))}
               {s.users.length > 4 && (
-                <div className="w-7 h-7 rounded-full border-2 border-white bg-slate-100 flex items-center justify-center text-[10px] font-semibold text-slate-600">
+                <div className="w-7 h-7 rounded-full border-2 border-[#12121A] bg-white/10 flex items-center justify-center text-[10px] font-semibold text-zinc-400">
                   +{s.users.length - 4}
                 </div>
               )}
@@ -394,10 +394,10 @@ export const WorkflowStrip = () => (
           <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium ${
               s.current
-                ? "bg-violet-50 border-violet-200 text-violet-700"
+                ? "bg-fuchsia-500/10 border-fuchsia-500/30 text-fuchsia-400"
                 : s.done
-                ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                : "bg-slate-50 border-slate-200 text-slate-500"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                : "bg-white/5 border-white/10 text-zinc-500"
             }`}
           >
             {s.done ? (
@@ -407,7 +407,7 @@ export const WorkflowStrip = () => (
             )}
             {s.label}
           </div>
-          {i < STAGES.length - 1 && <div className="w-4 h-px bg-slate-200" />}
+          {i < STAGES.length - 1 && <div className="w-4 h-px bg-white/10" />}
         </div>
       ))}
     </div>

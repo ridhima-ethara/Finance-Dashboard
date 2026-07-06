@@ -6,7 +6,7 @@ import NotificationsDrawer from "./NotificationsDrawer";
 
 const AppShell = () => {
   return (
-    <div className="min-h-screen bg-slate-50" data-testid="app-shell">
+    <div className="min-h-screen bg-[#08080C] mesh-dots" data-testid="app-shell">
       <Sidebar />
       <div className="lg:pl-64">
         <TopBar />

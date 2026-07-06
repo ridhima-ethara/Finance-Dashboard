@@ -36,17 +36,17 @@ export const initials = (name = "") =>
     .toUpperCase();
 
 export const healthColor = (h) => {
-  if (h === "healthy") return { text: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", dot: "bg-emerald-500", label: "Healthy" };
-  if (h === "watch") return { text: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", dot: "bg-amber-500", label: "Watch" };
-  if (h === "over") return { text: "text-red-700", bg: "bg-red-50", border: "border-red-200", dot: "bg-red-500", label: "Over" };
-  return { text: "text-slate-700", bg: "bg-slate-50", border: "border-slate-200", dot: "bg-slate-400", label: "—" };
+  if (h === "healthy") return { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/30", dot: "bg-emerald-500/100", label: "Healthy" };
+  if (h === "watch") return { text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/30", dot: "bg-amber-500/100", label: "Watch" };
+  if (h === "over") return { text: "text-red-400", bg: "bg-red-500/10", border: "border-red-500/30", dot: "bg-red-500/100", label: "Over" };
+  return { text: "text-zinc-200", bg: "bg-white/5", border: "border-white/10", dot: "bg-zinc-500", label: "—" };
 };
 
 export const varianceColor = (v) =>
-  v > 0 ? "text-emerald-600" : v < 0 ? "text-red-600" : "text-slate-600";
+  v > 0 ? "text-emerald-600" : v < 0 ? "text-red-400" : "text-zinc-400";
 
 export const utilColor = (u) => {
-  if (u >= 100) return "text-red-600";
+  if (u >= 100) return "text-red-400";
   if (u >= 80) return "text-amber-600";
   return "text-emerald-600";
 };
