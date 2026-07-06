@@ -1,0 +1,109 @@
+{
+  "theme": "light",
+  "archetype": "4 (Swiss & High-Contrast) adapted for Premium SaaS",
+  "branding": {
+    "name": "Ethara.AI",
+    "primary_color": "#7C3AED",
+    "logo_text": "Ethara.AI"
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Outfit, sans-serif",
+      "body": "Inter, sans-serif"
+    },
+    "hierarchy": {
+      "h1": "text-3xl sm:text-4xl font-semibold tracking-tight",
+      "h2": "text-xl sm:text-2xl font-medium tracking-tight",
+      "h3": "text-lg sm:text-xl font-medium",
+      "body": "text-sm text-slate-600",
+      "small": "text-xs text-slate-500 uppercase tracking-widest"
+    }
+  },
+  "colors": {
+    "background": "#F8FAFC",
+    "surface": "#FFFFFF",
+    "primary": {
+      "DEFAULT": "#7C3AED",
+      "light": "#EDE9FE",
+      "dark": "#5B21B6",
+      "hover": "#6D28D9"
+    },
+    "semantic": {
+      "success": { "DEFAULT": "#10B981", "bg": "#D1FAE5", "text": "#065F46" },
+      "warning": { "DEFAULT": "#F59E0B", "bg": "#FEF3C7", "text": "#92400E" },
+      "danger": { "DEFAULT": "#EF4444", "bg": "#FEE2E2", "text": "#991B1B" },
+      "info": { "DEFAULT": "#3B82F6", "bg": "#DBEAFE", "text": "#1E40AF" }
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#64748B",
+      "muted": "#94A3B8"
+    },
+    "border": "#E2E8F0"
+  },
+  "spacing_and_layout": {
+    "container_padding": "p-6 md:p-8",
+    "card_padding": "p-6",
+    "gap": "gap-6",
+    "border_radius": "rounded-2xl",
+    "shadows": {
+      "card": "shadow-[0_2px_10px_rgba(0,0,0,0.02)]",
+      "hover": "shadow-[0_8px_30px_rgba(0,0,0,0.06)]"
+    }
+  },
+  "components": {
+    "sidebar": {
+      "background": "#FFFFFF",
+      "active_link_bg": "#F3F4F6",
+      "active_link_text": "#7C3AED",
+      "layout": "w-64 border-r border-slate-200 flex flex-col h-screen fixed"
+    },
+    "hero_card": {
+      "background": "#FEF2F2",
+      "border": "border border-red-200",
+      "text": "#991B1B",
+      "value_size": "text-4xl font-bold tracking-tight"
+    },
+    "kpi_cards": {
+      "style": "bg-white border border-slate-200 rounded-2xl p-6 shadow-sm",
+      "metric_size": "text-3xl font-semibold text-slate-900 mt-2"
+    },
+    "tables": {
+      "header_bg": "bg-slate-50",
+      "header_text": "text-xs font-semibold text-slate-500 uppercase tracking-wider",
+      "row_hover": "hover:bg-slate-50 transition-colors",
+      "expandable_bg": "bg-slate-50/50"
+    },
+    "charts": {
+      "tooltip_bg": "#FFFFFF",
+      "tooltip_shadow": "shadow-lg",
+      "tooltip_radius": "rounded-lg"
+    },
+    "badges": {
+      "style": "px-2.5 py-0.5 rounded-full text-xs font-medium border"
+    }
+  },
+  "interactive_elements": {
+    "hover_states": "translate-y-[-2px] transition-all duration-200",
+    "focus_states": "focus:outline-none focus:ring-2 focus:ring-[#7C3AED] focus:ring-offset-2"
+  },
+  "media_urls": {
+    "user_avatar": {
+      "url": "https://images.pexels.com/photos/36645466/pexels-photo-36645466.jpeg",
+      "description": "Avatar for Vikram Kumar - CTO / Project Lead in sidebar"
+    }
+  },
+  "data_testid_rules": "All interactive elements, including buttons, links, tabs, and table rows must have a data-testid attribute.",
+  "instructions_to_main_agent": [
+    "Build a sidebar layout with navigation items: Dashboard, Team Overview, All Tasks, Projects, Budget Consolidation, Attendance, Leave Management, Role Management.",
+    "Implement a top bar with a Role Switcher dropdown (Admin, CTO/COO, PL, Finance) and a Notifications drawer.",
+    "The main dashboard should have a prominent 'Amount at Risk' card in red styling, followed by a grid of executive KPIs.",
+    "Include two side-by-side charts: e.g., Budget vs Actual vs Estimated (Bar) and Utilization (Donut). Use Recharts.",
+    "Implement an expandable projects table showing Project Name, Budget, Actual, Variance, and Utilization. When expanded, show a nested table or breakdown of phases.",
+    "Include a 'Persistent AI Insights Panel' on the right side (or as a toggleable side panel) with mock insights about cost optimization.",
+    "Ensure all Shadcn UI components (Cards, Tables, Badges, Dropdowns) are heavily customized to use 'rounded-2xl', soft shadows, and generous 'p-6' padding.",
+    "Use Lucide-react for all iconography.",
+    "Ensure fonts Outfit (headings) and Inter (body) are loaded.",
+    "Do NOT use placeholder images. Use the provided user_avatar url."
+  ]
+}
