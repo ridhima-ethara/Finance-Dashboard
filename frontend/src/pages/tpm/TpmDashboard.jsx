@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { NOTIFICATIONS, APPROVALS, DAILY_ACTIVITY, MODEL_TRAJECTORY, THRESHOLDS } from "../../data/mockData";
-import { RETURNED_BUDGETS, CHANGE_REQUESTS } from "../../data/mockTpm";
+import { CHANGE_REQUESTS } from "../../data/mockTpm";
 import { Link } from "react-router-dom";
 import {
-  FolderKanban, ShieldCheck, Undo2, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
-  Plus, Bell, Sparkles, ChevronRight, AlertTriangle,
+  FolderKanban, ShieldCheck, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
+  Plus, Bell, Sparkles, ChevronRight, AlertTriangle, Calendar,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell } from "recharts";
@@ -145,9 +145,8 @@ const TpmDashboard = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <KpiCard testid="kpi-active-projects" label="Active projects" value={String(visibleProjects.length)} icon={FolderKanban} tone="magenta" />
         <KpiCard testid="kpi-pending-approvals" label="Pending approvals" value={String(pendingActions.length)} icon={ShieldCheck} tone="warning" />
-        <KpiCard testid="kpi-returned" label="Budgets returned" value={String(RETURNED_BUDGETS.length)} icon={Undo2} tone="warning" sublabel="Awaiting your edits" to={`/cto-review/${RETURNED_BUDGETS[0]?.id || ""}`} />
         <KpiCard testid="kpi-util" label="Budget utilization" value={fmtPct(util)} icon={Gauge} tone={util >= 90 ? "negative" : util >= 75 ? "warning" : "positive"} />
-        <KpiCard testid="kpi-today-est" label="Today's estimated" value={fmtCurrency(today?.estimate || 0, { compact: false })} icon={TrendingUp} to="/consumption" />
+        <KpiCard testid="kpi-today-consumption" label="Log today's consumption" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Calendar} tone="magenta" sublabel="Tap to submit" to="/consumption" />
         <KpiCard testid="kpi-today-actual" label="Today's actual" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Activity} tone="magenta" to="/consumption" />
         <KpiCard testid="kpi-remaining" label="Total remaining" value={fmtCurrency(remaining)} icon={Wallet} tone={remaining > 0 ? "positive" : "negative"} />
         <KpiCard testid="kpi-pending-cr" label="Pending change requests" value={String(CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
@@ -292,10 +291,10 @@ const TpmDashboard = () => {
         <Panel testid="widget-pending-actions" title="Pending actions" subtitle="what needs your attention">
           <div className="space-y-2">
             {[
-              { label: "Submit daily estimate for Kaiju Eval", link: "/consumption", icon: TrendingUp, tone: "text-fuchsia-300" },
-              { label: `Review returned budget from CTO — ${RETURNED_BUDGETS[0]?.projectName || "Atlas Ingest"}`, link: `/cto-review/${RETURNED_BUDGETS[0]?.id || ""}`, icon: Undo2, tone: "text-amber-300" },
+              { label: "Submit today's consumption for your projects", link: "/consumption", icon: Calendar, tone: "text-fuchsia-300" },
               { label: "Approve reimbursement · $420", link: "/reimbursements", icon: ShieldCheck, tone: "text-sky-300" },
               { label: "Confirm phase 2 completion — Talos", link: "/projects/talos", icon: ChevronRight, tone: "text-emerald-300" },
+              { label: "Raise change request for Crowley Sourcing", link: "#", icon: GitPullRequest, tone: "text-amber-300" },
             ].map((a, i) => (
               <Link key={i} to={a.link} className="flex items-center gap-3 p-2.5 rounded-lg border border-white/5 hover:border-fuchsia-500/30 bg-white/[0.02] hover:bg-white/[0.06] transition-all" data-testid={`action-${i}`}>
                 <a.icon className={`w-4 h-4 ${a.tone} flex-shrink-0`} />

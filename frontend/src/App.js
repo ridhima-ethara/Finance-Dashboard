@@ -19,7 +19,10 @@ import BudgetBuilder from "./pages/tpm/BudgetBuilder";
 import PhaseWorkspace from "./pages/tpm/PhaseWorkspace";
 import AiCost from "./pages/tpm/AiCost";
 import Consumption from "./pages/tpm/Consumption";
-import CtoReview from "./pages/tpm/CtoReview";
+import BudgetReviews from "./pages/cto/BudgetReviews";
+import BudgetReviewWorkspace from "./pages/cto/BudgetReviewWorkspace";
+import ChangeRequests from "./pages/cto/ChangeRequests";
+import ProjectMonitoring from "./pages/cto/ProjectMonitoring";
 import Reports from "./pages/Reports";
 import { Toaster } from "./components/ui/sonner";
 
@@ -59,8 +62,10 @@ function App() {
               <Route path="/projects/:id/phase/:phaseId" element={<PhaseWorkspace />} />
               <Route path="/ai-cost" element={<AiCost />} />
               <Route path="/consumption" element={<Consumption />} />
-              <Route path="/cto-review/:id" element={<CtoReview />} />
-              <Route path="/cto-review" element={<CtoReview />} />
+              <Route path="/budget-reviews" element={<BudgetReviews />} />
+              <Route path="/budget-reviews/:id" element={<BudgetReviewWorkspace />} />
+              <Route path="/change-requests" element={<ChangeRequests />} />
+              <Route path="/monitoring" element={<ProjectMonitoring />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

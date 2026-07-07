@@ -22,7 +22,29 @@ Frontend only (React + Tailwind + shadcn/ui + Recharts + react-router).
 - `components/dashboard/` — AmountAtRisk, KpiGrid, Charts (Budget/Actual/Estimated, Model expenses, Infra stacked, Monthly trend, Category donut, Utilization bars, Subscription usage, Workflow strip), ProjectsTable
 - `pages/` — Dashboard, Projects, ProjectDetail, Approvals, TopUps, Reimbursements, AuditLog, Team, Tasks, Settings
 
-## What's Implemented (2026-02-08 · iteration 5) — TPM Workflow Sub-Modules
+## What's Implemented (2026-02-09 · iteration 6) — CTO Portal + TPM Consumption Rework
+### CTO Portal (full workflow: Project → TPM assignment → Budget Review → Task/Model review → Modify → Approve & Forward to CFO → Monitor → CR approvals → Closure)
+- [x] **Sidebar** — Role-based nav. CTO gets: Dashboard, Projects, Budget Reviews, Project Monitoring, AI Cost Analytics, Change Requests, Model Keys, Reports, Audit Log (NO Settings)
+- [x] **CTO alert strip on Dashboard** — 4 tile row: Budget Reviews (pending), Change Requests (pending), High-Risk Projects (util ≥ 90%), Over Budget count — each links to the relevant module
+- [x] **Budget Reviews list** (`/budget-reviews`) — Queue of budgets awaiting CTO decision. Filters (urgency: All/High/Normal/Low, search by project/TPM/client). Each row shows: urgency chip, type, TPM, client, timeline, tasks, phases, lines flagged, requested amount, AI recommended amount with savings delta, and per-category breakdown (AI/Infra/Subs/Misc)
+- [x] **Budget Review Workspace** (`/budget-reviews/:id`) — Comprehensive review canvas with 6 tabs (Overview, Phase-wise, Task-wise, Model/Infra/Subs, Comparison, Audit) + sticky decision sidebar with Modify Budget, AI recommendation quick-set, comment box, Save Draft / Reject / Approve & Forward to CFO actions. All modifications logged to audit trail
+- [x] **Change Requests** (`/change-requests`) — Stage filter (All/CTO Review/COO Approval/Approved/Rejected) + expand-to-view details. Actions per pending CR: Approve · Approve & Forward to CFO · Modify · Reject. Impact assessment (budget/timeline/phase) + AI analysis suggestion
+- [x] **Project Monitoring** (`/monitoring`) — Project switcher + range toggle (7d/30d). 7 KPI cards (daily estimated, daily actual, remaining, burn rate, health, EAC, exhaustion in X days). Daily & Weekly cost trend charts. Phase-wise consumption bars linking to Phase Workspace. Utilization circular gauge. Last 7-day daily consumption table
+
+### TPM Portal — Reworked
+- [x] **Removed "Returned Budgets" module completely** — per product decision, CTO can only Approve, Reject, or Edit-and-forward to CFO. No "return to TPM for edits" flow exists. Removed sidebar item, KPI card, pending action, `/cto-review` routes, `CtoReview.jsx`, and `RETURNED_BUDGETS` mock data
+- [x] **Daily Consumption reworked** (`/consumption`) — TPM now submits **TODAY'S ACTUAL** consumption (not tomorrow's estimate). Row-based form with per-project: Project · Model · Tasks (count) · Trajectories (count) · Cost (USD). Live totals (tasks/trajectories/cost/projects). Inline % of approved daily budget with red/amber/green health. Add/remove rows. Submit to record for the day
+- [x] **Consumption Heatmap** — Project × last 14 days grid, cell color intensity based on % of approved daily budget consumed (green &lt; 40%, magenta 40-80%, amber 80-100%, red &gt; 100%). Cells with pct ≥ 100% show "!" indicator. Hover shows exact tasks/trajectories/spent/approved
+- [x] **Approved vs Actual chart + Recent submissions log** — Per-project comparison, plus last 10 submissions with health chips
+- [x] **TPM Dashboard cleaned** — Removed "Budgets returned" KPI and "Review returned budget from CTO" pending action item. Replaced with "Log today's consumption" primary CTA
+
+### Global — Settings visibility
+- [x] **Settings only for CFO** — Removed Settings nav from CTO, TPM, and PL sidebars. CFO gets Dashboard, Projects, Approvals, Top-ups, Reimbursements, AI Cost, Reports, Audit Log, Team, Settings
+
+### Data
+- [x] `mockTpm.js` updated: added `BUDGET_REVIEWS` (3 pending), `CTO_AUDIT` (2 sample modifications), `DAILY_CONSUMPTION_LOG` (14-day × 6-project seeded per-project daily consumption for heatmap). Removed `RETURNED_BUDGETS`
+
+
 - [x] **AI Cost Screen** (`/ai-cost`) — 6 KPI cards (today, WoW, MTD, projected, tokens, requests), stacked 30-day cost trend by provider, provider share donut, provider breakdown table (Anthropic/OpenAI/Google/Moonshot/xAI), model breakdown table with $/1K unit economics, project attribution list, AI optimization insights panel
 - [x] **Phase Workspace** (`/projects/:id/phase/:phaseId`) — Task table with owner, assigned model per task, infra, estimated vs actual cost, variance, status (planned/in-progress/done); 6 stat cards (est/actual/variance/util/completion/health); progress bar; status filter chips; AI phase insight
 - [x] **Daily Consumption** (`/consumption`) — 6 stat cards, 14-day trend (actual vs estimated) LineChart, category breakdown bars, submit-tomorrow's-estimate form (4 categories + project selector + toast confirmation), last-7-days consumption table

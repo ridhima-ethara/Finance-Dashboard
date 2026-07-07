@@ -1,4 +1,4 @@
-// TPM-specific mock data: AI Cost, Phase Tasks, Change Requests, Returned Budgets, Reports
+// TPM-specific mock data: AI Cost, Phase Tasks, Change Requests, Budget Reviews, Reports
 import { PROJECTS } from "./mockProjects";
 
 // AI COST DATA — today, monthly by provider, token usage, per-project attribution
@@ -115,30 +115,125 @@ export const CHANGE_REQUESTS = [
   { id: "cr3", projectId: "vesper", projectName: "Vesper Docker", type: "Budget increase", amount: 5000, currentBudget: 13000, requestedBudget: 18000, requester: "Aanya Sharma", urgency: "High", stage: "COO Approval", createdAt: "2026-06-20T15:11:00Z", reason: "Already 20% over budget. Client contract locked in; needs immediate top-up.", affectedPhase: "Phase 2 · Model tuning", timelineDelta: "0 days" },
 ];
 
-// RETURNED BUDGETS — CTO sent back for edits with inline comments
-export const RETURNED_BUDGETS = [
+// RETURNED_BUDGETS removed — per product decision, CTO can only Approve, Reject, or Edit-and-forward to CFO.
+// There is no "return to TPM for changes" flow.
+
+// BUDGET REVIEWS QUEUE — projects awaiting CTO decision
+export const BUDGET_REVIEWS = [
   {
-    id: "rb1",
+    id: "br1",
+    projectId: "crowley-gen",
+    projectName: "Crowley Generation",
+    client: "Acme AI",
+    tpm: "Vikram Kumar",
+    submittedAt: "2026-06-22T09:00:00Z",
+    urgency: "High",
+    stage: "CTO Review",
+    type: "Budget increase",
+    requestedBudget: 54000,
+    currentBudget: 48000,
+    recommendedBudget: 51500,
+    bufferPct: 12,
+    recoveryType: "Client-billable",
+    timeline: "Jun 1 – Jun 30, 2026",
+    tasks: 12,
+    phases: 4,
+    linesFlagged: 2,
+    variance: -3200,
+    aiCost: 22140,
+    infraCost: 9840,
+    subsCost: 2200,
+    miscCost: 1420,
+    justification: "Opus 4.8 inference volumes 18% above plan for Phase 2. Extra sweep needed before rollout.",
+  },
+  {
+    id: "br2",
     projectId: "atlas",
     projectName: "Atlas Ingest",
-    version: "v1.2",
-    originalVersion: "v1.1",
-    submittedBy: "Arjun Mehta",
-    submittedAt: "2026-06-22T09:00:00Z",
-    reviewedBy: "Vikram Kumar",
-    reviewedAt: "2026-06-23T14:30:00Z",
-    status: "returned",
-    ctoNote: "The GPU line is inflated. Try Gemini 2.5 Pro for classification — 34% cheaper for this task mix. Also consider reserved instances instead of on-demand for the ingest workload.",
-    diff: [
-      { line: "AI Model · Opus 4.8", from: 6800, to: 6800, changed: false, note: "Reduce or move to Gemini 2.5 Pro", flagged: true },
-      { line: "Infrastructure · AWS EC2 (on-demand)", from: 3200, to: 3200, changed: false, note: "Switch to reserved instances", flagged: true },
-      { line: "Infrastructure · AWS S3", from: 200, to: 200, changed: false, note: "OK", flagged: false },
-      { line: "Subscriptions · Claude Max", from: 400, to: 400, changed: false, note: "OK", flagged: false },
-      { line: "Miscellaneous · Travel", from: 800, to: 800, changed: false, note: "OK", flagged: false },
-    ],
-    total: 11400,
+    client: "Ironclad",
+    tpm: "Arjun Mehta",
+    submittedAt: "2026-06-21T09:44:00Z",
+    urgency: "Normal",
+    stage: "CTO Review",
+    type: "Budget modification",
+    requestedBudget: 14500,
+    currentBudget: 11000,
+    recommendedBudget: 13600,
+    bufferPct: 8,
+    recoveryType: "Internal (R&D)",
+    timeline: "Jun 1 – Jun 30, 2026",
+    tasks: 8,
+    phases: 4,
+    linesFlagged: 1,
+    variance: 400,
+    aiCost: 5680,
+    infraCost: 3200,
+    subsCost: 400,
+    miscCost: 320,
+    justification: "EC2 spike from Ironclad ingest workload up 34% week-over-week; extend sprint by 3 days.",
+  },
+  {
+    id: "br3",
+    projectId: "orion",
+    projectName: "Orion Stub",
+    client: "Voltek",
+    tpm: "Arjun Mehta",
+    submittedAt: "2026-06-20T14:22:00Z",
+    urgency: "Normal",
+    stage: "CTO Review",
+    type: "Initial budget",
+    requestedBudget: 12000,
+    currentBudget: 9000,
+    recommendedBudget: 11500,
+    bufferPct: 20,
+    recoveryType: "Client-billable",
+    timeline: "Jul 1 – Jul 31, 2026",
+    tasks: 6,
+    phases: 3,
+    linesFlagged: 0,
+    variance: 0,
+    aiCost: 6800,
+    infraCost: 2400,
+    subsCost: 640,
+    miscCost: 160,
+    justification: "New R&D engagement with Voltek. Standard discovery + prototype build with Opus 4.8 primary.",
   },
 ];
+
+// CTO AUDIT — modifications made by CTO on budgets
+export const CTO_AUDIT = [
+  { id: "cta-1", when: "2026-06-22T11:12:00Z", who: "Vikram Kumar", action: "Modified AI Model line", detail: "Reduced Opus 4.8 estimate by $1,200 (moved to Gemini 2.5 Pro)" },
+  { id: "cta-2", when: "2026-06-22T11:14:00Z", who: "Vikram Kumar", action: "Added buffer", detail: "Set buffer to 12% (was 10%)" },
+];
+
+// DAILY CONSUMPTION SUBMISSIONS — for heatmap; per project per day
+const seedDailyConsumption = () => {
+  const rows = [];
+  const projects = PROJECTS.slice(0, 6);
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date(2026, 5, 30 - i);
+    const day = d.toISOString().slice(0, 10);
+    projects.forEach((p, idx) => {
+      const seed = (d.getDate() * (idx + 1)) % 9;
+      const approvedDaily = Math.round(p.approvedBudget / 30);
+      const spent = Math.round(approvedDaily * (0.4 + (seed % 6) * 0.15));
+      const tasks = 3 + (seed % 8);
+      const trajectories = tasks * (2 + (seed % 3));
+      rows.push({
+        date: day,
+        projectId: p.id,
+        projectName: p.name,
+        approvedDaily,
+        spent,
+        tasks,
+        trajectories,
+        model: ["Opus 4.8", "Gemini 2.5 Pro", "GPT-4o", "Sonnet"][idx % 4],
+      });
+    });
+  }
+  return rows;
+};
+export const DAILY_CONSUMPTION_LOG = seedDailyConsumption();
 
 // REPORTS CATALOG — used by Reports module
 export const REPORTS_CATALOG = [

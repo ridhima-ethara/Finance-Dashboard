@@ -16,24 +16,36 @@ import {
   GitPullRequest,
   Zap,
   FileText,
-  Undo2,
+  Bell,
+  Activity,
+  Bot,
+  ScrollText,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { initials } from "../../lib/format";
 
-const NAV_DEFAULT = [
+const NAV_CTO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
-  { to: "/daily", label: "Daily", icon: Calendar, testid: "nav-daily" },
+  { to: "/budget-reviews", label: "Budget Reviews", icon: ClipboardCheck, testid: "nav-budget-reviews" },
+  { to: "/monitoring", label: "Project Monitoring", icon: Activity, testid: "nav-monitoring" },
+  { to: "/ai-cost", label: "AI Cost Analytics", icon: Zap, testid: "nav-ai-cost" },
+  { to: "/change-requests", label: "Change Requests", icon: GitPullRequest, testid: "nav-change-requests" },
+  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
+  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
+  { to: "/audit", label: "Audit Log", icon: ScrollText, testid: "nav-audit" },
+];
+
+const NAV_CFO = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
+  { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
-  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
   { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/audit", label: "Audit Log", icon: History, testid: "nav-audit" },
   { to: "/team", label: "Team", icon: Users, testid: "nav-team" },
-  { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
 ];
 
@@ -41,20 +53,45 @@ const NAV_TPM = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "My Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/budget-builder", label: "Budget Builder", icon: ClipboardCheck, testid: "nav-budget-builder" },
-  { to: "/cto-review", label: "Returned Budgets", icon: Undo2, testid: "nav-cto-review" },
   { to: "/consumption", label: "Daily Consumption", icon: Calendar, testid: "nav-consumption" },
   { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
   { to: "/approvals", label: "Pending Approvals", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
-  { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
 ];
+
+const NAV_PL = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
+  { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
+  { to: "/daily", label: "Daily", icon: Calendar, testid: "nav-daily" },
+  { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
+  { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
+  { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
+  { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
+  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
+  { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
+];
+
+const pickNav = (role) => {
+  switch (role) {
+    case "CTO":
+      return NAV_CTO;
+    case "CFO":
+      return NAV_CFO;
+    case "TPM":
+      return NAV_TPM;
+    case "PL":
+      return NAV_PL;
+    default:
+      return NAV_PL;
+  }
+};
 
 const Sidebar = () => {
   const { user, logout } = useApp();
   const nav = useNavigate();
-  const NAV = user?.role === "TPM" ? NAV_TPM : NAV_DEFAULT;
+  const NAV = pickNav(user?.role);
   const handleLogout = () => {
     logout();
     nav("/login", { replace: true });
