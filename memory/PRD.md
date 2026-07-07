@@ -22,7 +22,18 @@ Frontend only (React + Tailwind + shadcn/ui + Recharts + react-router).
 - `components/dashboard/` — AmountAtRisk, KpiGrid, Charts (Budget/Actual/Estimated, Model expenses, Infra stacked, Monthly trend, Category donut, Utilization bars, Subscription usage, Workflow strip), ProjectsTable
 - `pages/` — Dashboard, Projects, ProjectDetail, Approvals, TopUps, Reimbursements, AuditLog, Team, Tasks, Settings
 
-## What's Implemented (2026-02-07 · iteration 4)
+## What's Implemented (2026-02-08 · iteration 5) — TPM Workflow Sub-Modules
+- [x] **AI Cost Screen** (`/ai-cost`) — 6 KPI cards (today, WoW, MTD, projected, tokens, requests), stacked 30-day cost trend by provider, provider share donut, provider breakdown table (Anthropic/OpenAI/Google/Moonshot/xAI), model breakdown table with $/1K unit economics, project attribution list, AI optimization insights panel
+- [x] **Phase Workspace** (`/projects/:id/phase/:phaseId`) — Task table with owner, assigned model per task, infra, estimated vs actual cost, variance, status (planned/in-progress/done); 6 stat cards (est/actual/variance/util/completion/health); progress bar; status filter chips; AI phase insight
+- [x] **Daily Consumption** (`/consumption`) — 6 stat cards, 14-day trend (actual vs estimated) LineChart, category breakdown bars, submit-tomorrow's-estimate form (4 categories + project selector + toast confirmation), last-7-days consumption table
+- [x] **CTO Review / Returned Budget** (`/cto-review/:id`) — CTO note banner, version comparison (v1.1 → v1.2), flagged lines with per-line Accept/Reject decisions, budget summary sidebar with acceptance counts, response-to-CTO textarea, Resubmit action with toast + navigation, other returned-budgets nav list
+- [x] **Reports Library** (`/reports`) — 8 report cards (Budget, Phase, Expense, Variance, Task, Model, Recovery, Daily) with type icons, filters (search + type + frequency), Run + Download actions per card, expandable format-selector (PDF/CSV/XLSX/JSON), Scheduled reports section with 3 example schedules
+- [x] **TpmDashboard wiring** — kpi-returned links to `/cto-review/rb1`, today-est/today-actual link to `/consumption`, upcoming phase widget links to `/projects/:id/phase/:phaseId`; pending-actions rows navigate to correct new routes
+- [x] **Sidebar nav** — TPM role sees 11 items including new nav-cto-review, nav-consumption, nav-ai-cost, nav-reports; default (CTO/CFO/PL) roles get nav-ai-cost + nav-reports added
+- [x] **mockData.js refactor** — split into modular files: `mockUsers.js`, `mockProjects.js`, `mockFinance.js`, `mockAi.js`, `mockTpm.js`. `mockData.js` becomes a barrel re-export for backward compatibility. New mock data: `AI_COST_TODAY/MONTHLY/BY_PROVIDER/BY_MODEL/TREND/BY_PROJECT`, `PHASE_TASKS`, `CHANGE_REQUESTS`, `RETURNED_BUDGETS`, `REPORTS_CATALOG`
+- [x] Tested end-to-end via Playwright · 100% pass · zero console errors (`/app/test_reports/iteration_5.json`)
+
+
 - [x] **Login redesigned** — matches Ethara.AI branding image: dark background with subtle grid + diagonal wireframe, large white ornate mask + "Ethara.AI" wordmark (magenta ".AI"), "Financial Command Center" between fuchsia lines, 4 quick-login role cards color-coded per role (fuchsia/emerald/sky/amber), optional email+password form via toggle
 - [x] **TPM visibility** — TPM sees only projects they requested (project.tpm === user.name); PL sees own; CTO/CFO see all; helper `visibleProjects` in context; Dashboard subtitle and Projects list reflect scope
 - [x] **P1.1 Admin-defined project buffer** — Buffer panel on ProjectDetail with slider + numeric input + Save. Editable only by CTO/CFO. Effective budget = Approved × (1 + buffer%). Persisted in localStorage
@@ -81,6 +92,11 @@ P2
 - Comment mentions & attachments
 
 ## Next Action Items
-1. Wire real backend (FastAPI + MongoDB) with CRUD for projects/expenses/top-ups/approvals
-2. Add role gating (Finance can approve reimbursements, COO can approve top-ups, etc.)
-3. Replace mock AI with Claude Sonnet 4.5 via emergentintegrations
+1. **P2** — Upgrade floating AI Assistant (AiPanel) to handle TPM-specific queries: "Predict when this budget will be exhausted", "Show today's AI cost", "Which provider is cheapest for classification?"
+2. **P2** — Actual downloads for reports (mock CSV/JSON generation client-side using project data)
+3. **P2** — Real backend (FastAPI + MongoDB) with CRUD for projects/expenses/top-ups/approvals/budgets
+4. **P2** — Real auth + role-based route gating (Emergent Google auth or JWT)
+5. **P3** — Bill upload with object storage
+6. **P3** — Live LLM (Claude Sonnet 4.5 via Emergent LLM key) for AI panel
+7. **P3** — INR toggle with FX rate
+

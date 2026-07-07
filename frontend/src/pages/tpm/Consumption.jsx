@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { DAILY_ACTIVITY } from "../../data/mockAi";
-import { AI_COST_TREND } from "../../data/mockTpm";
 import { fmtCurrency } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";

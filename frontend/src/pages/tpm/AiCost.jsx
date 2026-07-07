@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
-import { fmtCurrency, fmtPct } from "../../lib/format";
+import { fmtCurrency } from "../../lib/format";
 import {
   AI_COST_TODAY,
   AI_COST_MONTHLY,
