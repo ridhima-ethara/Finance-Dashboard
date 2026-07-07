@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 5 TPM Portal frontend testing complete. Verified: (1) login page mandala + wordmark + subtitle + 4 role cards, (2) TPM sees page-tpm-dashboard with all 12 KPIs, 6 charts, 3 widgets, 4 action rows, (3) TPM sidebar shows exactly the 9 required nav items and hides reimb/team/tasks; non-TPM roles (CTO/CFO/PL) see page-dashboard with the default 11-item sidebar and no nav-budget-builder, (4) Budget Builder 3-step wizard renders correctly, add-* buttons create rows, running total updates as amounts are edited, bb-save-draft and bb-submit both show correct toasts, (5) Change Request dialog opens, validates empty reason with error toast, submits successfully with valid reason and closes. No 'BudgetBuilder is not defined' runtime error. No page/unhandled errors. One minor React key-collision warning in the Phase summary preview when a duplicate-name phase is added.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "console_warnings": [
+    {"component": "BudgetBuilder → SummaryCard 'Phase summary' (step 3)", "warning": "Encountered two children with the same key, `Phase 1`. Non-unique keys may cause components to be duplicated/omitted.", "root_cause": "SummaryCard (BudgetBuilder.jsx:240 & 318) uses row.k (== phase.name) as React key. Clicking add-phase creates a new phase with default name 'Phase 1' — collides with the pre-seeded 'Phase 1'.", "priority": "LOW", "suggested_fix": "In BudgetBuilder.jsx:240 pass phase.id as key, e.g. rows={phases.map(p => ({id: p.id, k: p.name, v: Number(p.budget||0)}))} and update SummaryCard to key on r.id (fallback r.k)."}
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "(Optional / low priority) Fix duplicate-key React warning in BudgetBuilder.jsx Phase summary — use phase.id (or index) as key instead of phase.name in SummaryCard rows."
+  ],
+  "critical_code_review_comments": [
+    "BudgetBuilder.jsx: `emptyPhase()` always seeds name='Phase 1'. When add-phase is clicked, new phases keep name 'Phase 1' — this drives both the React key collision and a confusing UX (two rows named 'Phase 1'). Consider naming new phases as `Phase ${phases.length + 1}`.",
+    "BudgetBuilder.jsx unused imports: `ArrowUpRightSquare` in TpmDashboard.jsx and `Sparkles` (in BudgetBuilder header import list) — trivial cleanup.",
+    "TpmDashboard.jsx: The header sentence says 'X projects assigned to you' but the visibleProjects filter for TPM should be verified against context — currently shows 4 projects for Arjun which matches USERS/PROJECTS mock, OK.",
+    "Login.jsx: EtharaMask SVG is inline in Login.jsx (~70 lines) — consider extracting to a shared component if it will be reused in Sidebar branding (which currently uses a different inline SVG)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only per request)", "frontend": "100% of the 12 requested checks pass"},
+  "seed_data_creation": "None. All flows use localStorage-only mock auth + mocked toasts.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 5 TPM Portal verified end-to-end via Playwright against https://budget-forge-8.preview.emergentagent.com. All 12 KPI testids, 6 chart testids, 3 widgets + 4 action rows, 9 TPM nav testids, 3-step Budget Builder testids (bb-step-1/2/3, cat-models/infra/subs/misc, add-cat-*/add-phase/add-task, bb-save-draft/bb-submit), and Change Request dialog (cr-project/amount/urgency-*/phase/tasks/timeline/reason/submit/cancel) all render and behave as spec. Non-TPM roles remain on the default Dashboard + 11-item sidebar. Only cosmetic React duplicate-key warning remains (see console_warnings)."
+}

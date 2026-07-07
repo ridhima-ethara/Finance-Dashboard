@@ -16,11 +16,16 @@ import { Download, RefreshCw, Plus } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { useState } from "react";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
+import TpmDashboard from "./tpm/TpmDashboard";
 
 const Dashboard = () => {
   const { role, scope, visibleProjects } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
   const isPL = role === "PL";
+
+  // TPM gets a dedicated portal dashboard
+  if (role === "TPM") return <TpmDashboard />;
+
 
   return (
     <div className="space-y-6" data-testid="page-dashboard">

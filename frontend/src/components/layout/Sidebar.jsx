@@ -12,11 +12,13 @@ import {
   KeyRound,
   LogOut,
   Calendar,
+  ClipboardCheck,
+  GitPullRequest,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { initials } from "../../lib/format";
 
-const NAV = [
+const NAV_DEFAULT = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/daily", label: "Daily", icon: Calendar, testid: "nav-daily" },
@@ -30,9 +32,22 @@ const NAV = [
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
 ];
 
+const NAV_TPM = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
+  { to: "/projects", label: "My Projects", icon: FolderKanban, testid: "nav-projects" },
+  { to: "/budget-builder", label: "Budget Builder", icon: ClipboardCheck, testid: "nav-budget-builder" },
+  { to: "/daily", label: "Daily Tracking", icon: Calendar, testid: "nav-daily" },
+  { to: "/approvals", label: "Pending Approvals", icon: ShieldCheck, testid: "nav-approvals" },
+  { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
+  { to: "/keys", label: "AI Cost & Keys", icon: KeyRound, testid: "nav-keys" },
+  { to: "/audit", label: "Reports", icon: History, testid: "nav-audit" },
+  { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
+];
+
 const Sidebar = () => {
   const { user, logout } = useApp();
   const nav = useNavigate();
+  const NAV = user?.role === "TPM" ? NAV_TPM : NAV_DEFAULT;
   const handleLogout = () => {
     logout();
     nav("/login", { replace: true });

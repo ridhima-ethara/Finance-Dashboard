@@ -20,38 +20,79 @@ const roleLabel = {
   PL: "Project Lead",
 };
 
-// Stylized Ethara tribal mask logo — matches the branding image
+// Ethara.AI lotus mandala mark — matches the branding
 const EtharaMask = ({ className = "" }) => (
-  <svg viewBox="0 0 120 160" className={className} fill="none">
-    {/* Oval frame */}
-    <ellipse cx="60" cy="80" rx="52" ry="72" stroke="white" strokeWidth="3.5" />
-    {/* Central leaf */}
+  <svg viewBox="0 0 200 200" className={className} fill="none">
+    {/* Outer circle */}
+    <circle cx="100" cy="100" r="88" stroke="white" strokeWidth="5" />
+
+    {/* Top center leaf */}
     <path
-      d="M60 22 C 78 40, 82 62, 60 90 C 38 62, 42 40, 60 22 Z"
-      fill="white"
+      d="M 100 38 Q 120 68 100 108 Q 80 68 100 38 Z"
+      stroke="white"
+      strokeWidth="5"
+      strokeLinejoin="round"
     />
-    {/* Central leaf inner void (petal detail) */}
+
+    {/* Upper-left leaf */}
     <path
-      d="M60 40 C 68 52, 68 66, 60 78 C 52 66, 52 52, 60 40 Z"
-      fill="#0A0A0F"
+      d="M 52 76 Q 54 108 92 110 Q 78 92 52 76 Z"
+      stroke="white"
+      strokeWidth="5"
+      strokeLinejoin="round"
     />
-    {/* Left eye */}
+
+    {/* Upper-right leaf */}
     <path
-      d="M 32 74 C 22 82, 22 96, 32 100 C 44 92, 44 82, 32 74 Z"
-      fill="white"
+      d="M 148 76 Q 146 108 108 110 Q 122 92 148 76 Z"
+      stroke="white"
+      strokeWidth="5"
+      strokeLinejoin="round"
     />
-    {/* Right eye */}
+
+    {/* Lower-left petal */}
     <path
-      d="M 88 74 C 98 82, 98 96, 88 100 C 76 92, 76 82, 88 74 Z"
-      fill="white"
+      d="M 58 122 Q 60 148 96 132 Q 84 124 58 122 Z"
+      stroke="white"
+      strokeWidth="5"
+      strokeLinejoin="round"
     />
-    {/* Center dividing line */}
-    <line x1="60" y1="94" x2="60" y2="128" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+
+    {/* Lower-right petal */}
+    <path
+      d="M 142 122 Q 140 148 104 132 Q 116 124 142 122 Z"
+      stroke="white"
+      strokeWidth="5"
+      strokeLinejoin="round"
+    />
+
+    {/* Center cross where petals meet */}
+    <path
+      d="M 92 110 L 100 120 L 108 110"
+      stroke="white"
+      strokeWidth="5"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      fill="none"
+    />
+    <path
+      d="M 96 132 L 100 140 L 104 132"
+      stroke="white"
+      strokeWidth="5"
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      fill="none"
+    />
+
     {/* Bottom drop */}
-    <path d="M 60 128 L 55 138 L 60 144 L 65 138 Z" fill="white" />
-    {/* Small dots */}
-    <circle cx="45" cy="112" r="1.6" fill="white" />
-    <circle cx="75" cy="112" r="1.6" fill="white" />
+    <path
+      d="M 95 148 Q 100 162 105 148 Q 100 144 95 148 Z"
+      fill="white"
+    />
+
+    {/* Two flanking dots */}
+    <circle cx="80" cy="156" r="2.8" fill="white" />
+    <circle cx="120" cy="156" r="2.8" fill="white" />
   </svg>
 );
 
@@ -113,7 +154,7 @@ const Login = () => {
       <div className="relative min-h-screen flex flex-col items-center justify-center px-6 py-10">
         {/* Wordmark banner — mask + Ethara.AI side by side */}
         <div className="flex items-center gap-6 sm:gap-10">
-          <EtharaMask className="w-24 h-32 sm:w-32 sm:h-44 md:w-40 md:h-56 flex-shrink-0" />
+          <EtharaMask className="w-24 h-24 sm:w-32 sm:h-32 md:w-40 md:h-40 flex-shrink-0" />
           <div className="flex flex-col leading-none">
             <div className="font-display font-bold tracking-tight text-white text-6xl sm:text-7xl md:text-8xl leading-none">
               Ethara<span className="text-fuchsia-500">.AI</span>
