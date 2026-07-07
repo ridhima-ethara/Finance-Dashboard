@@ -5,13 +5,16 @@ import { Search, Filter, Plus, ChevronRight } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useApp } from "../context/AppContext";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
+import NewProjectDialog from "../components/NewProjectDialog";
 
 const Projects = () => {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
   const [requestOpen, setRequestOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const { role, scope, visibleProjects } = useApp();
   const isPL = role === "PL";
+  const isCTO = role === "CTO";
 
   const filtered = visibleProjects.filter((p) => {
     if (scope !== "all" && p.type !== scope) return false;
@@ -43,10 +46,16 @@ const Projects = () => {
               Request Budget
             </Button>
           )}
-          <Button variant="outline" className="h-9 rounded-lg border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 gap-2" data-testid="btn-new-project">
-            <Plus className="w-4 h-4" />
-            New project
-          </Button>
+          {isCTO && (
+            <Button
+              onClick={() => setNewProjectOpen(true)}
+              className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+              data-testid="btn-new-project"
+            >
+              <Plus className="w-4 h-4" />
+              New project
+            </Button>
+          )}
         </div>
       </div>
 
@@ -158,6 +167,7 @@ const Projects = () => {
       </div>
 
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
+      <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
     </div>
   );
 };

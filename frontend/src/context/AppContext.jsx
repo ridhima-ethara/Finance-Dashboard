@@ -5,6 +5,7 @@ const AppContext = createContext(null);
 const SESSION_KEY = "ethara.session.v1";
 const BUFFERS_KEY = "ethara.buffers.v1";
 const RECOVERY_KEY = "ethara.recovery.v1";
+const CUSTOM_PROJECTS_KEY = "ethara.customProjects.v1";
 
 export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
@@ -35,6 +36,14 @@ export const AppProvider = ({ children }) => {
       return {};
     }
   });
+  // CTO-created projects — persisted in localStorage
+  const [customProjects, setCustomProjects] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(CUSTOM_PROJECTS_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
@@ -42,6 +51,7 @@ export const AppProvider = ({ children }) => {
   }, [user]);
   useEffect(() => localStorage.setItem(BUFFERS_KEY, JSON.stringify(buffers)), [buffers]);
   useEffect(() => localStorage.setItem(RECOVERY_KEY, JSON.stringify(recoveries)), [recoveries]);
+  useEffect(() => localStorage.setItem(CUSTOM_PROJECTS_KEY, JSON.stringify(customProjects)), [customProjects]);
 
   const login = ({ email, password, role }) => {
     if (role) {
@@ -61,15 +71,15 @@ export const AppProvider = ({ children }) => {
   };
   const logout = () => setUser(null);
 
-  // Merge overrides into projects
+  // Merge overrides into projects — include custom (CTO-created) projects
   const projects = useMemo(
     () =>
-      PROJECTS.map((p) => ({
+      [...PROJECTS, ...customProjects].map((p) => ({
         ...p,
         buffer: buffers[p.id] ?? p.buffer,
         recoveredAmount: recoveries[p.id] ?? p.recoveredAmount,
       })),
-    [buffers, recoveries]
+    [buffers, recoveries, customProjects]
   );
 
   // Role-based visibility filter
@@ -82,6 +92,60 @@ export const AppProvider = ({ children }) => {
 
   const setBuffer = (projectId, pct) => setBuffers((b) => ({ ...b, [projectId]: Number(pct) }));
   const setRecovery = (projectId, amount) => setRecoveries((r) => ({ ...r, [projectId]: Number(amount) }));
+
+  const addProject = (payload) => {
+    const id = `p-${Date.now().toString(36)}`;
+    const proj = {
+      id,
+      name: payload.internalName,
+      clientProjectName: payload.clientProjectName,
+      client: payload.client || "New Client",
+      pl: payload.tpm, // default owner
+      tpm: payload.tpm,
+      startDate: payload.startDate,
+      estimatedEndDate: payload.estimatedEndDate,
+      status: "Discovery",
+      type: "R&D",
+      buffer: 10,
+      recoverableFromClient: false,
+      recoveredAmount: 0,
+      approvedBudget: 0,
+      estimatedBudget: 0,
+      actualSpend: 0,
+      remaining: 0,
+      variance: 0,
+      utilization: 0,
+      burnRate: 0,
+      forecast: 0,
+      infrastructureCost: 0,
+      aiModelCost: 0,
+      employeeCost: 0,
+      purchaseCost: 0,
+      reimbursements: 0,
+      dinnerExpenses: 0,
+      miscExpenses: 0,
+      topupsTotal: 0,
+      health: "healthy",
+      topModel: "—",
+      phases: [],
+      expenses: [],
+      budgetHistory: [],
+      topupHistory: [],
+      auditLog: [
+        {
+          id: `a-${id}-1`,
+          ts: new Date().toISOString(),
+          actor: payload.createdBy || "CTO",
+          action: "Project created",
+          detail: `Assigned TPM: ${payload.tpm}. Start: ${payload.startDate} · Est. end: ${payload.estimatedEndDate}`,
+        },
+      ],
+      comments: [],
+      __custom: true,
+    };
+    setCustomProjects((arr) => [proj, ...arr]);
+    return proj;
+  };
 
   const role = user?.role || null;
   const value = useMemo(
@@ -102,6 +166,7 @@ export const AppProvider = ({ children }) => {
       visibleProjects,
       setBuffer,
       setRecovery,
+      addProject,
     }),
     [user, role, aiOpen, notifOpen, scope, projects, visibleProjects]
   );

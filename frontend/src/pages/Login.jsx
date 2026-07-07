@@ -112,7 +112,7 @@ const Login = () => {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {USERS.map((u) => {
+            {USERS.filter((u) => u.role !== "PL").map((u) => {
               const a = roleAccent[u.role];
               return (
                 <button

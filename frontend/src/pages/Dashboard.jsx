@@ -18,6 +18,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 import TpmDashboard from "./tpm/TpmDashboard";
+import CtoDashboard from "./cto/CtoDashboard";
 import { BUDGET_REVIEWS, CHANGE_REQUESTS } from "../data/mockTpm";
 import { PROJECTS } from "../data/mockProjects";
 import { BUFFER, RECOVERY } from "../data/mockCfo";
@@ -32,6 +33,8 @@ const Dashboard = () => {
 
   // TPM gets a dedicated portal dashboard
   if (role === "TPM") return <TpmDashboard />;
+  // CTO gets a project-focused ops dashboard (no CFO-style whole-budget views)
+  if (role === "CTO") return <CtoDashboard />;
 
   const pendingReviews = BUDGET_REVIEWS.filter((r) => r.stage === "CTO Review").length;
   const pendingCRs = CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length;
