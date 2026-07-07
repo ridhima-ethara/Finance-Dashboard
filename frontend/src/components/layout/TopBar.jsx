@@ -1,4 +1,5 @@
-import { Search, Bell, Sparkles, ChevronDown } from "lucide-react";
+import { Search, Bell, Sparkles, LogOut, ChevronDown } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import {
   DropdownMenu,
@@ -10,17 +11,17 @@ import {
 } from "../ui/dropdown-menu";
 import { Button } from "../ui/button";
 import { NOTIFICATIONS } from "../../data/mockData";
+import { initials } from "../../lib/format";
 
 const TopBar = () => {
-  const { role, setRole, roles, setAiOpen, setNotifOpen } = useApp();
+  const { user, setAiOpen, setNotifOpen, logout, scope, setScope } = useApp();
+  const nav = useNavigate();
   const unread = NOTIFICATIONS.filter((n) => !n.read).length;
+  if (!user) return null;
 
   return (
-    <header
-      data-testid="app-topbar"
-      className="sticky top-0 z-20 h-16 bg-[#0B0B12]/85 backdrop-blur border-b border-white/5 flex items-center gap-3 px-6"
-    >
-      <div className="flex-1 max-w-2xl relative">
+    <header data-testid="app-topbar" className="sticky top-0 z-20 h-16 bg-[#0B0B12]/85 backdrop-blur border-b border-white/5 flex items-center gap-3 px-6">
+      <div className="flex-1 max-w-xl relative">
         <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
         <input
           data-testid="topbar-search"
@@ -29,39 +30,27 @@ const TopBar = () => {
         />
       </div>
 
-      <div className="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="role-switcher"
-              className="h-10 rounded-lg border-white/10 bg-white/[0.04] hover:bg-white/[0.08] gap-2 font-medium"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-500/100" />
-              <span className="text-zinc-200">Viewing as</span>
-              <span className="text-white font-semibold">{role}</span>
-              <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-52">
-            <DropdownMenuLabel className="text-xs text-zinc-500 uppercase tracking-wider">
-              Switch role
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {roles.map((r) => (
-              <DropdownMenuItem
-                key={r}
-                data-testid={`role-option-${r.toLowerCase().replace(/\s+/g, "-")}`}
-                onClick={() => setRole(r)}
-                className={`text-sm ${r === role ? "font-semibold text-fuchsia-400" : ""}`}
-              >
-                {r}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      {/* R&D vs Ops scope filter */}
+      <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1" data-testid="scope-filter">
+        {[
+          { v: "all", l: "All" },
+          { v: "R&D", l: "R&D" },
+          { v: "Operations", l: "Ops" },
+        ].map((o) => (
+          <button
+            key={o.v}
+            onClick={() => setScope(o.v)}
+            data-testid={`scope-${o.v.toLowerCase().replace(/&/g, "").replace(/\s+/g, "")}`}
+            className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
+              scope === o.v ? "bg-fuchsia-500/15 text-fuchsia-300" : "text-zinc-400 hover:text-zinc-100"
+            }`}
+          >
+            {o.l}
+          </button>
+        ))}
+      </div>
 
+      <div className="flex items-center gap-2">
         <Button
           variant="outline"
           size="sm"
@@ -70,7 +59,7 @@ const TopBar = () => {
           className="h-10 rounded-lg border-fuchsia-500/30 gap-2 bg-fuchsia-500/[0.06] hover:bg-fuchsia-500/[0.14] text-fuchsia-200"
         >
           <Sparkles className="w-4 h-4 text-fuchsia-400" />
-          <span className="font-medium text-zinc-100">Ask AI</span>
+          <span className="font-medium">Ask AI</span>
         </Button>
 
         <button
@@ -85,6 +74,43 @@ const TopBar = () => {
             </span>
           )}
         </button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button data-testid="user-menu" className="h-10 pl-1 pr-2.5 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] flex items-center gap-2 transition-colors">
+              {user.avatarUrl ? (
+                <img src={user.avatarUrl} alt={user.name} className="w-7 h-7 rounded-md object-cover" />
+              ) : (
+                <div className="w-7 h-7 rounded-md bg-gradient-to-br from-fuchsia-500/40 to-pink-500/30 flex items-center justify-center text-[10px] font-semibold text-fuchsia-200">
+                  {initials(user.name)}
+                </div>
+              )}
+              <div className="hidden md:block text-left">
+                <div className="text-[11px] text-zinc-500 leading-none">Signed in as</div>
+                <div className="text-xs font-semibold text-zinc-100 mt-0.5">{user.role}</div>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel className="text-xs">
+              <div className="font-semibold">{user.name}</div>
+              <div className="text-zinc-500 text-[11px] mt-0.5">{user.email}</div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              data-testid="menu-logout"
+              onClick={() => {
+                logout();
+                nav("/login", { replace: true });
+              }}
+              className="text-sm gap-2"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

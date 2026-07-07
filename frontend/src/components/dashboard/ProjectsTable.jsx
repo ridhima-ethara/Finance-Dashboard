@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { PROJECTS } from "../../data/mockData";
 import { fmtCurrency, fmtPct, healthColor, varianceColor, utilColor } from "../../lib/format";
+import { useApp } from "../../context/AppContext";
 
 const HealthBadge = ({ h }) => {
   const c = healthColor(h);
@@ -17,10 +18,12 @@ const HealthBadge = ({ h }) => {
 const ProjectsTable = () => {
   const [expanded, setExpanded] = useState({ "crowley-gen": true });
   const nav = useNavigate();
+  const { scope } = useApp();
 
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
-  const totals = PROJECTS.reduce(
+  const projects = PROJECTS.filter((p) => scope === "all" || p.type === scope);
+  const totals = projects.reduce(
     (a, p) => ({
       approved: a.approved + p.approvedBudget,
       est: a.est + p.estimatedBudget,
@@ -66,7 +69,7 @@ const ProjectsTable = () => {
             </tr>
           </thead>
           <tbody>
-            {PROJECTS.map((p) => {
+            {projects.map((p) => {
               const isOpen = !!expanded[p.id];
               return (
                 <Fragment key={p.id}>
@@ -86,7 +89,14 @@ const ProjectsTable = () => {
                           <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-zinc-400" />
                         )}
                         <div>
-                          <div className="text-sm font-medium text-white">{p.name}</div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium text-white">{p.name}</div>
+                            <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${
+                              p.type === "R&D" ? "bg-violet-500/10 border-violet-500/30 text-violet-300" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                            }`}>
+                              {p.type}
+                            </span>
+                          </div>
                           <div className="text-[11px] text-zinc-500">{p.client}</div>
                         </div>
                       </button>

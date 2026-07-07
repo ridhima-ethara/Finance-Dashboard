@@ -1,0 +1,52 @@
+{
+  "summary": "Frontend-only e2e verification of iteration 3 (role-based logins + 4 P0 items). 15/16 review-request bullets PASS. Login/session/protected-routes flow, 4 quick-login role cards, sidebar with 10 nav items (Model Keys added, no Budget Consolidation), scope filter (all/rd/operations) with header + Projects list updates, user-menu logout + sidebar btn-logout both clear session and redirect to /login, role gating on btn-request-budget (CTO=hidden, PL=visible), full RequestBudgetDialog flow with 14+ testids + line/phase management + running total on submit + empty-justification error toast, Approvals rows show all three action buttons (Reject/Partial/Approve) for ap1..ap4, PartialApprovalDialog opens with slider/amount/defer/reason/cancel/submit and submits with %-released toast, Model Keys governance page renders 4 stats + 9 rows + reveal/copy/rotate/revoke per row + env/type/provider chip filters + search, TPM correctly denied on reveal with 'Access denied · Only CTO or CFO can reveal keys' toast (key stays masked), Generate Key dialog opens + gk-tag + gk-cancel + gk-generate produce success toast, R&D=violet & Operations=emerald chips render on 4+4 project cards AND 4+4 rows in projects-table. FAILED: reveal button on Model Keys does not actually reveal the key even for CTO/CFO — a critical bug in ModelKeys.jsx (see below).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "ModelKeys.jsx (reveal action)",
+        "issue": "CRITICAL: Clicking btn-reveal-* does NOT toggle the key from masked to full for CTO/CFO. Audit toast 'Key revealed · audit logged' fires (twice sometimes), but the DOM at key-value-* remains masked ('sk-ant-••••••••••••••••••abc4'). Root cause: onClick handler passes the whole key object k instead of k.id — see /app/frontend/src/pages/ModelKeys.jsx line 217: `onClick={() => toggleReveal(k)}`. The setter writes `{ ...r, [id]: !r[id] }` where `id` is the whole object, so it stringifies to '[object Object]' and the lookup `revealed[k.id]` in the render (line 214) never becomes true. Fix: change line 217 to `onClick={() => toggleReveal(k.id)}`.",
+        "selector": "[data-testid='btn-reveal-k1']",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Global · Sonner Toaster + ModelKeys 'Generate new key' button",
+        "issue": "MINOR/UX: Toaster is positioned top-right (App.js) and stacks over the 'Generate new key' button which is also top-right. After any prior action that triggers a toast (e.g. reveal, rotate, revoke), the Generate button is visually covered for ~4s and hard to click for real users. Consider top-center toasts or moving the button below the toolbar.",
+        "selector": "[data-testid='btn-generate-key']",
+        "priority": "MEDIUM"
+      },
+      {
+        "component": "RequestBudgetDialog.jsx <select>",
+        "issue": "MINOR (carried from iteration 2 — still not fixed): React hydration warning 'In HTML, <span> cannot be a child of <option>' fires when the dialog mounts (Radix reconciliation with the plain <select><option> at line 106). Non-blocking but noisy. Recommend using the Radix <Select> component or removing any wrapping <span> from option children.",
+        "selector": "[data-testid='rb-project']",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (Recharts)", "issues": ["Benign: ~10 warnings per mount 'The width(-1) and height(-1) of chart should be greater than 0'. Same as prior iterations. Set explicit minHeight on ResponsiveContainer parents to silence."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "HIGH — Fix ModelKeys reveal: `/app/frontend/src/pages/ModelKeys.jsx` line 217 change `toggleReveal(k)` → `toggleReveal(k.id)` so revealed state is keyed by string id.",
+    "MEDIUM — Move Toaster away from top-right (or reduce duration/dismissible) so it does not obscure 'Generate new key'.",
+    "LOW — Migrate RequestBudgetDialog's native <select> to the Radix Select component (kills the hydration warning + matches the rest of the UI).",
+    "LOW — Add minHeight to Recharts ResponsiveContainer parents to silence the width(-1)/height(-1) console warnings."
+  ],
+  "critical_code_review_comments": [
+    "BUG: ModelKeys.jsx `toggleReveal` receives the whole object k but stores state keyed by id → keys never actually reveal in the UI. Ship-blocker for a P0 governance feature explicitly called out in the review request.",
+    "TopBar.tsx scope-filter testid derivation: `scope-${o.v.toLowerCase().replace(/&/g, '').replace(/\\s+/g,'')}` yields 'scope-rd' and 'scope-operations' — matches spec. Consider using the same lower-kebab helper as ModelKeys ChipGroup to avoid drift.",
+    "Role labels are inconsistent across the app: AppContext/Login/mockData use short codes ('CTO','CFO','TPM','PL'), while Sidebar dropdowns and TEAM roster use long labels ('Project Lead','Finance', etc.). The current logic (`isPL = role === 'PL'`) works because it reads USERS[].role, but any future comparison against TEAM[].role or Settings switches will silently mismatch. Recommend a single ROLE_CODES + ROLE_LABELS mapping.",
+    "PartialApprovalDialog: nice UX (slider + defer options). Consider disabling pa-submit when amount<=0 or reason is empty rather than only showing an error on click.",
+    "No files exceed 700 lines. Env vars respected. No hardcoded URLs. Testids present on every interactive element checked."
+  ],
+  "updated_files": ["/app/memory/test_credentials.md"],
+  "success_rate": {"backend": "N/A (frontend-only per spec)", "frontend": "94% (15/16 review checks pass — reveal-key is the sole failure)"},
+  "test_credentials": "cto@ethara.ai / demo123 · cfo@ethara.ai / demo123 · tpm@ethara.ai / demo123 · pl@ethara.ai / demo123 — or use quick-login-<role>. Session key: localStorage['ethara.session.v1'].",
+  "seed_data_creation": "None — all data mocked. Iteration 3 added USERS (4 roles with password:'demo123'), MODEL_KEYS (9 entries), project.type flag ('R&D' vs 'Operations') on each of 8 projects.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Base URL: https://budget-forge-8.preview.emergentagent.com. Auth is localStorage-only (no backend). Always run `await page.evaluate('localStorage.clear()')` before login flows. Quick-login: click `[data-testid=\"quick-login-cto|cfo|tpm|pl\"]`. Logout: sidebar `btn-logout` OR user-menu → `menu-logout`. When testing Model Keys reveal after the fix, verify `[data-testid=\"key-value-k1\"]` inner_text changes from 'sk-ant-••••••••••••••••••abc4' (masked) to 'sk-ant-live-A21F94Xa8ec4nabc4' (full). ChipGroup testids: `filter-env-<v>`, `filter-type-<v>` (R&D → 'r-d'), `filter-prov-<v>`. Approvals use ids ap1..ap4. All 3 partial-approval flows (park/defer/close) share the same pa-submit — differentiate by pa-defer-<mode>.",
+  "rca of the issue": "ModelKeys.jsx reveal bug — RCA: The `toggleReveal(id)` function is defined with a single `id` parameter but is invoked as `toggleReveal(k)` from the reveal button's onClick (line 217). JavaScript then uses the full key object as a computed-property key in `setRevealed((r) => ({ ...r, [id]: !r[id] }))`, which coerces to the string '[object Object]'. The audit toast still fires because the setter runs successfully, but the row's render lookup `revealed[k.id]` (line 214) remains undefined/false, so the masked text is always shown. Reproduction: sign in as CTO → /keys → click any btn-reveal-* → the audit toast appears but key-value-* stays masked. Mitigation: change line 217 to `onClick={() => toggleReveal(k.id)}`. Additional hardening: rename parameter `id` in `toggleReveal` to be explicit, and consider TypeScript-style prop typing so this class of misuse is caught statically."
+}

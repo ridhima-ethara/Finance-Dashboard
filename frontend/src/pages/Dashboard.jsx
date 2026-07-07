@@ -18,9 +18,9 @@ import { useState } from "react";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 
 const Dashboard = () => {
-  const { role } = useApp();
+  const { role, scope } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
-  const isPL = role === "Project Lead";
+  const isPL = role === "PL";
 
   return (
     <div className="space-y-6" data-testid="page-dashboard">
@@ -36,6 +36,7 @@ const Dashboard = () => {
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
             Real-time budget, forecast &amp; burn across all AI engagements · June 2026
+            {scope !== "all" && <span className="ml-2 text-fuchsia-300">· scope: {scope}</span>}
           </p>
         </div>
         <div className="flex items-center gap-2">

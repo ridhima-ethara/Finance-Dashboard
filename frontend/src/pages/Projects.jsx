@@ -11,10 +11,11 @@ const Projects = () => {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
   const [requestOpen, setRequestOpen] = useState(false);
-  const { role } = useApp();
-  const isPL = role === "Project Lead";
+  const { role, scope } = useApp();
+  const isPL = role === "PL";
 
   const filtered = PROJECTS.filter((p) => {
+    if (scope !== "all" && p.type !== scope) return false;
     if (filter === "over" && p.utilization < 100) return false;
     if (filter === "watch" && !(p.utilization >= 85 && p.utilization < 100)) return false;
     if (filter === "healthy" && p.utilization >= 85) return false;
@@ -95,7 +96,14 @@ const Projects = () => {
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
-                  <div className="text-xs text-zinc-500">{p.client}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs text-zinc-500">{p.client}</div>
+                    <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border ${
+                      p.type === "R&D" ? "bg-violet-500/10 border-violet-500/30 text-violet-300" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                    }`}>
+                      {p.type}
+                    </span>
+                  </div>
                   <div className="mt-0.5 font-display font-semibold text-lg text-white truncate">
                     {p.name}
                   </div>

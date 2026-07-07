@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Users,
@@ -9,9 +9,11 @@ import {
   ArrowUpRightSquare,
   History,
   Settings,
+  KeyRound,
+  LogOut,
 } from "lucide-react";
-import { CURRENT_USER } from "../../data/mockData";
 import { useApp } from "../../context/AppContext";
+import { initials } from "../../lib/format";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
@@ -19,6 +21,7 @@ const NAV = [
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
+  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
   { to: "/audit", label: "Audit Log", icon: History, testid: "nav-audit" },
   { to: "/team", label: "Team", icon: Users, testid: "nav-team" },
   { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
@@ -26,12 +29,16 @@ const NAV = [
 ];
 
 const Sidebar = () => {
-  const { role } = useApp();
+  const { user, logout } = useApp();
+  const nav = useNavigate();
+  const handleLogout = () => {
+    logout();
+    nav("/login", { replace: true });
+  };
+  if (!user) return null;
+
   return (
-    <aside
-      data-testid="app-sidebar"
-      className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col border-r border-white/5 bg-[#0B0B12] z-30"
-    >
+    <aside data-testid="app-sidebar" className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col border-r border-white/5 bg-[#0B0B12] z-30">
       {/* Brand */}
       <div className="h-16 flex items-center gap-2 px-5 border-b border-white/5">
         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-fuchsia-500 to-pink-600 flex items-center justify-center shadow-[0_0_20px_rgba(232,25,184,0.4)]">
@@ -47,9 +54,7 @@ const Sidebar = () => {
 
       {/* Nav */}
       <div className="flex-1 overflow-y-auto px-3 py-5">
-        <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.14em] px-3 mb-2">
-          Navigation
-        </div>
+        <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-[0.14em] px-3 mb-2">Navigation</div>
         <nav className="flex flex-col gap-0.5">
           {NAV.map(({ to, label, icon: Icon, testid, end }) => (
             <NavLink
@@ -79,16 +84,26 @@ const Sidebar = () => {
 
       {/* User */}
       <div className="border-t border-white/5 p-3">
-        <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 cursor-pointer transition-colors" data-testid="sidebar-user">
-          <img
-            src={CURRENT_USER.avatarUrl}
-            alt={CURRENT_USER.name}
-            className="w-9 h-9 rounded-full object-cover border border-white/10"
-          />
+        <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors" data-testid="sidebar-user">
+          {user.avatarUrl ? (
+            <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover border border-white/10" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-fuchsia-500/40 to-pink-500/30 flex items-center justify-center text-xs font-semibold text-fuchsia-200 border border-white/10">
+              {initials(user.name)}
+            </div>
+          )}
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-zinc-100 truncate">{CURRENT_USER.name}</div>
-            <div className="text-xs text-zinc-500 truncate">{role} · Ethara.AI</div>
+            <div className="text-sm font-medium text-zinc-100 truncate">{user.name}</div>
+            <div className="text-xs text-zinc-500 truncate">{user.role} · Ethara.AI</div>
           </div>
+          <button
+            onClick={handleLogout}
+            data-testid="btn-logout"
+            className="w-8 h-8 rounded-lg hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center transition-colors"
+            title="Logout"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </aside>
