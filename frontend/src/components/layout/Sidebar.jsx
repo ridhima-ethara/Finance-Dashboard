@@ -14,6 +14,9 @@ import {
   Calendar,
   ClipboardCheck,
   GitPullRequest,
+  Zap,
+  FileText,
+  Undo2,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { initials } from "../../lib/format";
@@ -26,6 +29,8 @@ const NAV_DEFAULT = [
   { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
   { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
+  { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
+  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/audit", label: "Audit Log", icon: History, testid: "nav-audit" },
   { to: "/team", label: "Team", icon: Users, testid: "nav-team" },
   { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
@@ -36,11 +41,13 @@ const NAV_TPM = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "My Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/budget-builder", label: "Budget Builder", icon: ClipboardCheck, testid: "nav-budget-builder" },
-  { to: "/daily", label: "Daily Tracking", icon: Calendar, testid: "nav-daily" },
+  { to: "/cto-review", label: "Returned Budgets", icon: Undo2, testid: "nav-cto-review" },
+  { to: "/consumption", label: "Daily Consumption", icon: Calendar, testid: "nav-consumption" },
+  { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
   { to: "/approvals", label: "Pending Approvals", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
-  { to: "/keys", label: "AI Cost & Keys", icon: KeyRound, testid: "nav-keys" },
-  { to: "/audit", label: "Reports", icon: History, testid: "nav-audit" },
+  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
+  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
 ];
 

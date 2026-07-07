@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { NOTIFICATIONS, APPROVALS, DAILY_ACTIVITY, MODEL_TRAJECTORY, THRESHOLDS } from "../../data/mockData";
+import { RETURNED_BUDGETS, CHANGE_REQUESTS } from "../../data/mockTpm";
 import { Link } from "react-router-dom";
 import {
   FolderKanban, ShieldCheck, Undo2, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
@@ -12,7 +13,7 @@ import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tool
 import RequestBudgetDialog from "../../components/RequestBudgetDialog";
 import ChangeRequestDialog from "./ChangeRequestDialog";
 
-const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid }) => {
+const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid, to }) => {
   const toneMap = {
     positive: "text-emerald-300",
     negative: "text-red-300",
@@ -20,8 +21,8 @@ const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid 
     neutral: "text-zinc-300",
     magenta: "text-fuchsia-300",
   };
-  return (
-    <div data-testid={testid} className="bg-[#12121A] rounded-2xl border border-white/5 p-4 card-hover">
+  const inner = (
+    <>
       <div className="flex items-center justify-between">
         <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
         {Icon && (
@@ -32,6 +33,18 @@ const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid 
       </div>
       <div className="mt-2 font-display font-semibold text-2xl tabular text-white">{value}</div>
       {sublabel && <div className="mt-1 text-[11px] text-zinc-500 tabular">{sublabel}</div>}
+    </>
+  );
+  if (to) {
+    return (
+      <Link data-testid={testid} to={to} className="bg-[#12121A] rounded-2xl border border-white/5 p-4 card-hover block hover:border-fuchsia-500/30 transition-colors">
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <div data-testid={testid} className="bg-[#12121A] rounded-2xl border border-white/5 p-4 card-hover">
+      {inner}
     </div>
   );
 };
@@ -132,12 +145,12 @@ const TpmDashboard = () => {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <KpiCard testid="kpi-active-projects" label="Active projects" value={String(visibleProjects.length)} icon={FolderKanban} tone="magenta" />
         <KpiCard testid="kpi-pending-approvals" label="Pending approvals" value={String(pendingActions.length)} icon={ShieldCheck} tone="warning" />
-        <KpiCard testid="kpi-returned" label="Budgets returned" value="1" icon={Undo2} tone="warning" sublabel="Awaiting your edits" />
+        <KpiCard testid="kpi-returned" label="Budgets returned" value={String(RETURNED_BUDGETS.length)} icon={Undo2} tone="warning" sublabel="Awaiting your edits" to={`/cto-review/${RETURNED_BUDGETS[0]?.id || ""}`} />
         <KpiCard testid="kpi-util" label="Budget utilization" value={fmtPct(util)} icon={Gauge} tone={util >= 90 ? "negative" : util >= 75 ? "warning" : "positive"} />
-        <KpiCard testid="kpi-today-est" label="Today's estimated" value={fmtCurrency(today?.estimate || 0, { compact: false })} icon={TrendingUp} />
-        <KpiCard testid="kpi-today-actual" label="Today's actual" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Activity} tone="magenta" />
+        <KpiCard testid="kpi-today-est" label="Today's estimated" value={fmtCurrency(today?.estimate || 0, { compact: false })} icon={TrendingUp} to="/consumption" />
+        <KpiCard testid="kpi-today-actual" label="Today's actual" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Activity} tone="magenta" to="/consumption" />
         <KpiCard testid="kpi-remaining" label="Total remaining" value={fmtCurrency(remaining)} icon={Wallet} tone={remaining > 0 ? "positive" : "negative"} />
-        <KpiCard testid="kpi-pending-cr" label="Pending change requests" value="2" icon={GitPullRequest} tone="warning" />
+        <KpiCard testid="kpi-pending-cr" label="Pending change requests" value={String(CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
         <KpiCard testid="kpi-health" label="Budget health" value={health} icon={Heart} tone={health === "Green" ? "positive" : health === "Amber" ? "warning" : "negative"} sublabel={fmtPct(util)} />
         <KpiCard testid="kpi-burn-rate" label="Burn rate" value={`$${burnRate.toLocaleString()}/day`} icon={Flame} />
         <KpiCard testid="kpi-exhaustion" label="Exhaustion in" value={typeof runway === "number" ? `${runway} days` : runway} icon={Clock3} tone={typeof runway === "number" && runway < 14 ? "negative" : "neutral"} sublabel="At current burn" />
@@ -252,7 +265,7 @@ const TpmDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Panel testid="widget-upcoming-phase" title="Upcoming phase" subtitle={visibleProjects[0]?.name || "No project"}>
           {upcomingPhase ? (
-            <div>
+            <Link to={`/projects/${visibleProjects[0].id}/phase/${upcomingPhase.id}`} className="block hover:opacity-90 transition-opacity" data-testid="link-upcoming-phase">
               <div className="text-sm font-semibold text-white">{upcomingPhase.name}</div>
               <div className="text-xs text-zinc-500 mt-1">{upcomingPhase.dates}</div>
               <div className="mt-3 grid grid-cols-3 gap-2">
@@ -269,15 +282,18 @@ const TpmDashboard = () => {
                   <div className="text-sm font-semibold text-white capitalize">{upcomingPhase.health}</div>
                 </div>
               </div>
-            </div>
+              <div className="mt-3 inline-flex items-center gap-1 text-[11px] text-fuchsia-300 font-medium">
+                Open phase workspace <ChevronRight className="w-3 h-3" />
+              </div>
+            </Link>
           ) : <div className="text-xs text-zinc-500">No upcoming phase.</div>}
         </Panel>
 
         <Panel testid="widget-pending-actions" title="Pending actions" subtitle="what needs your attention">
           <div className="space-y-2">
             {[
-              { label: "Submit daily estimate for Kaiju Eval", link: "/daily", icon: TrendingUp, tone: "text-fuchsia-300" },
-              { label: "Review returned budget from CTO — Atlas Ingest", link: "/budget-builder", icon: Undo2, tone: "text-amber-300" },
+              { label: "Submit daily estimate for Kaiju Eval", link: "/consumption", icon: TrendingUp, tone: "text-fuchsia-300" },
+              { label: `Review returned budget from CTO — ${RETURNED_BUDGETS[0]?.projectName || "Atlas Ingest"}`, link: `/cto-review/${RETURNED_BUDGETS[0]?.id || ""}`, icon: Undo2, tone: "text-amber-300" },
               { label: "Approve reimbursement · $420", link: "/reimbursements", icon: ShieldCheck, tone: "text-sky-300" },
               { label: "Confirm phase 2 completion — Talos", link: "/projects/talos", icon: ChevronRight, tone: "text-emerald-300" },
             ].map((a, i) => (

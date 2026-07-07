@@ -16,6 +16,11 @@ import Login from "./pages/Login";
 import ModelKeys from "./pages/ModelKeys";
 import Daily from "./pages/Daily";
 import BudgetBuilder from "./pages/tpm/BudgetBuilder";
+import PhaseWorkspace from "./pages/tpm/PhaseWorkspace";
+import AiCost from "./pages/tpm/AiCost";
+import Consumption from "./pages/tpm/Consumption";
+import CtoReview from "./pages/tpm/CtoReview";
+import Reports from "./pages/Reports";
 import { Toaster } from "./components/ui/sonner";
 
 const Protected = ({ children }) => {
@@ -51,6 +56,12 @@ function App() {
               <Route path="/keys" element={<ModelKeys />} />
               <Route path="/daily" element={<Daily />} />
               <Route path="/budget-builder" element={<BudgetBuilder />} />
+              <Route path="/projects/:id/phase/:phaseId" element={<PhaseWorkspace />} />
+              <Route path="/ai-cost" element={<AiCost />} />
+              <Route path="/consumption" element={<Consumption />} />
+              <Route path="/cto-review/:id" element={<CtoReview />} />
+              <Route path="/cto-review" element={<CtoReview />} />
+              <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

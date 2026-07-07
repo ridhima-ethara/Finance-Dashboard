@@ -1,0 +1,31 @@
+{
+  "summary": "Iteration 5 TPM portfolio-module testing complete. Verified end-to-end via Playwright against the preview URL: (1) TPM quick-login lands on page-tpm-dashboard as Arjun Mehta / TPM, (2) all 12 KPIs, 6 charts, and 3 widgets render, (3) kpi-returned → /cto-review/rb1, kpi-today-est → /consumption, link-upcoming-phase → /projects/talos/phase/p2 all navigate correctly, (4) /ai-cost renders all 6 KPI cards + chart-cost-trend + chart-provider-share + table-providers (5 rows) + table-models (6→2 after clicking row-provider-Anthropic), and 7d/30d range toggles work, (5) /projects/crowley-gen/phase/p2 renders 'Phase 2 · Model tuning' with all 6 stat cards, 3 seeded tasks, and filter buttons correctly count planned/in-progress/done (0/2/1), (6) /consumption renders all 6 stat cards + trend + categories + submit-estimate, filling est-model=800 & est-infra=400 and clicking btn-submit-estimate does not error, (7) /cto-review (no id) falls back to Atlas Ingest v1.2, cto-note visible, version-compare shows 5 diff rows, accept-ai-model-opus-4-8 turns green (emerald border/bg classes), reject-infrastructure-aws-ec2-on-demand- clicks, btn-resubmit fires toast 'Budget resubmitted to CTO · Atlas Ingest · 1 suggestion accepted · new version v1.3' and navigates to /, (8) /reports renders all 8 report-rpt-* cards; reports-search='budget' filters to 2 cards; reports-filter-type='Phase' filters to 1 card; btn-run-rpt-budget shows toast 'Budget report generated · 8 records · PDF · CSV · download started'; clicking report-rpt-budget expands and shows 2 format download buttons, (9) TPM sidebar shows exactly the 11 expected nav items (nav-dashboard, nav-projects, nav-budget-builder, nav-cto-review, nav-consumption, nav-ai-cost, nav-approvals, nav-topups, nav-keys, nav-reports, nav-settings) and correctly hides nav-reimb/team/tasks/daily/audit; each new nav item navigates to correct URL, (10) Regression: CTO role lands on page-dashboard, default sidebar shows nav-ai-cost & nav-reports but NOT nav-budget-builder; Projects and ModelKeys pages load; ZERO console errors observed across all pages.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "console_warnings": [
+    {"note": "Iteration_4 previously reported a low-priority duplicate-key React warning in BudgetBuilder.jsx SummaryCard 'Phase summary' when a phase with duplicate default name is added. Not re-tested this iteration (out of scope). Fix suggestion still stands: use phase.id as key instead of phase.name."}
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "CtoReview.jsx line-based data-testid generation `d.line.toLowerCase().replace(/[^a-z0-9]+/g, '-')` produces trailing hyphens for lines ending in parens (e.g. 'Infrastructure · AWS EC2 (on-demand)' -> 'infrastructure-aws-ec2-on-demand-'). Works fine but not the cleanest testid; consider trimming trailing '-' before emitting. Non-blocking.",
+    "CtoReview.jsx: `note` state (Response to CTO textarea) is captured but never used in the resubmit toast/payload. Cosmetic — but the note is functionally dead code today.",
+    "Reports.jsx: cards use onClick on the wrapper AND stopPropagation on inner buttons — works correctly, but wrapper is a div, not a button/link, so it lacks proper keyboard/aria semantics. If a11y matters, wrap card body in a button.",
+    "TpmDashboard.jsx: still imports unused `ArrowUpRightSquare` and `TriangleAlert` from lucide-react (dead imports).",
+    "PhaseWorkspace.jsx: divides by tasks.length in progress-bar widths and completion — if tasks array were empty, would divide by 0. Currently PHASE_TASKS + fallback always returns >=2 rows, but a defensive guard is trivial to add.",
+    "Consumption.jsx: `AI_COST_TREND` is imported but never used (line 4). Dead import.",
+    "AiCost.jsx: unused `Sparkles` from lucide is imported at top and only used inside the insight Panel — fine, but `fmtPct` is imported and never used (line 4). Small cleanup.",
+    "mockData.js barrel re-export: correctly re-exports from mockUsers/mockProjects/mockFinance/mockAi/mockTpm — no import errors observed in any page. Refactor is clean."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "100% of 10 requested checks pass"},
+  "test_credentials": "Quick-login at /login: click quick-login-tpm / cto / cfo / pl (no password needed in demo mode).",
+  "seed_data_creation": "None. All flows use localStorage-only mock auth + mocked toasts + mock data files.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Iteration 5 five new TPM/portfolio modules (AI Cost, Phase Workspace, Daily Consumption, CTO Review, Reports) plus TpmDashboard clickable KPI wiring and sidebar nav additions all verified end-to-end. The mockData.js barrel-refactor is imported by pages via `../../data/mockData` and `../../data/mockTpm` and neither path throws import errors. All testids in the review spec resolve correctly. RETURNED_BUDGETS[0] fallback works when navigating to /cto-review without an :id. No console errors, no page errors, no failed navigations, no toast failures. Preview URL used throughout: https://budget-forge-8.preview.emergentagent.com."
+}

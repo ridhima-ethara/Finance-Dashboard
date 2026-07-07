@@ -12,7 +12,7 @@ const emptyModel = () => ({ id: uid(), name: "Opus 4.8", provider: "Anthropic", 
 const emptyInfra = () => ({ id: uid(), service: "AWS EC2", type: "GPU", monthly: 1200, months: 3, estCost: 3600 });
 const emptySub = () => ({ id: uid(), name: "Claude Max", monthly: 200, seats: 4, estCost: 800 });
 const emptyMisc = () => ({ id: uid(), category: "Travel", description: "Client visit", estCost: 400 });
-const emptyPhase = () => ({ id: uid(), name: "Phase 1", start: "2026-07-01", end: "2026-07-15", budget: 5000, deliverables: 2 });
+const emptyPhase = (n = 1) => ({ id: uid(), name: `Phase ${n}`, start: "2026-07-01", end: "2026-07-15", budget: 5000, deliverables: 2 });
 const emptyTask = () => ({ id: uid(), name: "New task", owner: "Aanya Sharma", estCost: 500, model: "Opus 4.8", infra: "AWS EC2", status: "planned" });
 
 const BudgetBuilder = () => {
@@ -24,7 +24,7 @@ const BudgetBuilder = () => {
   const [infra, setInfra] = useState([emptyInfra()]);
   const [subs, setSubs] = useState([emptySub()]);
   const [misc, setMisc] = useState([emptyMisc()]);
-  const [phases, setPhases] = useState([emptyPhase(), { ...emptyPhase(), name: "Phase 2", start: "2026-07-16", end: "2026-07-31", budget: 4000, deliverables: 3 }]);
+  const [phases, setPhases] = useState([emptyPhase(1), { ...emptyPhase(2), start: "2026-07-16", end: "2026-07-31", budget: 4000, deliverables: 3 }]);
   const [tasks, setTasks] = useState([emptyTask()]);
 
   const totals = useMemo(() => {
@@ -178,7 +178,7 @@ const BudgetBuilder = () => {
           </CategorySection>
 
           {/* Phases */}
-          <Card title="Project phases" right={<Button size="sm" variant="outline" onClick={addRow(setPhases, emptyPhase)} className="h-7 rounded-md border-white/10 bg-white/[0.03] text-zinc-300 text-xs" data-testid="add-phase"><Plus className="w-3 h-3 mr-1" />Add phase</Button>}>
+          <Card title="Project phases" right={<Button size="sm" variant="outline" onClick={() => setPhases((r) => [...r, emptyPhase(r.length + 1)])} className="h-7 rounded-md border-white/10 bg-white/[0.03] text-zinc-300 text-xs" data-testid="add-phase"><Plus className="w-3 h-3 mr-1" />Add phase</Button>}>
             <div className="space-y-2">
               {phases.map((ph) => (
                 <div key={ph.id} className="grid grid-cols-[1fr_120px_120px_100px_80px_28px] gap-2 items-center" data-testid={`phase-${ph.id}`}>
@@ -237,7 +237,7 @@ const BudgetBuilder = () => {
               {k:"Subscriptions", v:totals.subs},
               {k:"Miscellaneous", v:totals.misc},
             ]} />
-            <SummaryCard title="Phase summary" rows={phases.map((p) => ({k: p.name, v: Number(p.budget||0)}))} />
+            <SummaryCard title="Phase summary" rows={phases.map((p, i) => ({id: p.id, k: `${p.name}${phases.filter((x, j) => x.name === p.name).length > 1 ? ` (${i+1})` : ""}`, v: Number(p.budget||0)}))} />
           </div>
 
           <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3 text-xs">
@@ -315,8 +315,8 @@ const SummaryCard = ({ title, rows }) => (
   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4">
     <div className="text-[13px] font-semibold text-white mb-2">{title}</div>
     <div className="space-y-1.5">
-      {rows.map((r) => (
-        <div key={r.k} className="flex items-center justify-between text-xs">
+      {rows.map((r, i) => (
+        <div key={r.id || `${r.k}-${i}`} className="flex items-center justify-between text-xs">
           <span className="text-zinc-300">{r.k}</span>
           <span className="text-white font-semibold tabular">{fmtCurrency(r.v, { compact: false })}</span>
         </div>
