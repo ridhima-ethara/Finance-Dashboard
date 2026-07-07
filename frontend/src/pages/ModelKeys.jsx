@@ -214,7 +214,7 @@ const ModelKeys = () => {
                     <span data-testid={`key-value-${k.id}`}>{revealed[k.id] ? k.fullKey : k.maskedKey}</span>
                     <button
                       data-testid={`btn-reveal-${k.id}`}
-                      onClick={() => toggleReveal(k)}
+                      onClick={() => toggleReveal(k.id)}
                       className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
                     >
                       {revealed[k.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}

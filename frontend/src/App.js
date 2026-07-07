@@ -52,7 +52,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
-        <Toaster position="top-right" theme="dark" />
+        <Toaster position="bottom-right" theme="dark" />
       </AppProvider>
     </div>
   );

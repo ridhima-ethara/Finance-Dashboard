@@ -22,6 +22,14 @@ Frontend only (React + Tailwind + shadcn/ui + Recharts + react-router).
 - `components/dashboard/` — AmountAtRisk, KpiGrid, Charts (Budget/Actual/Estimated, Model expenses, Infra stacked, Monthly trend, Category donut, Utilization bars, Subscription usage, Workflow strip), ProjectsTable
 - `pages/` — Dashboard, Projects, ProjectDetail, Approvals, TopUps, Reimbursements, AuditLog, Team, Tasks, Settings
 
+## What's Implemented (2026-02-06 · iteration 3)
+- [x] **Role-based auth (mock)** — Login page with 4 quick-login role cards (CTO/CFO/TPM/PL) and email+password form; localStorage session; protected routes; logout via sidebar or user menu
+- [x] **P0.1 Line-wise Budget Request** — `RequestBudgetDialog` now captures line items (category, description, qty, unit cost, auto-computed total), delivery model (single/phase-wise), phase-wise deliverables, cost-per-task, and R&D/Ops scope · replaces the old single-amount request
+- [x] **P0.2 Partial Approval** — new `PartialApprovalDialog` with slider + amount input + "Park / Defer / Close remaining" toggle + reason; each approval row now has Reject / Partial / Approve
+- [x] **P0.3 R&D vs Operations bifurcation** — every project tagged R&D or Operations; global top-bar scope filter (All / R&D / Ops) filters projects table, projects grid, and dashboard header; violet/emerald chips visible on cards & rows
+- [x] **P0.4 Model Keys governance** — new `/keys` page: 4 stat cards, search + Env/Type/Provider chip filters, masked keys with reveal (CTO/CFO only, audit-logged), copy, rotate, revoke actions; Generate Key dialog; revoked keys visibly disabled
+- [x] Sidebar restructured: 10 nav items including "Model Keys"; logout button on user card
+
 ## What's Implemented (2026-02-06 · iteration 2)
 - [x] **Dark Ethara.AI theme** — near-black #08080C background with hot magenta (#E619B8) accent, matching ethara.ai website aesthetic (no longer copies the reference image)
 - [x] **Finance-grade KPI overhaul** — 8 KPIs curated as a finance specialist:
