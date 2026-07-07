@@ -18,7 +18,7 @@ import { useState } from "react";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 
 const Dashboard = () => {
-  const { role, scope } = useApp();
+  const { role, scope, visibleProjects } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
   const isPL = role === "PL";
 
@@ -37,6 +37,9 @@ const Dashboard = () => {
           <p className="text-sm text-zinc-400 mt-1">
             Real-time budget, forecast &amp; burn across all AI engagements · June 2026
             {scope !== "all" && <span className="ml-2 text-fuchsia-300">· scope: {scope}</span>}
+            {(role === "TPM" || role === "PL") && (
+              <span className="ml-2 text-sky-300">· showing {visibleProjects.length} project{visibleProjects.length === 1 ? "" : "s"} you {role === "TPM" ? "requested" : "lead"}</span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-2">

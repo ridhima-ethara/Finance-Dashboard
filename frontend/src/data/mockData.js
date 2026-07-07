@@ -100,6 +100,7 @@ const buildProject = (id, name, client, pl, approved, estimated, actual, status,
     name,
     client,
     pl,
+    tpm: extras.tpm || pl,
     status,
     type: extras.type || "R&D",
     buffer: extras.buffer ?? 10,
@@ -133,14 +134,14 @@ const buildProject = (id, name, client, pl, approved, estimated, actual, status,
 };
 
 export const PROJECTS = [
-  buildProject("crowley-gen", "Crowley Generation", "Acme AI", "Aanya Sharma", 48000, 44000, 41000, "Execution", { type: "R&D", buffer: 12, recoverable: true, recovered: 8000 }),
-  buildProject("talos", "Talos", "Northwind Data", "Maria Lopez", 46000, 38000, 31000, "Execution", { type: "Operations", buffer: 8 }),
-  buildProject("sourcing", "Crowley Sourcing", "Acme AI", "Aanya Sharma", 26000, 24000, 26400, "Execution", { type: "R&D", buffer: 10, recoverable: true, recovered: 4200 }),
-  buildProject("kaiju", "Kaiju Eval", "Helix Bio", "Arjun Mehta", 30000, 18000, 16000, "Execution", { type: "R&D", buffer: 15 }),
-  buildProject("atlas", "Atlas Ingest", "Ironclad", "Arjun Mehta", 11000, 12000, 12100, "Execution", { type: "Operations", buffer: 5 }),
-  buildProject("nimbus", "Nimbus QC", "Meridian", "Maria Lopez", 14000, 9000, 7000, "Execution", { type: "Operations", buffer: 8 }),
-  buildProject("orion", "Orion Stub", "Voltek", "Vikram Kumar", 9000, 7000, 2200, "Discovery", { type: "R&D", buffer: 20, recoverable: true, recovered: 0 }),
-  buildProject("vesper", "Vesper Docker", "Ironclad", "Aanya Sharma", 13000, 5400, 15600, "Execution", { type: "Operations", buffer: 10 }),
+  buildProject("crowley-gen", "Crowley Generation", "Acme AI", "Aanya Sharma", 48000, 44000, 41000, "Execution", { type: "R&D", buffer: 12, recoverable: true, recovered: 8000, tpm: "Vikram Kumar" }),
+  buildProject("talos", "Talos", "Northwind Data", "Maria Lopez", 46000, 38000, 31000, "Execution", { type: "Operations", buffer: 8, tpm: "Arjun Mehta" }),
+  buildProject("sourcing", "Crowley Sourcing", "Acme AI", "Aanya Sharma", 26000, 24000, 26400, "Execution", { type: "R&D", buffer: 10, recoverable: true, recovered: 4200, tpm: "Aanya Sharma" }),
+  buildProject("kaiju", "Kaiju Eval", "Helix Bio", "Arjun Mehta", 30000, 18000, 16000, "Execution", { type: "R&D", buffer: 15, tpm: "Arjun Mehta" }),
+  buildProject("atlas", "Atlas Ingest", "Ironclad", "Arjun Mehta", 11000, 12000, 12100, "Execution", { type: "Operations", buffer: 5, tpm: "Arjun Mehta" }),
+  buildProject("nimbus", "Nimbus QC", "Meridian", "Maria Lopez", 14000, 9000, 7000, "Execution", { type: "Operations", buffer: 8, tpm: "Maria Lopez" }),
+  buildProject("orion", "Orion Stub", "Voltek", "Vikram Kumar", 9000, 7000, 2200, "Discovery", { type: "R&D", buffer: 20, recoverable: true, recovered: 0, tpm: "Arjun Mehta" }),
+  buildProject("vesper", "Vesper Docker", "Ironclad", "Aanya Sharma", 13000, 5400, 15600, "Execution", { type: "Operations", buffer: 10, tpm: "Aanya Sharma" }),
 ];
 
 // Portfolio aggregates — computed from projects, with finance-first KPIs
@@ -292,3 +293,53 @@ export const LINE_CATEGORIES = [
   { id: "employee", label: "Employee", unit: "person-days", defaultRate: 400 },
   { id: "other", label: "Other", unit: "line", defaultRate: 0 },
 ];
+
+// Alert thresholds (P2)
+export const THRESHOLDS = [50, 75, 90, 100];
+
+// Daily activity for last 30 days (P1.3 · daily tracking)
+const seedDaily = () => {
+  const days = [];
+  const today = new Date(2026, 5, 30);
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    const seed = (d.getDate() * 7 + d.getMonth() * 3) % 11;
+    const base = 2500 + seed * 400;
+    const est = base + ((seed % 3) - 1) * 300;
+    days.push({
+      date: d.toISOString().slice(0, 10),
+      dow: d.getDay(),
+      spend: base,
+      estimate: est,
+      approvals: seed % 4,
+      expenses: 8 + (seed % 6),
+      byCategory: {
+        model: Math.round(base * 0.45),
+        infra: Math.round(base * 0.24),
+        employee: Math.round(base * 0.16),
+        other: Math.round(base * 0.15),
+      },
+    });
+  }
+  return days;
+};
+export const DAILY_ACTIVITY = seedDaily();
+
+// Per-model 30-day trajectory (P2)
+const seedModelTraj = () => {
+  const models = ["Opus 4.7", "Gemini 2.5 Pro", "GPT-4o", "Sonnet", "Kimi"];
+  const rows = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(2026, 5, 30 - i);
+    const day = d.toISOString().slice(0, 10);
+    const point = { date: day };
+    models.forEach((m, idx) => {
+      const seed = (d.getDate() * (idx + 2)) % 9;
+      point[m] = Math.round(200 + seed * 45 + idx * 40);
+    });
+    rows.push(point);
+  }
+  return rows;
+};
+export const MODEL_TRAJECTORY = seedModelTraj();

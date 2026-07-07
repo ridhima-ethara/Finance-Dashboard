@@ -22,6 +22,16 @@ Frontend only (React + Tailwind + shadcn/ui + Recharts + react-router).
 - `components/dashboard/` — AmountAtRisk, KpiGrid, Charts (Budget/Actual/Estimated, Model expenses, Infra stacked, Monthly trend, Category donut, Utilization bars, Subscription usage, Workflow strip), ProjectsTable
 - `pages/` — Dashboard, Projects, ProjectDetail, Approvals, TopUps, Reimbursements, AuditLog, Team, Tasks, Settings
 
+## What's Implemented (2026-02-07 · iteration 4)
+- [x] **Login redesigned** — matches Ethara.AI branding image: dark background with subtle grid + diagonal wireframe, large white ornate mask + "Ethara.AI" wordmark (magenta ".AI"), "Financial Command Center" between fuchsia lines, 4 quick-login role cards color-coded per role (fuchsia/emerald/sky/amber), optional email+password form via toggle
+- [x] **TPM visibility** — TPM sees only projects they requested (project.tpm === user.name); PL sees own; CTO/CFO see all; helper `visibleProjects` in context; Dashboard subtitle and Projects list reflect scope
+- [x] **P1.1 Admin-defined project buffer** — Buffer panel on ProjectDetail with slider + numeric input + Save. Editable only by CTO/CFO. Effective budget = Approved × (1 + buffer%). Persisted in localStorage
+- [x] **P1.2 Client Cost Recovery** — Recovery panel visible when project.recoverableFromClient. Actual / Recovered / Net cost mini-stats. Amount editable only by CFO/Finance. Persisted in localStorage
+- [x] **P1.3 Daily expense & approval tracking** — new `/daily` page with today's spend/approvals stats, 30-day calendar heatmap (magenta intensity by spend), daily spend-vs-estimate combo chart, per-model trajectory line chart, and chronological daily log
+- [x] **P2.1 Daily estimate entry** — TPM/PL/CTO can enter daily estimates via `daily-estimate-dialog` (date, category, amount, note)
+- [x] **P2.2 Precise threshold alerts** — Utilization tracker on ProjectDetail shows vertical markers at 50/75/90/100 %, colored per crossing; Utilization chart on dashboard also renders threshold markers per project
+- [x] **P2.3 Per-model trajectory** — 30-day line chart per model (Opus 4.7, Gemini 2.5 Pro, GPT-4o, Sonnet, Kimi) on the Daily page
+
 ## What's Implemented (2026-02-06 · iteration 3)
 - [x] **Role-based auth (mock)** — Login page with 4 quick-login role cards (CTO/CFO/TPM/PL) and email+password form; localStorage session; protected routes; logout via sidebar or user menu
 - [x] **P0.1 Line-wise Budget Request** — `RequestBudgetDialog` now captures line items (category, description, qty, unit cost, auto-computed total), delivery model (single/phase-wise), phase-wise deliverables, cost-per-task, and R&D/Ops scope · replaces the old single-amount request

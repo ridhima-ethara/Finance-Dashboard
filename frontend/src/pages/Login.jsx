@@ -3,14 +3,14 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { USERS } from "../data/mockData";
 import { Button } from "../components/ui/button";
-import { Sparkles, ArrowRight, Lock, Mail, ShieldCheck } from "lucide-react";
+import { ArrowRight, Lock, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const roleAccent = {
-  CTO: { bg: "from-fuchsia-500/20 to-pink-500/10", border: "border-fuchsia-500/30", text: "text-fuchsia-300", dot: "bg-fuchsia-400" },
-  CFO: { bg: "from-emerald-500/20 to-teal-500/10", border: "border-emerald-500/30", text: "text-emerald-300", dot: "bg-emerald-400" },
-  TPM: { bg: "from-sky-500/20 to-blue-500/10", border: "border-sky-500/30", text: "text-sky-300", dot: "bg-sky-400" },
-  PL: { bg: "from-amber-500/20 to-orange-500/10", border: "border-amber-500/30", text: "text-amber-300", dot: "bg-amber-400" },
+  CTO: { border: "border-fuchsia-500/40", text: "text-fuchsia-300", dot: "bg-fuchsia-400", glow: "hover:shadow-[0_0_24px_rgba(232,25,184,0.35)]" },
+  CFO: { border: "border-emerald-500/40", text: "text-emerald-300", dot: "bg-emerald-400", glow: "hover:shadow-[0_0_24px_rgba(16,185,129,0.35)]" },
+  TPM: { border: "border-sky-500/40", text: "text-sky-300", dot: "bg-sky-400", glow: "hover:shadow-[0_0_24px_rgba(56,189,248,0.35)]" },
+  PL: { border: "border-amber-500/40", text: "text-amber-300", dot: "bg-amber-400", glow: "hover:shadow-[0_0_24px_rgba(245,158,11,0.35)]" },
 };
 
 const roleLabel = {
@@ -20,11 +20,76 @@ const roleLabel = {
   PL: "Project Lead",
 };
 
+// Stylized Ethara tribal mask logo — matches the branding image
+const EtharaMask = ({ className = "" }) => (
+  <svg viewBox="0 0 120 160" className={className} fill="none">
+    {/* Oval frame */}
+    <ellipse cx="60" cy="80" rx="52" ry="72" stroke="white" strokeWidth="3.5" />
+    {/* Central leaf */}
+    <path
+      d="M60 22 C 78 40, 82 62, 60 90 C 38 62, 42 40, 60 22 Z"
+      fill="white"
+    />
+    {/* Central leaf inner void (petal detail) */}
+    <path
+      d="M60 40 C 68 52, 68 66, 60 78 C 52 66, 52 52, 60 40 Z"
+      fill="#0A0A0F"
+    />
+    {/* Left eye */}
+    <path
+      d="M 32 74 C 22 82, 22 96, 32 100 C 44 92, 44 82, 32 74 Z"
+      fill="white"
+    />
+    {/* Right eye */}
+    <path
+      d="M 88 74 C 98 82, 98 96, 88 100 C 76 92, 76 82, 88 74 Z"
+      fill="white"
+    />
+    {/* Center dividing line */}
+    <line x1="60" y1="94" x2="60" y2="128" stroke="white" strokeWidth="2.5" strokeLinecap="round" />
+    {/* Bottom drop */}
+    <path d="M 60 128 L 55 138 L 60 144 L 65 138 Z" fill="white" />
+    {/* Small dots */}
+    <circle cx="45" cy="112" r="1.6" fill="white" />
+    <circle cx="75" cy="112" r="1.6" fill="white" />
+  </svg>
+);
+
+// Diagonal + grid backdrop
+const Backdrop = () => (
+  <>
+    {/* Grid */}
+    <div
+      className="absolute inset-0 pointer-events-none"
+      style={{
+        backgroundImage:
+          "linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.035) 1px, transparent 1px)",
+        backgroundSize: "56px 56px",
+      }}
+    />
+    {/* Diagonal lines */}
+    <svg className="absolute inset-0 w-full h-full pointer-events-none" preserveAspectRatio="none" viewBox="0 0 1200 900">
+      <g stroke="rgba(255,255,255,0.045)" strokeWidth="1">
+        <line x1="180" y1="0" x2="600" y2="900" />
+        <line x1="1020" y1="0" x2="600" y2="900" />
+        <line x1="0" y1="200" x2="1200" y2="700" />
+      </g>
+      <g stroke="rgba(255,255,255,0.03)" strokeWidth="1">
+        <line x1="0" y1="0" x2="1200" y2="900" />
+        <line x1="1200" y1="0" x2="0" y2="900" />
+      </g>
+    </svg>
+    {/* Glow */}
+    <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[500px] rounded-full bg-fuchsia-500/[0.08] blur-[130px] pointer-events-none" />
+  </>
+);
+
 const Login = () => {
   const { isAuth, login } = useApp();
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showCreds, setShowCreds] = useState(false);
   const [busy, setBusy] = useState(false);
 
   if (isAuth) return <Navigate to="/" replace />;
@@ -34,7 +99,7 @@ const Login = () => {
     const r = login(opts);
     setBusy(false);
     if (r.ok) {
-      toast.success(`Welcome back, ${r.user.name}`, { description: `Signed in as ${r.user.role}` });
+      toast.success(`Welcome, ${r.user.name}`, { description: `Signed in as ${r.user.role}` });
       nav("/", { replace: true });
     } else {
       toast.error(r.message || "Login failed");
@@ -42,129 +107,37 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#08080C] mesh-dots p-6" data-testid="page-login">
-      {/* Glow */}
-      <div className="fixed inset-0 pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 rounded-full bg-fuchsia-500/10 blur-[120px]" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 rounded-full bg-pink-500/10 blur-[120px]" />
-      </div>
+    <div className="min-h-screen bg-[#0A0A0F] relative overflow-hidden" data-testid="page-login">
+      <Backdrop />
 
-      <div className="relative w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left · brand narrative */}
-        <div className="hidden lg:flex flex-col justify-between p-8 rounded-2xl border border-white/5 bg-gradient-to-br from-[#12121A] to-[#0B0B12]">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-fuchsia-500 to-pink-600 flex items-center justify-center shadow-[0_0_24px_rgba(232,25,184,0.4)]">
-              <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="9" />
-                <path d="M12 3 v18 M3 12 h18" opacity="0.5" />
-              </svg>
+      <div className="relative min-h-screen flex flex-col items-center justify-center px-6 py-10">
+        {/* Wordmark banner — mask + Ethara.AI side by side */}
+        <div className="flex items-center gap-6 sm:gap-10">
+          <EtharaMask className="w-24 h-32 sm:w-32 sm:h-44 md:w-40 md:h-56 flex-shrink-0" />
+          <div className="flex flex-col leading-none">
+            <div className="font-display font-bold tracking-tight text-white text-6xl sm:text-7xl md:text-8xl leading-none">
+              Ethara<span className="text-fuchsia-500">.AI</span>
             </div>
-            <span className="font-display font-semibold text-lg text-white">
-              Ethara<span className="text-fuchsia-400">.AI</span>
-            </span>
-          </div>
-
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.18em] text-fuchsia-400 font-semibold flex items-center gap-2">
-              <span className="w-6 h-px bg-fuchsia-400" />
-              Financial Command Center
+            <div className="mt-3 sm:mt-4 flex items-center gap-2">
+              <span className="w-8 h-px bg-fuchsia-500" />
+              <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.24em] text-fuchsia-400">
+                Financial Command Center
+              </span>
+              <span className="w-8 h-px bg-fuchsia-500" />
             </div>
-            <h1 className="mt-3 font-display font-semibold text-4xl tracking-tight text-white leading-tight">
-              AGI is not born.<br />
-              <span className="text-zinc-500">Budgets are earned.</span>
-            </h1>
-            <p className="mt-4 text-sm text-zinc-400 leading-relaxed max-w-md">
-              Sign in to view the portfolio you're responsible for. Every action — request, approval, key rotation —
-              is date-stamped and traceable.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { l: "Projects", v: "8" },
-              { l: "Approved", v: "$197k" },
-              { l: "At risk", v: "$41.8k" },
-            ].map((m) => (
-              <div key={m.l} className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
-                <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{m.l}</div>
-                <div className="mt-1 font-display font-semibold text-lg tabular text-white">{m.v}</div>
-              </div>
-            ))}
           </div>
         </div>
 
-        {/* Right · form */}
-        <div className="rounded-2xl border border-white/5 bg-[#12121A] p-7">
-          <div className="lg:hidden mb-4 flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-fuchsia-500 to-pink-600" />
-            <span className="font-display font-semibold text-white">
-              Ethara<span className="text-fuchsia-400">.AI</span>
-            </span>
-          </div>
-
-          <div className="text-[10px] uppercase tracking-[0.18em] text-fuchsia-400 font-semibold flex items-center gap-2">
-            <ShieldCheck className="w-3 h-3" />
-            Secure sign-in
-          </div>
-          <h2 className="mt-2 font-display font-semibold text-2xl text-white">Welcome back</h2>
-          <p className="text-sm text-zinc-500 mt-1">Sign in with your Ethara.AI credentials.</p>
-
-          {/* Email / password */}
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              doLogin({ email, password });
-            }}
-            className="mt-5 space-y-3"
-          >
-            <div>
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Email</div>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  data-testid="login-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="cto@ethara.ai"
-                  className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                />
-              </div>
+        {/* Quick logins */}
+        <div className="mt-12 sm:mt-16 w-full max-w-3xl">
+          <div className="text-center mb-5">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-zinc-500 flex items-center justify-center gap-2">
+              <ShieldCheck className="w-3 h-3" />
+              Sign in — choose your role
             </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Password</div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  data-testid="login-password"
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="demo123"
-                  className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                />
-              </div>
-            </div>
-            <Button
-              type="submit"
-              disabled={busy}
-              data-testid="login-submit"
-              className="w-full h-10 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)] gap-2"
-            >
-              Sign in
-              <ArrowRight className="w-4 h-4" />
-            </Button>
-          </form>
-
-          {/* Divider */}
-          <div className="mt-6 mb-4 flex items-center gap-3">
-            <div className="flex-1 h-px bg-white/5" />
-            <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Quick login (demo)</span>
-            <div className="flex-1 h-px bg-white/5" />
           </div>
 
-          {/* Quick login */}
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {USERS.map((u) => {
               const a = roleAccent[u.role];
               return (
@@ -172,24 +145,77 @@ const Login = () => {
                   key={u.id}
                   data-testid={`quick-login-${u.role.toLowerCase()}`}
                   onClick={() => doLogin({ role: u.role })}
-                  className={`text-left p-3 rounded-xl border ${a.border} bg-gradient-to-br ${a.bg} hover:brightness-125 transition-all group`}
+                  className={`text-left p-4 rounded-2xl border ${a.border} bg-[#12121A]/60 backdrop-blur-sm hover:bg-[#12121A]/90 transition-all group ${a.glow}`}
                 >
                   <div className="flex items-center gap-2">
                     <span className={`w-1.5 h-1.5 rounded-full ${a.dot}`} />
-                    <span className={`text-[10px] font-semibold uppercase tracking-widest ${a.text}`}>{u.role}</span>
+                    <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${a.text}`}>{u.role}</span>
                     <ArrowRight className="w-3 h-3 text-zinc-500 ml-auto group-hover:text-white transition-colors" />
                   </div>
-                  <div className="mt-2 text-sm font-semibold text-white truncate">{u.name}</div>
+                  <div className="mt-3 text-sm font-semibold text-white truncate">{u.name}</div>
                   <div className="text-[11px] text-zinc-500 truncate">{roleLabel[u.role]}</div>
                 </button>
               );
             })}
           </div>
 
-          <div className="mt-5 flex items-start gap-2 text-[11px] text-zinc-500 border-t border-white/5 pt-4">
-            <Sparkles className="w-3 h-3 text-fuchsia-400 mt-0.5 flex-shrink-0" />
-            <span>Demo mode · quick-login bypasses passwords. In production, hook this up to Emergent Google Auth or JWT.</span>
+          {/* Email/password toggle */}
+          <div className="mt-6 flex flex-col items-center gap-3">
+            {!showCreds ? (
+              <button
+                onClick={() => setShowCreds(true)}
+                data-testid="toggle-creds"
+                className="text-xs text-zinc-500 hover:text-fuchsia-300 transition-colors flex items-center gap-1.5"
+              >
+                <Lock className="w-3 h-3" />
+                Sign in with email &amp; password
+              </button>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  doLogin({ email, password });
+                }}
+                className="w-full max-w-md space-y-3 p-4 rounded-2xl border border-white/10 bg-[#12121A]/60"
+              >
+                <div className="relative">
+                  <Mail className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    data-testid="login-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="cto@ethara.ai"
+                    className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                  />
+                </div>
+                <div className="relative">
+                  <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    data-testid="login-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="demo123"
+                    className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                  />
+                </div>
+                <Button
+                  type="submit"
+                  disabled={busy}
+                  data-testid="login-submit"
+                  className="w-full h-10 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)] gap-2"
+                >
+                  Sign in
+                  <ArrowRight className="w-4 h-4" />
+                </Button>
+              </form>
+            )}
           </div>
+
+          <p className="mt-6 text-center text-[11px] text-zinc-600">
+            Demo mode · quick-login bypasses password. Session stored in your browser.
+          </p>
         </div>
       </div>
     </div>

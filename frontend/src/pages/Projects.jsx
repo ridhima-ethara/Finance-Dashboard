@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { PROJECTS } from "../data/mockData";
 import { fmtCurrency, fmtPct, healthColor, utilColor, varianceColor } from "../lib/format";
 import { Search, Filter, Plus, ChevronRight } from "lucide-react";
 import { Button } from "../components/ui/button";
@@ -11,10 +10,10 @@ const Projects = () => {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
   const [requestOpen, setRequestOpen] = useState(false);
-  const { role, scope } = useApp();
+  const { role, scope, visibleProjects } = useApp();
   const isPL = role === "PL";
 
-  const filtered = PROJECTS.filter((p) => {
+  const filtered = visibleProjects.filter((p) => {
     if (scope !== "all" && p.type !== scope) return false;
     if (filter === "over" && p.utilization < 100) return false;
     if (filter === "watch" && !(p.utilization >= 85 && p.utilization < 100)) return false;

@@ -1,18 +1,21 @@
 import { useParams, Link } from "react-router-dom";
-import { PROJECTS } from "../data/mockData";
+import { useState } from "react";
 import { fmtCurrency, fmtPct, fmtDate, healthColor, utilColor, varianceColor } from "../lib/format";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Button } from "../components/ui/button";
 import {
   ArrowLeft,
   Sparkles,
-  Download,
-  FileText,
   MessageSquare,
   Plus,
   History,
+  Shield,
+  Receipt,
+  Check,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { toast } from "sonner";
+import { THRESHOLDS } from "../data/mockData";
 
 const StatBlock = ({ label, value, hint, tone }) => (
   <div className="bg-[#12121A] rounded-2xl border border-white/10 p-5">
@@ -22,10 +25,24 @@ const StatBlock = ({ label, value, hint, tone }) => (
   </div>
 );
 
+const MiniStat = ({ label, value, tone }) => {
+  const t = tone === "emerald" ? "text-emerald-300" : tone === "fuchsia" ? "text-fuchsia-300" : "text-white";
+  return (
+    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+      <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+      <div className={`mt-0.5 text-sm font-semibold tabular ${t}`}>{value}</div>
+    </div>
+  );
+};
+
 const ProjectDetail = () => {
   const { id } = useParams();
-  const p = PROJECTS.find((x) => x.id === id);
-  const { setAiOpen } = useApp();
+  const { setAiOpen, projects, role, setBuffer, setRecovery } = useApp();
+  const p = projects.find((x) => x.id === id);
+  const [bufferInput, setBufferInput] = useState(p?.buffer ?? 10);
+  const [recoveryInput, setRecoveryInput] = useState(p?.recoveredAmount ?? 0);
+  const canEditBuffer = role === "CTO" || role === "CFO"; // Admin-level
+  const canEditRecovery = role === "CFO"; // Finance
 
   if (!p) {
     return (
@@ -84,6 +101,160 @@ const ProjectDetail = () => {
         <StatBlock label="Actual" value={fmtCurrency(p.actualSpend)} hint={`Est. ${fmtCurrency(p.estimatedBudget)}`} />
         <StatBlock label="Variance" value={`${p.variance > 0 ? "+" : ""}${fmtCurrency(p.variance)}`} tone={varianceColor(p.variance)} hint="vs estimate" />
         <StatBlock label="Utilization" value={fmtPct(p.utilization)} tone={utilColor(p.utilization)} hint={`Forecast ${fmtCurrency(p.forecast)}`} />
+      </div>
+
+      {/* Utilization progress with threshold markers (P2) */}
+      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="font-display font-semibold text-[15px] text-white">Utilization tracker</div>
+            <div className="text-xs text-zinc-500 mt-0.5">Vertical markers show alert thresholds at 50 / 75 / 90 / 100%</div>
+          </div>
+          <div className={`text-xs font-semibold ${utilColor(p.utilization)}`}>{fmtPct(p.utilization)} used</div>
+        </div>
+        <div className="relative h-3 rounded-full bg-white/[0.04] overflow-visible">
+          <div
+            className="absolute inset-y-0 left-0 rounded-full"
+            style={{ width: `${Math.min(p.utilization, 100)}%`, background: p.utilization >= 100 ? "#EF4444" : p.utilization >= 90 ? "#F59E0B" : "#E619B8" }}
+          />
+          {THRESHOLDS.map((t) => (
+            <div key={t} className="absolute -top-1 -bottom-1 flex flex-col items-center" style={{ left: `${t}%`, transform: "translateX(-50%)" }} data-testid={`threshold-${t}`}>
+              <div className={`w-px h-full ${p.utilization >= t ? "bg-fuchsia-400" : "bg-white/25"}`} />
+              <div className={`text-[9px] mt-0.5 font-semibold tabular ${p.utilization >= t ? "text-fuchsia-300" : "text-zinc-600"}`}>{t}%</div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 text-[11px] text-zinc-500 tabular">
+          Effective budget with buffer: <span className="text-zinc-100 font-semibold">{fmtCurrency(Math.round(p.approvedBudget * (1 + p.buffer / 100)))}</span>
+          <span className="ml-2 text-zinc-600">(approved {fmtCurrency(p.approvedBudget)} + {p.buffer}% buffer)</span>
+        </div>
+      </div>
+
+      {/* Buffer + Recovery (P1) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Buffer */}
+        <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="buffer-panel">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Shield className="w-4 h-4 text-fuchsia-400" />
+                <div className="font-display font-semibold text-[15px] text-white">Project buffer</div>
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">Admin-defined safety margin over approved budget</div>
+            </div>
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border border-white/10 bg-white/[0.03] text-zinc-400">
+              {canEditBuffer ? "Editable · CTO/CFO" : "Locked"}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <MiniStat label="Buffer" value={`${p.buffer}%`} tone="fuchsia" />
+            <MiniStat label="Buffer $" value={fmtCurrency(Math.round(p.approvedBudget * p.buffer / 100), { compact: false })} />
+            <MiniStat label="Effective budget" value={fmtCurrency(Math.round(p.approvedBudget * (1 + p.buffer / 100)))} tone="emerald" />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="range"
+              min="0"
+              max="30"
+              step="1"
+              value={bufferInput}
+              disabled={!canEditBuffer}
+              onChange={(e) => setBufferInput(Number(e.target.value))}
+              data-testid="buffer-slider"
+              className="flex-1 accent-fuchsia-500 disabled:opacity-40"
+            />
+            <div className="relative w-24">
+              <input
+                type="number"
+                min="0"
+                max="50"
+                value={bufferInput}
+                disabled={!canEditBuffer}
+                onChange={(e) => setBufferInput(Number(e.target.value))}
+                data-testid="buffer-input"
+                className="w-full h-9 pl-3 pr-8 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 disabled:opacity-40"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">%</span>
+            </div>
+            <Button
+              size="sm"
+              disabled={!canEditBuffer || bufferInput === p.buffer}
+              onClick={() => {
+                setBuffer(p.id, bufferInput);
+                toast.success(`Buffer updated to ${bufferInput}%`, { description: `${p.name} · audit-logged` });
+              }}
+              data-testid="btn-save-buffer"
+              className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 disabled:bg-white/5 disabled:text-zinc-500 text-white"
+            >
+              <Check className="w-3.5 h-3.5 mr-1" />
+              Save
+            </Button>
+          </div>
+        </div>
+
+        {/* Client Recovery */}
+        <div className={`bg-[#12121A] rounded-2xl border p-5 ${p.recoverableFromClient ? "border-emerald-500/20" : "border-white/5"}`} data-testid="recovery-panel">
+          <div className="flex items-start justify-between mb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Receipt className="w-4 h-4 text-emerald-400" />
+                <div className="font-display font-semibold text-[15px] text-white">Client cost recovery</div>
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">
+                {p.recoverableFromClient ? "Recoverable from client · Finance enters received amount" : "Not marked recoverable"}
+              </div>
+            </div>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+              p.recoverableFromClient ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : "border-white/10 bg-white/[0.03] text-zinc-500"
+            }`}>
+              {p.recoverableFromClient ? "Recoverable" : "Internal only"}
+            </span>
+          </div>
+
+          {p.recoverableFromClient ? (
+            <>
+              <div className="grid grid-cols-3 gap-3 mb-3">
+                <MiniStat label="Actual spend" value={fmtCurrency(p.actualSpend)} />
+                <MiniStat label="Recovered" value={fmtCurrency(p.recoveredAmount || 0)} tone="emerald" />
+                <MiniStat label="Net cost" value={fmtCurrency(p.actualSpend - (p.recoveredAmount || 0))} tone="fuchsia" />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    value={recoveryInput}
+                    disabled={!canEditRecovery}
+                    onChange={(e) => setRecoveryInput(Number(e.target.value))}
+                    data-testid="recovery-input"
+                    className="w-full h-9 pl-7 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-emerald-500/40 disabled:opacity-40"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  disabled={!canEditRecovery || recoveryInput === p.recoveredAmount}
+                  onClick={() => {
+                    setRecovery(p.id, recoveryInput);
+                    toast.success(`Recovery updated to ${fmtCurrency(recoveryInput)}`, { description: `${p.name} · Finance entry logged` });
+                  }}
+                  data-testid="btn-save-recovery"
+                  className="h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 disabled:bg-white/5 disabled:text-zinc-500 text-white"
+                >
+                  <Check className="w-3.5 h-3.5 mr-1" />
+                  Save
+                </Button>
+              </div>
+              {!canEditRecovery && (
+                <div className="mt-2 text-[11px] text-zinc-500">Only CFO / Finance can update the recovered amount.</div>
+              )}
+            </>
+          ) : (
+            <div className="text-xs text-zinc-500 py-6 text-center">
+              This project is internal (R&amp;D or Ops). Mark <span className="text-emerald-300">recoverable</span> to enable client billing tracking.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Cost breakdown */}

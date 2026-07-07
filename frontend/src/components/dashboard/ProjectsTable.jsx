@@ -1,7 +1,6 @@
 import { Fragment, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight, ChevronDown } from "lucide-react";
-import { PROJECTS } from "../../data/mockData";
 import { fmtCurrency, fmtPct, healthColor, varianceColor, utilColor } from "../../lib/format";
 import { useApp } from "../../context/AppContext";
 
@@ -18,11 +17,11 @@ const HealthBadge = ({ h }) => {
 const ProjectsTable = () => {
   const [expanded, setExpanded] = useState({ "crowley-gen": true });
   const nav = useNavigate();
-  const { scope } = useApp();
+  const { scope, visibleProjects } = useApp();
 
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
-  const projects = PROJECTS.filter((p) => scope === "all" || p.type === scope);
+  const projects = visibleProjects.filter((p) => scope === "all" || p.type === scope);
   const totals = projects.reduce(
     (a, p) => ({
       approved: a.approved + p.approvedBudget,
@@ -43,7 +42,7 @@ const ProjectsTable = () => {
             Projects — budget by project
           </div>
           <div className="text-xs text-zinc-500 mt-0.5">
-            {PROJECTS.length} projects · {fmtCurrency(totals.actual)} of {fmtCurrency(totals.approved)} · expand a row for phases
+            {projects.length} projects · {fmtCurrency(totals.actual)} of {fmtCurrency(totals.approved)} · expand a row for phases
           </div>
         </div>
         <div className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 tabular">

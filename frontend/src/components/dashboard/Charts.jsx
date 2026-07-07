@@ -15,7 +15,7 @@ import {
   PieChart,
   Pie,
 } from "recharts";
-import { PROJECTS, MONTHLY_SPEND, CATEGORY_BREAKDOWN, MODELS_USAGE, INFRA_BY_PROJECT } from "../../data/mockData";
+import { PROJECTS, MONTHLY_SPEND, CATEGORY_BREAKDOWN, MODELS_USAGE, INFRA_BY_PROJECT, THRESHOLDS } from "../../data/mockData";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 
 // Palette

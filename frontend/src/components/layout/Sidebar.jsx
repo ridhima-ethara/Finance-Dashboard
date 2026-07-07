@@ -11,6 +11,7 @@ import {
   Settings,
   KeyRound,
   LogOut,
+  Calendar,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { initials } from "../../lib/format";
@@ -18,6 +19,7 @@ import { initials } from "../../lib/format";
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
+  { to: "/daily", label: "Daily", icon: Calendar, testid: "nav-daily" },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },

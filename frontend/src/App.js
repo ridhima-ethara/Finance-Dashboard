@@ -14,6 +14,7 @@ import Team from "./pages/Team";
 import Tasks from "./pages/Tasks";
 import Login from "./pages/Login";
 import ModelKeys from "./pages/ModelKeys";
+import Daily from "./pages/Daily";
 import { Toaster } from "./components/ui/sonner";
 
 const Protected = ({ children }) => {
@@ -47,6 +48,7 @@ function App() {
               <Route path="/team" element={<Team />} />
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/keys" element={<ModelKeys />} />
+              <Route path="/daily" element={<Daily />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
