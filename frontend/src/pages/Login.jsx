@@ -20,80 +20,13 @@ const roleLabel = {
   PL: "Project Lead",
 };
 
-// Ethara.AI lotus mandala mark — matches the branding
+// Ethara.AI logo — provided by user
 const EtharaMask = ({ className = "" }) => (
-  <svg viewBox="0 0 200 200" className={className} fill="none">
-    {/* Outer circle */}
-    <circle cx="100" cy="100" r="88" stroke="white" strokeWidth="5" />
-
-    {/* Top center leaf */}
-    <path
-      d="M 100 38 Q 120 68 100 108 Q 80 68 100 38 Z"
-      stroke="white"
-      strokeWidth="5"
-      strokeLinejoin="round"
-    />
-
-    {/* Upper-left leaf */}
-    <path
-      d="M 52 76 Q 54 108 92 110 Q 78 92 52 76 Z"
-      stroke="white"
-      strokeWidth="5"
-      strokeLinejoin="round"
-    />
-
-    {/* Upper-right leaf */}
-    <path
-      d="M 148 76 Q 146 108 108 110 Q 122 92 148 76 Z"
-      stroke="white"
-      strokeWidth="5"
-      strokeLinejoin="round"
-    />
-
-    {/* Lower-left petal */}
-    <path
-      d="M 58 122 Q 60 148 96 132 Q 84 124 58 122 Z"
-      stroke="white"
-      strokeWidth="5"
-      strokeLinejoin="round"
-    />
-
-    {/* Lower-right petal */}
-    <path
-      d="M 142 122 Q 140 148 104 132 Q 116 124 142 122 Z"
-      stroke="white"
-      strokeWidth="5"
-      strokeLinejoin="round"
-    />
-
-    {/* Center cross where petals meet */}
-    <path
-      d="M 92 110 L 100 120 L 108 110"
-      stroke="white"
-      strokeWidth="5"
-      strokeLinejoin="round"
-      strokeLinecap="round"
-      fill="none"
-    />
-    <path
-      d="M 96 132 L 100 140 L 104 132"
-      stroke="white"
-      strokeWidth="5"
-      strokeLinejoin="round"
-      strokeLinecap="round"
-      fill="none"
-    />
-
-    {/* Bottom drop */}
-    <path
-      d="M 95 148 Q 100 162 105 148 Q 100 144 95 148 Z"
-      fill="white"
-    />
-
-    {/* Two flanking dots */}
-    <circle cx="80" cy="156" r="2.8" fill="white" />
-    <circle cx="120" cy="156" r="2.8" fill="white" />
-  </svg>
+  <img
+    src="https://customer-assets.emergentagent.com/job_35b8a911-7e5b-47f4-877d-0c3c5c9e0d0c/artifacts/scrxjjww_image%20%281%29.png"
+    alt="Ethara.AI"
+    className={`${className} object-contain drop-shadow-[0_0_30px_rgba(232,25,184,0.35)]`}
+  />
 );
 
 // Diagonal + grid backdrop

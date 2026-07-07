@@ -38,14 +38,14 @@ const NAV_CTO = [
 
 const NAV_CFO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
-  { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
-  { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
-  { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
-  { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
-  { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
+  { to: "/approval-queue", label: "Approval Queue", icon: ClipboardCheck, testid: "nav-approval-queue" },
+  { to: "/financial-monitoring", label: "Financial Monitoring", icon: Activity, testid: "nav-financial-monitoring" },
+  { to: "/topups", label: "Budget Management", icon: ArrowUpRightSquare, testid: "nav-topups" },
+  { to: "/buffer", label: "Contingency Buffer", icon: ShieldCheck, testid: "nav-buffer" },
+  { to: "/recovery", label: "Client Recovery", icon: Receipt, testid: "nav-recovery" },
+  { to: "/ai-cost", label: "AI Cost Analytics", icon: Zap, testid: "nav-ai-cost" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/audit", label: "Audit Log", icon: History, testid: "nav-audit" },
-  { to: "/team", label: "Team", icon: Users, testid: "nav-team" },
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
 ];
 

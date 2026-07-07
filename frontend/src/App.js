@@ -23,6 +23,10 @@ import BudgetReviews from "./pages/cto/BudgetReviews";
 import BudgetReviewWorkspace from "./pages/cto/BudgetReviewWorkspace";
 import ChangeRequests from "./pages/cto/ChangeRequests";
 import ProjectMonitoring from "./pages/cto/ProjectMonitoring";
+import ApprovalQueue from "./pages/cfo/ApprovalQueue";
+import FinancialMonitoring from "./pages/cfo/FinancialMonitoring";
+import Buffer from "./pages/cfo/Buffer";
+import Recovery from "./pages/cfo/Recovery";
 import Reports from "./pages/Reports";
 import { Toaster } from "./components/ui/sonner";
 
@@ -66,6 +70,10 @@ function App() {
               <Route path="/budget-reviews/:id" element={<BudgetReviewWorkspace />} />
               <Route path="/change-requests" element={<ChangeRequests />} />
               <Route path="/monitoring" element={<ProjectMonitoring />} />
+              <Route path="/approval-queue" element={<ApprovalQueue />} />
+              <Route path="/financial-monitoring" element={<FinancialMonitoring />} />
+              <Route path="/buffer" element={<Buffer />} />
+              <Route path="/recovery" element={<Recovery />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

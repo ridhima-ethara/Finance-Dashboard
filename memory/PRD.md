@@ -22,7 +22,30 @@ Frontend only (React + Tailwind + shadcn/ui + Recharts + react-router).
 - `components/dashboard/` — AmountAtRisk, KpiGrid, Charts (Budget/Actual/Estimated, Model expenses, Infra stacked, Monthly trend, Category donut, Utilization bars, Subscription usage, Workflow strip), ProjectsTable
 - `pages/` — Dashboard, Projects, ProjectDetail, Approvals, TopUps, Reimbursements, AuditLog, Team, Tasks, Settings
 
-## What's Implemented (2026-02-09 · iteration 6) — CTO Portal + TPM Consumption Rework
+## What's Implemented (2026-02-10 · iteration 7) — CFO Portal + Login Logo Swap
+
+### CFO Portal (workflow: Receive from CTO → Financial Review → Approve/Partial/Reject → Activate → Monitor → Client Recovery → Closure)
+- [x] **Sidebar reorganized** — CFO gets: Dashboard, Approval Queue, Financial Monitoring, Budget Management, Contingency Buffer, Client Recovery, AI Cost Analytics, Reports, Audit Log, Settings (Settings is CFO-only)
+- [x] **CFO Dashboard alert strip** — 4 tiles (Approval Queue pending · Pending Top-ups · Outstanding Recovery · Buffer Utilization) linking to modules
+- [x] **`/approval-queue`** — Full CFO decision workspace with per-row actions:
+    - **Approve full** — approves at requested amount
+    - **Partial Approve** — CFO enters the amount they're approving. This amount **becomes the new baseline visible to TPM** — all future top-ups will reference this amount (not the original request)
+    - **Return with comments** — sends back to CTO with notes
+    - **Reject** — final rejection with comment
+    - **Allocate hidden buffer (CFO-only)** — separate input reserves from confidential buffer pool, **not visible to TPM/CTO**
+    - **Forward for payment** — post-approval action
+    - Stats: Pending / Approved / Partial / Rejected / Total requested; hidden buffer banner (available / total / already allocated); search + priority filters
+- [x] **`/financial-monitoring`** — 8 KPIs (Org spend, Daily, Monthly, Variance, EAC, Cash flow (Jul), Financial risk, Exhaustion in days). 4 charts: Daily financial consumption, Cash flow forecast (6 months), Department-wise spend, AI spend distribution (pie). Project-spend ranking with utilization bars
+- [x] **`/buffer` — Contingency Buffer** (CFO-only, "Confidential") — Total pool card with visual bar, Utilization + Policy stats, Critical/Warning alerts, 4 actions (Increase / Reduce / Allocate / Release) with amount + project inputs, per-project buffer allocation table, allocation history log
+- [x] **`/recovery` — Client Cost Recovery** — 6 KPIs (Total recoverable, Recovered, Outstanding, Net company cost, Profitability%, Recoverable projects). Recovery trend LineChart + by-client BarChart. Per-client table with invoiced/received/outstanding/profitability. Recoverable projects table
+
+### Data
+- [x] Added `/data/mockCfo.js` — `BUFFER` (pool, per-project allocation, history, alerts), `RECOVERY` (per-client stats, monthly trend), `CASH_FLOW` (6-month forecast), `DEPT_SPEND`, `APPROVAL_TREND`
+
+### Global
+- [x] **Login logo replaced** — SVG mandala swapped with the user-provided PNG emblem (Ethara.AI leaf/floral mark) with fuchsia drop-shadow glow
+
+
 ### CTO Portal (full workflow: Project → TPM assignment → Budget Review → Task/Model review → Modify → Approve & Forward to CFO → Monitor → CR approvals → Closure)
 - [x] **Sidebar** — Role-based nav. CTO gets: Dashboard, Projects, Budget Reviews, Project Monitoring, AI Cost Analytics, Change Requests, Model Keys, Reports, Audit Log (NO Settings)
 - [x] **CTO alert strip on Dashboard** — 4 tile row: Budget Reviews (pending), Change Requests (pending), High-Risk Projects (util ≥ 90%), Over Budget count — each links to the relevant module
