@@ -6,7 +6,7 @@ import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Approvals from "./pages/Approvals";
-import TopUps from "./pages/TopUps";
+import Topups from "./pages/Topups";
 import Reimbursements from "./pages/Reimbursements";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
@@ -27,6 +27,8 @@ import ApprovalQueue from "./pages/cfo/ApprovalQueue";
 import FinancialMonitoring from "./pages/cfo/FinancialMonitoring";
 import Buffer from "./pages/cfo/Buffer";
 import Recovery from "./pages/cfo/Recovery";
+import EarlyWarning from "./pages/cfo/EarlyWarning";
+import MonthlyForecast from "./pages/cfo/MonthlyForecast";
 import Reports from "./pages/Reports";
 import { Toaster } from "./components/ui/sonner";
 
@@ -55,7 +57,7 @@ function App() {
               <Route path="/projects" element={<Projects />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/approvals" element={<Approvals />} />
-              <Route path="/topups" element={<TopUps />} />
+              <Route path="/topups" element={<Topups />} />
               <Route path="/reimbursements" element={<Reimbursements />} />
               <Route path="/audit" element={<AuditLog />} />
               <Route path="/team" element={<Team />} />
@@ -74,6 +76,8 @@ function App() {
               <Route path="/financial-monitoring" element={<FinancialMonitoring />} />
               <Route path="/buffer" element={<Buffer />} />
               <Route path="/recovery" element={<Recovery />} />
+              <Route path="/early-warning" element={<EarlyWarning />} />
+              <Route path="/monthly-forecast" element={<MonthlyForecast />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
             </Route>

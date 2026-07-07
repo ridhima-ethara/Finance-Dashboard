@@ -115,7 +115,7 @@ const RequestBudgetDialog = ({ open, onOpenChange }) => {
           {/* Row 2 · R&D vs Ops + delivery */}
           <div className="grid grid-cols-2 gap-3">
             <Field label="R&D or Operations">
-              <SelectPills options={["R&D", "Operations"]} value={projectType} onChange={setProjectType} testidPrefix="rb-scope" />
+              <SelectPills options={["R&D", "Production"]} value={projectType} onChange={setProjectType} testidPrefix="rb-scope" />
             </Field>
             <Field label="Delivery model">
               <SelectPills options={["single", "phase-wise"]} value={delivery} onChange={setDelivery} testidPrefix="rb-delivery" />

@@ -163,7 +163,7 @@ const ModelKeys = () => {
           />
         </div>
         <ChipGroup label="Env" value={envFilter} onChange={setEnvFilter} testidPrefix="env" options={["all", "production", "testing"]} />
-        <ChipGroup label="Type" value={typeFilter} onChange={setTypeFilter} testidPrefix="type" options={["all", "R&D", "Operations"]} />
+        <ChipGroup label="Type" value={typeFilter} onChange={setTypeFilter} testidPrefix="type" options={["all", "R&D", "Production"]} />
         <ChipGroup label="Provider" value={providerFilter} onChange={setProviderFilter} testidPrefix="prov" options={["all", "Anthropic", "OpenAI", "Google", "xAI"]} />
       </div>
 
@@ -328,7 +328,7 @@ const GenerateKeyDialog = ({ open, onOpenChange }) => {
             <SelectPill options={["testing", "production"]} value={form.env} onChange={(v) => setForm({ ...form, env: v })} />
           </Field>
           <Field label="Type">
-            <SelectPill options={["R&D", "Operations"]} value={form.type} onChange={(v) => setForm({ ...form, type: v })} />
+            <SelectPill options={["R&D", "Production"]} value={form.type} onChange={(v) => setForm({ ...form, type: v })} />
           </Field>
           <Field label="Tag (optional)">
             <input

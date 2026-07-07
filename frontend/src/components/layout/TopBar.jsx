@@ -35,7 +35,7 @@ const TopBar = () => {
         {[
           { v: "all", l: "All" },
           { v: "R&D", l: "R&D" },
-          { v: "Operations", l: "Ops" },
+          { v: "Production", l: "Production" },
         ].map((o) => (
           <button
             key={o.v}

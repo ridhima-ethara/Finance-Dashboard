@@ -8,7 +8,6 @@ import {
   CategoryDonut,
   UtilizationBars,
   SubscriptionsPanel,
-  WorkflowStrip,
 } from "../components/dashboard/Charts";
 import ProjectsTable from "../components/dashboard/ProjectsTable";
 import { Button } from "../components/ui/button";
@@ -214,9 +213,6 @@ const Dashboard = () => {
           <KpiGrid />
         </div>
       </div>
-
-      {/* Workflow strip */}
-      <WorkflowStrip />
 
       {/* Charts grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -82,13 +82,17 @@ export const AppProvider = ({ children }) => {
     [buffers, recoveries, customProjects]
   );
 
-  // Role-based visibility filter
+  // Role + scope-based visibility filter
   const visibleProjects = useMemo(() => {
     if (!user) return [];
-    if (user.role === "TPM") return projects.filter((p) => p.tpm === user.name);
-    if (user.role === "PL") return projects.filter((p) => p.pl === user.name);
-    return projects; // CTO / CFO see all
-  }, [projects, user]);
+    let list = projects;
+    if (user.role === "TPM") list = list.filter((p) => p.tpm === user.name);
+    else if (user.role === "PL") list = list.filter((p) => p.pl === user.name);
+    // scope filter applies to all roles
+    if (scope === "R&D") list = list.filter((p) => p.type === "R&D");
+    else if (scope === "Production") list = list.filter((p) => p.type === "Production");
+    return list;
+  }, [projects, user, scope]);
 
   const setBuffer = (projectId, pct) => setBuffers((b) => ({ ...b, [projectId]: Number(pct) }));
   const setRecovery = (projectId, amount) => setRecoveries((r) => ({ ...r, [projectId]: Number(amount) }));

@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
+import { MODEL_KEYS_MASKED } from "../../data/mockAi";
 import {
   AI_COST_TODAY,
   AI_COST_MONTHLY,
@@ -319,6 +320,7 @@ const AiCost = () => {
               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
                 <th className="text-left py-2 px-3">Model</th>
                 <th className="text-left py-2 px-3">Provider</th>
+                <th className="text-left py-2 px-3">Projects using</th>
                 <th className="text-right py-2 px-3">Today</th>
                 <th className="text-right py-2 px-3">MTD</th>
                 <th className="text-right py-2 px-3">Tokens (in / out)</th>
@@ -327,26 +329,48 @@ const AiCost = () => {
               </tr>
             </thead>
             <tbody>
-              {AI_COST_BY_MODEL.filter((m) => !selectedProvider || m.provider === selectedProvider).map((m) => (
-                <tr key={m.model} data-testid={`row-model-${m.model}`} className="border-b border-white/5 hover:bg-white/[0.03]">
-                  <td className="py-3 px-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-6 rounded-full" style={{ background: providerColors[m.provider] }} />
-                      <span className="font-medium text-white">{m.model}</span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-3 text-zinc-400 text-xs">{m.provider}</td>
-                  <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(m.today, { compact: false })}</td>
-                  <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(m.month)}</td>
-                  <td className="py-3 px-3 text-right text-zinc-300 tabular">
-                    {fmtTokens(m.tokensIn)} / {fmtTokens(m.tokensOut)}
-                  </td>
-                  <td className="py-3 px-3 text-right text-zinc-300 tabular">
-                    ${m.avgCostPer1kIn.toFixed(2)} · ${m.avgCostPer1kOut.toFixed(2)}
-                  </td>
-                  <td className="py-3 px-3 text-right text-zinc-300 tabular">{m.requests.toLocaleString()}</td>
-                </tr>
-              ))}
+              {AI_COST_BY_MODEL.filter((m) => !selectedProvider || m.provider === selectedProvider).map((m) => {
+                const usedIn = MODEL_KEYS_MASKED
+                  .filter((k) => k.model === m.model)
+                  .map((k) => k.projectName);
+                const projectsUsing = Array.from(new Set(usedIn));
+                return (
+                  <tr key={m.model} data-testid={`row-model-${m.model}`} className="border-b border-white/5 hover:bg-white/[0.03]">
+                    <td className="py-3 px-3">
+                      <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-6 rounded-full" style={{ background: providerColors[m.provider] }} />
+                        <span className="font-medium text-white">{m.model}</span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-zinc-400 text-xs">{m.provider}</td>
+                    <td className="py-3 px-3">
+                      {projectsUsing.length === 0 ? (
+                        <span className="text-[11px] text-zinc-600">—</span>
+                      ) : (
+                        <div className="flex items-center gap-1 flex-wrap max-w-[240px]">
+                          {projectsUsing.slice(0, 3).map((pname) => (
+                            <span key={pname} className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-fuchsia-500/10 border border-fuchsia-500/25 text-fuchsia-200 text-[10px] font-medium">
+                              {pname}
+                            </span>
+                          ))}
+                          {projectsUsing.length > 3 && (
+                            <span className="text-[10px] text-zinc-500">+{projectsUsing.length - 3}</span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(m.today, { compact: false })}</td>
+                    <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(m.month)}</td>
+                    <td className="py-3 px-3 text-right text-zinc-300 tabular">
+                      {fmtTokens(m.tokensIn)} / {fmtTokens(m.tokensOut)}
+                    </td>
+                    <td className="py-3 px-3 text-right text-zinc-300 tabular">
+                      ${m.avgCostPer1kIn.toFixed(2)} · ${m.avgCostPer1kOut.toFixed(2)}
+                    </td>
+                    <td className="py-3 px-3 text-right text-zinc-300 tabular">{m.requests.toLocaleString()}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

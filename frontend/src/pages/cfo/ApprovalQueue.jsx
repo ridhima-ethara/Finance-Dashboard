@@ -92,22 +92,30 @@ const ApprovalQueue = () => {
     });
   };
   const doReject = (r) => {
-    updateStatus(r.id, { status: "rejected", cfoComment: comment[r.id] || "" });
-    toast.error("Budget rejected", { description: `${r.projectName} · TPM notified · comment: "${comment[r.id] || "None"}"` });
+    if (!(comment[r.id] || "").trim()) {
+      toast.error("Comment is required to reject");
+      return;
+    }
+    updateStatus(r.id, { status: "rejected", cfoComment: comment[r.id] });
+    toast.error("Budget rejected", { description: `${r.projectName} · TPM notified · comment: "${comment[r.id]}"` });
   };
   const doReturn = (r) => {
-    updateStatus(r.id, { status: "returned", cfoComment: comment[r.id] || "" });
-    toast.info("Returned with comments to CTO", { description: `${r.projectName} · comment: "${comment[r.id] || "None"}"` });
+    if (!(comment[r.id] || "").trim()) {
+      toast.error("Comment is required to return");
+      return;
+    }
+    updateStatus(r.id, { status: "returned", cfoComment: comment[r.id] });
+    toast.info("Returned with comments to CTO", { description: `${r.projectName} · comment: "${comment[r.id]}"` });
   };
   const doAllocateBuffer = (r) => {
     const b = Number(buffer[r.id]);
-    if (!b || b <= 0) {
-      toast.error("Enter a valid buffer amount");
+    if (!b || b <= 0 || b > 50) {
+      toast.error("Enter a buffer between 0% and 50%");
       return;
     }
     updateStatus(r.id, { cfoBufferAllocation: b });
     toast.success("Contingency buffer allocated (hidden)", {
-      description: `${r.projectName} · +${fmtCurrency(b, { compact: false })} reserved from buffer pool · not visible to TPM/CTO`,
+      description: `${r.projectName} · ${b}% (${fmtCurrency(Math.round((r.requestedBudget * b) / 100), { compact: false })}) reserved · not visible to TPM/CTO`,
     });
   };
   const doForwardPayment = (r) => {
@@ -224,7 +232,7 @@ const ApprovalQueue = () => {
                       </span>
                       {r.cfoBufferAllocation > 0 && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-fuchsia-500/10 border border-fuchsia-500/30 text-fuchsia-300">
-                          <Lock className="w-3 h-3" /> Buffer +{fmtCurrency(r.cfoBufferAllocation, { compact: false })}
+                          <Lock className="w-3 h-3" /> Buffer +{r.cfoBufferAllocation}%
                         </span>
                       )}
                     </div>
@@ -327,22 +335,24 @@ const ApprovalQueue = () => {
 
                         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
                           <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300 mb-1.5">
-                            <Lock className="w-3 h-3" /> Allocate hidden buffer (CFO only)
+                            <Lock className="w-3 h-3" /> Allocate hidden buffer % (CFO only)
                           </div>
                           <div className="text-[11px] text-zinc-400 mb-2">
-                            Reserve from buffer pool for downside protection. Not visible to TPM/CTO. Currently allocated: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(r.cfoBufferAllocation, { compact: false })}</span>
+                            Reserve % of requested budget from the pool for downside protection. Not visible to TPM/CTO. Currently allocated: <span className="text-fuchsia-300 font-semibold tabular">{r.cfoBufferAllocation}%</span>
                           </div>
                           <div className="flex items-center gap-2">
                             <div className="relative flex-1">
-                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">$</span>
                               <input
                                 type="number"
+                                min="0"
+                                max="50"
                                 value={buffer[r.id] || ""}
                                 onChange={(e) => setBuffer({ ...buffer, [r.id]: e.target.value })}
-                                placeholder="Buffer amount"
+                                placeholder="Buffer %"
                                 data-testid={`buffer-input-${r.id}`}
-                                className="w-full h-9 pl-7 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                                className="w-full h-9 pl-3 pr-8 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                               />
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">%</span>
                             </div>
                             <Button
                               onClick={(e) => { e.stopPropagation(); doAllocateBuffer(r); }}

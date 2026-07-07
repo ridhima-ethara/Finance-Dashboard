@@ -39,10 +39,10 @@ const mkTopups = (project) => [
 ];
 
 const mkPhases = (approved, actual) => [
-  { id: "p1", name: "Phase 1 · Discovery", dates: "Jun 1 – 8", estimated: Math.round(approved * 0.22), actual: Math.round(actual * 0.22), health: "healthy" },
-  { id: "p2", name: "Phase 2 · Model tuning", dates: "Jun 9 – 16", estimated: Math.round(approved * 0.28), actual: Math.round(actual * 0.32), health: "over" },
-  { id: "p3", name: "Phase 3 · Integration", dates: "Jun 17 – 24", estimated: Math.round(approved * 0.28), actual: Math.round(actual * 0.26), health: "watch" },
-  { id: "p4", name: "Phase 4 · Rollout", dates: "Jun 25 – 30", estimated: Math.round(approved * 0.22), actual: Math.round(actual * 0.20), health: "healthy" },
+  { id: "p1", name: "Phase 1", dates: "Jun 1 – 8", estimated: Math.round(approved * 0.22), actual: Math.round(actual * 0.22), health: "healthy" },
+  { id: "p2", name: "Phase 2", dates: "Jun 9 – 16", estimated: Math.round(approved * 0.28), actual: Math.round(actual * 0.32), health: "over" },
+  { id: "p3", name: "Phase 3", dates: "Jun 17 – 24", estimated: Math.round(approved * 0.28), actual: Math.round(actual * 0.26), health: "watch" },
+  { id: "p4", name: "Phase 4", dates: "Jun 25 – 30", estimated: Math.round(approved * 0.22), actual: Math.round(actual * 0.20), health: "healthy" },
 ];
 
 const buildProject = (id, name, client, pl, approved, estimated, actual, status, extras = {}) => {
@@ -106,13 +106,13 @@ const buildProject = (id, name, client, pl, approved, estimated, actual, status,
 
 export const PROJECTS = [
   buildProject("crowley-gen", "Crowley Generation", "Acme AI", "Aanya Sharma", 48000, 44000, 41000, "Execution", { type: "R&D", buffer: 12, recoverable: true, recovered: 8000, tpm: "Vikram Kumar" }),
-  buildProject("talos", "Talos", "Northwind Data", "Maria Lopez", 46000, 38000, 31000, "Execution", { type: "Operations", buffer: 8, tpm: "Arjun Mehta" }),
+  buildProject("talos", "Talos", "Northwind Data", "Maria Lopez", 46000, 38000, 31000, "Execution", { type: "Production", buffer: 8, tpm: "Arjun Mehta" }),
   buildProject("sourcing", "Crowley Sourcing", "Acme AI", "Aanya Sharma", 26000, 24000, 26400, "Execution", { type: "R&D", buffer: 10, recoverable: true, recovered: 4200, tpm: "Aanya Sharma" }),
   buildProject("kaiju", "Kaiju Eval", "Helix Bio", "Arjun Mehta", 30000, 18000, 16000, "Execution", { type: "R&D", buffer: 15, tpm: "Arjun Mehta" }),
-  buildProject("atlas", "Atlas Ingest", "Ironclad", "Arjun Mehta", 11000, 12000, 12100, "Execution", { type: "Operations", buffer: 5, tpm: "Arjun Mehta" }),
-  buildProject("nimbus", "Nimbus QC", "Meridian", "Maria Lopez", 14000, 9000, 7000, "Execution", { type: "Operations", buffer: 8, tpm: "Maria Lopez" }),
+  buildProject("atlas", "Atlas Ingest", "Ironclad", "Arjun Mehta", 11000, 12000, 12100, "Execution", { type: "Production", buffer: 5, tpm: "Arjun Mehta" }),
+  buildProject("nimbus", "Nimbus QC", "Meridian", "Maria Lopez", 14000, 9000, 7000, "Execution", { type: "Production", buffer: 8, tpm: "Maria Lopez" }),
   buildProject("orion", "Orion Stub", "Voltek", "Vikram Kumar", 9000, 7000, 2200, "Discovery", { type: "R&D", buffer: 20, recoverable: true, recovered: 0, tpm: "Arjun Mehta" }),
-  buildProject("vesper", "Vesper Docker", "Ironclad", "Aanya Sharma", 13000, 5400, 15600, "Execution", { type: "Operations", buffer: 10, tpm: "Aanya Sharma" }),
+  buildProject("vesper", "Vesper Docker", "Ironclad", "Aanya Sharma", 13000, 5400, 15600, "Execution", { type: "Production", buffer: 10, tpm: "Aanya Sharma" }),
 ];
 
 export const PORTFOLIO = (() => {

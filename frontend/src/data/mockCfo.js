@@ -65,10 +65,7 @@ export const CASH_FLOW = [
 // DEPARTMENT SPEND (for CFO monitoring)
 export const DEPT_SPEND = [
   { dept: "R&D", spend: PROJECTS.filter((p) => p.type === "R&D").reduce((s, p) => s + p.actualSpend, 0), budget: PROJECTS.filter((p) => p.type === "R&D").reduce((s, p) => s + p.approvedBudget, 0) },
-  { dept: "Operations", spend: PROJECTS.filter((p) => p.type === "Operations").reduce((s, p) => s + p.actualSpend, 0), budget: PROJECTS.filter((p) => p.type === "Operations").reduce((s, p) => s + p.approvedBudget, 0) },
-  { dept: "Product", spend: 24000, budget: 28000 },
-  { dept: "Sales/GTM", spend: 12500, budget: 18000 },
-  { dept: "Admin", spend: 9800, budget: 12000 },
+  { dept: "Production", spend: PROJECTS.filter((p) => p.type === "Production").reduce((s, p) => s + p.actualSpend, 0), budget: PROJECTS.filter((p) => p.type === "Production").reduce((s, p) => s + p.approvedBudget, 0) },
 ];
 
 // BUDGET APPROVAL TREND (monthly, for CFO trend chart)
