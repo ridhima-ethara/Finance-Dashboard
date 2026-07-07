@@ -104,12 +104,12 @@ const Sidebar = () => {
     <aside data-testid="app-sidebar" className="hidden lg:flex fixed inset-y-0 left-0 w-64 flex-col border-r border-white/5 bg-[#0B0B12] z-30">
       {/* Brand */}
       <div className="h-16 flex items-center gap-2 px-5 border-b border-white/5">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-fuchsia-500 to-pink-600 flex items-center justify-center shadow-[0_0_20px_rgba(232,25,184,0.4)]">
-          <svg viewBox="0 0 24 24" className="w-4 h-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 3 v18 M3 12 h18 M6.3 6.3 l11.4 11.4 M17.7 6.3 L6.3 17.7" opacity="0.5" />
-          </svg>
-        </div>
+        <img
+          src="https://customer-assets.emergentagent.com/job_budget-forge-8/artifacts/lsy7cvxh_images.jpeg"
+          alt="Ethara.AI"
+          data-testid="sidebar-logo"
+          className="w-9 h-9 rounded-full object-contain drop-shadow-[0_0_16px_rgba(232,25,184,0.35)]"
+        />
         <span className="font-display font-semibold text-[17px] tracking-tight text-white">
           Ethara<span className="text-fuchsia-400">.AI</span>
         </span>
