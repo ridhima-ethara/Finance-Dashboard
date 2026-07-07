@@ -23,7 +23,7 @@ const roleLabel = {
 // Ethara.AI logo — provided by user
 const EtharaMask = ({ className = "" }) => (
   <img
-    src="https://customer-assets.emergentagent.com/job_budget-forge-8/artifacts/ry7vmiix_images.jpeg"
+    src="https://customer-assets.emergentagent.com/job_budget-forge-8/artifacts/lsy7cvxh_images.jpeg"
     alt="Ethara.AI"
     className={`${className} object-contain rounded-full drop-shadow-[0_0_30px_rgba(232,25,184,0.35)]`}
   />
