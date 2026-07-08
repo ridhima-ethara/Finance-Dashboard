@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, Fragment } from "react";
 import { BUFFER } from "../../data/mockCfo";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { toast } from "sonner";
@@ -11,53 +11,73 @@ import {
   Send,
   RotateCcw,
   AlertTriangle,
-  History,
   Wallet,
   TrendingUp,
+  Percent,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
+
+// Build lifecycle rows for each buffer-using project (initial → requested → approved → consumed → remaining).
+const buildLifecycle = () =>
+  BUFFER.perProject.map((p) => {
+    const projectBudget = p.approved; // project's approved budget
+    const initial = Math.round(projectBudget * 0.05); // Initial approved buffer (5% policy baseline)
+    const additionalRequested = Math.max(0, p.allocated - initial + (p.status === "critical" ? Math.round(projectBudget * 0.03) : p.status === "using" ? Math.round(projectBudget * 0.02) : 0));
+    const bufferApproved = p.allocated; // total buffer approved for the project
+    const consumed = p.consumed;
+    const remaining = Math.max(0, bufferApproved - consumed);
+    return { ...p, projectBudget, initial, additionalRequested, bufferApproved, consumed, remaining };
+  });
 
 const Buffer = () => {
   const [total, setTotal] = useState(BUFFER.total);
   const [available, setAvailable] = useState(BUFFER.available);
-  const [amt, setAmt] = useState("");
+  const [pct, setPct] = useState(5); // percentage input
   const [selectedProject, setSelectedProject] = useState(BUFFER.perProject[0]?.id || "");
+  const [expanded, setExpanded] = useState({});
 
   const consumed = total - available;
-  const pct = total ? Math.round((consumed / total) * 100) : 0;
+  const utilizationPct = total ? Math.round((consumed / total) * 100) : 0;
+  const proj = BUFFER.perProject.find((p) => p.id === selectedProject);
+  // Amount computed from % of pool for pool-level actions, and of project approved budget for project-level actions
+  const amountFromPct = Math.round((total * pct) / 100);
+  const amountFromPctProject = proj ? Math.round((proj.approved * pct) / 100) : 0;
+
+  const lifecycle = useMemo(buildLifecycle, []);
+
+  const validPct = (v) => v > 0 && v <= 100;
 
   const increase = () => {
-    const v = Number(amt);
-    if (!v || v <= 0) { toast.error("Enter a valid amount"); return; }
-    setTotal((t) => t + v);
-    setAvailable((a) => a + v);
-    setAmt("");
-    toast.success("Buffer pool increased", { description: `+${fmtCurrency(v, { compact: false })} · new total ${fmtCurrency(total + v)}` });
+    if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
+    setTotal((t) => t + amountFromPct);
+    setAvailable((a) => a + amountFromPct);
+    toast.success("Buffer pool increased", { description: `+${pct}% of pool · ${fmtCurrency(amountFromPct, { compact: false })} · new total ${fmtCurrency(total + amountFromPct)}` });
   };
   const reduce = () => {
-    const v = Number(amt);
-    if (!v || v <= 0 || v > available) { toast.error("Amount must be ≤ available buffer"); return; }
-    setTotal((t) => t - v);
-    setAvailable((a) => a - v);
-    setAmt("");
-    toast.success("Buffer pool reduced", { description: `−${fmtCurrency(v, { compact: false })}` });
+    if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
+    if (amountFromPct > available) { toast.error("Cannot reduce beyond available buffer"); return; }
+    setTotal((t) => t - amountFromPct);
+    setAvailable((a) => a - amountFromPct);
+    toast.success("Buffer pool reduced", { description: `−${pct}% · ${fmtCurrency(amountFromPct, { compact: false })}` });
   };
   const allocate = () => {
-    const v = Number(amt);
-    if (!v || v <= 0 || v > available) { toast.error("Amount must be ≤ available"); return; }
-    setAvailable((a) => a - v);
-    setAmt("");
-    const proj = BUFFER.perProject.find((p) => p.id === selectedProject);
-    toast.success("Buffer allocated to project (hidden)", {
-      description: `${proj?.name || "Project"} · +${fmtCurrency(v, { compact: false })} · not visible to TPM/CTO`,
+    if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
+    if (!proj) { toast.error("Select a project"); return; }
+    if (amountFromPctProject > available) { toast.error("Amount exceeds available pool"); return; }
+    setAvailable((a) => a - amountFromPctProject);
+    toast.success("Buffer allocated (hidden)", {
+      description: `${proj.name} · +${pct}% of approved (${fmtCurrency(amountFromPctProject, { compact: false })}) · not visible to TPM/CTO`,
     });
   };
   const release = () => {
-    const v = Number(amt);
-    if (!v || v <= 0) { toast.error("Enter valid amount"); return; }
-    setAvailable((a) => a + v);
-    setAmt("");
-    toast.success("Buffer released back to pool", { description: `+${fmtCurrency(v, { compact: false })} freed` });
+    if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
+    if (!proj) { toast.error("Select a project"); return; }
+    setAvailable((a) => a + amountFromPctProject);
+    toast.success("Buffer released back to pool", { description: `${proj.name} · +${fmtCurrency(amountFromPctProject, { compact: false })} freed` });
   };
+
+  const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
   return (
     <div className="space-y-6" data-testid="page-buffer">
@@ -83,7 +103,7 @@ const Buffer = () => {
           </div>
           <div className="font-display text-4xl font-semibold text-white tabular">{fmtCurrency(total)}</div>
           <div className="mt-4 h-2 rounded-full bg-white/[0.05] overflow-hidden">
-            <div className="h-full bg-gradient-to-r from-fuchsia-500 to-pink-500" style={{ width: `${pct}%` }} />
+            <div className="h-full bg-gradient-to-r from-fuchsia-500 to-pink-500" style={{ width: `${utilizationPct}%` }} />
           </div>
           <div className="mt-2 flex justify-between text-[11px]">
             <span className="text-zinc-400">Consumed <span className="text-white font-semibold tabular">{fmtCurrency(consumed)}</span></span>
@@ -91,7 +111,7 @@ const Buffer = () => {
           </div>
         </div>
 
-        <Stat label="Utilization" value={fmtPct(pct)} sub={`${fmtCurrency(consumed)} used`} icon={TrendingUp} tone={pct > 75 ? "warning" : "positive"} testid="buffer-util" />
+        <Stat label="Utilization" value={fmtPct(utilizationPct)} sub={`${fmtCurrency(consumed)} used`} icon={TrendingUp} tone={utilizationPct > 75 ? "warning" : "positive"} testid="buffer-util" />
         <Stat label="Policy" value={`${BUFFER.policyPct}%`} sub="Auto-reserved per project" icon={ShieldCheck} testid="buffer-policy" />
       </div>
 
@@ -116,22 +136,45 @@ const Buffer = () => {
         </div>
       )}
 
-      {/* Actions */}
+      {/* Actions — percentage based */}
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="buffer-actions">
-        <div className="font-display font-semibold text-[15px] text-white mb-3">Buffer actions</div>
+        <div className="flex items-baseline justify-between mb-3">
+          <div>
+            <div className="font-display font-semibold text-[15px] text-white">Buffer actions</div>
+            <div className="text-xs text-zinc-500 mt-0.5">Buffer allocation is expressed as a percentage. Pool actions use % of total pool · project actions use % of the project&apos;s approved budget.</div>
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
           <div>
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Amount</div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Allocation percentage</div>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">$</span>
+              <Percent className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="number"
-                value={amt}
-                onChange={(e) => setAmt(e.target.value)}
-                placeholder="0"
-                data-testid="buffer-amt"
-                className="w-full h-10 pl-7 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                min="0"
+                max="100"
+                step="0.5"
+                value={pct}
+                onChange={(e) => setPct(Number(e.target.value) || 0)}
+                placeholder="5"
+                data-testid="buffer-pct"
+                className="w-full h-10 pl-8 pr-14 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-zinc-500 tabular">%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="20"
+              step="0.5"
+              value={pct}
+              onChange={(e) => setPct(Number(e.target.value))}
+              data-testid="buffer-pct-slider"
+              className="w-full mt-2 accent-fuchsia-500"
+            />
+            <div className="mt-1 flex items-center justify-between text-[11px] text-zinc-500 tabular">
+              <span>Pool amount: <span className="text-fuchsia-300 font-semibold">{fmtCurrency(amountFromPct, { compact: false })}</span></span>
+              <span>Project amount: <span className="text-fuchsia-300 font-semibold">{fmtCurrency(amountFromPctProject, { compact: false })}</span></span>
             </div>
           </div>
           <div>
@@ -143,93 +186,163 @@ const Buffer = () => {
               className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
             >
               {BUFFER.perProject.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id}>{p.name} · approved {fmtCurrency(p.approved)}</option>
               ))}
             </select>
+            {proj && (
+              <div className="mt-2 text-[11px] text-zinc-500">
+                Current buffer allocated: <span className="text-white tabular">{fmtCurrency(proj.allocated, { compact: false })}</span> ({Math.round((proj.allocated / proj.approved) * 100)}% of approved)
+              </div>
+            )}
           </div>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={increase} className="h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white gap-2" data-testid="btn-increase">
-            <Plus className="w-3.5 h-3.5" /> Increase pool
+            <Plus className="w-3.5 h-3.5" /> Increase pool by {pct}%
           </Button>
           <Button onClick={reduce} variant="outline" className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2" data-testid="btn-reduce">
-            <Minus className="w-3.5 h-3.5" /> Reduce pool
+            <Minus className="w-3.5 h-3.5" /> Reduce pool by {pct}%
           </Button>
           <Button onClick={allocate} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)]" data-testid="btn-allocate">
-            <Send className="w-3.5 h-3.5" /> Allocate to project
+            <Send className="w-3.5 h-3.5" /> Allocate {pct}% to project
           </Button>
           <Button onClick={release} variant="outline" className="h-9 rounded-lg border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15 gap-2" data-testid="btn-release">
-            <RotateCcw className="w-3.5 h-3.5" /> Release back
+            <RotateCcw className="w-3.5 h-3.5" /> Release {pct}% back
           </Button>
         </div>
       </div>
 
-      {/* Projects using buffer */}
+      {/* Projects using buffer — lifecycle view */}
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="buffer-projects">
-        <div className="font-display font-semibold text-[15px] text-white mb-3">Projects using buffer</div>
+        <div className="mb-3">
+          <div className="font-display font-semibold text-[15px] text-white">Projects using buffer · lifecycle</div>
+          <div className="text-xs text-zinc-500 mt-0.5">
+            Initial approved → Additional requested → Buffer approved → Consumed → Remaining
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                <th className="text-left py-2 px-3 w-8" />
                 <th className="text-left py-2 px-3">Project</th>
-                <th className="text-right py-2 px-3">Approved</th>
-                <th className="text-right py-2 px-3">Allocated</th>
+                <th className="text-right py-2 px-3">Initial buffer</th>
+                <th className="text-right py-2 px-3">Additional requested</th>
+                <th className="text-right py-2 px-3">Buffer approved</th>
                 <th className="text-right py-2 px-3">Consumed</th>
-                <th className="text-right py-2 px-3">Available</th>
+                <th className="text-right py-2 px-3">Remaining</th>
                 <th className="text-left py-2 px-3">Status</th>
               </tr>
             </thead>
             <tbody>
-              {BUFFER.perProject.map((p) => (
-                <tr key={p.id} data-testid={`buffer-project-${p.id}`} className="border-b border-white/5 hover:bg-white/[0.03]">
-                  <td className="py-3 px-3 text-white font-medium">{p.name}</td>
-                  <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(p.approved)}</td>
-                  <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.allocated, { compact: false })}</td>
-                  <td className="py-3 px-3 text-right text-fuchsia-300 tabular">{fmtCurrency(p.consumed, { compact: false })}</td>
-                  <td className="py-3 px-3 text-right text-emerald-300 tabular">{fmtCurrency(p.allocated - p.consumed, { compact: false })}</td>
-                  <td className="py-3 px-3">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                      p.status === "critical" ? "bg-red-500/15 text-red-300" : p.status === "using" ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300"
-                    }`}>
-                      {p.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {lifecycle.map((p) => {
+                const isOpen = !!expanded[p.id];
+                const consumedPct = p.bufferApproved ? Math.round((p.consumed / p.bufferApproved) * 100) : 0;
+                return (
+                  <Fragment key={p.id}>
+                    <tr
+                      data-testid={`buffer-project-${p.id}`}
+                      className="border-b border-white/5 hover:bg-white/[0.03] cursor-pointer"
+                      onClick={() => toggle(p.id)}
+                    >
+                      <td className="py-3 px-3 text-zinc-500">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </td>
+                      <td className="py-3 px-3 text-white font-medium">{p.name}</td>
+                      <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(p.initial, { compact: false })}</td>
+                      <td className="py-3 px-3 text-right text-amber-300 tabular">{fmtCurrency(p.additionalRequested, { compact: false })}</td>
+                      <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.bufferApproved, { compact: false })}</td>
+                      <td className="py-3 px-3 text-right text-fuchsia-300 tabular">{fmtCurrency(p.consumed, { compact: false })}</td>
+                      <td className="py-3 px-3 text-right text-emerald-300 tabular">{fmtCurrency(p.remaining, { compact: false })}</td>
+                      <td className="py-3 px-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                          p.status === "critical" ? "bg-red-500/15 text-red-300" : p.status === "using" ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300"
+                        }`}>
+                          {p.status}
+                        </span>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr data-testid={`buffer-project-detail-${p.id}`} className="bg-white/[0.02]">
+                        <td colSpan={8} className="px-3 py-3">
+                          <div className="pl-6 pr-2">
+                            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">Lifecycle timeline</div>
+                            <LifecycleBar row={p} />
+                            <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                              <MiniField label="Approved project budget" value={fmtCurrency(p.projectBudget, { compact: false })} />
+                              <MiniField label="Buffer % of project" value={`${p.projectBudget ? Math.round((p.bufferApproved / p.projectBudget) * 1000) / 10 : 0}%`} />
+                              <MiniField label="Consumption" value={`${consumedPct}% of buffer`} />
+                              <MiniField label="Coverage remaining" value={fmtCurrency(p.remaining, { compact: false })} tone="positive" />
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
+    </div>
+  );
+};
 
-      {/* Allocation history */}
-      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="buffer-history">
-        <div className="flex items-center gap-2 mb-3">
-          <History className="w-4 h-4 text-fuchsia-300" />
-          <div className="font-display font-semibold text-[15px] text-white">Buffer allocation history</div>
+const LifecycleBar = ({ row }) => {
+  // Visual stack: initial | additional | consumed | remaining
+  const denom = Math.max(row.bufferApproved, row.initial + row.additionalRequested) || 1;
+  const initialPct = Math.min(100, Math.round((row.initial / denom) * 100));
+  const additionalPct = Math.min(100 - initialPct, Math.round((row.additionalRequested / denom) * 100));
+  const consumedPct = Math.min(100, row.bufferApproved ? Math.round((row.consumed / row.bufferApproved) * 100) : 0);
+  const remainingPct = Math.max(0, 100 - consumedPct);
+  return (
+    <div className="space-y-2">
+      <div>
+        <div className="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
+          <span>Requested vs approved buffer</span>
+          <span className="tabular">Approved {row.initial + row.additionalRequested > 0 ? Math.round((row.bufferApproved / (row.initial + row.additionalRequested)) * 100) : 100}% of ask</span>
         </div>
-        <div className="space-y-2">
-          {BUFFER.history.map((h) => (
-            <div key={h.id} data-testid={`history-${h.id}`} className="flex items-center gap-3 p-3 rounded-lg border border-white/5 bg-white/[0.02]">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                h.action === "Allocated" ? "bg-fuchsia-500/15 text-fuchsia-300 border border-fuchsia-500/30" : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-              }`}>
-                {h.action}
-              </span>
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-white">{h.project}</div>
-                <div className="text-[11px] text-zinc-500 mt-0.5 truncate">{h.reason}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-sm font-semibold text-white tabular">
-                  {h.action === "Allocated" ? "−" : "+"}{fmtCurrency(h.amount, { compact: false })}
-                </div>
-                <div className="text-[11px] text-zinc-500 tabular">{h.date} · {h.by}</div>
-              </div>
-            </div>
-          ))}
+        <div className="relative h-2 rounded-full bg-white/[0.04] overflow-hidden flex">
+          <div className="h-full bg-zinc-500/70" style={{ width: `${initialPct}%` }} title={`Initial ${row.initial}`} />
+          <div className="h-full bg-amber-500/70" style={{ width: `${additionalPct}%` }} title={`Additional requested ${row.additionalRequested}`} />
+        </div>
+        <div className="mt-1 flex items-center gap-3 text-[10px]">
+          <Legend color="bg-zinc-500/70" label={`Initial · ${row.initial.toLocaleString()}`} />
+          <Legend color="bg-amber-500/70" label={`Additional · ${row.additionalRequested.toLocaleString()}`} />
         </div>
       </div>
+      <div>
+        <div className="flex items-center justify-between text-[10px] text-zinc-500 mb-1">
+          <span>Consumption vs remaining (of approved buffer)</span>
+          <span className="tabular">{consumedPct}% consumed</span>
+        </div>
+        <div className="relative h-2 rounded-full bg-white/[0.04] overflow-hidden flex">
+          <div className="h-full bg-fuchsia-500/80" style={{ width: `${consumedPct}%` }} title={`Consumed ${row.consumed}`} />
+          <div className="h-full bg-emerald-500/70" style={{ width: `${remainingPct}%` }} title={`Remaining ${row.remaining}`} />
+        </div>
+        <div className="mt-1 flex items-center gap-3 text-[10px]">
+          <Legend color="bg-fuchsia-500/80" label={`Consumed · ${row.consumed.toLocaleString()}`} />
+          <Legend color="bg-emerald-500/70" label={`Remaining · ${row.remaining.toLocaleString()}`} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Legend = ({ color, label }) => (
+  <span className="inline-flex items-center gap-1 text-zinc-400">
+    <span className={`w-2 h-2 rounded-sm ${color}`} /> {label}
+  </span>
+);
+
+const MiniField = ({ label, value, tone = "neutral" }) => {
+  const tones = { positive: "text-emerald-300", negative: "text-red-300", warning: "text-amber-300", neutral: "text-white" };
+  return (
+    <div className="rounded-lg bg-white/[0.03] border border-white/5 p-2">
+      <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+      <div className={`text-[13px] font-semibold tabular mt-0.5 ${tones[tone]}`}>{value}</div>
     </div>
   );
 };

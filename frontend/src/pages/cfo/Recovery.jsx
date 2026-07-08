@@ -1,3 +1,4 @@
+import { useState, Fragment } from "react";
 import { RECOVERY } from "../../data/mockCfo";
 import { PROJECTS } from "../../data/mockProjects";
 import { fmtCurrency, fmtPct } from "../../lib/format";
@@ -13,11 +14,55 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { Receipt, TrendingUp, Wallet, Building2, CheckCircle2, Clock3, AlertTriangle, DollarSign } from "lucide-react";
+import { Receipt, TrendingUp, Wallet, Building2, CheckCircle2, Clock3, AlertTriangle, DollarSign, ChevronDown, ChevronRight, MessageSquare, User as UserIcon } from "lucide-react";
+
+// Seed phase-wise recovery data using each project's phases plus TPM remarks & client feedback.
+const seedPhaseRecovery = (project) => {
+  const phases = project.phases || [];
+  const perPhaseTotal = phases.length ? Math.round(project.actualSpend / phases.length) : project.actualSpend;
+  const clientReasons = [
+    "Client accepted phase deliverables; recovery approved as per SOW.",
+    "Pending client sign-off — awaiting stakeholder review this week.",
+    "Client disputed portion of AI model spend; negotiating scope amendment.",
+    "Fully approved for billing — invoice issued last cycle.",
+    "Client requested itemised breakdown before releasing recovery.",
+  ];
+  const tpmRemarks = [
+    "Phase closed with 2 days spare buffer. All acceptance criteria met.",
+    "Model routing changes recommended for next phase — deferred to CFO review.",
+    "Extended context testing pushed cost 12% above plan. Documented in change log.",
+    "On-track delivery; TPM handover completed on time.",
+    "Overrun driven by client-requested scope addition (evidence attached).",
+  ];
+  return phases.map((ph, i) => {
+    const rec = Math.round(ph.actual * (project.recoverableFromClient ? 1 : 0.6));
+    const invoiced = i < phases.length - 1 ? rec : Math.round(rec * 0.4);
+    const received = i < phases.length - 2 ? invoiced : 0;
+    const status = received >= invoiced && invoiced > 0 ? "recovered" : invoiced > 0 ? "invoiced" : "pending";
+    return {
+      id: `${project.id}-${ph.id}`,
+      phaseId: ph.id,
+      phaseName: ph.name,
+      dates: ph.dates,
+      estimated: ph.estimated,
+      actual: ph.actual,
+      recoverable: rec,
+      invoiced,
+      received,
+      outstanding: invoiced - received,
+      status,
+      tpmRemarks: tpmRemarks[i % tpmRemarks.length],
+      clientFeedback: clientReasons[i % clientReasons.length],
+      closureDate: ph.dates,
+    };
+  });
+};
 
 const Recovery = () => {
   const recoverableProjects = PROJECTS.filter((p) => p.recoverableFromClient);
   const profitPct = RECOVERY.total > 0 ? Math.round(((RECOVERY.recovered - RECOVERY.netCost) / RECOVERY.total) * 100) : 0;
+  const [expanded, setExpanded] = useState({});
+  const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
   return (
     <div className="space-y-6" data-testid="page-recovery">
@@ -110,12 +155,13 @@ const Recovery = () => {
         </div>
       </Panel>
 
-      {/* Recoverable Projects */}
-      <Panel testid="recoverable-projects" title="Recoverable projects" subtitle="Recoverable actual spend and reimbursed amounts">
+      {/* Recoverable Projects — expandable phase-wise view */}
+      <Panel testid="recoverable-projects" title="Recoverable projects" subtitle="Click a project to expand phase-wise recovery, TPM remarks &amp; client feedback">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                <th className="text-left py-2 px-3 w-8" />
                 <th className="text-left py-2 px-3">Project</th>
                 <th className="text-left py-2 px-3">Client</th>
                 <th className="text-right py-2 px-3">Actual spend</th>
@@ -128,28 +174,98 @@ const Recovery = () => {
               {recoverableProjects.map((p) => {
                 const net = p.actualSpend - (p.recoveredAmount || 0);
                 const status = p.recoveredAmount >= p.actualSpend * 0.8 ? "on-track" : p.recoveredAmount > 0 ? "partial" : "pending";
+                const isOpen = !!expanded[p.id];
+                const phaseRecovery = seedPhaseRecovery(p);
                 return (
-                  <tr key={p.id} data-testid={`proj-rec-${p.id}`} className="border-b border-white/5 hover:bg-white/[0.03]">
-                    <td className="py-3 px-3 text-white font-medium">{p.name}</td>
-                    <td className="py-3 px-3 text-zinc-300 text-xs">{p.client}</td>
-                    <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(p.actualSpend)}</td>
-                    <td className="py-3 px-3 text-right text-emerald-300 tabular">{fmtCurrency(p.recoveredAmount || 0)}</td>
-                    <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(net)}</td>
-                    <td className="py-3 px-3">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                        status === "on-track" ? "bg-emerald-500/15 text-emerald-300" : status === "partial" ? "bg-amber-500/15 text-amber-300" : "bg-red-500/15 text-red-300"
-                      }`}>
-                        {status === "on-track" ? <CheckCircle2 className="w-3 h-3" /> : status === "partial" ? <Clock3 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
-                        {status}
-                      </span>
-                    </td>
-                  </tr>
+                  <Fragment key={p.id}>
+                    <tr
+                      data-testid={`proj-rec-${p.id}`}
+                      className="border-b border-white/5 hover:bg-white/[0.03] cursor-pointer"
+                      onClick={() => toggle(p.id)}
+                    >
+                      <td className="py-3 px-3 text-zinc-500">
+                        {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                      </td>
+                      <td className="py-3 px-3 text-white font-medium">{p.name}</td>
+                      <td className="py-3 px-3 text-zinc-300 text-xs">{p.client}</td>
+                      <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(p.actualSpend)}</td>
+                      <td className="py-3 px-3 text-right text-emerald-300 tabular">{fmtCurrency(p.recoveredAmount || 0)}</td>
+                      <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(net)}</td>
+                      <td className="py-3 px-3">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                          status === "on-track" ? "bg-emerald-500/15 text-emerald-300" : status === "partial" ? "bg-amber-500/15 text-amber-300" : "bg-red-500/15 text-red-300"
+                        }`}>
+                          {status === "on-track" ? <CheckCircle2 className="w-3 h-3" /> : status === "partial" ? <Clock3 className="w-3 h-3" /> : <AlertTriangle className="w-3 h-3" />}
+                          {status}
+                        </span>
+                      </td>
+                    </tr>
+                    {isOpen && (
+                      <tr data-testid={`proj-rec-detail-${p.id}`} className="bg-white/[0.02]">
+                        <td colSpan={7} className="px-3 py-4">
+                          <div className="pl-6 pr-2 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Phase-wise recovery</div>
+                              <div className="text-[10px] text-zinc-500 tabular">{phaseRecovery.length} phases · surfaced to CFO &amp; CTO</div>
+                            </div>
+                            {phaseRecovery.map((ph) => (
+                              <div key={ph.id} data-testid={`phase-rec-${ph.id}`} className="rounded-lg border border-white/5 bg-[#0F0F17] p-3">
+                                <div className="flex items-start justify-between gap-4 flex-wrap">
+                                  <div className="flex-1 min-w-[180px]">
+                                    <div className="flex items-center gap-2">
+                                      <div className="text-sm font-semibold text-white">{ph.phaseName}</div>
+                                      <span className="text-[10px] text-zinc-500 tabular">{ph.dates}</span>
+                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold ${
+                                        ph.status === "recovered" ? "bg-emerald-500/15 text-emerald-300" : ph.status === "invoiced" ? "bg-fuchsia-500/15 text-fuchsia-300" : "bg-amber-500/15 text-amber-300"
+                                      }`}>
+                                        {ph.status}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                      <MiniStat label="Recoverable" value={fmtCurrency(ph.recoverable, { compact: false })} tone="magenta" />
+                                      <MiniStat label="Invoiced" value={fmtCurrency(ph.invoiced, { compact: false })} />
+                                      <MiniStat label="Received" value={fmtCurrency(ph.received, { compact: false })} tone="positive" />
+                                      <MiniStat label="Outstanding" value={fmtCurrency(ph.outstanding, { compact: false })} tone={ph.outstanding > 0 ? "warning" : "positive"} />
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+                                    <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300 mb-1 flex items-center gap-1">
+                                      <UserIcon className="w-3 h-3" /> TPM remarks (phase closure)
+                                    </div>
+                                    <div className="text-[12px] text-zinc-200 leading-relaxed">{ph.tpmRemarks}</div>
+                                  </div>
+                                  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+                                    <div className="text-[10px] uppercase tracking-widest font-semibold text-emerald-300 mb-1 flex items-center gap-1">
+                                      <MessageSquare className="w-3 h-3" /> Client feedback / reason
+                                    </div>
+                                    <div className="text-[12px] text-zinc-200 leading-relaxed">{ph.clientFeedback}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })}
             </tbody>
           </table>
         </div>
       </Panel>
+    </div>
+  );
+};
+
+const MiniStat = ({ label, value, tone = "neutral" }) => {
+  const tones = { positive: "text-emerald-300", negative: "text-red-300", warning: "text-amber-300", neutral: "text-white", magenta: "text-fuchsia-300" };
+  return (
+    <div className="rounded-md bg-white/[0.02] border border-white/5 p-1.5">
+      <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+      <div className={`text-[12px] font-semibold tabular mt-0.5 ${tones[tone]}`}>{value}</div>
     </div>
   );
 };

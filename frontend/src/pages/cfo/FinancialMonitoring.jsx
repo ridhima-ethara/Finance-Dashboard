@@ -3,7 +3,7 @@ import { PROJECTS, PORTFOLIO } from "../../data/mockProjects";
 import { DAILY_ACTIVITY } from "../../data/mockAi";
 import { MONTHLY_SPEND } from "../../data/mockFinance";
 import { AI_COST_BY_PROVIDER } from "../../data/mockTpm";
-import { DEPT_SPEND, CASH_FLOW } from "../../data/mockCfo";
+import { DEPT_SPEND, CASH_FLOW, BUFFER } from "../../data/mockCfo";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import {
   ResponsiveContainer,
@@ -22,7 +22,7 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { Activity, TrendingUp, Wallet, Flame, Clock3, Gauge, AlertTriangle, DollarSign, PieChart as PieIcon } from "lucide-react";
+import { Activity, TrendingUp, Wallet, Flame, Clock3, Gauge, AlertTriangle, DollarSign, PieChart as PieIcon, ShieldCheck } from "lucide-react";
 
 const FinancialMonitoring = () => {
   const today = DAILY_ACTIVITY[DAILY_ACTIVITY.length - 1];
@@ -35,7 +35,16 @@ const FinancialMonitoring = () => {
   const exhaustDate = runway ? new Date(Date.now() + runway * 86400000).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—";
 
   const projectSpend = useMemo(
-    () => PROJECTS.map((p) => ({ name: p.name.split(" ")[0], actual: p.actualSpend, approved: p.approvedBudget })).sort((a, b) => b.actual - a.actual),
+    () => PROJECTS.map((p) => {
+      const buf = BUFFER.perProject.find((b) => b.id === p.id);
+      return {
+        name: p.name.split(" ")[0],
+        actual: p.actualSpend,
+        approved: p.approvedBudget,
+        bufferAllocated: buf?.allocated || 0,
+        bufferConsumed: buf?.consumed || 0,
+      };
+    }).sort((a, b) => b.actual - a.actual),
     []
   );
 
@@ -122,17 +131,72 @@ const FinancialMonitoring = () => {
       </div>
 
       {/* Project spend ranking */}
-      <Panel testid="project-spend" title="Project-wise spend" subtitle="Top spenders">
-        <div className="space-y-2">
+      <Panel testid="project-spend" title="Project-wise spend" subtitle="Top spenders · magenta = actual, dashed marker = contingency buffer">
+        <div className="mb-3 flex items-center gap-4 text-[11px] text-zinc-400">
+          <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-fuchsia-500" /> Actual spend</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500/70" /> Buffer available</span>
+          <span className="inline-flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-amber-500/80" /> Buffer consumed</span>
+          <span className="inline-flex items-center gap-1.5"><ShieldCheck className="w-3 h-3 text-fuchsia-300" /> Buffer allocation marker</span>
+        </div>
+        <div className="space-y-2.5">
           {projectSpend.slice(0, 6).map((p) => {
             const pct = p.approved ? Math.round((p.actual / p.approved) * 100) : 0;
+            const bufferPct = p.approved ? Math.min(100, Math.round(((p.actual + p.bufferAllocated) / p.approved) * 100)) : 0;
+            const bufferSpanPct = p.approved ? Math.round((p.bufferAllocated / p.approved) * 100) : 0;
+            const bufferConsumedPct = p.approved ? Math.round((p.bufferConsumed / p.approved) * 100) : 0;
+            const actualPct = Math.min(100, pct);
             return (
-              <div key={p.name} className="flex items-center gap-3 p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                <span className={`w-1.5 h-8 rounded-full ${pct >= 100 ? "bg-red-500" : pct >= 90 ? "bg-amber-500" : "bg-fuchsia-500"}`} />
+              <div key={p.name} data-testid={`row-spend-${p.name.toLowerCase()}`} className="flex items-center gap-3 p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                <span className={`w-1.5 h-9 rounded-full ${pct >= 100 ? "bg-red-500" : pct >= 90 ? "bg-amber-500" : "bg-fuchsia-500"}`} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white truncate">{p.name}</div>
-                  <div className="w-full h-1 rounded-full bg-white/[0.05] overflow-hidden mt-1">
-                    <div className="h-full" style={{ width: `${Math.min(pct, 100)}%`, background: pct >= 100 ? "#EF4444" : pct >= 90 ? "#F59E0B" : "#E619B8" }} />
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="font-medium text-white truncate">{p.name}</span>
+                    <span className="text-[10px] text-zinc-500 tabular">
+                      Buffer: <span className="text-fuchsia-300 font-semibold">{fmtCurrency(p.bufferAllocated, { compact: false })}</span>
+                      {p.bufferConsumed > 0 && <> · used <span className="text-amber-300 font-semibold">{fmtCurrency(p.bufferConsumed, { compact: false })}</span></>}
+                    </span>
+                  </div>
+                  {/* Segmented bar: actual + buffer overlays */}
+                  <div className="relative w-full h-2 rounded-full bg-white/[0.05] overflow-visible">
+                    <div className="absolute inset-0 h-full rounded-full" style={{ width: `${actualPct}%`, background: pct >= 100 ? "#EF4444" : pct >= 90 ? "#F59E0B" : "#E619B8" }} />
+                    {/* Buffer allocation segment sitting on top from actual → actual + buffer */}
+                    {bufferSpanPct > 0 && (
+                      <div
+                        className="absolute top-0 h-full rounded-full opacity-90"
+                        style={{
+                          left: `${actualPct}%`,
+                          width: `${Math.min(100 - actualPct, bufferSpanPct)}%`,
+                          background: "repeating-linear-gradient(45deg, rgba(16,185,129,0.55) 0 4px, rgba(16,185,129,0.22) 4px 8px)",
+                        }}
+                        title={`Buffer allocated ${fmtCurrency(p.bufferAllocated, { compact: false })}`}
+                      />
+                    )}
+                    {/* Buffer consumed indicator inside the buffer segment */}
+                    {bufferConsumedPct > 0 && (
+                      <div
+                        className="absolute top-0 h-full rounded-full"
+                        style={{
+                          left: `${actualPct}%`,
+                          width: `${Math.min(100 - actualPct, bufferConsumedPct)}%`,
+                          background: "rgba(245,158,11,0.85)",
+                        }}
+                        title={`Buffer consumed ${fmtCurrency(p.bufferConsumed, { compact: false })}`}
+                      />
+                    )}
+                    {/* Marker line at the boundary where buffer starts */}
+                    <div
+                      className="absolute -top-1 h-4 w-0.5 bg-fuchsia-300 rounded-full"
+                      style={{ left: `${actualPct}%` }}
+                      title="Actual spend end / buffer start"
+                    />
+                    {/* Marker line at buffer full extent */}
+                    {bufferPct > actualPct && (
+                      <div
+                        className="absolute -top-1 h-4 w-0.5 bg-emerald-400 rounded-full"
+                        style={{ left: `${bufferPct}%` }}
+                        title={`Buffer coverage extends to ${bufferPct}%`}
+                      />
+                    )}
                   </div>
                 </div>
                 <div className="text-right w-32">

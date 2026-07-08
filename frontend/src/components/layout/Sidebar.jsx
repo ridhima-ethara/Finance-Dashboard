@@ -60,7 +60,6 @@ const NAV_TPM = [
   { to: "/approvals", label: "Pending Approvals", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
-  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
 ];
 
 const NAV_PL = [

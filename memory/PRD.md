@@ -178,3 +178,39 @@ P2
 5. **P2** — Real backend (FastAPI + MongoDB) with CRUD for projects/expenses/top-ups/approvals + real auth.
 6. **P3** — Bill upload with object storage; live LLM via Emergent LLM key; INR toggle.
 
+
+## What's Implemented (2026-02-08 · iteration 9) — CFO Dashboard Refinements + Reports Downloads
+
+### 1. Financial Monitoring — Project-wise Spend
+- [x] Each spend bar now shows a **contingency buffer indicator** overlay: repeating-diagonal emerald segment for buffer allocated + solid amber for buffer consumed. Two vertical marker lines highlight (a) actual/buffer boundary (fuchsia) and (b) buffer coverage extent (emerald). Legend + per-row summary shows Buffer allocated & used.
+- Data joined from `BUFFER.perProject` (allocated + consumed).
+
+### 2. Contingency Buffer
+- [x] Removed **Buffer Allocation History** section entirely.
+- [x] **Buffer Actions** are now **percentage-based** — single `%` input + slider drives all four actions (Increase pool, Reduce pool, Allocate to project, Release back). Preview shows both `Pool amount` (% of pool) and `Project amount` (% of project's approved).
+- [x] **Projects Using Buffer** redesigned as a lifecycle view — expandable rows show: **Initial buffer → Additional requested → Buffer approved → Consumed → Remaining**, plus a dual-track visual (Requested vs Approved / Consumed vs Remaining) and a per-project mini-stat panel.
+
+### 3. Recoverable Projects (Client Recovery)
+- [x] Recoverable projects table is now **expandable phase-wise**. Clicking a project reveals per-phase rows with:
+    - Recoverable amount · Invoiced · Received · Outstanding
+    - **TPM remarks** submitted at phase closure
+    - **Client feedback/reason for recovery**
+- [x] Surfaced identically to CFO and CTO (same page, role-agnostic).
+
+### 4. AI Cost Analytics
+- [x] Replaced the "Token Usage Analysis" theme with three tabs: **Model Spend · Task Log · Usage Analysis**.
+- [x] **Removed** the Provider Breakdown table entirely.
+- [x] **Model Breakdown** table kept — enriched with per-model click-selection state.
+- [x] **Task Log** tab flattens `PHASE_TASKS` + synthesized aggregate rows so every task with its model, owner, and cost delta is searchable/filterable by status.
+- [x] **Usage Analysis** tab shows cost per model (bar), token throughput in/out (bar), and cost by project attribution with AI insight cards.
+- [x] KPI grid updated (removed input-token KPI; added Active-models KPI). Pie switched from provider share → model share.
+
+### 5. Reports
+- [x] Real client-side **CSV/JSON download** via new `lib/reportGenerators.js` — pulls from `PROJECTS`, `PHASE_TASKS`, `AI_COST_BY_MODEL/PROVIDER`, `RECOVERY`, `DAILY_CONSUMPTION_LOG`. XLSX/PDF placeholders emit CSV (Excel-compatible).
+- [x] `Generate all` button now downloads every filtered report at once.
+- [x] Row-count and filename surfaced in the toast.
+- [x] **Removed** `Reports` from the TPM sidebar (`NAV_TPM`). If a TPM opens `/reports` directly, a `reports-tpm-notice` banner explains the section is now consolidated under CFO/CTO.
+
+### Testing
+- Manual smoke tests via screenshots verified all 5 pages render correctly (CFO Buffer, Financial Monitoring w/ buffer bars, Recovery with expandable phase drops, AI Cost tabs, Reports with real downloads). No automated agent run this iteration per user request.
+

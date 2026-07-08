@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { REPORTS_CATALOG } from "../data/mockTpm";
 import { fmtCurrency } from "../lib/format";
+import { downloadReportAs, getReportRows } from "../lib/reportGenerators";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
+import { useApp } from "../context/AppContext";
 import {
   FileText,
   Download,
@@ -18,6 +20,7 @@ import {
   ListChecks,
   Bot,
   DollarSign,
+  Lock,
 } from "lucide-react";
 
 const typeIcons = {
@@ -43,6 +46,7 @@ const typeColors = {
 };
 
 const Reports = () => {
+  const { role } = useApp();
   const [typeFilter, setTypeFilter] = useState("all");
   const [freqFilter, setFreqFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -61,19 +65,35 @@ const Reports = () => {
   }, [typeFilter, freqFilter, search]);
 
   const runReport = (r) => {
+    const primary = r.format.split(" · ")[0];
+    const res = downloadReportAs(r, primary);
     toast.success(`${r.name} generated`, {
-      description: `${r.records} records · ${r.format} · download started`,
+      description: `${res.rows} records · ${primary} · ${res.filename} downloaded`,
     });
   };
 
   const downloadReport = (r, format) => {
+    const res = downloadReportAs(r, format);
     toast.success(`Downloading ${r.name}`, {
-      description: `Format: ${format} · ${r.records} rows`,
+      description: `Format: ${format} · ${res.rows} rows · ${res.filename}`,
     });
+  };
+
+  const runAll = () => {
+    filtered.forEach((r) => downloadReportAs(r, r.format.split(" · ")[0]));
+    toast.success("All reports generated", { description: `${filtered.length} files downloaded` });
   };
 
   return (
     <div className="space-y-6" data-testid="page-reports">
+      {role === "TPM" && (
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-start gap-3" data-testid="reports-tpm-notice">
+          <Lock className="w-4 h-4 text-zinc-400 mt-0.5 flex-shrink-0" />
+          <div className="text-sm text-zinc-300">
+            Reports have been consolidated under the <span className="text-white font-semibold">CFO</span> and <span className="text-white font-semibold">CTO</span> portals. Reach out to them if you need a specific export.
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -86,7 +106,7 @@ const Reports = () => {
             Generate, schedule, and download financial reports across your projects
           </p>
         </div>
-        <Button className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)]" data-testid="btn-generate-all">
+        <Button onClick={runAll} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)]" data-testid="btn-generate-all">
           <Play className="w-3.5 h-3.5" />
           Generate all
         </Button>
