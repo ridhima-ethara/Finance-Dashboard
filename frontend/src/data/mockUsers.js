@@ -27,6 +27,8 @@ export const TEAM = [
   { id: "u6", name: "Priya Kapoor", role: "Finance", email: "priya@ethara.ai" },
   { id: "u7", name: "Nikhil Rao", role: "COO", email: "nikhil@ethara.ai" },
   { id: "u8", name: "Sara Chen", role: "Engineer", email: "sara@ethara.ai" },
+  { id: "u9", name: "Neha Kapoor", role: "R&D", email: "neha@ethara.ai" },
+  { id: "u10", name: "Dev Patel", role: "R&D", email: "dev@ethara.ai" },
 ];
 
 export const CLIENTS = ["Acme AI", "Northwind Data", "Helix Bio", "Ironclad", "Meridian", "Voltek"];

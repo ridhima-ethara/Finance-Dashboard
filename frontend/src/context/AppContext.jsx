@@ -154,7 +154,7 @@ export const AppProvider = ({ children }) => {
     let list = projects;
     if (user.role === "TPM") list = list.filter((p) => p.tpm === user.name);
     else if (user.role === "PL") list = list.filter((p) => p.pl === user.name);
-    // R&D team sees the full portfolio — same view as TPM but not project-scoped.
+    else if (user.role === "R&D") list = list.filter((p) => (p.rndMembers || []).includes(user.name) || p.tpm === user.name);
     if (scope === "R&D") list = list.filter((p) => p.type === "R&D");
     else if (scope === "Production") list = list.filter((p) => p.type === "Production");
     return list;
@@ -165,15 +165,18 @@ export const AppProvider = ({ children }) => {
 
   const addProject = (payload) => {
     const id = `p-${Date.now().toString(36)}`;
+    const rndMembers = payload.rndMembers || [];
     const proj = {
       id,
       name: payload.internalName,
       clientProjectName: payload.clientProjectName,
-      client: payload.client || "New Client",
+      client: payload.clientProjectName || "New Engagement",
       pl: payload.tpm,
       tpm: payload.tpm,
+      rndMembers,
+      docUrl: payload.docUrl || "",
       startDate: payload.startDate,
-      estimatedEndDate: payload.estimatedEndDate,
+      estimatedEndDate: "",
       status: "Discovery",
       type: "R&D",
       buffer: 10,
@@ -207,7 +210,7 @@ export const AppProvider = ({ children }) => {
           ts: new Date().toISOString(),
           actor: payload.createdBy || "CTO",
           action: "Project created",
-          detail: `Assigned TPM: ${payload.tpm}. Start: ${payload.startDate} · Est. end: ${payload.estimatedEndDate}`,
+          detail: `Assigned TPM: ${payload.tpm}${rndMembers.length ? ` · R&D: ${rndMembers.join(", ")}` : ""}. Start ${payload.startDate}${payload.docUrl ? ` · doc attached` : ""}`,
         },
       ],
       comments: [],
@@ -364,9 +367,9 @@ export const AppProvider = ({ children }) => {
     );
   };
 
-  // ---- Budget submissions (from TPM Budget Builder) ----
+  // ---- Budget submissions (from TPM/R&D Budget Builder) ----
   const submitBudget = (payload) => {
-    // payload: { projectId, projectName, budgetType, priority, totalTasks, delivery, phases, items, totals }
+    // payload: { projectId, projectName, budgetType, priority, totalTasks, delivery, phases, items, totals, resubmitOfReviewId? }
     const id = `bud-${Date.now().toString(36)}`;
     const entry = {
       id,
@@ -377,7 +380,19 @@ export const AppProvider = ({ children }) => {
       status: "submitted",
     };
     setBudgets((arr) => [entry, ...arr]);
-    // Patch the custom project (if any) with phases matching this submission — so Projects section reflects it.
+    // If this is a resubmission of a returned review, mark it as resubmitted (clears from TPM's returned queue).
+    if (payload.resubmitOfReviewId) {
+      const now = new Date().toISOString();
+      setBudgetReviews((arr) => arr.map((r) => (
+        r.id === payload.resubmitOfReviewId
+          ? {
+              ...r,
+              status: "resubmitted",
+              history: [...(r.history || []), { at: now, actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`, action: "Resubmitted with edits", detail: `New total ${payload.totals?.total || 0}` }],
+            }
+          : r
+      )));
+    }
     setCustomProjects((cps) => cps.map((p) => {
       if (p.id !== payload.projectId) return p;
       const newPhases = (payload.phases || []).map((ph, idx) => ({
@@ -500,6 +515,32 @@ export const AppProvider = ({ children }) => {
     });
   };
 
+  // Return budget to TPM/R&D with comments — TPM sees it as an editable, resubmittable draft.
+  const ctoReturnBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, ctoComment, returnTo }) => {
+    const now = new Date().toISOString();
+    setBudgetReviews((arr) => {
+      const idx = arr.findIndex((r) => r.id === reviewId);
+      const entry = {
+        id: reviewId,
+        projectId,
+        projectName,
+        tpm,
+        returnedTo: returnTo || "TPM",
+        requestedBudget,
+        modifiedPhases: [],
+        modifiedTotal: 0,
+        ctoComment,
+        ctoBy: user?.name || "CTO",
+        ctoAt: now,
+        status: "returned-to-tpm",
+        cfoDecision: null,
+        history: [{ at: now, actor: `${user?.name || "CTO"} · CTO`, action: `Returned to ${returnTo || "TPM"} with comments`, detail: ctoComment || "" }],
+      };
+      if (idx >= 0) return arr.map((r, i) => (i === idx ? { ...entry, history: [...(arr[idx].history || []), entry.history[0]] } : r));
+      return [entry, ...arr];
+    });
+  };
+
   const cfoDecideBudgetReview = (reviewId, { decision, amount, comment }) => {
     // decision: 'approve' | 'partial' | 'reject' | 'return'
     setBudgetReviews((arr) => arr.map((r) => {
@@ -564,6 +605,7 @@ export const AppProvider = ({ children }) => {
       budgetReviews,
       ctoModifyBudgetReview,
       ctoRejectBudgetReview,
+      ctoReturnBudgetReview,
       cfoDecideBudgetReview,
     }),
     [user, role, aiOpen, notifOpen, scope, projects, visibleProjects, taskLogs, topupRequests, budgets, batchDeliveries, budgetReviews]

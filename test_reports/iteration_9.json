@@ -1,0 +1,35 @@
+{
+  "summary": "Frontend E2E smoke of the 8 requested Ethara.AI flows using Playwright against the preview URL. All 47 assertions passed across CTO new-project, R&D budget-builder, TPM budget-builder, CTO budget-review-workspace, and TPM returned-budgets widget → edit & resubmit round trip.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "TPM Dashboard charts", "issues": ["Recharts warning: 'The width(-1) and height(-1) of chart should be greater than 0' fires repeatedly on mount for dashboard charts (cosmetic — charts still render on next tick). Consider adding minWidth/minHeight or a debounced resize observer to silence noise in console."]},
+      {"screen": "NewProjectDialog / BudgetBuilder", "issues": ["React DevTools hydration warning: '<span> cannot be a child of <option>' — third-party dev instrumentation wraps <option> children with a <span data-ve-dynamic> which is invalid HTML. Not caused by app code but produced by the visual-editor overlay in preview; still logs a red console error."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_9.json"],
+  "action_items": [
+    "(Optional) Silence Recharts width(-1)/height(-1) warnings by giving chart containers a defined min-height and using ResponsiveContainer with debounce=1.",
+    "No functional fixes required — all 8 review-request flows behave as specified."
+  ],
+  "critical_code_review_comments": [
+    "AppContext.jsx is ~620 lines and mixes session, projects, task logs, top-ups, budgets, batch deliveries, and budget reviews. Consider splitting into feature-scoped slices (contexts/hooks) for maintainability.",
+    "BudgetBuilder.jsx is ~780 lines with three tab bodies, stepper, prefill logic, and helper components in one file. Extracting ModelRow / InfraRow / SubRow / Stepper into their own files would improve readability and unit-test surface.",
+    "In BudgetReviewWorkspace.jsx the review is resolved from static BUDGET_REVIEWS (mockTpm) instead of merging with the dynamically-produced budgetReviews array; if a review only exists in localStorage (e.g. after a fresh submitBudget), the workspace falls back to BUDGET_REVIEWS[0]. Consider merging sources before lookup.",
+    "AppContext.visibleProjects filter treats R&D users as: 'rndMembers includes user.name OR p.tpm === user.name'. Second branch means an R&D user who happens to be a TPM on a project sees Production projects too — verify this is intended.",
+    "ctoReturnBudgetReview overwrites modifiedPhases/modifiedTotal with empty defaults; if CTO had edited the phase-wise breakdown before clicking Return, that work is discarded (only ctoComment is preserved). Consider capturing the current phaseTotals in the returned entry so R&D/TPM sees exactly what the CTO wanted."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "100% (47/47 assertions)"},
+  "test_credentials": "cto@ethara.ai / demo123 · tpm@ethara.ai / demo123 · rd@ethara.ai / demo123 (all quick-login cards on /login).",
+  "seed_data_creation": "During test run: (a) CTO created project TEST-Nova with R&D=Neha Kapoor (localStorage: ethara.customProjects.v1). (b) CTO returned br1 to TPM with a TEST comment (localStorage: ethara.budgetReviews.v1). Reset both keys via localStorage.clear() to restore preview baseline.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 8 review flows verified end-to-end in a single Playwright session (state carries via localStorage). Key data-testids validated: input-client-project-name, input-internal-name, input-doc-url, input-tpm, rnd-multi-picker, rnd-toggle-u9, btn-create-project, bb-budget-type (disabled for R&D), bb-delivery-single/multiple, bb-single-tasks, bb-single-trajectories, bb-doc-url, bb-tab-models/infra/subs, bb-infra-monthly-*, bb-sub-members-*, bb-sub-<row>-member-*, tab-overview, tab-modify (no phase/task/audit/comparison tabs), btn-save-draft, btn-return-tpm, btn-reject, btn-approve-forward, input-comment, widget-returned-budgets, returned-budget-br1, bb-returned-banner, bb-submit ('Resubmit budget' text when ?edit=<id>). Empty-comment guard on Return-to-TPM works. If retesting is needed, `localStorage.clear()` before starting to avoid seeded test state.",
+  "rca of the issue": "N/A — no bugs found relative to the review-request spec."
+}

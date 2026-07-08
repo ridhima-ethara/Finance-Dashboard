@@ -6,7 +6,7 @@ import { CHANGE_REQUESTS } from "../../data/mockTpm";
 import { Link } from "react-router-dom";
 import {
   FolderKanban, ShieldCheck, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
-  Plus, Bell, Sparkles, ChevronRight, AlertTriangle, Calendar,
+  Plus, Bell, Sparkles, ChevronRight, AlertTriangle, Calendar, Undo2, Edit3,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell } from "recharts";
@@ -64,9 +64,15 @@ const Panel = ({ title, subtitle, right, children, testid }) => (
 );
 
 const TpmDashboard = () => {
-  const { user, visibleProjects } = useApp();
+  const { user, visibleProjects, budgetReviews } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
   const [crOpen, setCrOpen] = useState(false);
+
+  // Returned budgets addressed to me (or my role)
+  const myReturnedBudgets = (budgetReviews || []).filter((r) => (
+    (r.status === "returned-to-tpm" || r.status === "rejected-by-cto") &&
+    (r.tpm === user?.name || (user?.role === "R&D" && r.returnedTo === "R&D"))
+  ));
 
   // Compute TPM-scoped KPIs
   const approved = visibleProjects.reduce((s, p) => s + p.approvedBudget, 0);
@@ -260,6 +266,46 @@ const TpmDashboard = () => {
           </div>
         </Panel>
       </div>
+
+      {/* Returned budgets — edit & resubmit */}
+      {myReturnedBudgets.length > 0 && (
+        <div className="bg-[#12121A] rounded-2xl border border-amber-500/20 p-5" data-testid="widget-returned-budgets">
+          <div className="flex items-start justify-between gap-2 mb-3">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-semibold text-amber-300">
+                <Undo2 className="w-3 h-3" /> Returned by CTO
+              </div>
+              <div className="font-display font-semibold text-[15px] text-white mt-1">Budgets awaiting your revision</div>
+              <div className="text-xs text-zinc-500 mt-0.5">Edit &amp; resubmit — your inputs are pre-filled</div>
+            </div>
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              {myReturnedBudgets.length} pending
+            </span>
+          </div>
+          <div className="space-y-2">
+            {myReturnedBudgets.map((r) => (
+              <Link
+                key={r.id}
+                to={`/budget-builder?edit=${r.id}`}
+                data-testid={`returned-budget-${r.id}`}
+                className="flex items-start gap-3 p-3 rounded-lg border border-white/5 hover:border-amber-500/30 bg-white/[0.02] hover:bg-white/[0.04] transition-all group"
+              >
+                <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/25 flex items-center justify-center flex-shrink-0">
+                  <Edit3 className="w-3.5 h-3.5 text-amber-300" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-white">{r.projectName}</div>
+                  <div className="text-[11px] text-zinc-500 mt-0.5">
+                    Returned {new Date(r.ctoAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} · Original ask <span className="text-zinc-300 tabular">{fmtCurrency(r.requestedBudget, { compact: false })}</span>
+                  </div>
+                  {r.ctoComment && <div className="text-xs text-zinc-300 mt-1 line-clamp-2"><span className="text-fuchsia-300 font-semibold">CTO:</span> {r.ctoComment}</div>}
+                </div>
+                <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-amber-300 flex-shrink-0" />
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Projects table with expandable phase drawer (log daily task / raise top-up per phase) */}
       <ProjectsTable />

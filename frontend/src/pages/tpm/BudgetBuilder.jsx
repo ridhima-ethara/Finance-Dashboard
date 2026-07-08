@@ -1,44 +1,86 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import { Button } from "../../components/ui/button";
 import { toast } from "sonner";
-import { ArrowLeft, Plus, Trash2, Save, Send, Sparkles, ClipboardCheck, Cpu, Server, CreditCard, CheckCircle2, ChevronRight } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  ArrowLeft, Plus, Trash2, Save, Send, Sparkles, ClipboardCheck, Cpu, Server, CreditCard,
+  CheckCircle2, ChevronRight, Link2, Paperclip, UserPlus, MessageSquareWarning,
+} from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { EC2_INSTANCES, BEDROCK_MODELS, SUBSCRIPTION_CATALOG } from "../../data/mockCatalog";
+import { BUDGET_REVIEWS } from "../../data/mockTpm";
+import { TEAM } from "../../data/mockUsers";
 
 const uid = () => Math.random().toString(36).slice(2, 8);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const plusDaysISO = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+const HOURS_PER_MONTH = 730; // AWS standard
 
-const emptyModelItem = () => {
+// Rough cost per trajectory (approx: 4K in + 1K out for a typical multi-step trajectory)
+const costPerTrajectory = (model) => {
+  if (!model) return 0;
+  return Math.round((model.pricePer1kIn * 4 + model.pricePer1kOut * 1) * 10000) / 10000;
+};
+
+const emptyModelItem = (tasks = 0, trajectories = 0) => {
   const m = BEDROCK_MODELS[0];
-  return { id: uid(), modelId: m.id, estTokensInK: 1000, estTokensOutK: 200, estCost: Math.round((m.pricePer1kIn * 1000 + m.pricePer1kOut * 200) * 100) / 100 };
+  const perTraj = costPerTrajectory(m);
+  const traj = Number(tasks) * Number(trajectories);
+  return {
+    id: uid(),
+    modelId: m.id,
+    provider: m.provider,
+    costPerTraj: perTraj,
+    estCost: Math.round(perTraj * traj * 100) / 100,
+  };
 };
 const emptyInfraItem = () => {
   const inst = EC2_INSTANCES[0];
-  return { id: uid(), instance: inst.code, quantity: 1, hoursPerMonth: 200, months: 1, estCost: Math.round(inst.hourly * 200 * 100) / 100 };
+  const monthly = Math.round(inst.hourly * HOURS_PER_MONTH * 100) / 100;
+  return { id: uid(), instance: inst.code, monthlyCost: monthly, months: 1, estCost: monthly };
 };
 const emptySubItem = () => {
   const s = SUBSCRIPTION_CATALOG[0];
-  return { id: uid(), subscription: s.name, monthly: s.monthly, seats: 1, months: 1, estCost: s.monthly };
+  return { id: uid(), subscription: s.name, pricePerSeat: s.monthly, seats: 1, months: 1, members: [], estCost: s.monthly };
 };
 
-const emptyPhase = (n, start, end) => ({ id: `p${n}`, name: `Phase ${n}`, tasks: 0, start: start || todayISO(), end: end || plusDaysISO(14), budget: 0 });
+const emptyPhase = (n, start, end) => ({
+  id: `p${n}`,
+  name: `Phase ${n}`,
+  tasks: 100,
+  trajectories: 3,
+  start: start || todayISO(),
+  end: end || plusDaysISO(14),
+});
 
 const BudgetBuilder = () => {
   const nav = useNavigate();
-  const { visibleProjects, submitBudget } = useApp();
+  const [params] = useSearchParams();
+  const editReviewId = params.get("edit");
+  const { visibleProjects, submitBudget, budgetReviews, role, user } = useApp();
+  const isRnd = role === "R&D";
+
   const [step, setStep] = useState(1); // 1=Details, 2=Budget Items, 3=Preview
 
+  // Prefill from a returned review, if applicable
+  const returnedReview = useMemo(() => {
+    if (!editReviewId) return null;
+    return budgetReviews.find((r) => r.id === editReviewId) || BUDGET_REVIEWS.find((r) => r.id === editReviewId) || null;
+  }, [editReviewId, budgetReviews]);
+
   // ---- Step 1: Details ----
-  const [projectId, setProjectId] = useState(visibleProjects[0]?.id || "");
+  const [projectId, setProjectId] = useState(returnedReview?.projectId || visibleProjects[0]?.id || "");
   const [priority, setPriority] = useState("Medium");
-  const [budgetType, setBudgetType] = useState("Operations");
-  const [totalTasks, setTotalTasks] = useState(500);
-  const [deliveryMode, setDeliveryMode] = useState("single"); // single | multiple
+  // R&D users are locked to "RnD"; TPM can pick RnD or Production
+  const initialBudgetType = isRnd ? "RnD" : (returnedReview ? "Production" : "Production");
+  const [budgetType, setBudgetType] = useState(initialBudgetType);
+  // R&D locked to single phase
+  const [deliveryMode, setDeliveryMode] = useState(isRnd ? "single" : "single");
+
   const [singleStart, setSingleStart] = useState(todayISO());
   const [singleEnd, setSingleEnd] = useState(plusDaysISO(30));
+  const [singlePhase, setSinglePhase] = useState({ tasks: 500, trajectories: 3 });
   const [phases, setPhases] = useState([
     { ...emptyPhase(1), start: todayISO(), end: plusDaysISO(15) },
     { ...emptyPhase(2), start: plusDaysISO(16), end: plusDaysISO(30) },
@@ -47,11 +89,51 @@ const BudgetBuilder = () => {
   // ---- Step 2: Budget items ----
   const [selectedTypes, setSelectedTypes] = useState({ models: true, infra: true, subs: true });
   const [activeTab, setActiveTab] = useState("models");
-  const [models, setModels] = useState([emptyModelItem()]);
+  const [models, setModels] = useState([emptyModelItem(500, 3)]);
   const [infra, setInfra] = useState([emptyInfraItem()]);
   const [subs, setSubs] = useState([emptySubItem()]);
 
+  // Doc attachment (URL + mock file upload)
+  const [docUrl, setDocUrl] = useState("");
+  const [uploadedFileName, setUploadedFileName] = useState("");
+
+  // If prefilling from a returned review, hydrate reasonable defaults
+  useEffect(() => {
+    if (!returnedReview) return;
+    // Prefer stored modifiedPhases; fall back to review requested budget
+    const proj = visibleProjects.find((p) => p.id === returnedReview.projectId);
+    if (proj) setProjectId(proj.id);
+    toast.info("Returned budget loaded — edit and resubmit", {
+      description: returnedReview.ctoComment || "Address CTO comments below",
+    });
+  }, [returnedReview?.id]);
+
   const project = visibleProjects.find((p) => p.id === projectId);
+
+  // Trajectories drive model volume (tasks × trajectories × costPerTraj)
+  const totalTrajectories = useMemo(() => {
+    if (deliveryMode === "single") return Number(singlePhase.tasks || 0) * Number(singlePhase.trajectories || 0);
+    return phases.reduce((s, p) => s + Number(p.tasks || 0) * Number(p.trajectories || 0), 0);
+  }, [deliveryMode, singlePhase, phases]);
+
+  const totalTasks = useMemo(() => {
+    if (deliveryMode === "single") return Number(singlePhase.tasks || 0);
+    return phases.reduce((s, p) => s + Number(p.tasks || 0), 0);
+  }, [deliveryMode, singlePhase, phases]);
+
+  // Recompute model estCost whenever trajectory volume changes
+  useEffect(() => {
+    setModels((rows) => rows.map((r) => {
+      const meta = BEDROCK_MODELS.find((m) => m.id === r.modelId) || BEDROCK_MODELS[0];
+      const perTraj = costPerTrajectory(meta);
+      return {
+        ...r,
+        provider: meta.provider,
+        costPerTraj: perTraj,
+        estCost: Math.round(perTraj * totalTrajectories * 100) / 100,
+      };
+    }));
+  }, [totalTrajectories]);
 
   const totals = useMemo(() => {
     const m = selectedTypes.models ? models.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
@@ -67,9 +149,11 @@ const BudgetBuilder = () => {
     setModels((rows) => rows.map((r) => {
       if (r.id !== id) return r;
       const next = { ...r, [key]: v };
-      if (["modelId", "estTokensInK", "estTokensOutK"].includes(key)) {
-        const m = BEDROCK_MODELS.find((x) => x.id === next.modelId) || BEDROCK_MODELS[0];
-        next.estCost = Math.round((m.pricePer1kIn * Number(next.estTokensInK || 0) + m.pricePer1kOut * Number(next.estTokensOutK || 0)) * 100) / 100;
+      if (key === "modelId") {
+        const meta = BEDROCK_MODELS.find((m) => m.id === next.modelId) || BEDROCK_MODELS[0];
+        next.provider = meta.provider;
+        next.costPerTraj = costPerTrajectory(meta);
+        next.estCost = Math.round(next.costPerTraj * totalTrajectories * 100) / 100;
       }
       return next;
     }));
@@ -78,9 +162,12 @@ const BudgetBuilder = () => {
     setInfra((rows) => rows.map((r) => {
       if (r.id !== id) return r;
       const next = { ...r, [key]: v };
-      if (["instance", "quantity", "hoursPerMonth", "months"].includes(key)) {
-        const inst = EC2_INSTANCES.find((x) => x.code === next.instance) || EC2_INSTANCES[0];
-        next.estCost = Math.round(inst.hourly * Number(next.quantity || 1) * Number(next.hoursPerMonth || 0) * Number(next.months || 1) * 100) / 100;
+      if (["instance", "monthlyCost", "months"].includes(key)) {
+        if (key === "instance") {
+          const inst = EC2_INSTANCES.find((x) => x.code === next.instance) || EC2_INSTANCES[0];
+          next.monthlyCost = Math.round(inst.hourly * HOURS_PER_MONTH * 100) / 100;
+        }
+        next.estCost = Math.round(Number(next.monthlyCost || 0) * Number(next.months || 1) * 100) / 100;
       }
       return next;
     }));
@@ -89,33 +176,50 @@ const BudgetBuilder = () => {
     setSubs((rows) => rows.map((r) => {
       if (r.id !== id) return r;
       const next = { ...r, [key]: v };
-      if (["subscription", "seats", "months"].includes(key)) {
+      if (key === "subscription") {
         const s = SUBSCRIPTION_CATALOG.find((x) => x.name === next.subscription) || SUBSCRIPTION_CATALOG[0];
-        next.monthly = s.monthly;
-        next.estCost = Math.round(s.monthly * Number(next.seats || 1) * Number(next.months || 1) * 100) / 100;
+        next.pricePerSeat = s.monthly;
+      }
+      if (["subscription", "seats", "pricePerSeat", "months"].includes(key)) {
+        next.estCost = Math.round(Number(next.pricePerSeat || 0) * Number(next.seats || 1) * Number(next.months || 1) * 100) / 100;
       }
       return next;
     }));
   };
+  const toggleSubMember = (id, memberName) => {
+    setSubs((rows) => rows.map((r) => {
+      if (r.id !== id) return r;
+      const has = r.members.includes(memberName);
+      const members = has ? r.members.filter((m) => m !== memberName) : [...r.members, memberName];
+      return { ...r, members, seats: Math.max(members.length, 1) };
+    }));
+  };
 
-  // Auto-distribute total across phases if not manually set
   const distributedPhases = useMemo(() => {
     if (deliveryMode === "single") {
-      return [{ id: "p1", name: "Delivery", start: singleStart, end: singleEnd, budget: totals.total, tasks: Number(totalTasks) }];
+      return [{ id: "p1", name: "Delivery", start: singleStart, end: singleEnd, budget: totals.total, tasks: Number(singlePhase.tasks), trajectories: Number(singlePhase.trajectories) }];
     }
-    const per = phases.length ? Math.round(totals.total / phases.length) : 0;
-    return phases.map((p) => ({ ...p, budget: p.budget && Number(p.budget) > 0 ? Number(p.budget) : per }));
-  }, [deliveryMode, phases, singleStart, singleEnd, totals.total, totalTasks]);
+    // weight by tasks × trajectories
+    const totalTraj = phases.reduce((s, p) => s + Number(p.tasks || 0) * Number(p.trajectories || 0), 0) || 1;
+    return phases.map((p) => {
+      const traj = Number(p.tasks || 0) * Number(p.trajectories || 0);
+      const share = traj / totalTraj;
+      return { ...p, budget: Math.round(totals.total * share) };
+    });
+  }, [deliveryMode, phases, singleStart, singleEnd, singlePhase, totals.total]);
 
   const canProceedDetails = () => {
     if (!projectId) { toast.error("Select a project"); return false; }
-    if (!totalTasks || Number(totalTasks) <= 0) { toast.error("Enter total number of tasks"); return false; }
     if (deliveryMode === "single") {
+      if (!singlePhase.tasks || Number(singlePhase.tasks) <= 0) { toast.error("Enter number of tasks"); return false; }
+      if (!singlePhase.trajectories || Number(singlePhase.trajectories) <= 0) { toast.error("Enter estimated trajectories per task"); return false; }
       if (!singleStart || !singleEnd) { toast.error("Set estimated start & end date"); return false; }
     } else {
       if (!phases.length) { toast.error("Add at least one phase"); return false; }
       for (const p of phases) {
         if (!p.name || !p.start || !p.end) { toast.error(`Complete ${p.name || "phase"} details`); return false; }
+        if (!p.tasks || Number(p.tasks) <= 0) { toast.error(`Enter tasks for ${p.name}`); return false; }
+        if (!p.trajectories || Number(p.trajectories) <= 0) { toast.error(`Enter trajectories for ${p.name}`); return false; }
       }
     }
     return true;
@@ -127,6 +231,13 @@ const BudgetBuilder = () => {
   };
 
   const saveDraft = () => toast.success("Draft saved", { description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · auto-saved` });
+
+  const onFilePick = (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setUploadedFileName(f.name);
+    toast.success("File attached", { description: `${f.name} · ${(f.size / 1024).toFixed(1)} KB` });
+  };
 
   const doSubmit = () => {
     const items = {
@@ -140,15 +251,19 @@ const BudgetBuilder = () => {
       budgetType,
       priority,
       totalTasks: Number(totalTasks),
+      totalTrajectories,
       delivery: { mode: deliveryMode, singleStart, singleEnd },
       phases: distributedPhases,
       items,
       totals,
+      docUrl,
+      uploadedFileName,
+      resubmitOfReviewId: returnedReview?.id || null,
     });
-    toast.success("Budget submitted", {
+    toast.success(returnedReview ? "Budget resubmitted to CTO" : "Budget submitted", {
       description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · ${distributedPhases.length} ${distributedPhases.length === 1 ? "phase" : "phases"}`,
     });
-    nav("/projects");
+    nav(returnedReview ? "/" : "/projects");
   };
 
   const stepPill = (n, label, active, done) => (
@@ -167,15 +282,15 @@ const BudgetBuilder = () => {
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <Link to="/" className="text-xs text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> TPM Dashboard</Link>
+          <Link to="/" className="text-xs text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</Link>
           <div className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
-            <ClipboardCheck className="w-3 h-3" /> Budget Builder
+            <ClipboardCheck className="w-3 h-3" /> {isRnd ? "R&D Portal · Budget Builder" : "Budget Builder"}
           </div>
           <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">
             {project?.name || "New budget"}
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Running total <span className="text-fuchsia-300 font-semibold">{fmtCurrency(totals.total, { compact: false })}</span> · {deliveryMode === "single" ? "Single phase" : `${phases.length} phases`}
+            Running total <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.total, { compact: false })}</span> · {deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} · <span className="text-zinc-300 tabular">{totalTrajectories.toLocaleString()}</span> trajectories
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -184,6 +299,18 @@ const BudgetBuilder = () => {
           </Button>
         </div>
       </div>
+
+      {/* Returned review banner */}
+      {returnedReview && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4 flex items-start gap-3" data-testid="bb-returned-banner">
+          <MessageSquareWarning className="w-4 h-4 text-amber-300 mt-0.5 flex-shrink-0" />
+          <div className="text-xs text-zinc-200 leading-relaxed">
+            <div className="text-amber-200 font-semibold uppercase tracking-widest text-[10px] mb-0.5">Returned by CTO — please revise</div>
+            <div><span className="text-white font-semibold">Comment:</span> {returnedReview.ctoComment || "—"}</div>
+            <div className="text-[11px] text-zinc-400 mt-1">Original ask: <span className="text-white tabular">{fmtCurrency(returnedReview.requestedBudget, { compact: false })}</span> · Returned {new Date(returnedReview.ctoAt || Date.now()).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</div>
+          </div>
+        </div>
+      )}
 
       {/* Stepper */}
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4 flex items-center gap-4 flex-wrap" data-testid="bb-stepper">
@@ -209,18 +336,45 @@ const BudgetBuilder = () => {
                 {["Low", "Medium", "High", "Critical"].map((p) => <option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Budget type *">
-              <select value={budgetType} onChange={(e) => setBudgetType(e.target.value)} data-testid="bb-budget-type" className={ipStyle}>
-                {["Operations", "R&D", "Production", "Client-billable", "Internal"].map((b) => <option key={b}>{b}</option>)}
+            <Field label={isRnd ? "Budget type · locked to R&D" : "Budget type *"}>
+              <select
+                value={budgetType}
+                onChange={(e) => setBudgetType(e.target.value)}
+                data-testid="bb-budget-type"
+                disabled={isRnd}
+                className={ipStyle + (isRnd ? " opacity-70 cursor-not-allowed" : "")}
+              >
+                {(isRnd ? ["RnD"] : ["Production", "RnD"]).map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </Field>
-            <Field label="Total number of tasks *">
-              <input type="number" min="1" value={totalTasks} onChange={(e) => setTotalTasks(e.target.value)} data-testid="bb-total-tasks" className={ipStyle + " tabular"} />
+            <Field label="Doc attachment (URL)" hint="Optional · Drive/Notion link">
+              <div className="relative">
+                <Link2 className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="url"
+                  value={docUrl}
+                  onChange={(e) => setDocUrl(e.target.value)}
+                  placeholder="https://…"
+                  data-testid="bb-doc-url"
+                  className={ipStyle + " pl-9"}
+                />
+              </div>
             </Field>
           </div>
 
+          {/* Mock file upload */}
+          <div className="mt-4">
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Upload spec sheet (optional)</div>
+            <label className="flex items-center gap-2 h-10 px-3 rounded-lg bg-white/[0.04] border border-dashed border-white/15 text-xs text-zinc-300 cursor-pointer hover:border-fuchsia-500/40" data-testid="bb-file-input-label">
+              <Paperclip className="w-3.5 h-3.5 text-zinc-500" />
+              <span className="flex-1 truncate">{uploadedFileName || "Choose a file… (PDF / XLSX / CSV / DOCX)"}</span>
+              <span className="text-[10px] text-fuchsia-300">Browse</span>
+              <input type="file" onChange={onFilePick} className="hidden" data-testid="bb-file-input" />
+            </label>
+          </div>
+
           <div className="mt-5">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project delivery</div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project delivery {isRnd && <span className="text-fuchsia-300">· R&D locked to single phase</span>}</div>
             <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
               <button
                 onClick={() => setDeliveryMode("single")}
@@ -229,18 +383,26 @@ const BudgetBuilder = () => {
               >
                 Single phase
               </button>
-              <button
-                onClick={() => setDeliveryMode("multiple")}
-                data-testid="bb-delivery-multiple"
-                className={`px-4 py-1.5 rounded-md text-xs font-medium ${deliveryMode === "multiple" ? "bg-fuchsia-500 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]" : "text-zinc-400 hover:text-zinc-100"}`}
-              >
-                Multiple phases
-              </button>
+              {!isRnd && (
+                <button
+                  onClick={() => setDeliveryMode("multiple")}
+                  data-testid="bb-delivery-multiple"
+                  className={`px-4 py-1.5 rounded-md text-xs font-medium ${deliveryMode === "multiple" ? "bg-fuchsia-500 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]" : "text-zinc-400 hover:text-zinc-100"}`}
+                >
+                  Multiple phases
+                </button>
+              )}
             </div>
           </div>
 
           {deliveryMode === "single" && (
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="bb-single-phase">
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-3" data-testid="bb-single-phase">
+              <Field label="Number of tasks *">
+                <input type="number" min="1" value={singlePhase.tasks} onChange={(e) => setSinglePhase((s) => ({ ...s, tasks: e.target.value }))} data-testid="bb-single-tasks" className={ipStyle + " tabular"} />
+              </Field>
+              <Field label="Est. trajectories / task *">
+                <input type="number" min="1" value={singlePhase.trajectories} onChange={(e) => setSinglePhase((s) => ({ ...s, trajectories: e.target.value }))} data-testid="bb-single-trajectories" className={ipStyle + " tabular"} />
+              </Field>
               <Field label="Estimated Start Date *">
                 <input type="date" value={singleStart} onChange={(e) => setSingleStart(e.target.value)} data-testid="bb-single-start" className={ipStyle} />
               </Field>
@@ -250,9 +412,9 @@ const BudgetBuilder = () => {
             </div>
           )}
 
-          {deliveryMode === "multiple" && (
+          {deliveryMode === "multiple" && !isRnd && (
             <div className="mt-4 space-y-3" data-testid="bb-multi-phases">
-              <div className="text-[11px] text-zinc-500">Multiple phases deliver the project batch-by-batch. Add a phase for each batch with its own task count and window.</div>
+              <div className="text-[11px] text-zinc-500">Multiple phases deliver the project batch-by-batch. Each phase drives its own trajectory count → total updates automatically.</div>
               {phases.map((ph, i) => (
                 <div key={ph.id} data-testid={`bb-phase-${ph.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
                   <div className="flex items-center justify-between mb-3">
@@ -267,17 +429,23 @@ const BudgetBuilder = () => {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                     <Field label="Phase name">
                       <input value={ph.name} onChange={(e) => updateRow(setPhases)(ph.id, "name", e.target.value)} data-testid={`bb-phase-name-${ph.id}`} className={ipStyle} />
                     </Field>
                     <Field label="Tasks">
-                      <input type="number" min="0" value={ph.tasks} placeholder="e.g. 1,000" onChange={(e) => updateRow(setPhases)(ph.id, "tasks", e.target.value)} data-testid={`bb-phase-tasks-${ph.id}`} className={ipStyle + " tabular"} />
+                      <input type="number" min="0" value={ph.tasks} onChange={(e) => updateRow(setPhases)(ph.id, "tasks", e.target.value)} data-testid={`bb-phase-tasks-${ph.id}`} className={ipStyle + " tabular"} />
                     </Field>
-                    <Field label="Estimated Start Date *">
+                    <Field label="Trajectories / task">
+                      <input type="number" min="0" value={ph.trajectories} onChange={(e) => updateRow(setPhases)(ph.id, "trajectories", e.target.value)} data-testid={`bb-phase-traj-${ph.id}`} className={ipStyle + " tabular"} />
+                    </Field>
+                    <Field label="Sub-total trajectories">
+                      <div className={ipStyle + " tabular flex items-center text-fuchsia-300"}>{(Number(ph.tasks || 0) * Number(ph.trajectories || 0)).toLocaleString()}</div>
+                    </Field>
+                    <Field label="Start *">
                       <input type="date" value={ph.start} onChange={(e) => updateRow(setPhases)(ph.id, "start", e.target.value)} data-testid={`bb-phase-start-${ph.id}`} className={ipStyle} />
                     </Field>
-                    <Field label="Estimated End Date *">
+                    <Field label="End *">
                       <input type="date" value={ph.end} onChange={(e) => updateRow(setPhases)(ph.id, "end", e.target.value)} data-testid={`bb-phase-end-${ph.id}`} className={ipStyle} />
                     </Field>
                   </div>
@@ -294,7 +462,10 @@ const BudgetBuilder = () => {
             </div>
           )}
 
-          <div className="mt-6 flex items-center justify-end gap-2">
+          <div className="mt-6 flex items-center justify-between">
+            <div className="text-xs text-zinc-400">
+              Total trajectories: <span className="text-fuchsia-300 font-semibold tabular">{totalTrajectories.toLocaleString()}</span> · {totalTasks.toLocaleString()} tasks
+            </div>
             <Button
               onClick={() => canProceedDetails() && setStep(2)}
               data-testid="bb-next-1"
@@ -308,14 +479,14 @@ const BudgetBuilder = () => {
 
       {/* Step 2 — Budget Items */}
       {step === 2 && (
-        <Card title="2. Budget Items" subtitle="Pick the budget types, then use the tabs to add items to each" testid="bb-step-items">
+        <Card title="2. Budget Items" subtitle={`Trajectories: ${totalTrajectories.toLocaleString()} · costs auto-update from step 1`} testid="bb-step-items">
           <div>
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Budget types</div>
             <div className="flex items-center gap-2 flex-wrap">
               {[
-                { k: "models", label: "Models", desc: "Bedrock AI models priced per token" },
-                { k: "infra", label: "Infrastructure", desc: "EC2 compute, storage & servers" },
-                { k: "subs", label: "Subscriptions", desc: "Tools & seat subscriptions" },
+                { k: "models", label: "Models", desc: "AI models · cost = provider × trajectories" },
+                { k: "infra", label: "Infrastructure", desc: "Enter monthly $ — daily cost auto-shown" },
+                { k: "subs", label: "Subscriptions", desc: "$ per seat + assign members" },
               ].map((t) => {
                 const on = selectedTypes[t.k];
                 return (
@@ -356,31 +527,32 @@ const BudgetBuilder = () => {
             ))}
           </div>
 
-          {/* Models tab */}
+          {/* Models */}
           {activeTab === "models" && selectedTypes.models && (
             <div className="mt-4" data-testid="bb-pane-models">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-fuchsia-300" />
                   <div className="text-sm font-semibold text-white">AI Models · Bedrock</div>
+                  <span className="text-[11px] text-zinc-500">· cost = trajectories × $/trajectory</span>
                 </div>
-                <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem()])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
+                <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem(totalTasks, deliveryMode === "single" ? singlePhase.trajectories : phases[0]?.trajectories || 0)])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add model
                 </Button>
               </div>
               <div className="space-y-1.5">
                 <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
-                  <span>Model (Bedrock)</span><span className="text-right">In tokens (K)</span><span className="text-right">Out tokens (K)</span><span className="text-right">Est. cost</span><span />
+                  <span>Model</span><span>Provider</span><span className="text-right">Cost / trajectory</span><span className="text-right">Est. cost</span><span />
                 </div>
                 {models.map((r) => {
                   const meta = BEDROCK_MODELS.find((m) => m.id === r.modelId);
                   return (
                     <div key={r.id} data-testid={`bb-row-model-${r.id}`} className="grid grid-cols-[1.5fr_1fr_1fr_1fr_28px] gap-2 items-center py-1">
                       <select value={r.modelId} onChange={(e) => updateModelRow(r.id, "modelId", e.target.value)} data-testid={`bb-model-select-${r.id}`} className={rowInp}>
-                        {BEDROCK_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.provider} · ${m.pricePer1kIn.toFixed(4)}/${m.pricePer1kOut.toFixed(4)} per 1K</option>)}
+                        {BEDROCK_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
-                      <input type="number" min="0" value={r.estTokensInK} onChange={(e) => updateModelRow(r.id, "estTokensInK", e.target.value)} className={rowInp + " tabular text-right"} />
-                      <input type="number" min="0" value={r.estTokensOutK} onChange={(e) => updateModelRow(r.id, "estTokensOutK", e.target.value)} className={rowInp + " tabular text-right"} />
+                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 leading-8 truncate">{meta?.provider}</div>
+                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 tabular text-right leading-8">${r.costPerTraj.toFixed(4)}</div>
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
                       <RemoveBtn onClick={() => removeRow(setModels)(r.id)} testid={`bb-model-remove-${r.id}`} />
                     </div>
@@ -388,39 +560,43 @@ const BudgetBuilder = () => {
                 })}
               </div>
               <div className="mt-2 text-[11px] text-zinc-500">
-                Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span>
+                Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span> · {totalTrajectories.toLocaleString()} trajectories
               </div>
             </div>
           )}
 
-          {/* Infra tab */}
+          {/* Infra */}
           {activeTab === "infra" && selectedTypes.infra && (
             <div className="mt-4" data-testid="bb-pane-infra">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-fuchsia-300" />
-                  <div className="text-sm font-semibold text-white">Infrastructure · EC2 instances</div>
+                  <div className="text-sm font-semibold text-white">Infrastructure · monthly spend</div>
+                  <span className="text-[11px] text-zinc-500">· daily cost shown alongside</span>
                 </div>
                 <Button size="sm" onClick={() => setInfra((r) => [...r, emptyInfraItem()])} data-testid="bb-add-infra" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add instance
                 </Button>
               </div>
               <div className="space-y-1.5">
-                <div className="grid grid-cols-[1.6fr_.6fr_.8fr_.6fr_.9fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
-                  <span>EC2 Instance</span><span className="text-right">Qty</span><span className="text-right">Hrs / mo</span><span className="text-right">Months</span><span className="text-right">Est. cost</span><span />
+                <div className="grid grid-cols-[1.6fr_1fr_.7fr_.9fr_.9fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
+                  <span>EC2 Instance</span><span className="text-right">Monthly cost ($)</span><span className="text-right">Months</span><span className="text-right">≈ $/day</span><span className="text-right">Est. cost</span><span />
                 </div>
-                {infra.map((r) => (
-                  <div key={r.id} data-testid={`bb-row-infra-${r.id}`} className="grid grid-cols-[1.6fr_.6fr_.8fr_.6fr_.9fr_28px] gap-2 items-center py-1">
-                    <select value={r.instance} onChange={(e) => updateInfraRow(r.id, "instance", e.target.value)} data-testid={`bb-infra-select-${r.id}`} className={rowInp}>
-                      {EC2_INSTANCES.map((i) => <option key={i.code} value={i.code}>{i.code} · {i.family} · {i.vCPU} vCPU · {i.memoryGiB} GiB · ${i.hourly.toFixed(3)}/hr</option>)}
-                    </select>
-                    <input type="number" min="1" value={r.quantity} onChange={(e) => updateInfraRow(r.id, "quantity", e.target.value)} className={rowInp + " tabular text-right"} />
-                    <input type="number" min="0" value={r.hoursPerMonth} onChange={(e) => updateInfraRow(r.id, "hoursPerMonth", e.target.value)} className={rowInp + " tabular text-right"} />
-                    <input type="number" min="1" value={r.months} onChange={(e) => updateInfraRow(r.id, "months", e.target.value)} className={rowInp + " tabular text-right"} />
-                    <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
-                    <RemoveBtn onClick={() => removeRow(setInfra)(r.id)} testid={`bb-infra-remove-${r.id}`} />
-                  </div>
-                ))}
+                {infra.map((r) => {
+                  const perDay = Math.round((Number(r.monthlyCost || 0) / 30) * 100) / 100;
+                  return (
+                    <div key={r.id} data-testid={`bb-row-infra-${r.id}`} className="grid grid-cols-[1.6fr_1fr_.7fr_.9fr_.9fr_28px] gap-2 items-center py-1">
+                      <select value={r.instance} onChange={(e) => updateInfraRow(r.id, "instance", e.target.value)} data-testid={`bb-infra-select-${r.id}`} className={rowInp}>
+                        {EC2_INSTANCES.map((i) => <option key={i.code} value={i.code}>{i.code} · {i.family} · {i.vCPU} vCPU · {i.memoryGiB} GiB</option>)}
+                      </select>
+                      <input type="number" min="0" step="10" value={r.monthlyCost} onChange={(e) => updateInfraRow(r.id, "monthlyCost", e.target.value)} data-testid={`bb-infra-monthly-${r.id}`} className={rowInp + " tabular text-right"} />
+                      <input type="number" min="1" value={r.months} onChange={(e) => updateInfraRow(r.id, "months", e.target.value)} className={rowInp + " tabular text-right"} />
+                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 tabular text-right leading-8">${perDay.toLocaleString()}</div>
+                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
+                      <RemoveBtn onClick={() => removeRow(setInfra)(r.id)} testid={`bb-infra-remove-${r.id}`} />
+                    </div>
+                  );
+                })}
               </div>
               <div className="mt-2 text-[11px] text-zinc-500">
                 Total infrastructure: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.infra, { compact: false })}</span>
@@ -428,32 +604,52 @@ const BudgetBuilder = () => {
             </div>
           )}
 
-          {/* Subs tab */}
+          {/* Subs */}
           {activeTab === "subs" && selectedTypes.subs && (
             <div className="mt-4" data-testid="bb-pane-subs">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-fuchsia-300" />
-                  <div className="text-sm font-semibold text-white">Subscriptions</div>
+                  <div className="text-sm font-semibold text-white">Subscriptions · seat-based</div>
+                  <span className="text-[11px] text-zinc-500">· assign members below each row</span>
                 </div>
                 <Button size="sm" onClick={() => setSubs((r) => [...r, emptySubItem()])} data-testid="bb-add-sub" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add subscription
                 </Button>
               </div>
-              <div className="space-y-1.5">
-                <div className="grid grid-cols-[1.5fr_.6fr_.8fr_.8fr_.8fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
-                  <span>Subscription</span><span className="text-right">Seats</span><span className="text-right">Months</span><span className="text-right">$ / mo</span><span className="text-right">Est. cost</span><span />
-                </div>
+              <div className="space-y-3">
                 {subs.map((r) => (
-                  <div key={r.id} data-testid={`bb-row-sub-${r.id}`} className="grid grid-cols-[1.5fr_.6fr_.8fr_.8fr_.8fr_28px] gap-2 items-center py-1">
-                    <select value={r.subscription} onChange={(e) => updateSubRow(r.id, "subscription", e.target.value)} data-testid={`bb-sub-select-${r.id}`} className={rowInp}>
-                      {SUBSCRIPTION_CATALOG.map((s) => <option key={s.id} value={s.name}>{s.name} · ${s.monthly}/mo</option>)}
-                    </select>
-                    <input type="number" min="1" value={r.seats} onChange={(e) => updateSubRow(r.id, "seats", e.target.value)} className={rowInp + " tabular text-right"} />
-                    <input type="number" min="1" value={r.months} onChange={(e) => updateSubRow(r.id, "months", e.target.value)} className={rowInp + " tabular text-right"} />
-                    <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 tabular text-right leading-8">${r.monthly}</div>
-                    <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
-                    <RemoveBtn onClick={() => removeRow(setSubs)(r.id)} testid={`bb-sub-remove-${r.id}`} />
+                  <div key={r.id} data-testid={`bb-row-sub-${r.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+                    <div className="grid grid-cols-[1.4fr_.8fr_.6fr_.8fr_.9fr_28px] gap-2 items-center">
+                      <select value={r.subscription} onChange={(e) => updateSubRow(r.id, "subscription", e.target.value)} data-testid={`bb-sub-select-${r.id}`} className={rowInp}>
+                        {SUBSCRIPTION_CATALOG.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                      </select>
+                      <input type="number" min="0" step="1" value={r.pricePerSeat} onChange={(e) => updateSubRow(r.id, "pricePerSeat", e.target.value)} data-testid={`bb-sub-price-${r.id}`} className={rowInp + " tabular text-right"} title="$ per seat / month" />
+                      <input type="number" min="1" value={r.seats} onChange={(e) => updateSubRow(r.id, "seats", e.target.value)} className={rowInp + " tabular text-right"} title="Seats" />
+                      <input type="number" min="1" value={r.months} onChange={(e) => updateSubRow(r.id, "months", e.target.value)} className={rowInp + " tabular text-right"} title="Months" />
+                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
+                      <RemoveBtn onClick={() => removeRow(setSubs)(r.id)} testid={`bb-sub-remove-${r.id}`} />
+                    </div>
+                    <div className="grid grid-cols-[45px_1fr] gap-2 items-start pl-1">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pt-1.5"><UserPlus className="w-3 h-3 inline mr-1" />Members</div>
+                      <div className="flex flex-wrap gap-1.5" data-testid={`bb-sub-members-${r.id}`}>
+                        {TEAM.slice(0, 8).map((m) => {
+                          const on = r.members.includes(m.name);
+                          return (
+                            <button
+                              key={m.id}
+                              onClick={() => toggleSubMember(r.id, m.name)}
+                              data-testid={`bb-sub-${r.id}-member-${m.id}`}
+                              className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors ${
+                                on ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-200" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
+                              }`}
+                            >
+                              {m.name.split(" ")[0]}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -465,7 +661,7 @@ const BudgetBuilder = () => {
 
           <div className="mt-6 flex items-center justify-between">
             <Button onClick={() => setStep(1)} variant="outline" data-testid="bb-back-2" className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-1.5">
-              <ArrowLeft className="w-3.5 h-3.5" /> Previous Step
+              <ArrowLeft className="w-3.5 h-3.5" /> Previous
             </Button>
             <Button
               onClick={() => canProceedItems() && setStep(3)}
@@ -484,9 +680,9 @@ const BudgetBuilder = () => {
           <Card title="3. Preview & Submit" subtitle="Final review before submitting" testid="bb-step-preview">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <MiniStat label="Total budget" value={fmtCurrency(totals.total, { compact: false })} tone="magenta" />
-              <MiniStat label="Phases" value={String(distributedPhases.length)} />
-              <MiniStat label="Total tasks" value={String(totalTasks)} />
-              <MiniStat label="Delivery" value={deliveryMode === "single" ? "Single phase" : "Multiple phases"} />
+              <MiniStat label="Trajectories" value={totalTrajectories.toLocaleString()} />
+              <MiniStat label="Tasks" value={totalTasks.toLocaleString()} />
+              <MiniStat label="Delivery" value={deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <SummaryCard title="Category summary" rows={[
@@ -494,27 +690,36 @@ const BudgetBuilder = () => {
                 { k: "Infrastructure", v: totals.infra, on: selectedTypes.infra },
                 { k: "Subscriptions", v: totals.subs, on: selectedTypes.subs },
               ].filter((x) => x.on)} />
-              <SummaryCard title="Phase summary" rows={distributedPhases.map((p) => ({ id: p.id, k: `${p.name} · ${p.start} → ${p.end}`, v: p.budget }))} />
+              <SummaryCard title="Phase summary" rows={distributedPhases.map((p) => ({ id: p.id, k: `${p.name} · ${p.start || ""} → ${p.end || ""}`, v: p.budget }))} />
             </div>
+            {(docUrl || uploadedFileName) && (
+              <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-300 flex items-center gap-2">
+                <Paperclip className="w-3.5 h-3.5 text-fuchsia-300" />
+                {docUrl && <a href={docUrl} target="_blank" rel="noreferrer" className="text-fuchsia-300 underline">{docUrl}</a>}
+                {docUrl && uploadedFileName && <span className="text-zinc-500">·</span>}
+                {uploadedFileName && <span>{uploadedFileName}</span>}
+              </div>
+            )}
             <div className="mt-4 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3 text-xs">
               <Sparkles className="w-4 h-4 text-fuchsia-300 mt-0.5 flex-shrink-0" />
               <div className="text-zinc-300">
                 <span className="text-fuchsia-200 font-semibold">AI insight: </span>
-                Model spend ({fmtCurrency(totals.models, { compact: false })}) is <span className="text-fuchsia-300 font-semibold">{totals.total ? Math.round((totals.models / totals.total) * 100) : 0}%</span> of total. Consider adding a 10% contingency for the first phase.
+                Model spend ({fmtCurrency(totals.models, { compact: false })}) is <span className="text-fuchsia-300 font-semibold">{totals.total ? Math.round((totals.models / totals.total) * 100) : 0}%</span> of total. {totalTrajectories > 5000 && "High trajectory count — consider a cheaper primary model to reduce variance."}
               </div>
             </div>
           </Card>
 
           <div className="flex items-center justify-between">
             <Button onClick={() => setStep(2)} variant="outline" data-testid="bb-back-3" className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-1.5">
-              <ArrowLeft className="w-3.5 h-3.5" /> Previous Step
+              <ArrowLeft className="w-3.5 h-3.5" /> Previous
             </Button>
             <Button onClick={doSubmit} data-testid="bb-submit" className="h-10 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)] px-5">
-              <Send className="w-4 h-4" /> Submit budget
+              <Send className="w-4 h-4" /> {returnedReview ? "Resubmit budget" : "Submit budget"}
             </Button>
           </div>
         </div>
       )}
+      {user && null}
     </div>
   );
 };
@@ -532,9 +737,12 @@ const Card = ({ title, subtitle, children, testid }) => (
   </div>
 );
 
-const Field = ({ label, children }) => (
+const Field = ({ label, hint, children }) => (
   <div>
-    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">{label}</div>
+    <div className="flex items-baseline justify-between mb-1.5">
+      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+      {hint && <div className="text-[10px] text-zinc-600">{hint}</div>}
+    </div>
     {children}
   </div>
 );
@@ -569,5 +777,7 @@ const SummaryCard = ({ title, rows }) => (
     </div>
   </div>
 );
+
+// AlertTriangle used inline where needed via imports; keep exported default only.
 
 export default BudgetBuilder;
