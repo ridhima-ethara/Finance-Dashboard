@@ -10,6 +10,7 @@ import {
   SubscriptionsPanel,
 } from "../components/dashboard/Charts";
 import ProjectsTable from "../components/dashboard/ProjectsTable";
+import CostPerTaskView from "../components/dashboard/CostPerTaskView";
 import { Button } from "../components/ui/button";
 import { Download, RefreshCw, Plus, ClipboardCheck, GitPullRequest, AlertTriangle, ChevronRight, ShieldCheck, Receipt, Wallet, ArrowUpRightSquare, Lock, PackageCheck } from "lucide-react";
 import { useApp } from "../context/AppContext";
@@ -248,6 +249,9 @@ const Dashboard = () => {
 
       {/* Projects table */}
       <ProjectsTable />
+
+      {/* CFO — cost per task/trajectory breakdown */}
+      {isCFO && <CostPerTaskView />}
 
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
     </div>

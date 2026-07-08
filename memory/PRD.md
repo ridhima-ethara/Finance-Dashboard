@@ -215,6 +215,25 @@ P2
 - Manual smoke tests via screenshots verified all 5 pages render correctly (CFO Buffer, Financial Monitoring w/ buffer bars, Recovery with expandable phase drops, AI Cost tabs, Reports with real downloads). No automated agent run this iteration per user request.
 
 
+## What's Implemented (2026-02-08 · iteration 13) — CFO Unit Economics & Exponential Task-Cost Forecast
+
+### CFO Dashboard · Unit economics (`data-testid=cfo-cost-per-task-view`)
+- New widget under the Projects table that renders **per-project × per-phase** unit economics: planned tasks, trajectories, phase budget, cost/task, cost/trajectory, actual cost/task (from TPM logs), variance.
+- Summary strip: total tasks, total trajectories, portfolio budget, avg cost/task, avg cost/trajectory (`cpt-total-tasks`, `cpt-total-traj`, `cpt-total-budget`, `cpt-avg-per-task`, `cpt-avg-per-traj`).
+- Scope toggle (`cpt-scope-all` / `cpt-scope-rnd` / `cpt-scope-production`) and sort dropdown (`cpt-sort`).
+- Rows with zero derivable tasks are filtered out for readability.
+- Data sources: custom projects (per-phase `totalTasks` + `trajectoriesPerTask` stamped by BudgetBuilder) with a fallback to `BUDGET_REVIEWS.tasks / phases`.
+
+### Monthly Forecast · Exponential task-cost projection (`data-testid=task-cost-forecast`)
+- Fits an exponential curve `y = a·e^(b·x)` via log-linear regression across historical phase unit costs (portfolio-wide or one project via `task-cost-project-scope` dropdown).
+- Renders a composed chart: historical cost/task (blue), fitted curve (yellow dashed), projected next 3 phases (fuchsia area with `Now` reference line).
+- Four KPI cells: growth/phase, historic phase count, next-phase cost/task, next-phase budget estimate (`fc-growth`, `fc-hist-count`, `fc-next-cost-per-task`, `fc-next-budget`).
+- Right-side "Recent phases · cost/task" list and left "Next-phase recommendation" panel with human-readable insight.
+- Graceful empty state when < 2 positive historical data points.
+
+### Testing
+- Self-tested via screenshots: CFO Dashboard scroll-in reveals the new Unit Economics table with 12+ rows across all seed projects. Monthly Forecast shows a full curve fit (`growth/phase = -13.2%`, `next phase cost/task = $724.48`, `next phase budget = $1,449`) with the projected 3-phase extension chart.
+
 ## What's Implemented (2026-02-08 · iteration 12) — TPM Task Logging + Cost-per-Task Model Formula + R&D Section Cleanup
 
 ### TPM Daily Task Logging (Project → Tasks tab)

@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import { MONTHLY_SPEND } from "../../data/mockFinance";
 import { PROJECTS } from "../../data/mockProjects";
+import { BUDGET_REVIEWS } from "../../data/mockTpm";
+import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import {
   ResponsiveContainer,
@@ -13,8 +15,9 @@ import {
   Tooltip,
   CartesianGrid,
   Legend,
+  ReferenceLine,
 } from "recharts";
-import { TrendingUp, Sparkles, ChevronRight, Cpu, ListChecks, Bot, Target } from "lucide-react";
+import { TrendingUp, Sparkles, ChevronRight, Cpu, ListChecks, Bot, Target, Zap } from "lucide-react";
 import { Button } from "../../components/ui/button";
 
 const PROJECT_TYPES = [
@@ -51,8 +54,99 @@ const MonthlyForecast = () => {
   const [projType, setProjType] = useState("rnd");
   const [tasks, setTasks] = useState(24);
   const [selectedModel, setSelectedModel] = useState("Opus 4.8");
+  const { projects, taskLogs } = useApp();
+  const [selectedProjectId, setSelectedProjectId] = useState("");
 
   const forecast = useMemo(buildForecast, []);
+
+  // ------- Task-cost exponential projection -------
+  // Build historical cost/task series per phase across the portfolio (or a chosen project).
+  const historicalPhases = useMemo(() => {
+    const src = selectedProjectId ? projects.filter((p) => p.id === selectedProjectId) : projects;
+    const out = [];
+    src.forEach((p) => {
+      const review = BUDGET_REVIEWS.find((r) => r.projectId === p.id);
+      const totalTasks = Number(review?.tasks || 0);
+      const nPhases = (p.phases || []).length || 1;
+      const perPhaseTasksFallback = totalTasks ? Math.round(totalTasks / nPhases) : 0;
+      (p.phases || []).forEach((ph, idx) => {
+        const planned = Number(ph.totalTasks || ph.tasks || perPhaseTasksFallback || 0);
+        if (planned <= 0) return;
+        const budget = Number(ph.estimated || 0);
+        const key = `${p.id}::${ph.id}`;
+        const logs = taskLogs[key] || [];
+        const loggedTasks = logs.reduce((s, l) => s + (Number(l.tasksDone) || 0), 0);
+        const loggedCost = logs.reduce((s, l) => s + (Number(l.cost) || 0), 0);
+        const costPerTask = planned > 0 ? Math.round((budget / planned) * 100) / 100 : 0;
+        const actualPerTask = loggedTasks > 0 ? Math.round((loggedCost / loggedTasks) * 100) / 100 : null;
+        out.push({
+          key,
+          idx: idx + 1,
+          projectName: p.name,
+          phaseName: ph.name,
+          planned,
+          budget,
+          costPerTask,
+          actualPerTask,
+        });
+      });
+    });
+    return out;
+  }, [selectedProjectId, projects, taskLogs]);
+
+  // Exponential fit y = a * e^(b*x)  via log-linear regression on positive y-values.
+  const expoFit = useMemo(() => {
+    const pts = historicalPhases
+      .map((p, i) => ({ x: i + 1, y: p.actualPerTask ?? p.costPerTask }))
+      .filter((p) => p.y > 0);
+    if (pts.length < 2) return null;
+    const n = pts.length;
+    const sumX = pts.reduce((s, p) => s + p.x, 0);
+    const sumLnY = pts.reduce((s, p) => s + Math.log(p.y), 0);
+    const sumXLnY = pts.reduce((s, p) => s + p.x * Math.log(p.y), 0);
+    const sumX2 = pts.reduce((s, p) => s + p.x * p.x, 0);
+    const b = (n * sumXLnY - sumX * sumLnY) / (n * sumX2 - sumX * sumX || 1);
+    const lnA = (sumLnY - b * sumX) / n;
+    const a = Math.exp(lnA);
+    return { a, b, growthPct: Math.round((Math.exp(b) - 1) * 1000) / 10 };
+  }, [historicalPhases]);
+
+  // Build chart series: actual (historical), fitted curve, and 3 future-phase projections
+  const taskCostSeries = useMemo(() => {
+    if (!expoFit) return [];
+    const series = [];
+    historicalPhases.forEach((p, i) => {
+      const x = i + 1;
+      series.push({
+        phase: `${p.projectName.split(" ")[0]} · ${p.phaseName}`,
+        actual: p.actualPerTask ?? p.costPerTask,
+        fitted: Math.round(expoFit.a * Math.exp(expoFit.b * x) * 100) / 100,
+        projected: null,
+      });
+    });
+    const lastX = historicalPhases.length;
+    [1, 2, 3].forEach((k) => {
+      const x = lastX + k;
+      const y = Math.round(expoFit.a * Math.exp(expoFit.b * x) * 100) / 100;
+      series.push({
+        phase: `Next +${k}`,
+        actual: null,
+        fitted: y,
+        projected: y,
+      });
+    });
+    return series;
+  }, [historicalPhases, expoFit]);
+
+  const nextPhaseEstimate = useMemo(() => {
+    if (!expoFit) return null;
+    const x = historicalPhases.length + 1;
+    const perTask = Math.round(expoFit.a * Math.exp(expoFit.b * x) * 100) / 100;
+    // Assume the next phase covers a similar task count to the last phase.
+    const lastPhaseTasks = historicalPhases[historicalPhases.length - 1]?.planned || 100;
+    const totalBudget = Math.round(perTask * lastPhaseTasks);
+    return { perTask, planned: lastPhaseTasks, totalBudget };
+  }, [expoFit, historicalPhases]);
 
   // Recommendation engine
   const baseEstimate = useMemo(() => {
@@ -232,6 +326,108 @@ const MonthlyForecast = () => {
           </span>
         </div>
       </div>
+
+      {/* Exponential task-cost projection */}
+      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="task-cost-forecast">
+        <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
+              <Zap className="w-3 h-3" /> Task-cost forecast
+            </div>
+            <div className="font-display font-semibold text-[15px] text-white mt-1">Exponential projection · cost / task</div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Log-linear fit of past phase unit costs · projects next 3 phases &amp; recommends the next phase estimate
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Scope</div>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => setSelectedProjectId(e.target.value)}
+              data-testid="task-cost-project-scope"
+              className="h-9 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+            >
+              <option value="">Whole portfolio</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {!expoFit || taskCostSeries.length < 3 ? (
+          <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-xs text-zinc-500">
+            Not enough historical phase data to fit an exponential curve. Log more phases via TPM budgets to unlock this projection.
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <ForecastCell label="Growth / phase" value={`${expoFit.growthPct >= 0 ? "+" : ""}${expoFit.growthPct}%`} accent={expoFit.growthPct >= 0 ? "text-amber-300" : "text-emerald-300"} testid="fc-growth" />
+              <ForecastCell label="Historic phases" value={historicalPhases.length.toString()} accent="text-white" testid="fc-hist-count" />
+              <ForecastCell label="Next phase · cost/task" value={fmtCurrency(nextPhaseEstimate?.perTask || 0, { compact: false })} accent="text-fuchsia-300" testid="fc-next-cost-per-task" />
+              <ForecastCell label="Next phase · budget est." value={fmtCurrency(nextPhaseEstimate?.totalBudget || 0, { compact: false })} accent="text-fuchsia-300" testid="fc-next-budget" />
+            </div>
+
+            <div className="h-[320px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={taskCostSeries}>
+                  <defs>
+                    <linearGradient id="proj" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#E619B8" stopOpacity={0.25} />
+                      <stop offset="100%" stopColor="#E619B8" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+                  <XAxis dataKey="phase" tick={{ fontSize: 9, fill: "#71717A" }} axisLine={false} tickLine={false} interval={0} angle={-30} textAnchor="end" height={70} />
+                  <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${Number(v).toFixed(0)}`)} />
+                  <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => (v ? fmtCurrency(v, { compact: false }) : "—")} />
+                  <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
+                  <ReferenceLine x={taskCostSeries[historicalPhases.length - 1]?.phase} stroke="#71717A" strokeDasharray="4 4" label={{ value: "Now", position: "top", fill: "#71717A", fontSize: 10 }} />
+                  <Area type="monotone" dataKey="projected" name="Projected next phases" stroke="#E619B8" strokeDasharray="4 4" fill="url(#proj)" strokeWidth={2.5} dot={{ r: 4, fill: "#E619B8" }} />
+                  <Line type="monotone" dataKey="fitted" name="Exponential fit" stroke="#F5C518" strokeWidth={2} strokeDasharray="3 3" dot={false} />
+                  <Line type="monotone" dataKey="actual" name="Historical cost / task" stroke="#4F8EF7" strokeWidth={2.5} dot={{ r: 4, fill: "#4F8EF7" }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
+              <div className="rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/[0.05] p-4" data-testid="next-phase-panel">
+                <div className="flex items-center gap-2 mb-2">
+                  <Zap className="w-4 h-4 text-fuchsia-300" />
+                  <div className="text-sm font-semibold text-white">Next-phase recommendation</div>
+                </div>
+                <div className="text-xs text-zinc-300 leading-relaxed">
+                  At the current growth rate of <span className="text-amber-300 font-semibold tabular">{expoFit.growthPct >= 0 ? "+" : ""}{expoFit.growthPct}%</span> per phase, the next phase is projected to cost{" "}
+                  <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(nextPhaseEstimate?.perTask || 0, { compact: false })}</span> per task.
+                  For a comparable phase size of <span className="text-white font-semibold tabular">{(nextPhaseEstimate?.planned || 0).toLocaleString()}</span> tasks that lands at{" "}
+                  <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(nextPhaseEstimate?.totalBudget || 0, { compact: false })}</span> total budget.
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Suggested phase budget</span>
+                  <span className="text-white font-display font-semibold text-xl tabular ml-auto">{fmtCurrency(nextPhaseEstimate?.totalBudget || 0, { compact: false })}</span>
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <ListChecks className="w-4 h-4 text-fuchsia-300" />
+                  <div className="text-sm font-semibold text-white">Recent phases · cost/task</div>
+                </div>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {historicalPhases.slice(-6).reverse().map((p) => (
+                    <div key={p.key} className="flex items-center justify-between text-[11px] py-1 border-b border-white/5 last:border-0" data-testid={`hist-row-${p.key}`}>
+                      <span className="text-zinc-300 truncate">{p.projectName} · <span className="text-fuchsia-300">{p.phaseName}</span></span>
+                      <span className="text-white font-semibold tabular">
+                        {fmtCurrency(p.actualPerTask ?? p.costPerTask, { compact: false })}
+                        {p.actualPerTask ? <span className="text-emerald-300 text-[9px] ml-1">actual</span> : <span className="text-zinc-500 text-[9px] ml-1">plan</span>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 };
@@ -247,6 +443,13 @@ const RecommendCell = ({ label, value, color, testid }) => (
   <div className="rounded-xl border border-white/5 bg-white/[0.03] p-3" data-testid={testid}>
     <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
     <div className={`font-display text-2xl font-semibold tabular mt-1 ${color}`}>{value}</div>
+  </div>
+);
+
+const ForecastCell = ({ label, value, accent = "text-white", testid }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3" data-testid={testid}>
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className={`text-lg font-display font-semibold tabular mt-0.5 ${accent}`}>{value}</div>
   </div>
 );
 
