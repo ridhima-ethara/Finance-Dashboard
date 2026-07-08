@@ -12,6 +12,7 @@ import { Button } from "../../components/ui/button";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell } from "recharts";
 import RequestBudgetDialog from "../../components/RequestBudgetDialog";
 import ChangeRequestDialog from "./ChangeRequestDialog";
+import ProjectsTable from "../../components/dashboard/ProjectsTable";
 
 const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid, to }) => {
   const toneMap = {
@@ -259,6 +260,9 @@ const TpmDashboard = () => {
           </div>
         </Panel>
       </div>
+
+      {/* Projects table with expandable phase drawer (log daily task / raise top-up per phase) */}
+      <ProjectsTable />
 
       {/* Widgets: pending actions / notifications / upcoming phase */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

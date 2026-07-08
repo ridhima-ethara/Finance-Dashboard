@@ -19,8 +19,16 @@ import {
   Target,
   TrendingDown,
   TrendingUp,
+  ArrowUpRightSquare,
+  Pencil,
+  Trash2,
+  Lock,
+  FileText,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
+import TpmTaskLogDialog from "../../components/TpmTaskLogDialog";
+import TopupRequestDialog from "../../components/TopupRequestDialog";
+import { toast } from "sonner";
 
 const statusStyles = {
   done: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-300", Icon: CheckCircle2 },
@@ -31,8 +39,13 @@ const statusStyles = {
 const PhaseWorkspace = () => {
   const { id, phaseId } = useParams();
   const nav = useNavigate();
-  const { visibleProjects } = useApp();
+  const { visibleProjects, role, getPhaseLogs, isTaskEditable, deletePhaseTask } = useApp();
   const [statusFilter, setStatusFilter] = useState("all");
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState(null);
+  const [topupOpen, setTopupOpen] = useState(false);
+  const isTPM = role === "TPM";
+  const isCFO = role === "CFO";
 
   const project = useMemo(
     () => visibleProjects.find((p) => p.id === id) || PROJECTS.find((p) => p.id === id),
@@ -52,6 +65,7 @@ const PhaseWorkspace = () => {
     );
   }
 
+  const tpmLogs = getPhaseLogs(id, phaseId);
   const filteredTasks = tasks.filter((t) => (statusFilter === "all" ? true : t.status === statusFilter));
   const totalEst = tasks.reduce((s, t) => s + t.estCost, 0);
   const totalActual = tasks.reduce((s, t) => s + t.actualCost, 0);
@@ -61,6 +75,14 @@ const PhaseWorkspace = () => {
   const plannedCount = tasks.filter((t) => t.status === "planned").length;
   const completion = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
   const utilization = phase.estimated ? Math.round((phase.actual / phase.estimated) * 100) : 0;
+
+  const openEditLog = (log) => { setEditingLog(log); setTaskDialogOpen(true); };
+  const openNewLog = () => { setEditingLog(null); setTaskDialogOpen(true); };
+  const removeLog = (log) => {
+    if (!isTaskEditable(log)) { toast.error("Task log is locked (>24h)"); return; }
+    deletePhaseTask(id, phaseId, log.id);
+    toast.success("Task log deleted");
+  };
 
   return (
     <div className="space-y-6" data-testid="page-phase-workspace">
@@ -85,16 +107,36 @@ const PhaseWorkspace = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
-            data-testid="btn-add-task"
-          >
-            <Plus className="w-3.5 h-3.5" /> Add task
-          </Button>
-          <Button className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2" data-testid="btn-mark-complete">
-            <CheckCircle2 className="w-3.5 h-3.5" /> Mark phase complete
-          </Button>
+          {isTPM && (
+            <>
+              <Button
+                onClick={openNewLog}
+                variant="outline"
+                className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
+                data-testid="btn-add-task"
+              >
+                <Plus className="w-3.5 h-3.5" /> Log daily task
+              </Button>
+              <Button
+                onClick={() => setTopupOpen(true)}
+                variant="outline"
+                className="h-9 rounded-lg border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20 gap-2"
+                data-testid="btn-raise-topup-phase"
+              >
+                <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise top-up
+              </Button>
+            </>
+          )}
+          {isCFO && (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300" data-testid="phase-readonly-badge">
+              <Lock className="w-3 h-3" /> Read-only
+            </span>
+          )}
+          {isTPM && (
+            <Button className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2" data-testid="btn-mark-complete">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Mark phase complete
+            </Button>
+          )}
         </div>
       </div>
 
@@ -252,6 +294,89 @@ const PhaseWorkspace = () => {
         </div>
       </div>
 
+      {/* TPM logged tasks */}
+      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="tpm-logs-panel">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <div className="font-display font-semibold text-[15px] text-white flex items-center gap-2">
+              <FileText className="w-4 h-4 text-fuchsia-300" />
+              TPM logged tasks
+              <span className="text-xs text-zinc-500 font-normal">({tpmLogs.length})</span>
+              {isCFO && <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-400"><Lock className="w-2.5 h-2.5" /> Read-only</span>}
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">Daily task entries · editable within 24h</div>
+          </div>
+          {isTPM && (
+            <Button
+              onClick={openNewLog}
+              size="sm"
+              className="h-8 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+              data-testid="btn-log-task-inline"
+            >
+              <Plus className="w-3.5 h-3.5" /> Log task
+            </Button>
+          )}
+        </div>
+        {tpmLogs.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-xs text-zinc-500">
+            {isTPM ? "No tasks logged yet. Click \"Log task\" to add your first entry for this phase." : "No TPM logs for this phase yet."}
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {tpmLogs.map((log) => {
+              const editable = isTaskEditable(log);
+              return (
+                <div key={log.id} data-testid={`ws-log-${log.id}`} className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm text-white font-medium">{log.name}</div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5">
+                        <User className="w-2.5 h-2.5 inline mr-0.5" /> {log.assignee} · {log.date} · {log.hours}h
+                      </div>
+                      {log.notes && <div className="text-[11px] text-zinc-400 mt-1 line-clamp-2">{log.notes}</div>}
+                      {log.evidence && (
+                        <a href={log.evidence} target="_blank" rel="noreferrer" className="text-[11px] text-fuchsia-300 hover:text-fuchsia-200 truncate inline-block max-w-full mt-1">
+                          {log.evidence}
+                        </a>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-sm text-white tabular font-semibold">{fmtCurrency(log.cost, { compact: false })}</div>
+                      {isTPM && (
+                        <div className="flex items-center gap-0.5 justify-end mt-1">
+                          {editable ? (
+                            <>
+                              <button
+                                onClick={() => openEditLog(log)}
+                                data-testid={`ws-log-edit-${log.id}`}
+                                className="w-6 h-6 rounded-md hover:bg-fuchsia-500/15 text-zinc-500 hover:text-fuchsia-300 flex items-center justify-center"
+                                title="Edit (within 24h)"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => removeLog(log)}
+                                data-testid={`ws-log-delete-${log.id}`}
+                                className="w-6 h-6 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center"
+                                title="Delete (within 24h)"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[9px] text-zinc-600 inline-flex items-center gap-0.5"><Lock className="w-2.5 h-2.5" /> locked</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* AI insight */}
       <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3">
         <Sparkles className="w-4 h-4 text-fuchsia-300 mt-0.5 flex-shrink-0" />
@@ -278,6 +403,20 @@ const PhaseWorkspace = () => {
           )}
         </div>
       </div>
+
+      <TpmTaskLogDialog
+        open={taskDialogOpen}
+        onOpenChange={(o) => { setTaskDialogOpen(o); if (!o) setEditingLog(null); }}
+        project={project}
+        phase={phase}
+        editingLog={editingLog}
+      />
+      <TopupRequestDialog
+        open={topupOpen}
+        onOpenChange={setTopupOpen}
+        project={project}
+        defaultPhaseId={phase.id}
+      />
     </div>
   );
 };

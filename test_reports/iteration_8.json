@@ -1,0 +1,33 @@
+{
+  "summary": "Retest of iteration 7 CRITICAL fix. Verified TWO newly-accessible TPM surfaces PLUS full regression on CFO read-only and 2-stage top-up approval. (a) TpmDashboard now renders <ProjectsTable/> below charts — projects-table + 4 row-toggle-* + expandable phase-drawer confirmed. (b) PhaseWorkspace fully wired to TpmTaskLogDialog + TopupRequestDialog — btn-add-task opens task-log-dialog, submit creates ws-log-* entry with ws-log-edit-*/ws-log-delete-* icons; btn-raise-topup-phase opens topup-dialog with phase pre-selected (p2). All 10 review-request scenarios pass. Console clean (0 errors); only 8 pre-existing Recharts width(-1)/height(-1) warnings on dashboard render (non-blocking). Hydration warning about <span> in <option> from iteration 7 also gone in this run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard (all roles)",
+        "issues": ["Recharts warning 'width(-1) and height(-1) of chart should be greater than 0' repeats ~8x on load — ResponsiveContainer parent sizing (pre-existing, non-blocking, does not affect UX)."]
+      }
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_8.json"],
+  "action_items": [
+    "Nice-to-have: Address Recharts ResponsiveContainer width(-1)/height(-1) warnings by giving parent a fixed min-height or explicit sizing to eliminate console noise."
+  ],
+  "critical_code_review_comments": [
+    "TpmDashboard.jsx line 265 correctly imports & renders <ProjectsTable/> below the charts grid — TPM now has drawer access.",
+    "PhaseWorkspace.jsx correctly wires TpmTaskLogDialog + TopupRequestDialog with defaultPhaseId={phase.id}; ws-log-edit-* / ws-log-delete-* respect isTaskEditable 24h window.",
+    "TopupRequestDialog label is now computed as a plain string (no <span> child inside <option>) — hydration warning resolved.",
+    "TopupRequestDetail.jsx testids are input-approved-amt / input-approved-slider / input-comment / btn-approve / btn-partial / btn-reject (not partial-amount/partial-submit) — verified 2-stage flow works correctly with $48k -> $50k baseline update.",
+    "Non-blocking: PhaseWorkspace.jsx is ~449 lines — still under 700-line threshold but approaching; consider splitting StatCard + tpm-logs-panel + tasks-table into subcomponents when adding more features."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only, mocked)", "frontend": "100% — 10/10 review test items pass (TPM ProjectsTable on dashboard, TPM drawer log/topup, PhaseWorkspace add-task + raise-topup + 24h edit lock, 2-stage CTO->CFO approval with baseline bump $48k->$50k utilization 85%->82%, CFO strict read-only on /projects + ProjectDetail + PhaseWorkspace + Dashboard drawer)."},
+  "test_credentials": "Quick-login cards on /login: quick-login-tpm (Arjun Mehta), quick-login-cto (Vikram Kumar), quick-login-cfo (Priya Kapoor). No password.",
+  "seed_data_creation": "None — used AppContext seedTopupRequests (tur-seed-1 pending-cto) present per Playwright context. Consumed tur-seed-1 in Stage-1 partial ($2000 by CTO) -> Stage-2 approve (by CFO) flow.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Correct testids on TopupRequestDetail.jsx are input-approved-amt (number input), input-approved-slider (Radix slider), input-comment (textarea), btn-approve / btn-partial / btn-reject. Phase IDs in mockProjects.js are p1/p2/p3/p4 (NOT phase-1). CFO can navigate to any /projects/:id/phase/:phaseId — PhaseWorkspace falls back to PROJECTS static data via visibleProjects.find || PROJECTS.find. Playwright fresh context: seeded top-ups reset — use localStorage.removeItem('ethara.session.v1') to switch roles while keeping top-up state within one script.",
+  "rca_of_the_issue": "Iteration 7 CRITICAL gap (TPM cannot reach phase-drawer) has been fully fixed. Two independent code paths now expose the daily task log + phase-scoped top-up: (1) TpmDashboard imports ProjectsTable and renders <ProjectsTable/> after the charts grid, giving TPM the same drawer/log/topup flow non-TPM roles already had; (2) PhaseWorkspace now uses TpmTaskLogDialog (openNewLog on btn-add-task and btn-log-task-inline) and TopupRequestDialog (btn-raise-topup-phase with defaultPhaseId={phase.id}), so TPM can log/top-up directly from /projects/:id/phase/:phaseId. Verified end-to-end via playwright: task-log-dialog submit -> toast success -> ws-log-edit-<id>/ws-log-delete-<id> rendered in tpm-logs-panel (within 24h), and topup submit toast 'Top-up request submitted, Talos · Phase 1 · $3,000 - routed to CTO'. Also verified 2-stage approval: CTO partial $2000 on tur-seed-1 -> CFO Stage-2 approve -> Crowley Generation approvedBudget $48.0k -> $50.0k (utilization 85% -> 82%, effective-with-12%-buffer $53.8k -> $56.0k). No open issues."
+}

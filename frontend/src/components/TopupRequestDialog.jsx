@@ -85,11 +85,12 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
                 data-testid="tur-phase"
                 className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               >
-                {phases.map((ph) => (
-                  <option key={ph.id} value={ph.id} className="bg-[#12121A]">
-                    {ph.name} · {ph.dates}
-                  </option>
-                ))}
+                {phases.map((ph) => {
+                  const label = `${ph.name} · ${ph.dates}`;
+                  return (
+                    <option key={ph.id} value={ph.id} className="bg-[#12121A]">{label}</option>
+                  );
+                })}
               </select>
             </div>
           </Field>
