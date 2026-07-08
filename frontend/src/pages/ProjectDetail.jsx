@@ -348,6 +348,30 @@ const ProjectDetail = () => {
                 {isTPM ? "No tasks logged yet. Use the Batch tab to log daily tasks per phase." : "No TPM logs for this project yet."}
               </div>
             ) : (
+              <>
+              {/* Phase-wise progress bars */}
+              {(p.phases || []).some((ph) => Number(ph.totalTasks || ph.tasks || 0) > 0) && (
+                <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-2" data-testid="phase-progress-grid">
+                  {(p.phases || []).map((ph) => {
+                    const planned = Number(ph.totalTasks || ph.tasks || 0);
+                    if (planned <= 0) return null;
+                    const logs = getPhaseLogs(p.id, ph.id);
+                    const done = logs.reduce((s, l) => s + (Number(l.tasksDone) || 0), 0);
+                    const pct = planned ? Math.min(100, Math.round((done / planned) * 100)) : 0;
+                    return (
+                      <div key={ph.id} data-testid={`phase-progress-${ph.id}`} className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+                        <div className="flex items-center justify-between text-[11px] mb-1.5">
+                          <span className="text-white font-medium">{ph.name}</span>
+                          <span className="text-zinc-500 tabular"><span className="text-white font-semibold">{done.toLocaleString()}</span> / {planned.toLocaleString()} · <span className="text-fuchsia-300 font-semibold">{pct}%</span></span>
+                        </div>
+                        <div className="h-2 rounded-full bg-white/[0.05] overflow-hidden">
+                          <div className={`h-full transition-all ${pct >= 100 ? "bg-emerald-500" : "bg-fuchsia-500"}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -355,8 +379,8 @@ const ProjectDetail = () => {
                       <th className="text-left py-2 px-3">Task</th>
                       <th className="text-left py-2 px-3">Phase</th>
                       <th className="text-left py-2 px-3">Assignee</th>
-                      <th className="text-right py-2 px-3">Hours</th>
-                      <th className="text-right py-2 px-3">Cost</th>
+                      <th className="text-right py-2 px-3">Tasks Done</th>
+                      <th className="text-right py-2 px-3">Est. cost</th>
                       <th className="text-left py-2 px-3">Date</th>
                       {isTPM && <th className="text-right py-2 px-3">Actions</th>}
                     </tr>
@@ -374,7 +398,7 @@ const ProjectDetail = () => {
                           <td className="py-3 px-3 text-xs text-zinc-300">
                             <span className="inline-flex items-center gap-1"><UserIcon className="w-3 h-3 text-zinc-500" /> {l.assignee}</span>
                           </td>
-                          <td className="py-3 px-3 text-right tabular text-white">{l.hours}h</td>
+                          <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(l.tasksDone || 0).toLocaleString()}</td>
                           <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(l.cost, { compact: false })}</td>
                           <td className="py-3 px-3 text-xs text-zinc-400 tabular">{l.date}</td>
                           {isTPM && (
@@ -413,6 +437,7 @@ const ProjectDetail = () => {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
           </div>
         </TabsContent>

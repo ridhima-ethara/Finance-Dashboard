@@ -215,6 +215,33 @@ P2
 - Manual smoke tests via screenshots verified all 5 pages render correctly (CFO Buffer, Financial Monitoring w/ buffer bars, Recovery with expandable phase drops, AI Cost tabs, Reports with real downloads). No automated agent run this iteration per user request.
 
 
+## What's Implemented (2026-02-08 · iteration 12) — TPM Task Logging + Cost-per-Task Model Formula + R&D Section Cleanup
+
+### TPM Daily Task Logging (Project → Tasks tab)
+- [x] **TpmTaskLogDialog** reworked for the new phase-first flow:
+    - `task-phase` selector inside the dialog (previously fixed by parent). Users pick a phase, then log work.
+    - `task-tasks-done` — number of tasks completed today
+    - `task-cost` — Estimated cost (USD) attributed to those tasks
+    - `task-notes` — Note / remark
+    - Live "avg cost/task" hint below cost input
+- [x] **Phase progress bar** — new panel inside the dialog (`task-progress`) shows `<tasks done> / <total planned> · X%` for the selected phase, with a visual bar (`task-progress-bar`) that projects the new entry against total.
+- [x] **ProjectDetail Tasks tab** — replaced Hours column with **Tasks Done**; retained Est. cost column. Added a phase-progress grid (`phase-progress-grid`) above the log table that shows one bar per phase (green when ≥100%, fuchsia otherwise) so the whole team can see phase-level completion at a glance.
+- [x] `AppContext.logPhaseTask` / `updatePhaseTask` now accept and persist `tasksDone`. `submitBudget` writes per-phase `totalTasks` (planned) + `trajectoriesPerTask` so the progress bar has the denominator.
+
+### Budget Builder — Cost/Task Model Formula
+- [x] Model row simplified to **Model · Provider · Cost / task ($, editable) · Est. cost**.
+- [x] Formula: **Est. cost = totalTrajectories × cost/task** (where totalTrajectories = sum of `tasks × trajectories` across phases). Increasing tasks or trajectories in step 1 automatically recomputes model estCost in step 2 while preserving the user-entered cost/task.
+- [x] Removed the old auto-computed `costPerTraj` column and In/Out token inputs.
+- [x] Live formula footer under the models table: **`<N> tasks × <T> trajectories/task × cost/task · Total models: $X`**.
+
+### R&D "New Budget" Section Cleanup
+- [x] Removed **Doc attachment (URL)** field and **Upload spec sheet (optional)** placeholder from Budget Builder (they were project-creation concerns anyway).
+- [x] Step 1 grid reduced from 4 fields to 3 (Project · Priority · Budget type). No file/upload row.
+- [x] Single-phase section reordered: **Number of tasks + Est. trajectories/task on top → Total trajectories chip → Start + End dates below**.
+
+### Testing
+- Manual smoke test via screenshots verified: R&D single-phase layout matches spec (screenshot `/tmp/bb_rnd_new.png`), model formula computes correctly (1000×4×0.135 = $540, screenshot `/tmp/bb_models_new.png`), task-log dialog captures all new fields (screenshot `/tmp/task_dialog.png`), and Tasks tab renders with `Tasks Done` + `Est. cost` columns after submission (screenshot `/tmp/task_after_log.png`). No automated agent run this iteration per user request.
+
 ## What's Implemented (2026-02-08 · iteration 11) — Streamlined CTO Project Creation, R&D Budget Builder & CTO Return-to-Sender Loop
 
 ### CTO Project Creation (NewProjectDialog)

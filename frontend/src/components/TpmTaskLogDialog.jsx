@@ -1,38 +1,68 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { CalendarDays, Clock3, DollarSign, Paperclip, Send, User as UserIcon, X, ClipboardList } from "lucide-react";
+import { CalendarDays, DollarSign, Send, User as UserIcon, X, ClipboardList, Layers, ListChecks, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { TEAM } from "../data/mockUsers";
+import { fmtCurrency } from "../lib/format";
 
-// Dialog to log a daily task entry against a specific project/phase (TPM only).
+// Dialog to log a daily task entry (TPM only). Now supports:
+//  • Phase picker (inside the dialog)
+//  • Estimated cost, tasks done count, progress bar vs phase total, note.
 const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) => {
-  const { logPhaseTask, updatePhaseTask } = useApp();
+  const { logPhaseTask, updatePhaseTask, getPhaseLogs } = useApp();
   const isEdit = !!editingLog;
+
+  const projectPhases = project?.phases || [];
+  const initialPhaseId = phase?.id || projectPhases[0]?.id || "";
+  const [phaseId, setPhaseId] = useState(initialPhaseId);
+  const currentPhase = projectPhases.find((p) => p.id === phaseId) || phase || null;
+
   const [name, setName] = useState(editingLog?.name || "");
   const [assignee, setAssignee] = useState(editingLog?.assignee || TEAM[0]?.name || "");
-  const [hours, setHours] = useState(editingLog?.hours ?? 4);
-  const [cost, setCost] = useState(editingLog?.cost ?? 0);
+  const [estCost, setEstCost] = useState(editingLog?.cost ?? 0);
+  const [tasksDone, setTasksDone] = useState(editingLog?.tasksDone ?? 1);
   const [date, setDate] = useState(editingLog?.date || new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState(editingLog?.notes || "");
-  const [evidence, setEvidence] = useState(editingLog?.evidence || "");
+
+  // How many tasks have already been logged for this phase (excluding the log currently being edited)?
+  const existingLogs = useMemo(() => (project && phaseId ? getPhaseLogs(project.id, phaseId) : []), [project, phaseId, getPhaseLogs]);
+  const doneAlready = useMemo(() => existingLogs.reduce((s, l) => s + (Number(l.tasksDone) || 0), 0), [existingLogs]);
+  const doneAlreadyExcludingEdit = isEdit ? doneAlready - (Number(editingLog?.tasksDone) || 0) : doneAlready;
+  const phaseTotalTasks = Number(currentPhase?.totalTasks || currentPhase?.tasks || project?.totalTasks || 0);
+  const projectedDone = doneAlreadyExcludingEdit + (Number(tasksDone) || 0);
+  const progressPct = phaseTotalTasks > 0 ? Math.min(100, Math.round((projectedDone / phaseTotalTasks) * 100)) : 0;
 
   const reset = () => {
-    setName(""); setAssignee(TEAM[0]?.name || ""); setHours(4); setCost(0);
-    setDate(new Date().toISOString().slice(0, 10)); setNotes(""); setEvidence("");
+    setName(""); setAssignee(TEAM[0]?.name || ""); setEstCost(0); setTasksDone(1);
+    setDate(new Date().toISOString().slice(0, 10)); setNotes("");
   };
 
   const submit = () => {
+    if (!phaseId) { toast.error("Select a phase"); return; }
     if (!name.trim()) { toast.error("Task name is required"); return; }
     if (!assignee) { toast.error("Assignee is required"); return; }
     if (!date) { toast.error("Date is required"); return; }
+    if (Number(tasksDone) <= 0) { toast.error("Enter how many tasks were completed"); return; }
+    const payload = {
+      name,
+      assignee,
+      hours: 0,
+      cost: Number(estCost) || 0,
+      tasksDone: Number(tasksDone) || 0,
+      date,
+      notes,
+      evidence: "",
+    };
     if (isEdit) {
-      updatePhaseTask(project.id, phase.id, editingLog.id, { name, assignee, hours, cost, date, notes, evidence });
-      toast.success("Task log updated", { description: `${project.name} · ${phase.name}` });
+      updatePhaseTask(project.id, phase.id, editingLog.id, payload);
+      toast.success("Task log updated", { description: `${project.name} · ${currentPhase?.name || phaseId}` });
     } else {
-      logPhaseTask({ projectId: project.id, phaseId: phase.id, name, assignee, hours, cost, date, notes, evidence });
-      toast.success("Daily task logged", { description: `${project.name} · ${phase.name} · ${assignee} · ${hours}h` });
+      logPhaseTask({ projectId: project.id, phaseId, ...payload });
+      toast.success("Daily task logged", {
+        description: `${project.name} · ${currentPhase?.name || phaseId} · ${assignee} · ${tasksDone} task${Number(tasksDone) === 1 ? "" : "s"}`,
+      });
       reset();
     }
     onOpenChange(false);
@@ -40,7 +70,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[560px] bg-[#12121A] border border-white/10 text-zinc-100" data-testid="task-log-dialog">
+      <DialogContent className="sm:max-w-[560px] max-h-[92vh] overflow-y-auto bg-[#12121A] border border-white/10 text-zinc-100" data-testid="task-log-dialog">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-fuchsia-500/15 flex items-center justify-center border border-fuchsia-500/30">
@@ -49,14 +79,55 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             <div>
               <DialogTitle className="font-display text-lg text-white">{isEdit ? "Edit task log" : "Log daily task"}</DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
-                {project?.name} · {phase?.name} · visible to CTO & CFO
+                {project?.name} · pick a phase &amp; record what was delivered today
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
-          <Field label="Task name">
+          {!isEdit && (
+            <Field label="Phase *">
+              <div className="relative">
+                <Layers className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <select
+                  value={phaseId}
+                  onChange={(e) => setPhaseId(e.target.value)}
+                  data-testid="task-phase"
+                  className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                >
+                  {projectPhases.length === 0 && <option value="">— No phases available —</option>}
+                  {projectPhases.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-[#12121A]">
+                      {p.name} {p.totalTasks ? `· ${p.totalTasks} tasks planned` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </Field>
+          )}
+
+          {/* Progress bar for total tasks in phase */}
+          {phaseTotalTasks > 0 && (
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3" data-testid="task-progress">
+              <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1.5">
+                <span className="flex items-center gap-1"><ListChecks className="w-3 h-3 text-fuchsia-300" /> Phase progress</span>
+                <span className="tabular">
+                  <span className="text-white font-semibold">{projectedDone.toLocaleString()}</span>
+                  <span className="text-zinc-500"> / {phaseTotalTasks.toLocaleString()} tasks</span>
+                  <span className="ml-2 text-fuchsia-300 font-semibold">{progressPct}%</span>
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-white/[0.05] overflow-hidden">
+                <div className="h-full bg-fuchsia-500 transition-all" style={{ width: `${progressPct}%` }} data-testid="task-progress-bar" />
+              </div>
+              {progressPct >= 100 && (
+                <div className="mt-1.5 text-[10px] text-emerald-300">All planned tasks completed for this phase.</div>
+              )}
+            </div>
+          )}
+
+          <Field label="Task name *">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -67,7 +138,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Assignee">
+            <Field label="Assignee *">
               <div className="relative">
                 <UserIcon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <select
@@ -85,7 +156,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
               </div>
             </Field>
 
-            <Field label="Date">
+            <Field label="Date *">
               <div className="relative">
                 <CalendarDays className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -100,30 +171,30 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Hours spent">
+            <Field label="Tasks done *" hint="Count completed today">
               <div className="relative">
-                <Clock3 className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <ListChecks className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="number"
-                  min="0"
-                  step="0.5"
-                  value={hours}
-                  onChange={(e) => setHours(Number(e.target.value) || 0)}
-                  data-testid="task-hours"
+                  min="1"
+                  step="1"
+                  value={tasksDone}
+                  onChange={(e) => setTasksDone(Number(e.target.value) || 0)}
+                  data-testid="task-tasks-done"
                   className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                 />
               </div>
             </Field>
 
-            <Field label="Cost incurred (USD)">
+            <Field label="Estimated cost (USD) *" hint="Spend attributed to these tasks">
               <div className="relative">
                 <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
                   type="number"
                   min="0"
                   step="1"
-                  value={cost}
-                  onChange={(e) => setCost(Number(e.target.value) || 0)}
+                  value={estCost}
+                  onChange={(e) => setEstCost(Number(e.target.value) || 0)}
                   data-testid="task-cost"
                   className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                 />
@@ -131,26 +202,22 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             </Field>
           </div>
 
-          <Field label="Notes">
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              placeholder="Progress notes, blockers, or handoff context"
-              data-testid="task-notes"
-              className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
-            />
-          </Field>
+          {tasksDone > 0 && estCost > 0 && (
+            <div className="text-[11px] text-zinc-500">
+              Avg cost / task: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(Number(estCost) / Math.max(Number(tasksDone), 1), { compact: false })}</span>
+            </div>
+          )}
 
-          <Field label="Evidence link (optional)">
+          <Field label="Note / remark" hint="Optional">
             <div className="relative">
-              <Paperclip className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                value={evidence}
-                onChange={(e) => setEvidence(e.target.value)}
-                placeholder="PR URL, dashboard screenshot, doc link…"
-                data-testid="task-evidence"
-                className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+              <StickyNote className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-3 pointer-events-none" />
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                placeholder="Progress notes, blockers, or handoff context"
+                data-testid="task-notes"
+                className="w-full pl-8 pr-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
               />
             </div>
           </Field>
@@ -182,9 +249,12 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   );
 };
 
-const Field = ({ label, children }) => (
+const Field = ({ label, hint, children }) => (
   <div>
-    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">{label}</div>
+    <div className="flex items-baseline justify-between mb-1.5">
+      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+      {hint && <div className="text-[10px] text-zinc-600">{hint}</div>}
+    </div>
     {children}
   </div>
 );

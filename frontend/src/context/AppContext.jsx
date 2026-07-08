@@ -226,7 +226,7 @@ export const AppProvider = ({ children }) => {
 
   const isTaskEditable = (log) => Date.now() - new Date(log.createdAt).getTime() < TASK_EDIT_WINDOW_MS;
 
-  const logPhaseTask = ({ projectId, phaseId, name, assignee, hours, cost, date, notes, evidence }) => {
+  const logPhaseTask = ({ projectId, phaseId, name, assignee, hours, cost, tasksDone, date, notes, evidence }) => {
     const id = `tl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const entry = {
       id,
@@ -236,6 +236,7 @@ export const AppProvider = ({ children }) => {
       assignee,
       hours: Number(hours) || 0,
       cost: Number(cost) || 0,
+      tasksDone: Number(tasksDone) || 0,
       date,
       notes: notes || "",
       evidence: evidence || "",
@@ -259,7 +260,13 @@ export const AppProvider = ({ children }) => {
         [key]: list.map((t) => {
           if (t.id !== logId) return t;
           if (!isTaskEditable(t)) return t;
-          return { ...t, ...patch, hours: Number(patch.hours ?? t.hours), cost: Number(patch.cost ?? t.cost) };
+          return {
+            ...t,
+            ...patch,
+            hours: Number(patch.hours ?? t.hours),
+            cost: Number(patch.cost ?? t.cost),
+            tasksDone: Number(patch.tasksDone ?? t.tasksDone ?? 0),
+          };
         }),
       };
     });
@@ -402,6 +409,8 @@ export const AppProvider = ({ children }) => {
         estimated: Number(ph.budget || 0),
         actual: 0,
         health: "healthy",
+        totalTasks: Number(ph.tasks || 0),
+        trajectoriesPerTask: Number(ph.trajectories || 0),
       }));
       const approved = (payload.phases || []).reduce((s, ph) => s + Number(ph.budget || 0), 0) || payload.totals?.total || 0;
       return {
