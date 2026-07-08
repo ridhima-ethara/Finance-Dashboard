@@ -13,9 +13,10 @@ export const USERS = [
   { id: "u2", name: "Priya Kapoor", role: "CFO", title: "Chief Financial Officer", email: "cfo@ethara.ai", password: "demo123", avatarUrl: "" },
   { id: "u3", name: "Arjun Mehta", role: "TPM", title: "Technical Program Manager", email: "tpm@ethara.ai", password: "demo123", avatarUrl: "" },
   { id: "u4", name: "Aanya Sharma", role: "PL", title: "Project Lead", email: "pl@ethara.ai", password: "demo123", avatarUrl: "" },
+  { id: "u5", name: "Neha Kapoor", role: "R&D", title: "R&D Lead", email: "rd@ethara.ai", password: "demo123", avatarUrl: "" },
 ];
 
-export const ROLES = ["CTO", "CFO", "TPM", "PL"];
+export const ROLES = ["CTO", "CFO", "TPM", "R&D", "PL"];
 
 export const TEAM = [
   { id: "u1", name: "Vikram Kumar", role: "CTO", email: "vikram@ethara.ai" },

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { ChevronRight, ChevronDown, User, Calendar, Cpu, Layers, Plus, ArrowUpRightSquare, Pencil, Trash2, Lock, FileText, PackageCheck } from "lucide-react";
 import { fmtCurrency, fmtPct, healthColor, varianceColor, utilColor } from "../../lib/format";
 import { useApp } from "../../context/AppContext";
+import { isTpmView } from "../../lib/roles";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "../ui/sheet";
 import { Button } from "../ui/button";
 import { getPhaseTasks, DAILY_CONSUMPTION_LOG } from "../../data/mockTpm";
@@ -219,7 +220,7 @@ const ProjectsTable = () => {
 
 const PhaseDrawerContent = ({ project, phase }) => {
   const { role, getPhaseLogs, deletePhaseTask, isTaskEditable, batchDeliveries } = useApp();
-  const isTPM = role === "TPM";
+  const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
   const canEdit = isTPM; // Only TPM can edit/log
 

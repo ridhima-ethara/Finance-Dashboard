@@ -4,6 +4,7 @@ import { fmtCurrency, fmtPct, healthColor, utilColor, varianceColor } from "../l
 import { Search, Filter, Plus, ChevronRight, ArrowUpRightSquare, Lock } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useApp } from "../context/AppContext";
+import { isTpmView } from "../lib/roles";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 import NewProjectDialog from "../components/NewProjectDialog";
 import TopupRequestDialog from "../components/TopupRequestDialog";
@@ -17,7 +18,7 @@ const Projects = () => {
   const { role, scope, visibleProjects } = useApp();
   const isPL = role === "PL";
   const isCTO = role === "CTO";
-  const isTPM = role === "TPM";
+  const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
 
   const filtered = visibleProjects.filter((p) => {

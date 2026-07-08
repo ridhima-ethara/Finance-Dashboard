@@ -83,6 +83,7 @@ const pickNav = (role) => {
     case "CFO":
       return NAV_CFO;
     case "TPM":
+    case "R&D":
       return NAV_TPM;
     case "PL":
       return NAV_PL;

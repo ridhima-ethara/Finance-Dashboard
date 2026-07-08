@@ -10,6 +10,7 @@ const roleAccent = {
   CTO: { border: "border-fuchsia-500/40", text: "text-fuchsia-300", dot: "bg-fuchsia-400", glow: "hover:shadow-[0_0_24px_rgba(232,25,184,0.35)]" },
   CFO: { border: "border-emerald-500/40", text: "text-emerald-300", dot: "bg-emerald-400", glow: "hover:shadow-[0_0_24px_rgba(16,185,129,0.35)]" },
   TPM: { border: "border-sky-500/40", text: "text-sky-300", dot: "bg-sky-400", glow: "hover:shadow-[0_0_24px_rgba(56,189,248,0.35)]" },
+  "R&D": { border: "border-violet-500/40", text: "text-violet-300", dot: "bg-violet-400", glow: "hover:shadow-[0_0_24px_rgba(139,92,246,0.35)]" },
   PL: { border: "border-amber-500/40", text: "text-amber-300", dot: "bg-amber-400", glow: "hover:shadow-[0_0_24px_rgba(245,158,11,0.35)]" },
 };
 
@@ -17,6 +18,7 @@ const roleLabel = {
   CTO: "Chief Technology Officer",
   CFO: "Chief Financial Officer",
   TPM: "Technical Program Manager",
+  "R&D": "R&D Team · TPM view",
   PL: "Project Lead",
 };
 
@@ -111,13 +113,13 @@ const Login = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-2xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl mx-auto">
             {USERS.filter((u) => u.role !== "PL").map((u) => {
               const a = roleAccent[u.role];
               return (
                 <button
                   key={u.id}
-                  data-testid={`quick-login-${u.role.toLowerCase()}`}
+                  data-testid={`quick-login-${u.role.toLowerCase().replace(/&/g, "n").replace(/[^a-z0-9-]/g, "-")}`}
                   onClick={() => doLogin({ role: u.role })}
                   className={`text-left p-4 rounded-2xl border ${a.border} bg-[#12121A]/60 backdrop-blur-sm hover:bg-[#12121A]/90 transition-all group ${a.glow}`}
                 >

@@ -154,6 +154,7 @@ export const AppProvider = ({ children }) => {
     let list = projects;
     if (user.role === "TPM") list = list.filter((p) => p.tpm === user.name);
     else if (user.role === "PL") list = list.filter((p) => p.pl === user.name);
+    // R&D team sees the full portfolio — same view as TPM but not project-scoped.
     if (scope === "R&D") list = list.filter((p) => p.type === "R&D");
     else if (scope === "Production") list = list.filter((p) => p.type === "Production");
     return list;

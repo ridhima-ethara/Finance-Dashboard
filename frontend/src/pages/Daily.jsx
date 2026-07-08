@@ -111,7 +111,7 @@ const Daily = () => {
           <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">Daily activity</h1>
           <p className="text-sm text-zinc-400 mt-1">Day-by-day expenses, approvals, and Ops-entered estimates · last 30 days</p>
         </div>
-        {(role === "TPM" || role === "PL" || role === "CTO") && (
+        {(role === "TPM" || role === "R&D" || role === "PL" || role === "CTO") && (
           <Button
             onClick={() => setOpenEstimate(true)}
             className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"

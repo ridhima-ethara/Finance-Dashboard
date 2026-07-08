@@ -8,6 +8,7 @@ import ProjectDetail from "./pages/ProjectDetail";
 import Approvals from "./pages/Approvals";
 import Topups from "./pages/Topups";
 import TpmTopups from "./pages/tpm/TpmTopups";
+import { isTpmView } from "./lib/roles";
 import Reimbursements from "./pages/Reimbursements";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
@@ -45,7 +46,7 @@ const Protected = ({ children }) => {
 
 const TopupsRoute = () => {
   const { role } = useApp();
-  return role === "TPM" ? <TpmTopups /> : <Topups />;
+  return isTpmView(role) ? <TpmTopups /> : <Topups />;
 };
 
 function App() {

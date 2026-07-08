@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { isTpmView } from "../lib/roles";
 import { fmtCurrency, fmtDate } from "../lib/format";
 import { APPROVALS } from "../data/mockData";
 import { Button } from "../components/ui/button";
@@ -472,8 +473,8 @@ const LegacyApprovals = () => {
 
 const Approvals = () => {
   const { role } = useApp();
-  // TPMs never see the decision UI on this route — even for their own requests.
-  return role === "TPM" ? <TpmMyRequests /> : <LegacyApprovals />;
+  // TPMs (and R&D team, which shares the TPM view) never see the decision UI on this route.
+  return isTpmView(role) ? <TpmMyRequests /> : <LegacyApprovals />;
 };
 
 export default Approvals;

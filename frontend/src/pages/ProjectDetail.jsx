@@ -9,6 +9,7 @@ import {
   Trash2, Pencil, FileText, Layers, Building2, MessageSquare, Shield, DollarSign, TrendingUp, TrendingDown,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
+import { isTpmView } from "../lib/roles";
 import { toast } from "sonner";
 import { TEAM } from "../data/mockUsers";
 import TopupRequestDialog from "../components/TopupRequestDialog";
@@ -53,7 +54,7 @@ const ProjectDetail = () => {
     setAiOpen, projects, role, topupRequests, batchDeliveries, getPhaseLogs, isTaskEditable, deletePhaseTask,
   } = useApp();
   const p = projects.find((x) => x.id === id);
-  const isTPM = role === "TPM";
+  const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
 
   const [topupOpen, setTopupOpen] = useState(false);

@@ -14,6 +14,7 @@ import { Button } from "../components/ui/button";
 import { Download, RefreshCw, Plus, ClipboardCheck, GitPullRequest, AlertTriangle, ChevronRight, ShieldCheck, Receipt, Wallet, ArrowUpRightSquare, Lock, PackageCheck } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { useState, useMemo } from "react";
+import { isTpmView } from "../lib/roles";
 import { Link } from "react-router-dom";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 import TpmDashboard from "./tpm/TpmDashboard";
@@ -36,7 +37,7 @@ const Dashboard = () => {
   );
 
   // TPM gets a dedicated portal dashboard
-  if (role === "TPM") return <TpmDashboard />;
+  if (isTpmView(role)) return <TpmDashboard />;
   // CTO gets a project-focused ops dashboard (no CFO-style whole-budget views)
   if (role === "CTO") return <CtoDashboard />;
 
@@ -63,8 +64,8 @@ const Dashboard = () => {
           <p className="text-sm text-zinc-400 mt-1">
             Real-time budget, forecast &amp; burn across all AI engagements · June 2026
             {scope !== "all" && <span className="ml-2 text-fuchsia-300">· scope: {scope}</span>}
-            {(role === "TPM" || role === "PL") && (
-              <span className="ml-2 text-sky-300">· showing {visibleProjects.length} project{visibleProjects.length === 1 ? "" : "s"} you {role === "TPM" ? "requested" : "lead"}</span>
+            {(isTpmView(role) || role === "PL") && (
+              <span className="ml-2 text-sky-300">· showing {visibleProjects.length} project{visibleProjects.length === 1 ? "" : "s"} you {isTpmView(role) ? "requested" : "lead"}</span>
             )}
           </p>
         </div>

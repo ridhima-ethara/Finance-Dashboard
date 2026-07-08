@@ -158,7 +158,7 @@ const AiCost = () => {
             Model spend, task log &amp; usage analysis
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Real-time cost across models and projects · {user?.role === "TPM" ? "your projects" : "portfolio-wide"}
+            Real-time cost across models and projects · {user?.role === "TPM" || user?.role === "R&D" ? "your projects" : "portfolio-wide"}
           </p>
         </div>
         <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1 h-9">

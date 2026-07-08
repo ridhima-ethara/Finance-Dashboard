@@ -29,6 +29,7 @@ import { Button } from "../../components/ui/button";
 import TpmTaskLogDialog from "../../components/TpmTaskLogDialog";
 import TopupRequestDialog from "../../components/TopupRequestDialog";
 import { toast } from "sonner";
+import { isTpmView } from "../../lib/roles";
 
 const statusStyles = {
   done: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-300", Icon: CheckCircle2 },
@@ -44,7 +45,7 @@ const PhaseWorkspace = () => {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
   const [topupOpen, setTopupOpen] = useState(false);
-  const isTPM = role === "TPM";
+  const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
 
   const project = useMemo(

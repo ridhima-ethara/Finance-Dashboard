@@ -5,6 +5,7 @@ import { downloadReportAs, getReportRows } from "../lib/reportGenerators";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { useApp } from "../context/AppContext";
+import { isTpmView } from "../lib/roles";
 import {
   FileText,
   Download,
@@ -86,7 +87,7 @@ const Reports = () => {
 
   return (
     <div className="space-y-6" data-testid="page-reports">
-      {role === "TPM" && (
+      {isTpmView(role) && (
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-start gap-3" data-testid="reports-tpm-notice">
           <Lock className="w-4 h-4 text-zinc-400 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-zinc-300">

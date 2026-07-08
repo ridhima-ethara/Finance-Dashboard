@@ -130,7 +130,7 @@ const Consumption = () => {
             Log today&apos;s consumption
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · project-wise tasks, trajectories &amp; cost — {user?.role === "TPM" ? "your projects" : "all projects"}
+            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · project-wise tasks, trajectories &amp; cost — {user?.role === "TPM" || user?.role === "R&D" ? "your projects" : "all projects"}
           </p>
         </div>
       </div>
