@@ -145,3 +145,36 @@ P2
 6. **P3** — Live LLM (Claude Sonnet 4.5 via Emergent LLM key) for AI panel
 7. **P3** — INR toggle with FX rate
 
+
+## What's Implemented (2026-02-08 · iteration 8) — Role-Based Projects + TPM Task Logging + 2-Stage Top-up Approvals
+
+### Role-based Projects module
+- [x] **CFO strict read-only** — On `/projects` no `Raise top-up`/`New project` buttons; header shows `Read-only` badge; on `ProjectDetail` `cfo-readonly-badge` present; no Request top-up button; on PhaseWorkspace `phase-readonly-badge` present; on the Phase sidebar drawer the `Read-only` pill is shown, no `Log daily task`/`Raise top-up` buttons.
+- [x] **TPM daily task logging** — New `TpmTaskLogDialog` (fields: task name, assignee, hours, cost incurred, date, notes, evidence URL). Wired into two surfaces so TPM always has a path:
+    - `ProjectsTable` phase drawer (`drawer-btn-log-task` → `task-log-dialog`) — accessible from Dashboard for TPM
+    - `PhaseWorkspace` (`btn-add-task` / `btn-log-task-inline` → `task-log-dialog`) — accessible via `link-upcoming-phase`
+    - `TpmDashboard` now embeds `<ProjectsTable/>` beneath its widgets so TPM can drill into any phase drawer
+- [x] **24h edit window** — Logged tasks show `log-edit-*` / `log-delete-*` icons within 24 hours of `createdAt`; after that they are locked (Lock icon shown). Enforced in `AppContext.updatePhaseTask` / `deletePhaseTask` via `isTaskEditable`.
+- [x] **TPM tasks visible to CTO & CFO** — CTO sees them in phase drawer; CFO sees them read-only (no edit/delete icons).
+
+### TPM Top-up requests (phase-wise) + 2-stage approvals
+- [x] **`TopupRequestDialog`** — TPM raises phase-scoped top-up (phase select with mini stats, amount, urgency, business justification). Reachable from: Projects page `btn-raise-topup`, ProjectDetail `btn-request-topup`, PhaseWorkspace `btn-raise-topup-phase`, Phase drawer `drawer-btn-topup`, `/topups` `btn-new-topup`.
+- [x] **`/topups` for TPM** — dedicated list (`page-tpm-topups`) with stats (Total / Pending / Approved / Value approved) + status filters (all/pending/approved/rejected). CFO route stays on the existing `Topups` page via `TopupsRoute` role switch.
+- [x] **`TopupRequestDetail` (`/topup-requests/:id`)** — 2-stage decision workspace. Stage 1: CTO gets `Approve full` / `Partial` / `Reject` (with slider + comment). Stage 2 (CFO final): max approved amount is capped at the CTO-forwarded amount. Rejection requires a comment.
+- [x] **Journey visual pipeline** — TPM → CTO → CFO → Approved with pending / current / done / reject states.
+- [x] **Baseline math** — `AppContext.projects` memo folds `cfoDecision.amount` for `approved`/`partial` requests into `approvedBudget`, `topupsTotal`, `remaining`, `utilization`. Verified live: Crowley Generation approved $48.0k → $50.0k, util 85% → 82%.
+- [x] **Approval Queue unified** — `/approval-queue` merges budget reviews + real top-up requests; top-up rows link to `/topup-requests/:id`.
+- [x] **Activity log & AI recommendation** — Each top-up detail shows a step-by-step audit history and an "Approve at 85%" AI suggestion.
+
+### Testing
+- Iteration 7 flagged CRITICAL: TPM had no path to phase drawer (TpmDashboard didn't render ProjectsTable). Fixed in iteration 8 by rendering ProjectsTable in TpmDashboard AND wiring PhaseWorkspace to TpmTaskLogDialog + TopupRequestDialog.
+- Iteration 8 test report: **10/10 review scenarios pass · 100% success rate · zero console errors** (only pre-existing Recharts sizing warnings, non-blocking).
+
+## Next Action Items
+1. **P1** — Complete Reports Module (Budget / Phase / Expense / Variance exportable reports across all portals).
+2. **P2** — Upgrade AI Assistant (AiPanel) to role-specific queries (CFO cash flow, CTO over-budget forecast, TPM burn-rate).
+3. **P2** — Address Recharts ResponsiveContainer width(-1)/height(-1) console warnings on dashboard renders.
+4. **P2** — Split large files (`AppContext.jsx`, `PhaseWorkspace.jsx` ~450 lines) into domain contexts + sub-components as they grow past 700 lines.
+5. **P2** — Real backend (FastAPI + MongoDB) with CRUD for projects/expenses/top-ups/approvals + real auth.
+6. **P3** — Bill upload with object storage; live LLM via Emergent LLM key; INR toggle.
+
