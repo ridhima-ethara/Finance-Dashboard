@@ -215,6 +215,36 @@ P2
 - Manual smoke tests via screenshots verified all 5 pages render correctly (CFO Buffer, Financial Monitoring w/ buffer bars, Recovery with expandable phase drops, AI Cost tabs, Reports with real downloads). No automated agent run this iteration per user request.
 
 
+## What's Implemented (2026-02-08 · iteration 11) — Streamlined CTO Project Creation, R&D Budget Builder & CTO Return-to-Sender Loop
+
+### CTO Project Creation (NewProjectDialog)
+- [x] Removed the **Client dropdown** and **Estimated end date** field.
+- [x] Added **Client project name** (`input-client-project-name`) and **Internal project name** (`input-internal-name`) — the internal name becomes the codename shown across dashboards; the client name is stored on the project record.
+- [x] Added **Doc attachment URL** (`input-doc-url`) — Drive/Notion/etc. link visible to allocated members.
+- [x] Added **R&D team multi-picker** (`rnd-multi-picker` · toggle pills `rnd-toggle-<id>`). Selected members are stored on `project.rndMembers`; project appears on their dashboards automatically.
+- [x] `AppContext.addProject` extended with `docUrl`, `rndMembers`; `visibleProjects` filters R&D users to projects where their name is in `rndMembers` (or they are the TPM).
+
+### Budget Builder (TPM & R&D · `/budget-builder`)
+- [x] **Role-aware locks (R&D)** — R&D user sees header "R&D Portal · Budget Builder"; budget type locked to `RnD` (select disabled); delivery mode locked to **Single phase** (Multiple phases toggle removed). TPM can pick `Production` or `RnD` and choose single or multiple phases.
+- [x] **Trajectory-driven budget** — Step 1 adds Number of tasks + Est. trajectories / task per phase. Header shows live "Total trajectories" and drives Step 2 model est. cost via `costPerTrajectory(model)`.
+- [x] **Models tab simplified** — columns are Model · Provider · Cost/trajectory · Est. cost (no In/Out token inputs).
+- [x] **Infra tab reworked** — user enters Monthly cost ($); `≈ $/day` auto-shown; Est. cost = monthly × months.
+- [x] **Subscriptions tab reworked** — price/seat + Seats + Months + Assign members pill row. Toggling members adjusts seat count.
+- [x] **Doc URL + mock file upload** — Step 1 URL input and mock file picker; both surface on Preview.
+- [x] **Edit & Resubmit prefilled from returned review** — `/budget-builder?edit=<reviewId>` loads the review with amber banner and CTO comment; submit CTA becomes `Resubmit budget`. On submit AppContext marks review as `resubmitted`.
+
+### CTO Budget Review Workspace (`/budget-reviews/:id`)
+- [x] **Tabs trimmed** — only Overview and Modify Budget remain. Phase-wise, Task-wise, Model/Infra/Subs, Comparison, and Audit tabs removed.
+- [x] **Return to TPM/R&D** — new header action `btn-return-tpm` and sidebar target toggle (TPM/R&D). Requires a comment; `AppContext.ctoReturnBudgetReview` writes status `returned-to-tpm`.
+- [x] **Overview enriched** — Estimated vs business requirement comparison merged into Overview.
+
+### TPM / R&D Dashboard
+- [x] **Returned budgets widget** (`widget-returned-budgets`) shows all reviews returned to the current user with CTO comment. Each card links to `/budget-builder?edit=<id>`.
+
+### Testing
+- Iteration 11 test report (`/app/test_reports/iteration_9.json`): **47/47 assertions pass · 100% success** across 8 review flows. No functional bugs.
+
+
 ## What's Implemented (2026-02-08 · iteration 10) — Budget Builder Redesign + Batch Delivery Recovery Loop
 
 ### Budget Builder (TPM · `/budget-builder`)
