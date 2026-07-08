@@ -10,6 +10,7 @@ const TASK_LOGS_KEY = "ethara.taskLogs.v1";
 const TOPUP_REQ_KEY = "ethara.topupRequests.v1";
 const BUDGETS_KEY = "ethara.budgets.v1";
 const BATCH_DELIVERIES_KEY = "ethara.batchDeliveries.v1";
+const BUDGET_REVIEWS_KEY = "ethara.budgetReviews.v1";
 
 const readJSON = (key, fallback) => {
   try {
@@ -88,6 +89,7 @@ export const AppProvider = ({ children }) => {
   });
   const [budgets, setBudgets] = useState(() => readJSON(BUDGETS_KEY, []));
   const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, []));
+  const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, []));
 
   useEffect(() => {
     if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
@@ -100,6 +102,7 @@ export const AppProvider = ({ children }) => {
   useEffect(() => localStorage.setItem(TOPUP_REQ_KEY, JSON.stringify(topupRequests)), [topupRequests]);
   useEffect(() => localStorage.setItem(BUDGETS_KEY, JSON.stringify(budgets)), [budgets]);
   useEffect(() => localStorage.setItem(BATCH_DELIVERIES_KEY, JSON.stringify(batchDeliveries)), [batchDeliveries]);
+  useEffect(() => localStorage.setItem(BUDGET_REVIEWS_KEY, JSON.stringify(budgetReviews)), [budgetReviews]);
 
   const login = ({ email, password, role }) => {
     if (role) {
@@ -440,6 +443,83 @@ export const AppProvider = ({ children }) => {
     )));
   };
 
+  // ---- Budget Reviews (CTO edits original TPM ask, forwards to CFO for final decision) ----
+  const ctoModifyBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, modifiedPhases, ctoComment }) => {
+    const total = (modifiedPhases || []).reduce((s, ph) => s + Number(ph.infra || 0) + Number(ph.model || 0) + Number(ph.subs || 0), 0);
+    const now = new Date().toISOString();
+    setBudgetReviews((arr) => {
+      const existingIdx = arr.findIndex((r) => r.id === reviewId);
+      const base = {
+        id: reviewId,
+        projectId,
+        projectName,
+        tpm,
+        requestedBudget,
+        modifiedPhases,
+        modifiedTotal: total,
+        ctoComment,
+        ctoBy: user?.name || "CTO",
+        ctoAt: now,
+        status: "forwarded-cfo",
+        cfoDecision: null,
+        history: [
+          { at: now, actor: `${user?.name || "CTO"} · CTO`, action: "Modified & forwarded to CFO", detail: `Total ${total} · ${modifiedPhases.length} phases` },
+        ],
+      };
+      if (existingIdx >= 0) {
+        const prev = arr[existingIdx];
+        return arr.map((r, i) => (i === existingIdx ? { ...base, history: [...(prev.history || []), base.history[0]] } : r));
+      }
+      return [base, ...arr];
+    });
+    return total;
+  };
+
+  const ctoRejectBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, ctoComment }) => {
+    const now = new Date().toISOString();
+    setBudgetReviews((arr) => {
+      const idx = arr.findIndex((r) => r.id === reviewId);
+      const entry = {
+        id: reviewId,
+        projectId,
+        projectName,
+        tpm,
+        requestedBudget,
+        modifiedPhases: [],
+        modifiedTotal: 0,
+        ctoComment,
+        ctoBy: user?.name || "CTO",
+        ctoAt: now,
+        status: "rejected-by-cto",
+        cfoDecision: null,
+        history: [{ at: now, actor: `${user?.name || "CTO"} · CTO`, action: "CTO rejected", detail: ctoComment || "" }],
+      };
+      if (idx >= 0) return arr.map((r, i) => (i === idx ? { ...entry, history: [...(arr[idx].history || []), entry.history[0]] } : r));
+      return [entry, ...arr];
+    });
+  };
+
+  const cfoDecideBudgetReview = (reviewId, { decision, amount, comment }) => {
+    // decision: 'approve' | 'partial' | 'reject' | 'return'
+    setBudgetReviews((arr) => arr.map((r) => {
+      if (r.id !== reviewId) return r;
+      const at = new Date().toISOString();
+      const statusMap = { approve: "approved", partial: "partial", reject: "rejected", return: "returned" };
+      const actionLabel = {
+        approve: "CFO approved",
+        partial: "CFO partial approval",
+        reject: "CFO rejected",
+        return: "CFO returned for changes",
+      }[decision];
+      return {
+        ...r,
+        status: statusMap[decision] || "returned",
+        cfoDecision: { decision, amount: Number(amount || 0), comment: comment || "", at, by: user?.name || "CFO" },
+        history: [...(r.history || []), { at, actor: `${user?.name || "CFO"} · CFO`, action: actionLabel, detail: comment || "" }],
+      };
+    }));
+  };
+
   const role = user?.role || null;
   const value = useMemo(
     () => ({
@@ -479,8 +559,13 @@ export const AppProvider = ({ children }) => {
       batchDeliveries,
       deliverBatch,
       recordActualRecovery,
+      // CTO budget review modifications
+      budgetReviews,
+      ctoModifyBudgetReview,
+      ctoRejectBudgetReview,
+      cfoDecideBudgetReview,
     }),
-    [user, role, aiOpen, notifOpen, scope, projects, visibleProjects, taskLogs, topupRequests, budgets, batchDeliveries]
+    [user, role, aiOpen, notifOpen, scope, projects, visibleProjects, taskLogs, topupRequests, budgets, batchDeliveries, budgetReviews]
   );
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

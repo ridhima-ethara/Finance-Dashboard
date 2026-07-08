@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BUDGET_REVIEWS, CTO_AUDIT, getPhaseTasks } from "../../data/mockTpm";
 import { PROJECTS } from "../../data/mockProjects";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
+import { useApp } from "../../context/AppContext";
 import {
   ArrowLeft,
   Check,
@@ -24,18 +25,43 @@ import {
   Save,
   Edit3,
   FileText,
+  Wallet,
+  CreditCard,
 } from "lucide-react";
 
 const BudgetReviewWorkspace = () => {
   const { id } = useParams();
   const nav = useNavigate();
+  const { ctoModifyBudgetReview, ctoRejectBudgetReview, budgetReviews } = useApp();
   const review = useMemo(() => BUDGET_REVIEWS.find((r) => r.id === id) || BUDGET_REVIEWS[0], [id]);
   const project = useMemo(() => PROJECTS.find((p) => p.id === review.projectId), [review]);
+  const priorModification = useMemo(() => budgetReviews.find((r) => r.id === review.id), [budgetReviews, review]);
 
   const [tab, setTab] = useState("overview");
   const [modifyMode, setModifyMode] = useState(false);
   const [amount, setAmount] = useState(review.recommendedBudget);
   const [comment, setComment] = useState("");
+
+  // ---- Editable phase-wise modifications (infra / model / subs per phase) ----
+  const phases = project?.phases || [];
+  const buildInitialPhases = () => {
+    if (priorModification?.modifiedPhases?.length) return priorModification.modifiedPhases;
+    const denom = phases.reduce((s, p) => s + p.estimated, 0) || 1;
+    return phases.map((p) => {
+      const weight = p.estimated / denom;
+      return {
+        id: p.id,
+        name: p.name,
+        infra: Math.round(review.infraCost * weight),
+        model: Math.round(review.aiCost * weight),
+        subs: Math.round(review.subsCost * weight),
+      };
+    });
+  };
+  const [modifiedPhases, setModifiedPhases] = useState(buildInitialPhases);
+  useEffect(() => {
+    if (priorModification?.modifiedPhases?.length) setModifiedPhases(priorModification.modifiedPhases);
+  }, [priorModification?.id, priorModification?.modifiedPhases]);
 
   if (!review || !project) {
     return (
@@ -51,18 +77,54 @@ const BudgetReviewWorkspace = () => {
   const requestedBudget = review.requestedBudget;
   const currentBudget = review.currentBudget;
   const recommended = review.recommendedBudget;
-  const delta = amount - currentBudget;
-  const savings = requestedBudget - amount;
+
+  const phaseTotals = modifiedPhases.map((p) => ({
+    ...p,
+    total: Number(p.infra || 0) + Number(p.model || 0) + Number(p.subs || 0),
+  }));
+  const modifiedTotal = phaseTotals.reduce((s, p) => s + p.total, 0);
+  const modifiedInfra = phaseTotals.reduce((s, p) => s + Number(p.infra || 0), 0);
+  const modifiedModel = phaseTotals.reduce((s, p) => s + Number(p.model || 0), 0);
+  const modifiedSubs = phaseTotals.reduce((s, p) => s + Number(p.subs || 0), 0);
+  const modifiedDeltaVsRequested = modifiedTotal - requestedBudget;
+
+  const updateCell = (phaseId, key, val) => {
+    setModifiedPhases((rows) => rows.map((r) => (r.id === phaseId ? { ...r, [key]: Number(val) || 0 } : r)));
+  };
+  const resetToOriginal = () => setModifiedPhases(buildInitialPhases());
+
+  // Use the modified total for the sidebar decision panel when the CTO has edited
+  const effectiveAmount = tab === "modify" ? modifiedTotal : amount;
+  const delta = effectiveAmount - currentBudget;
+  const savings = requestedBudget - effectiveAmount;
 
   const approveAndForward = () => {
-    toast.success("Budget approved and forwarded to CFO", {
-      description: `${review.projectName} · ${fmtCurrency(amount, { compact: false })} · ${savings > 0 ? `${fmtCurrency(savings, { compact: false })} saved vs request` : "at requested amount"}`,
+    ctoModifyBudgetReview({
+      reviewId: review.id,
+      projectId: project.id,
+      projectName: review.projectName,
+      tpm: review.tpm,
+      requestedBudget,
+      modifiedPhases: phaseTotals.map((p) => ({ id: p.id, name: p.name, infra: p.infra, model: p.model, subs: p.subs })),
+      ctoComment: comment,
+    });
+    toast.success("Budget modified & forwarded to CFO", {
+      description: `${review.projectName} · ${fmtCurrency(modifiedTotal, { compact: false })}${savings > 0 ? ` · ${fmtCurrency(savings, { compact: false })} saved vs request` : ""} · TPM notified`,
     });
     nav("/budget-reviews");
   };
   const rejectBudget = () => {
+    if (!comment.trim()) { toast.error("Add a comment to reject"); return; }
+    ctoRejectBudgetReview({
+      reviewId: review.id,
+      projectId: project.id,
+      projectName: review.projectName,
+      tpm: review.tpm,
+      requestedBudget,
+      ctoComment: comment,
+    });
     toast.error("Budget rejected", {
-      description: `${review.projectName} · TPM notified · comment: "${comment || "No comment provided"}"`,
+      description: `${review.projectName} · TPM notified · comment: "${comment}"`,
     });
     nav("/budget-reviews");
   };
@@ -70,7 +132,6 @@ const BudgetReviewWorkspace = () => {
     toast("Draft saved", { description: "Your modifications will be preserved when you return" });
   };
 
-  const phases = project.phases;
   const tasks = getPhaseTasks(project.id, "p2");
 
   return (
@@ -117,6 +178,7 @@ const BudgetReviewWorkspace = () => {
       <div className="flex items-center gap-1 border-b border-white/5 overflow-x-auto">
         {[
           { id: "overview", label: "Overview" },
+          { id: "modify", label: "Modify Budget" },
           { id: "phases", label: "Phase-wise" },
           { id: "tasks", label: "Task-wise" },
           { id: "resources", label: "Model / Infra / Subs" },
@@ -163,6 +225,112 @@ const BudgetReviewWorkspace = () => {
                   <BreakdownCell icon={FileText} label="Miscellaneous" value={review.miscCost} color="#F59E0B" />
                 </div>
               </Panel>
+              {priorModification && (
+                <Panel testid="overview-prior-mod" title="Your previous modification" subtitle={`Status: ${priorModification.status.replace(/-/g, " ")} · Total ${fmtCurrency(priorModification.modifiedTotal, { compact: false })}`}>
+                  <div className="text-xs text-zinc-300 leading-relaxed">
+                    Modified on <span className="text-white font-semibold tabular">{new Date(priorModification.ctoAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</span> ·
+                    {" "}<span className="text-fuchsia-300 font-semibold">Forwarded to CFO</span>. TPM has been notified with the modified ask.
+                  </div>
+                </Panel>
+              )}
+            </>
+          )}
+
+          {tab === "modify" && (
+            <>
+              <Panel
+                testid="modify-summary"
+                title="Modify budget · phase-wise breakdown"
+                subtitle="Edit Infra, Model &amp; Subscription per phase — overall budget recalculates automatically"
+              >
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                  <BreakdownCell icon={Server} label="Infra (new)" value={modifiedInfra} color="#3B82F6" />
+                  <BreakdownCell icon={Cpu} label="Models (new)" value={modifiedModel} color="#E619B8" />
+                  <BreakdownCell icon={CreditCard} label="Subs (new)" value={modifiedSubs} color="#10B981" />
+                  <BreakdownCell icon={Wallet} label="Modified total" value={modifiedTotal} color="#F59E0B" />
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                        <th className="text-left py-2 px-3">Phase</th>
+                        <th className="text-right py-2 px-3">Infra ($)</th>
+                        <th className="text-right py-2 px-3">Model ($)</th>
+                        <th className="text-right py-2 px-3">Subs ($)</th>
+                        <th className="text-right py-2 px-3">Phase total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {phaseTotals.map((p) => (
+                        <tr key={p.id} data-testid={`modify-phase-${p.id}`} className="border-b border-white/5">
+                          <td className="py-2 px-3 text-white font-medium">{p.name}</td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="number"
+                              min="0"
+                              step="100"
+                              value={p.infra}
+                              onChange={(e) => updateCell(p.id, "infra", e.target.value)}
+                              data-testid={`modify-infra-${p.id}`}
+                              className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="number"
+                              min="0"
+                              step="100"
+                              value={p.model}
+                              onChange={(e) => updateCell(p.id, "model", e.target.value)}
+                              data-testid={`modify-model-${p.id}`}
+                              className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                            />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="number"
+                              min="0"
+                              step="100"
+                              value={p.subs}
+                              onChange={(e) => updateCell(p.id, "subs", e.target.value)}
+                              data-testid={`modify-subs-${p.id}`}
+                              className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                            />
+                          </td>
+                          <td className="py-2 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.total, { compact: false })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-fuchsia-500/30">
+                        <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Modified total</td>
+                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedInfra, { compact: false })}</td>
+                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedModel, { compact: false })}</td>
+                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedSubs, { compact: false })}</td>
+                        <td className="py-3 px-3 text-right text-fuchsia-300 font-bold text-lg tabular">{fmtCurrency(modifiedTotal, { compact: false })}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-[11px] flex-wrap gap-2">
+                  <div className="text-zinc-500 tabular">
+                    TPM requested <span className="text-white">{fmtCurrency(requestedBudget, { compact: false })}</span> · your modified ask is
+                    {" "}<span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold" : "text-amber-300 font-semibold"}>
+                      {modifiedDeltaVsRequested >= 0 ? "+" : ""}{fmtCurrency(modifiedDeltaVsRequested, { compact: false })}
+                    </span> vs request
+                  </div>
+                  <button onClick={resetToOriginal} data-testid="btn-reset-modify" className="text-[11px] text-fuchsia-300 hover:text-fuchsia-200">
+                    Reset to original breakdown
+                  </button>
+                </div>
+              </Panel>
+              <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3">
+                <Sparkles className="w-4 h-4 text-fuchsia-300 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-zinc-300 leading-relaxed">
+                  <span className="text-fuchsia-200 font-semibold">Note: </span>
+                  When you click <span className="text-white font-semibold">Approve &amp; Forward to CFO</span>, your modified breakdown is saved, the TPM is notified with the modified ask, and the request status becomes <span className="text-fuchsia-300 font-semibold">Forwarded to CFO</span>.
+                </div>
+              </div>
             </>
           )}
 
@@ -332,9 +500,11 @@ const BudgetReviewWorkspace = () => {
         {/* Sidebar: Decision panel */}
         <div className="space-y-4">
           <div className="bg-[#12121A] rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.03] p-5 sticky top-4" data-testid="decision-panel">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300 mb-2">Approval amount</div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300 mb-2">
+              {tab === "modify" ? "Modified total (live)" : "Approval amount"}
+            </div>
             <div className="flex items-baseline gap-2">
-              <span className="font-display text-3xl font-semibold text-white tabular">{fmtCurrency(amount, { compact: false })}</span>
+              <span className="font-display text-3xl font-semibold text-white tabular">{fmtCurrency(effectiveAmount, { compact: false })}</span>
               {modifyMode && (
                 <button onClick={() => setModifyMode(false)} className="text-xs text-zinc-500 hover:text-zinc-300">
                   cancel edit
@@ -342,10 +512,14 @@ const BudgetReviewWorkspace = () => {
               )}
             </div>
             <div className="mt-1 text-[11px] text-zinc-500 tabular">
-              {delta >= 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })} vs current · {savings > 0 ? `${fmtCurrency(savings, { compact: false })} below request` : "at request"}
+              {delta >= 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })} vs current · {savings > 0 ? `${fmtCurrency(savings, { compact: false })} below request` : savings < 0 ? `${fmtCurrency(-savings, { compact: false })} above request` : "at request"}
             </div>
 
-            {modifyMode ? (
+            {tab === "modify" ? (
+              <div className="mt-3 rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-2 text-[11px] text-zinc-300">
+                Edit inputs inside the <span className="text-fuchsia-300 font-semibold">Modify Budget</span> tab to change this value.
+              </div>
+            ) : modifyMode ? (
               <div className="mt-3">
                 <input
                   type="number"
@@ -370,12 +544,12 @@ const BudgetReviewWorkspace = () => {
               </div>
             ) : (
               <Button
-                onClick={() => setModifyMode(true)}
+                onClick={() => setTab("modify")}
                 variant="outline"
                 className="w-full mt-3 h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
                 data-testid="btn-modify-budget"
               >
-                <Edit3 className="w-3.5 h-3.5" /> Modify budget
+                <Edit3 className="w-3.5 h-3.5" /> Modify phase-wise breakdown
               </Button>
             )}
 

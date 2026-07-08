@@ -125,7 +125,7 @@ export const BUDGET_REVIEWS = [
     projectId: "crowley-gen",
     projectName: "Crowley Generation",
     client: "Acme AI",
-    tpm: "Vikram Kumar",
+    tpm: "Arjun Mehta",
     submittedAt: "2026-06-22T09:00:00Z",
     urgency: "High",
     stage: "CTO Review",

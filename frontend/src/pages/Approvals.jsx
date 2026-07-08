@@ -23,6 +23,7 @@ const STATUS_MAP = {
   pending: { label: "Pending", tone: "amber", Icon: Clock3 },
   "pending-cto": { label: "Pending · CTO Review", tone: "amber", Icon: Clock3 },
   "pending-cfo": { label: "Pending · CFO Sign-off", tone: "sky", Icon: Clock3 },
+  "forwarded-cfo": { label: "Modified by CTO · Forwarded to CFO", tone: "sky", Icon: Clock3 },
   approved: { label: "Approved", tone: "emerald", Icon: CheckCircle2 },
   partial: { label: "Partially Approved", tone: "emerald-soft", Icon: Percent },
   "partial-recovered": { label: "Partially Recovered", tone: "emerald-soft", Icon: Percent },
@@ -45,9 +46,56 @@ const typeConfig = {
   Batch: { label: "Batch Delivery", Icon: PackageCheck, tone: "text-emerald-300" },
 };
 
-// Build TPM's request rows from context (top-ups + batches) + any mock budget requests they own.
-const buildMyRequests = ({ userName, topupRequests, batchDeliveries }) => {
+// Build TPM's request rows from context (top-ups + batches + budget reviews) + any mock budget requests they own.
+const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetReviews }) => {
   const rows = [];
+
+  // Budget reviews modified/rejected by CTO (context state)
+  budgetReviews
+    .filter((r) => r.tpm === userName)
+    .forEach((r) => {
+      const decisions = [];
+      if (r.ctoAt) {
+        decisions.push({
+          actor: "CTO",
+          decision: r.status === "rejected-by-cto" ? "reject" : "modify",
+          amount: r.modifiedTotal,
+          comment: r.ctoComment,
+          at: r.ctoAt,
+        });
+      }
+      if (r.cfoDecision) {
+        decisions.push({
+          actor: "CFO",
+          decision: r.cfoDecision.decision,
+          amount: r.cfoDecision.amount,
+          comment: r.cfoDecision.comment,
+          at: r.cfoDecision.at,
+        });
+      }
+      const displayStatus = r.status === "forwarded-cfo"
+        ? "forwarded-cfo"
+        : r.status === "rejected-by-cto"
+          ? "rejected"
+          : r.cfoDecision
+            ? (r.cfoDecision.decision === "approve" ? "approved" : r.cfoDecision.decision === "partial" ? "partial" : r.cfoDecision.decision === "return" ? "returned" : "rejected")
+            : "pending";
+      rows.push({
+        id: r.id,
+        type: "Budget",
+        title: "Budget review",
+        subtitle: r.projectName,
+        requestedAmount: r.requestedBudget,
+        approvedAmount: r.status === "rejected-by-cto" ? 0 : (r.cfoDecision?.amount ?? r.modifiedTotal),
+        reason: r.status === "forwarded-cfo"
+          ? `CTO modified to ${r.modifiedTotal ? "$" + Number(r.modifiedTotal).toLocaleString() : "—"} — awaiting CFO sign-off`
+          : (r.ctoComment || ""),
+        submittedAt: r.ctoAt,
+        status: displayStatus,
+        decisions,
+        href: `/budget-reviews/${r.id}`,
+      });
+    });
 
   topupRequests
     .filter((r) => r.requester === userName || r.deliveredBy === userName)
@@ -147,16 +195,16 @@ const StatusChip = ({ status }) => {
 
 // -------------------- TPM view (read-only status tracking) --------------------
 const TpmMyRequests = () => {
-  const { user, topupRequests, batchDeliveries } = useApp();
+  const { user, topupRequests, batchDeliveries, budgetReviews } = useApp();
   const [filter, setFilter] = useState("all");
   const rows = useMemo(
-    () => buildMyRequests({ userName: user?.name, topupRequests, batchDeliveries }),
-    [user, topupRequests, batchDeliveries]
+    () => buildMyRequests({ userName: user?.name, topupRequests, batchDeliveries, budgetReviews }),
+    [user, topupRequests, batchDeliveries, budgetReviews]
   );
 
   const stats = useMemo(() => ({
     total: rows.length,
-    pending: rows.filter((r) => r.status === "pending" || r.status === "pending-cto" || r.status === "pending-cfo").length,
+    pending: rows.filter((r) => ["pending", "pending-cto", "pending-cfo", "forwarded-cfo"].includes(r.status)).length,
     approved: rows.filter((r) => r.status === "approved" || r.status === "recovered").length,
     partial: rows.filter((r) => r.status === "partial" || r.status === "partial-recovered").length,
     rejected: rows.filter((r) => r.status === "rejected").length,
@@ -164,7 +212,7 @@ const TpmMyRequests = () => {
   }), [rows]);
 
   const filtered = filter === "all" ? rows : rows.filter((r) => {
-    if (filter === "pending") return r.status === "pending" || r.status === "pending-cto" || r.status === "pending-cfo";
+    if (filter === "pending") return ["pending", "pending-cto", "pending-cfo", "forwarded-cfo"].includes(r.status);
     if (filter === "approved") return r.status === "approved" || r.status === "recovered";
     if (filter === "partial") return r.status === "partial" || r.status === "partial-recovered";
     if (filter === "rejected") return r.status === "rejected";
@@ -292,7 +340,9 @@ const TpmMyRequests = () => {
                         ? { Icon: Percent, cls: "text-emerald-300 bg-emerald-500/10 border-emerald-500/25" }
                         : d.decision === "approve"
                           ? { Icon: CheckCircle2, cls: "text-emerald-300 bg-emerald-500/15 border-emerald-500/30" }
-                          : { Icon: Clock3, cls: "text-amber-300 bg-amber-500/15 border-amber-500/30" };
+                          : d.decision === "modify"
+                            ? { Icon: Undo2, cls: "text-sky-300 bg-sky-500/15 border-sky-500/30" }
+                            : { Icon: Clock3, cls: "text-amber-300 bg-amber-500/15 border-amber-500/30" };
                     return (
                       <div key={i} className="flex items-start gap-2 rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center border flex-shrink-0 mt-0.5 ${dIcon.cls}`}>
@@ -303,7 +353,7 @@ const TpmMyRequests = () => {
                             <span className="text-white font-semibold">{d.actor}</span>
                             <span className="text-zinc-500">·</span>
                             <span className="text-zinc-300 capitalize">
-                              {d.decision === "approve" ? "Approved" : d.decision === "partial" ? "Partially approved" : d.decision === "reject" ? "Rejected" : d.decision}
+                              {d.decision === "approve" ? "Approved" : d.decision === "partial" ? "Partially approved" : d.decision === "reject" ? "Rejected" : d.decision === "modify" ? "Modified & forwarded to CFO" : d.decision === "return" ? "Returned for changes" : d.decision}
                             </span>
                             {d.amount != null && d.decision !== "pending" && d.decision !== "reject" && (
                               <>
