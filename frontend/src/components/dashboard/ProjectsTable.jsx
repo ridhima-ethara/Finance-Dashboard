@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, ChevronDown, User, Calendar, Cpu, Layers, Plus, ArrowUpRightSquare, Pencil, Trash2, Lock, FileText } from "lucide-react";
+import { ChevronRight, ChevronDown, User, Calendar, Cpu, Layers, Plus, ArrowUpRightSquare, Pencil, Trash2, Lock, FileText, PackageCheck } from "lucide-react";
 import { fmtCurrency, fmtPct, healthColor, varianceColor, utilColor } from "../../lib/format";
 import { useApp } from "../../context/AppContext";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "../ui/sheet";
@@ -8,6 +8,7 @@ import { Button } from "../ui/button";
 import { getPhaseTasks, DAILY_CONSUMPTION_LOG } from "../../data/mockTpm";
 import TpmTaskLogDialog from "../TpmTaskLogDialog";
 import TopupRequestDialog from "../TopupRequestDialog";
+import DeliverBatchDialog from "../DeliverBatchDialog";
 import { toast } from "sonner";
 
 const HealthBadge = ({ h }) => {
@@ -217,7 +218,7 @@ const ProjectsTable = () => {
 };
 
 const PhaseDrawerContent = ({ project, phase }) => {
-  const { role, getPhaseLogs, deletePhaseTask, isTaskEditable } = useApp();
+  const { role, getPhaseLogs, deletePhaseTask, isTaskEditable, batchDeliveries } = useApp();
   const isTPM = role === "TPM";
   const isCFO = role === "CFO";
   const canEdit = isTPM; // Only TPM can edit/log
@@ -231,6 +232,7 @@ const PhaseDrawerContent = ({ project, phase }) => {
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
   const [topupOpen, setTopupOpen] = useState(false);
+  const [deliverOpen, setDeliverOpen] = useState(false);
 
   const openEdit = (log) => { setEditingLog(log); setTaskDialogOpen(true); };
   const openNew = () => { setEditingLog(null); setTaskDialogOpen(true); };
@@ -239,6 +241,9 @@ const PhaseDrawerContent = ({ project, phase }) => {
     deletePhaseTask(project.id, phase.id, log.id);
     toast.success("Task log deleted");
   };
+
+  // Existing batch delivery for this phase (if any) — surface to CFO/TPM
+  const delivery = batchDeliveries.find((d) => d.projectId === project.id && d.phaseId === phase.id);
 
   return (
     <>
@@ -271,6 +276,48 @@ const PhaseDrawerContent = ({ project, phase }) => {
           >
             <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise top-up
           </Button>
+          <Button
+            onClick={() => setDeliverOpen(true)}
+            variant="outline"
+            disabled={!!delivery}
+            data-testid="drawer-btn-deliver"
+            className="h-9 rounded-lg border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-60 gap-1.5"
+          >
+            <PackageCheck className="w-3.5 h-3.5" /> {delivery ? "Batch delivered" : "Deliver batch"}
+          </Button>
+        </div>
+      )}
+
+      {/* Delivery status card — visible to all roles when a delivery exists */}
+      {delivery && (
+        <div className="mt-4 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.05] p-3" data-testid="drawer-delivery-status">
+          <div className="flex items-center gap-2 mb-1">
+            <PackageCheck className="w-3.5 h-3.5 text-emerald-300" />
+            <div className="text-[11px] uppercase tracking-widest font-semibold text-emerald-300">Batch delivered · {delivery.status.replace("-", " ")}</div>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-2">
+            <div>
+              <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">Proposed</div>
+              <div className="text-sm text-white font-semibold tabular">{fmtCurrency(delivery.proposedAmount, { compact: false })}</div>
+            </div>
+            <div>
+              <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">Actual recovered</div>
+              <div className={`text-sm font-semibold tabular ${delivery.actualRecovered != null ? "text-emerald-300" : "text-zinc-500"}`}>
+                {delivery.actualRecovered != null ? fmtCurrency(delivery.actualRecovered, { compact: false }) : "Awaiting CFO"}
+              </div>
+            </div>
+          </div>
+          {delivery.clientComment && (
+            <div className="mt-2 text-[11px] text-zinc-300 leading-relaxed">
+              <span className="text-emerald-200 font-semibold">Client: </span>{delivery.clientComment}
+              {delivery.clientRepresentative && <span className="text-zinc-500"> · via {delivery.clientRepresentative}</span>}
+            </div>
+          )}
+          {delivery.cfoNote && (
+            <div className="mt-1 text-[11px] text-zinc-300 leading-relaxed">
+              <span className="text-fuchsia-200 font-semibold">CFO: </span>{delivery.cfoNote}
+            </div>
+          )}
         </div>
       )}
 
@@ -420,6 +467,12 @@ const PhaseDrawerContent = ({ project, phase }) => {
         onOpenChange={setTopupOpen}
         project={project}
         defaultPhaseId={phase.id}
+      />
+      <DeliverBatchDialog
+        open={deliverOpen}
+        onOpenChange={setDeliverOpen}
+        project={project}
+        phase={phase}
       />
     </>
   );

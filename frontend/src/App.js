@@ -27,6 +27,7 @@ import ProjectMonitoring from "./pages/cto/ProjectMonitoring";
 import ApprovalQueue from "./pages/cfo/ApprovalQueue";
 import ApprovalDetail from "./pages/cfo/ApprovalDetail";
 import TopupRequestDetail from "./pages/TopupRequestDetail";
+import CfoBatchDeliveries from "./pages/cfo/BatchDeliveries";
 import FinancialMonitoring from "./pages/cfo/FinancialMonitoring";
 import Buffer from "./pages/cfo/Buffer";
 import Recovery from "./pages/cfo/Recovery";
@@ -83,6 +84,7 @@ function App() {
               <Route path="/approval-queue" element={<ApprovalQueue />} />
               <Route path="/approval-queue/:id" element={<ApprovalDetail />} />
               <Route path="/topup-requests/:id" element={<TopupRequestDetail />} />
+              <Route path="/batch-deliveries" element={<CfoBatchDeliveries />} />
               <Route path="/financial-monitoring" element={<FinancialMonitoring />} />
               <Route path="/buffer" element={<Buffer />} />
               <Route path="/recovery" element={<Recovery />} />

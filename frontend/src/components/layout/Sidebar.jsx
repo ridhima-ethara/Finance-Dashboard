@@ -20,6 +20,7 @@ import {
   Activity,
   Bot,
   ScrollText,
+  PackageCheck,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { initials } from "../../lib/format";
@@ -45,6 +46,7 @@ const NAV_CFO = [
   { to: "/monthly-forecast", label: "Monthly Forecast", icon: Activity, testid: "nav-monthly-forecast" },
   { to: "/buffer", label: "Contingency Buffer", icon: ShieldCheck, testid: "nav-buffer" },
   { to: "/recovery", label: "Client Recovery", icon: Receipt, testid: "nav-recovery" },
+  { to: "/batch-deliveries", label: "Batch Deliveries", icon: PackageCheck, testid: "nav-batch-deliveries" },
   { to: "/ai-cost", label: "AI Cost Analytics", icon: Zap, testid: "nav-ai-cost" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/audit", label: "Audit Log", icon: History, testid: "nav-audit" },

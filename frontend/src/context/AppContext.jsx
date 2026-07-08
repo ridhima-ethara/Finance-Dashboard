@@ -8,6 +8,8 @@ const RECOVERY_KEY = "ethara.recovery.v1";
 const CUSTOM_PROJECTS_KEY = "ethara.customProjects.v1";
 const TASK_LOGS_KEY = "ethara.taskLogs.v1";
 const TOPUP_REQ_KEY = "ethara.topupRequests.v1";
+const BUDGETS_KEY = "ethara.budgets.v1";
+const BATCH_DELIVERIES_KEY = "ethara.batchDeliveries.v1";
 
 const readJSON = (key, fallback) => {
   try {
@@ -84,6 +86,8 @@ export const AppProvider = ({ children }) => {
     const stored = readJSON(TOPUP_REQ_KEY, null);
     return stored && Array.isArray(stored) ? stored : seedTopupRequests();
   });
+  const [budgets, setBudgets] = useState(() => readJSON(BUDGETS_KEY, []));
+  const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, []));
 
   useEffect(() => {
     if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
@@ -94,6 +98,8 @@ export const AppProvider = ({ children }) => {
   useEffect(() => localStorage.setItem(CUSTOM_PROJECTS_KEY, JSON.stringify(customProjects)), [customProjects]);
   useEffect(() => localStorage.setItem(TASK_LOGS_KEY, JSON.stringify(taskLogs)), [taskLogs]);
   useEffect(() => localStorage.setItem(TOPUP_REQ_KEY, JSON.stringify(topupRequests)), [topupRequests]);
+  useEffect(() => localStorage.setItem(BUDGETS_KEY, JSON.stringify(budgets)), [budgets]);
+  useEffect(() => localStorage.setItem(BATCH_DELIVERIES_KEY, JSON.stringify(batchDeliveries)), [batchDeliveries]);
 
   const login = ({ email, password, role }) => {
     if (role) {
@@ -354,6 +360,86 @@ export const AppProvider = ({ children }) => {
     );
   };
 
+  // ---- Budget submissions (from TPM Budget Builder) ----
+  const submitBudget = (payload) => {
+    // payload: { projectId, projectName, budgetType, priority, totalTasks, delivery, phases, items, totals }
+    const id = `bud-${Date.now().toString(36)}`;
+    const entry = {
+      id,
+      ...payload,
+      submittedBy: user?.name || "TPM",
+      submittedRole: user?.role || "TPM",
+      submittedAt: new Date().toISOString(),
+      status: "submitted",
+    };
+    setBudgets((arr) => [entry, ...arr]);
+    // Patch the custom project (if any) with phases matching this submission — so Projects section reflects it.
+    setCustomProjects((cps) => cps.map((p) => {
+      if (p.id !== payload.projectId) return p;
+      const newPhases = (payload.phases || []).map((ph, idx) => ({
+        id: ph.id || `p${idx + 1}`,
+        name: ph.name || `Phase ${idx + 1}`,
+        dates: `${ph.start || ""} → ${ph.end || ""}`,
+        estimated: Number(ph.budget || 0),
+        actual: 0,
+        health: "healthy",
+      }));
+      const approved = (payload.phases || []).reduce((s, ph) => s + Number(ph.budget || 0), 0) || payload.totals?.total || 0;
+      return {
+        ...p,
+        approvedBudget: approved,
+        estimatedBudget: approved,
+        remaining: approved,
+        phases: newPhases.length ? newPhases : p.phases,
+        budgetItems: payload.items,
+        deliveryMode: payload.delivery?.mode,
+        totalTasks: payload.totalTasks,
+      };
+    }));
+    return entry;
+  };
+
+  // ---- Batch deliveries (TPM "Deliver batch" per phase) ----
+  const deliverBatch = ({ projectId, phaseId, phaseName, proposedAmount, clientComment, clientRepresentative }) => {
+    const proj = projects.find((p) => p.id === projectId);
+    const id = `bd-${Date.now().toString(36)}`;
+    const entry = {
+      id,
+      projectId,
+      projectName: proj?.name || projectId,
+      client: proj?.client || "—",
+      phaseId,
+      phaseName: phaseName || phaseId,
+      proposedAmount: Number(proposedAmount),
+      clientComment: clientComment || "",
+      clientRepresentative: clientRepresentative || "",
+      deliveredBy: user?.name || "TPM",
+      deliveredAt: new Date().toISOString(),
+      status: "pending-cfo",
+      actualRecovered: null,
+      cfoNote: "",
+      cfoAt: null,
+      cfoBy: null,
+    };
+    setBatchDeliveries((arr) => [entry, ...arr]);
+    return entry;
+  };
+
+  const recordActualRecovery = (id, { actualRecovered, cfoNote }) => {
+    setBatchDeliveries((arr) => arr.map((d) => (
+      d.id === id
+        ? {
+            ...d,
+            actualRecovered: Number(actualRecovered),
+            cfoNote: cfoNote || "",
+            cfoAt: new Date().toISOString(),
+            cfoBy: user?.name || "CFO",
+            status: Number(actualRecovered) >= d.proposedAmount ? "recovered" : "partial-recovered",
+          }
+        : d
+    )));
+  };
+
   const role = user?.role || null;
   const value = useMemo(
     () => ({
@@ -387,8 +473,14 @@ export const AppProvider = ({ children }) => {
       createTopupRequest,
       ctoDecideTopup,
       cfoDecideTopup,
+      // budgets & batch deliveries
+      budgets,
+      submitBudget,
+      batchDeliveries,
+      deliverBatch,
+      recordActualRecovery,
     }),
-    [user, role, aiOpen, notifOpen, scope, projects, visibleProjects, taskLogs, topupRequests]
+    [user, role, aiOpen, notifOpen, scope, projects, visibleProjects, taskLogs, topupRequests, budgets, batchDeliveries]
   );
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

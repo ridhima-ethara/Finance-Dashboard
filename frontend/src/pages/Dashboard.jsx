@@ -11,9 +11,9 @@ import {
 } from "../components/dashboard/Charts";
 import ProjectsTable from "../components/dashboard/ProjectsTable";
 import { Button } from "../components/ui/button";
-import { Download, RefreshCw, Plus, ClipboardCheck, GitPullRequest, AlertTriangle, ChevronRight, ShieldCheck, Receipt, Wallet, ArrowUpRightSquare, Lock } from "lucide-react";
+import { Download, RefreshCw, Plus, ClipboardCheck, GitPullRequest, AlertTriangle, ChevronRight, ShieldCheck, Receipt, Wallet, ArrowUpRightSquare, Lock, PackageCheck } from "lucide-react";
 import { useApp } from "../context/AppContext";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 import TpmDashboard from "./tpm/TpmDashboard";
@@ -24,11 +24,16 @@ import { BUFFER, RECOVERY } from "../data/mockCfo";
 import { fmtCurrency, fmtPct } from "../lib/format";
 
 const Dashboard = () => {
-  const { role, scope, visibleProjects } = useApp();
+  const { role, scope, visibleProjects, batchDeliveries } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
   const isPL = role === "PL";
   const isCTO = role === "CTO";
   const isCFO = role === "CFO";
+
+  const pendingBatchDeliveries = useMemo(
+    () => batchDeliveries.filter((d) => d.status === "pending-cfo").length,
+    [batchDeliveries]
+  );
 
   // TPM gets a dedicated portal dashboard
   if (role === "TPM") return <TpmDashboard />;
@@ -158,9 +163,9 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* CFO alert strip — approval queue, top-ups, recovery, buffer */}
+      {/* CFO alert strip — approval queue, top-ups, recovery, buffer, batch deliveries */}
       {isCFO && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3" data-testid="cfo-alert-strip">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-3" data-testid="cfo-alert-strip">
           <Link to="/approval-queue" data-testid="cfo-tile-queue" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.10] transition-colors p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
               <ClipboardCheck className="w-4 h-4 text-emerald-300" />
@@ -200,6 +205,19 @@ const Dashboard = () => {
               <div className="text-white font-display font-semibold text-xl tabular">{fmtPct(bufferUtil)}</div>
             </div>
             <ChevronRight className="w-4 h-4 text-zinc-400" />
+          </Link>
+          <Link to="/batch-deliveries" data-testid="cfo-tile-batches" className="rounded-2xl border border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.10] transition-colors p-4 flex items-center gap-3 relative">
+            <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center flex-shrink-0">
+              <PackageCheck className="w-4 h-4 text-sky-300" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300">Batch deliveries</div>
+              <div className="text-white font-display font-semibold text-xl tabular">{pendingBatchDeliveries} awaiting</div>
+            </div>
+            {pendingBatchDeliveries > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-400 animate-pulse" title="New pending" />
+            )}
+            <ChevronRight className="w-4 h-4 text-sky-300" />
           </Link>
         </div>
       )}

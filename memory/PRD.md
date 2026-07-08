@@ -214,3 +214,31 @@ P2
 ### Testing
 - Manual smoke tests via screenshots verified all 5 pages render correctly (CFO Buffer, Financial Monitoring w/ buffer bars, Recovery with expandable phase drops, AI Cost tabs, Reports with real downloads). No automated agent run this iteration per user request.
 
+
+## What's Implemented (2026-02-08 · iteration 10) — Budget Builder Redesign + Batch Delivery Recovery Loop
+
+### Budget Builder (TPM · `/budget-builder`)
+- [x] **3-step flow** (removed the User/Approval tab): **Details → Budget Items → Preview & Submit** with a visual step-pill stepper.
+- [x] **Step 1 — Basic Budget Details**: Project · Priority · Budget type · Total number of tasks · Project delivery toggle (`Single phase` / `Multiple phases`).
+    - Single phase → estimated start & end dates
+    - Multiple phases → per-phase cards with Phase name, Tasks, Start & End dates + `Add phase` button (matches reference image 2)
+- [x] **Step 2 — Budget Items**: multi-select budget-type pills (`Models`, `Infrastructure`, `Subscriptions`). Selected types become tabs.
+    - **Models tab**: Bedrock model dropdown (Claude Opus 4.8, Sonnet 4.6, Haiku 4.5, Titan Premier, Nova Pro/Lite/Micro, Llama 3.3/3.1, Mistral, Mixtral, Command R+/R, Jamba, Stable Image, embeddings). Est. cost auto-computed from `pricePer1kIn × tokensIn + pricePer1kOut × tokensOut`.
+    - **Infrastructure tab**: full EC2 instance dropdown (t3/m5/m6i, c5/c6i, r5, g4dn/g5/p3/p4d/p5, inf1/inf2, trn1) with vCPU/mem/hourly and Qty × Hrs/mo × Months cost calc.
+    - **Subscriptions tab**: catalog picker (Claude Max, ChatGPT Team, Cursor Pro, GitHub Enterprise, Figma, Notion, Linear) × Seats × Months.
+- [x] **Step 3 — Preview & Submit**: category + phase summaries with an AI insight ribbon.
+- [x] Submitting invokes `submitBudget()` in AppContext, which stores the budget and **patches the target project** (`customProjects`) with the new phases, approved budget, budget items, delivery mode, and total tasks — so it flows straight into the Projects section, phase drawer, task log surfaces.
+
+### Batch Delivery + Client Recovery Loop (TPM ↔ CFO)
+- [x] **Deliver batch** — new TPM action inside the phase drawer (`drawer-btn-deliver`) opens `DeliverBatchDialog` where TPM enters **proposed recoverable amount**, **client representative** (optional), and **client comment/reason**. Batch = phase. Button disables to `Batch delivered` once submitted.
+- [x] **CFO notification** — CFO Dashboard's alert strip now has a 5th tile `Batch deliveries` with a red pulse when `pendingBatchDeliveries > 0` and links to the new page.
+- [x] **CFO Projects section** — new page `/batch-deliveries` (sidebar entry `Batch Deliveries`, `nav-batch-deliveries`) shows each delivered batch as a card with proposed amount + client comment. CFO enters **actual amount recovered** + optional note → `recordActualRecovery()`. Status flips to `Recovered · full` or `Recovered · partial` depending on delta. UI shows both proposed vs actual side-by-side with variance chip (+/−).
+- [x] **Delivery status card** on the phase drawer surfaces the same data (proposed / actual / client comment / CFO note) — visible to all roles for cross-transparency.
+
+### Files touched
+- Added: `data/mockCatalog.js`, `components/DeliverBatchDialog.jsx`, `pages/cfo/BatchDeliveries.jsx`
+- Modified: `context/AppContext.jsx` (budgets/batchDeliveries state + submitBudget/deliverBatch/recordActualRecovery), `pages/tpm/BudgetBuilder.jsx` (rewritten), `components/dashboard/ProjectsTable.jsx` (Deliver batch button + status card), `App.js` (route), `components/layout/Sidebar.jsx` (nav), `pages/Dashboard.jsx` (5th CFO tile + pending badge)
+
+### Testing
+- Manual smoke tests via screenshots verified: Step 1 single phase, Step 1 multiple phases (matching reference image 2), Step 2 Budget Items with Bedrock model dropdown (matching reference image 1's tabs), CFO Dashboard 5-tile alert strip, CFO Batch Deliveries page. No automated agent run this iteration per user request.
+
