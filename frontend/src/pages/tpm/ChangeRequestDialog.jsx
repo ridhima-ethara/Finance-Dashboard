@@ -44,7 +44,8 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
         <div className="space-y-3 py-2">
           <Field label="Project">
             <select value={project} onChange={(e) => setProject(e.target.value)} data-testid="cr-project" className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-amber-500/40">
-              {visibleProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              {visibleProjects.length === 0 && <option value="">— No projects available —</option>}
+              {visibleProjects.map((p) => <option key={p.id} value={p.id}>{p.name}{p.client ? ` · ${p.client}` : ""}</option>)}
             </select>
           </Field>
 

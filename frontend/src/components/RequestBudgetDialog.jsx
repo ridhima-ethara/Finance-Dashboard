@@ -9,7 +9,8 @@ import {
 } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { Sparkles, Send, X, Plus, Trash2, Cpu, Server, CreditCard, HardDrive, Users, Package } from "lucide-react";
-import { PROJECTS, LINE_CATEGORIES } from "../data/mockData";
+import { LINE_CATEGORIES } from "../data/mockData";
+import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
 import { toast } from "sonner";
 
@@ -25,7 +26,9 @@ const catIcon = {
 const uid = () => Math.random().toString(36).slice(2, 9);
 
 const RequestBudgetDialog = ({ open, onOpenChange }) => {
-  const [project, setProject] = useState(PROJECTS[0]?.id || "");
+  const { visibleProjects, projects } = useApp();
+  const projectOptions = useMemo(() => (visibleProjects.length ? visibleProjects : projects), [visibleProjects, projects]);
+  const [project, setProject] = useState(projectOptions[0]?.id || "");
   const [type, setType] = useState("Initial budget");
   const [delivery, setDelivery] = useState("phase-wise"); // "single" or "phase-wise"
   const [projectType, setProjectType] = useState("R&D"); // R&D or Operations
@@ -102,8 +105,8 @@ const RequestBudgetDialog = ({ open, onOpenChange }) => {
                 data-testid="rb-project"
                 className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               >
-                {PROJECTS.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} — {p.client}</option>
+                {projectOptions.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}{p.client ? ` — ${p.client}` : ""}</option>
                 ))}
               </select>
             </Field>

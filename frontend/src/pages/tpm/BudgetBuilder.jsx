@@ -311,8 +311,8 @@ const BudgetBuilder = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Project *">
               <select value={projectId} onChange={(e) => setProjectId(e.target.value)} data-testid="bb-project" className={ipStyle}>
-                <option value="" disabled>Select a project</option>
-                {visibleProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                <option value="" disabled>{visibleProjects.length ? "Select a project" : "— No projects assigned to you yet —"}</option>
+                {visibleProjects.map((p) => <option key={p.id} value={p.id}>{p.name}{p.client ? ` · ${p.client}` : ""}</option>)}
               </select>
             </Field>
             <Field label="Priority *">

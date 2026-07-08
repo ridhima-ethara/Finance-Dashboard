@@ -1,22 +1,41 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { CalendarDays, DollarSign, Send, User as UserIcon, X, ClipboardList, Layers, ListChecks, StickyNote } from "lucide-react";
+import { CalendarDays, DollarSign, Send, User as UserIcon, X, ClipboardList, Layers, ListChecks, StickyNote, FolderKanban } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { TEAM } from "../data/mockUsers";
 import { fmtCurrency } from "../lib/format";
 
 // Dialog to log a daily task entry (TPM only). Now supports:
-//  • Phase picker (inside the dialog)
+//  • Project picker + Phase picker (inside the dialog)
 //  • Estimated cost, tasks done count, progress bar vs phase total, note.
 const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) => {
-  const { logPhaseTask, updatePhaseTask, getPhaseLogs } = useApp();
+  const { logPhaseTask, updatePhaseTask, getPhaseLogs, visibleProjects } = useApp();
   const isEdit = !!editingLog;
 
-  const projectPhases = project?.phases || [];
-  const initialPhaseId = phase?.id || projectPhases[0]?.id || "";
-  const [phaseId, setPhaseId] = useState(initialPhaseId);
+  // If a project was passed in (opened from a specific project page), lock to it.
+  // Otherwise let the user pick any of their visible projects.
+  const projectList = useMemo(() => {
+    if (project) return [project];
+    return visibleProjects;
+  }, [project, visibleProjects]);
+
+  const [projectId, setProjectId] = useState(project?.id || visibleProjects[0]?.id || "");
+  const activeProject = useMemo(
+    () => projectList.find((p) => p.id === projectId) || project || projectList[0] || null,
+    [projectId, projectList, project]
+  );
+  const projectPhases = activeProject?.phases || [];
+  const [phaseId, setPhaseId] = useState(phase?.id || projectPhases[0]?.id || "");
+
+  // Keep the selected phase in sync when the project changes
+  useEffect(() => {
+    if (!projectPhases.find((p) => p.id === phaseId)) {
+      setPhaseId(projectPhases[0]?.id || "");
+    }
+  }, [projectId, projectPhases, phaseId]);
+
   const currentPhase = projectPhases.find((p) => p.id === phaseId) || phase || null;
 
   const [name, setName] = useState(editingLog?.name || "");
@@ -26,11 +45,10 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   const [date, setDate] = useState(editingLog?.date || new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState(editingLog?.notes || "");
 
-  // How many tasks have already been logged for this phase (excluding the log currently being edited)?
-  const existingLogs = useMemo(() => (project && phaseId ? getPhaseLogs(project.id, phaseId) : []), [project, phaseId, getPhaseLogs]);
+  const existingLogs = useMemo(() => (activeProject && phaseId ? getPhaseLogs(activeProject.id, phaseId) : []), [activeProject, phaseId, getPhaseLogs]);
   const doneAlready = useMemo(() => existingLogs.reduce((s, l) => s + (Number(l.tasksDone) || 0), 0), [existingLogs]);
   const doneAlreadyExcludingEdit = isEdit ? doneAlready - (Number(editingLog?.tasksDone) || 0) : doneAlready;
-  const phaseTotalTasks = Number(currentPhase?.totalTasks || currentPhase?.tasks || project?.totalTasks || 0);
+  const phaseTotalTasks = Number(currentPhase?.totalTasks || currentPhase?.tasks || activeProject?.totalTasks || 0);
   const projectedDone = doneAlreadyExcludingEdit + (Number(tasksDone) || 0);
   const progressPct = phaseTotalTasks > 0 ? Math.min(100, Math.round((projectedDone / phaseTotalTasks) * 100)) : 0;
 
@@ -40,6 +58,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   };
 
   const submit = () => {
+    if (!activeProject) { toast.error("Select a project"); return; }
     if (!phaseId) { toast.error("Select a phase"); return; }
     if (!name.trim()) { toast.error("Task name is required"); return; }
     if (!assignee) { toast.error("Assignee is required"); return; }
@@ -56,12 +75,12 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
       evidence: "",
     };
     if (isEdit) {
-      updatePhaseTask(project.id, phase.id, editingLog.id, payload);
-      toast.success("Task log updated", { description: `${project.name} · ${currentPhase?.name || phaseId}` });
+      updatePhaseTask(activeProject.id, phase.id, editingLog.id, payload);
+      toast.success("Task log updated", { description: `${activeProject.name} · ${currentPhase?.name || phaseId}` });
     } else {
-      logPhaseTask({ projectId: project.id, phaseId, ...payload });
+      logPhaseTask({ projectId: activeProject.id, phaseId, ...payload });
       toast.success("Daily task logged", {
-        description: `${project.name} · ${currentPhase?.name || phaseId} · ${assignee} · ${tasksDone} task${Number(tasksDone) === 1 ? "" : "s"}`,
+        description: `${activeProject.name} · ${currentPhase?.name || phaseId} · ${assignee} · ${tasksDone} task${Number(tasksDone) === 1 ? "" : "s"}`,
       });
       reset();
     }
@@ -79,13 +98,33 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             <div>
               <DialogTitle className="font-display text-lg text-white">{isEdit ? "Edit task log" : "Log daily task"}</DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
-                {project?.name} · pick a phase &amp; record what was delivered today
+                {activeProject?.name ? `${activeProject.name} · ` : ""}pick a phase &amp; record what was delivered today
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="space-y-3 py-2">
+          {!isEdit && !project && projectList.length > 0 && (
+            <Field label="Project *">
+              <div className="relative">
+                <FolderKanban className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <select
+                  value={projectId}
+                  onChange={(e) => setProjectId(e.target.value)}
+                  data-testid="task-project"
+                  className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                >
+                  {projectList.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-[#12121A]">
+                      {p.name}{p.client ? ` · ${p.client}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </Field>
+          )}
+
           {!isEdit && (
             <Field label="Phase *">
               <div className="relative">
@@ -99,7 +138,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                   {projectPhases.length === 0 && <option value="">— No phases available —</option>}
                   {projectPhases.map((p) => (
                     <option key={p.id} value={p.id} className="bg-[#12121A]">
-                      {p.name} {p.totalTasks ? `· ${p.totalTasks} tasks planned` : ""}
+                      {activeProject?.name ? `${activeProject.name} · ` : ""}{p.name}{p.totalTasks ? ` · ${p.totalTasks} tasks planned` : ""}
                     </option>
                   ))}
                 </select>
