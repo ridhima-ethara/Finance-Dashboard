@@ -1,10 +1,14 @@
 import { Fragment, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, ChevronDown, X, User, Calendar, Cpu, Layers } from "lucide-react";
+import { ChevronRight, ChevronDown, User, Calendar, Cpu, Layers, Plus, ArrowUpRightSquare, Pencil, Trash2, Lock, FileText } from "lucide-react";
 import { fmtCurrency, fmtPct, healthColor, varianceColor, utilColor } from "../../lib/format";
 import { useApp } from "../../context/AppContext";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "../ui/sheet";
+import { Button } from "../ui/button";
 import { getPhaseTasks, DAILY_CONSUMPTION_LOG } from "../../data/mockTpm";
+import TpmTaskLogDialog from "../TpmTaskLogDialog";
+import TopupRequestDialog from "../TopupRequestDialog";
+import { toast } from "sonner";
 
 const HealthBadge = ({ h }) => {
   const c = healthColor(h);
@@ -213,11 +217,28 @@ const ProjectsTable = () => {
 };
 
 const PhaseDrawerContent = ({ project, phase }) => {
+  const { role, getPhaseLogs, deletePhaseTask, isTaskEditable } = useApp();
+  const isTPM = role === "TPM";
+  const isCFO = role === "CFO";
+  const canEdit = isTPM; // Only TPM can edit/log
+
   const tasks = getPhaseTasks(project.id, phase.id);
+  const tpmLogs = getPhaseLogs(project.id, phase.id);
   const doneCount = tasks.filter((t) => t.status === "done").length;
-  const inProgress = tasks.filter((t) => t.status === "in-progress").length;
   const dailyLog = DAILY_CONSUMPTION_LOG.filter((d) => d.projectId === project.id).slice(-7).reverse();
   const utilization = phase.estimated ? Math.round((phase.actual / phase.estimated) * 100) : 0;
+
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState(null);
+  const [topupOpen, setTopupOpen] = useState(false);
+
+  const openEdit = (log) => { setEditingLog(log); setTaskDialogOpen(true); };
+  const openNew = () => { setEditingLog(null); setTaskDialogOpen(true); };
+  const onDelete = (log) => {
+    if (!isTaskEditable(log)) { toast.error("Task log is locked (>24h)"); return; }
+    deletePhaseTask(project.id, phase.id, log.id);
+    toast.success("Task log deleted");
+  };
 
   return (
     <>
@@ -226,8 +247,32 @@ const PhaseDrawerContent = ({ project, phase }) => {
           {project.name} · {project.client}
         </div>
         <SheetTitle className="font-display text-2xl text-white">{phase.name}</SheetTitle>
-        <SheetDescription className="text-xs text-zinc-400">{phase.dates} · TPM {project.tpm}</SheetDescription>
+        <SheetDescription className="text-xs text-zinc-400">
+          {phase.dates} · TPM {project.tpm}
+          {isCFO && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-400"><Lock className="w-2.5 h-2.5" /> Read-only</span>}
+        </SheetDescription>
       </SheetHeader>
+
+      {/* TPM actions */}
+      {isTPM && (
+        <div className="mt-4 flex items-center gap-2 flex-wrap">
+          <Button
+            onClick={openNew}
+            data-testid="drawer-btn-log-task"
+            className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+          >
+            <Plus className="w-3.5 h-3.5" /> Log daily task
+          </Button>
+          <Button
+            onClick={() => setTopupOpen(true)}
+            variant="outline"
+            data-testid="drawer-btn-topup"
+            className="h-9 rounded-lg border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20 gap-1.5"
+          >
+            <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise top-up
+          </Button>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-2 mt-4">
@@ -237,10 +282,76 @@ const PhaseDrawerContent = ({ project, phase }) => {
         <DrawerStat label="Tasks done" value={`${doneCount}/${tasks.length}`} />
       </div>
 
-      {/* Tasks */}
+      {/* TPM logged tasks */}
       <div className="mt-5">
         <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 flex items-center gap-1">
-          <Layers className="w-3 h-3" /> Tasks ({tasks.length})
+          <FileText className="w-3 h-3" /> TPM logged tasks ({tpmLogs.length})
+          {isCFO && <span className="ml-1 text-zinc-600">· read-only</span>}
+        </div>
+        {tpmLogs.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-4 text-center text-xs text-zinc-500">
+            {isTPM ? "No tasks logged yet. Click \"Log daily task\" to add one." : "No TPM logs for this phase yet."}
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {tpmLogs.map((log) => {
+              const editable = isTaskEditable(log);
+              return (
+                <div key={log.id} data-testid={`log-${log.id}`} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-white font-medium truncate">{log.name}</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">
+                        <User className="w-2.5 h-2.5 inline mr-0.5" /> {log.assignee} · {log.date} · {log.hours}h
+                      </div>
+                      {log.notes && <div className="text-[10px] text-zinc-400 mt-1 line-clamp-2">{log.notes}</div>}
+                      {log.evidence && (
+                        <a href={log.evidence} target="_blank" rel="noreferrer" className="text-[10px] text-fuchsia-300 hover:text-fuchsia-200 truncate inline-block max-w-full">
+                          {log.evidence}
+                        </a>
+                      )}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <div className="text-xs text-white tabular font-semibold">{fmtCurrency(log.cost, { compact: false })}</div>
+                      {canEdit && (
+                        <div className="flex items-center gap-0.5 justify-end mt-1">
+                          {editable ? (
+                            <>
+                              <button
+                                onClick={() => openEdit(log)}
+                                data-testid={`log-edit-${log.id}`}
+                                className="w-6 h-6 rounded-md hover:bg-fuchsia-500/15 text-zinc-500 hover:text-fuchsia-300 flex items-center justify-center"
+                                title="Edit (within 24h)"
+                              >
+                                <Pencil className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => onDelete(log)}
+                                data-testid={`log-delete-${log.id}`}
+                                className="w-6 h-6 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center"
+                                title="Delete (within 24h)"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </>
+                          ) : (
+                            <span className="text-[9px] text-zinc-600 inline-flex items-center gap-0.5"><Lock className="w-2.5 h-2.5" /> locked</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Existing planned tasks */}
+      <div className="mt-5">
+        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 flex items-center gap-1">
+          <Layers className="w-3 h-3" /> Planned tasks ({tasks.length})
         </div>
         <div className="space-y-1.5">
           {tasks.map((t) => (
@@ -264,7 +375,7 @@ const PhaseDrawerContent = ({ project, phase }) => {
       {/* Daily log */}
       <div className="mt-5">
         <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 flex items-center gap-1">
-          <Calendar className="w-3 h-3" /> Daily task log · last 7 days (TPM)
+          <Calendar className="w-3 h-3" /> Daily consumption · last 7 days
         </div>
         <div className="rounded-lg border border-white/5 bg-white/[0.02] overflow-hidden">
           <table className="w-full text-xs" data-testid="drawer-daily-log">
@@ -296,6 +407,20 @@ const PhaseDrawerContent = ({ project, phase }) => {
           Approved daily budget: <span className="text-white font-semibold tabular">{fmtCurrency(Math.round(project.approvedBudget / 30), { compact: false })}</span>
         </div>
       </div>
+
+      <TpmTaskLogDialog
+        open={taskDialogOpen}
+        onOpenChange={(o) => { setTaskDialogOpen(o); if (!o) setEditingLog(null); }}
+        project={project}
+        phase={phase}
+        editingLog={editingLog}
+      />
+      <TopupRequestDialog
+        open={topupOpen}
+        onOpenChange={setTopupOpen}
+        project={project}
+        defaultPhaseId={phase.id}
+      />
     </>
   );
 };

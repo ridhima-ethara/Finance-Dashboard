@@ -1,0 +1,48 @@
+{
+  "summary": "End-to-end frontend testing of the Ethara.AI role-based TPM/CTO/CFO project/top-up/task-log flows. Verified: TPM /projects btn-raise-topup, top-up dialog + toast + new card in /topups (page-tpm-topups); btn-new-topup on /topups; CFO strict read-only (no btn-raise-topup, no btn-new-project, cfo-readonly-badge on ProjectDetail, Read-only pill in phase-drawer, no drawer TPM buttons); Approval Queue Top-up tab lists top-ups (row-tur-*); full 2-stage top-up flow on tur-seed-1: CTO Stage-1 Partial ($2000, comment) -> status pending-cfo -> CFO Stage-2 (Final) with max $2000 from CTO -> Approve full; budget baseline correctly updated (Crowley Generation Approved $48.0k -> $50.0k, Utilization 85% -> 82%). Seeded tur-seed-2 correctly shows CFO Stage-2 (Final) with CTO-forwarded $3000 cap. CRITICAL GAP: TPM cannot reach the phase-drawer (drawer-btn-log-task / drawer-btn-topup / task-log-dialog) because TpmDashboard is a dedicated component that does NOT render ProjectsTable. TpmTaskLogDialog is only used inside ProjectsTable (non-TPM Dashboard), so TPM has NO UI path to log a daily task. PhaseWorkspace exposes btn-add-task but does not use TpmTaskLogDialog / logPhaseTask context.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "TpmDashboard (pages/tpm/TpmDashboard.jsx) + Dashboard.jsx",
+        "issue": "TPM has NO path to the phase-drawer. Dashboard.jsx short-circuits to <TpmDashboard/> for role==='TPM', and TpmDashboard does not include ProjectsTable (which owns row-toggle-*, phase-view-*, phase-drawer, drawer-btn-log-task, drawer-btn-topup, task-log-dialog). Consequently, the entire 'TPM logs daily task' feature (TpmTaskLogDialog / logPhaseTask) is unreachable from any TPM screen.",
+        "selector": "[data-testid=drawer-btn-log-task], [data-testid=task-log-dialog], [data-testid=drawer-btn-topup]",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "TopupRequestDialog.jsx (line 89)",
+        "issue": "React hydration console errors emitted every time the top-up dialog opens: '<span> cannot be a child of <option>'. Caused by the visual-editor injecting an inline <span data-ve-dynamic=\"true\"> inside each <option> of the Phase <select>. Not a functional bug but pollutes console and is a hydration warning.",
+        "selector": "[data-testid=tur-phase] option",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard (non-TPM)",
+        "issues": ["Recharts warning: 'The width(-1) and height(-1) of chart should be greater than 0' repeats ~10 times on load — ResponsiveContainer parent sizing issue (pre-existing, non-blocking)."]
+      }
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_7.json"],
+  "action_items": [
+    "URGENT: Make the phase-drawer reachable for TPM. Either (a) render <ProjectsTable/> inside TpmDashboard (scoped to visibleProjects), or (b) embed <TpmTaskLogDialog/> + drawer-btn-log-task inside PhaseWorkspace (page /projects/:id/phase/:phaseId) since TPM already navigates there via link-upcoming-phase and btn-add-task. Without one of these, the entire 'TPM daily task log' feature is dead code for the TPM role.",
+    "Consider also surfacing 'drawer-btn-topup' in PhaseWorkspace so TPM can raise phase-scoped top-ups from the phase page (currently only accessible via /projects btn-raise-topup or /topups btn-new-topup where phase is picked via the tur-phase select — works but is not the phase-drawer flow specified in the requirement).",
+    "Fix hydration warning in TopupRequestDialog: the visual-editor is auto-wrapping <option> children in a <span>. Consider rendering the option label via a plain string expression only (already is: {ph.name} · {ph.dates}) — the wrapping is done by the editor toolchain, may need to disable x-source instrumentation for <option> children."
+  ],
+  "critical_code_review_comments": [
+    "AppContext.jsx logPhaseTask/updatePhaseTask/deletePhaseTask are wired correctly and 24h edit window via isTaskEditable is enforced in updatePhaseTask (returns unchanged log if window elapsed) and deletePhaseTask (filter keeps locked entries). Solid.",
+    "TopupRequestDetail.jsx correctly caps CFO approvedAmt at CTO-forwarded amount via slider max and validation in doCfoPartial (approvedAmt > requestedByCto rejected). Journey visual states (pending/current/done/reject) match the state machine.",
+    "AppContext.jsx budget merge: 'utilization: Math.round((p.actualSpend / (p.approvedBudget + bonus)) * 100)' correctly recomputes after top-up approval. Verified live: Crowley approved 48.0 -> 50.0k, utilization 85% -> 82%.",
+    "TpmDashboard.jsx is missing the primary TPM workflow (daily task logging). ProjectsTable + TpmTaskLogDialog were built but not wired into any TPM-visible page. Highest-priority regression.",
+    "Non-blocking: TpmDashboard file (~330 lines) should be checked against 700-line threshold — currently OK."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only, mocked)", "frontend": "~85% — 11/13 review test items pass; TPM phase-drawer/task-log (items 2, 3, 4 partially) fail because TPM has no route to the phase-drawer."},
+  "test_credentials": "Quick-login cards on /login: quick-login-tpm (Arjun Mehta), quick-login-cto (Vikram Kumar), quick-login-cfo (Priya Kapoor). No password. No Admin quick-login card in current UI.",
+  "seed_data_creation": "None — used AppContext seedTopupRequests (tur-seed-1 pending-cto, tur-seed-2 pending-cfo) already present. Also created ephemeral tur-mrbs1oug via TPM /projects btn-raise-topup which persisted within that session's localStorage.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Playwright runs in a fresh browser context each script — localStorage is NOT shared across scripts. Seeded top-ups (tur-seed-1 pending-cto, tur-seed-2 pending-cfo) reset per session. To retest the CTO->CFO handoff end-to-end in a single script: login as CTO -> visit /topup-requests/tur-seed-1 -> partial approve -> without new context, evaluate localStorage.removeItem('ethara.session.v1') -> login as CFO -> /topup-requests/tur-seed-1 (same session, so localStorage top-up list survives) -> Approve full. VERIFIED WORKING this way in iteration 7. For CFO Dashboard phase-drawer verification, note that Crowley Generation (crowley-gen) row-toggle expands but shows no phase-view children — likely no phases seeded for that project's expandable row in mockData. Use 'talos' or later projects instead.",
+  "rca_of_the_issue": "TPM daily-task-log inaccessibility RCA: (1) src/pages/Dashboard.jsx line 34 branches early to <TpmDashboard/> when role==='TPM'. (2) TpmDashboard.jsx renders bespoke widgets (upcoming phase link -> PhaseWorkspace, action lists) but never imports ProjectsTable. (3) ProjectsTable is the sole consumer of TpmTaskLogDialog (grep confirms) and the sole renderer of drawer-btn-log-task / task-log-dialog / drawer-btn-topup testids. (4) PhaseWorkspace has a separate btn-add-task flow that does NOT use TpmTaskLogDialog nor call logPhaseTask. Net effect: the feature specified in the review request ('TPM logs a task: click drawer-btn-log-task -> task-log-dialog -> task-log-submit -> log appears with log-edit/log-delete icons within 24h') is completely inaccessible to the TPM role. Mitigation: import ProjectsTable inside TpmDashboard (below the KPI cards) so TPM sees their visibleProjects with expandable phase drawers, OR alternatively add a 'Log task / Raise top-up' section to PhaseWorkspace that renders <TpmTaskLogDialog/> + <TopupRequestDialog defaultPhaseId=phase.id/>."
+}

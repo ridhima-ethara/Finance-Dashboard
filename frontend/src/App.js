@@ -7,6 +7,7 @@ import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Approvals from "./pages/Approvals";
 import Topups from "./pages/Topups";
+import TpmTopups from "./pages/tpm/TpmTopups";
 import Reimbursements from "./pages/Reimbursements";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
@@ -25,6 +26,7 @@ import ChangeRequests from "./pages/cto/ChangeRequests";
 import ProjectMonitoring from "./pages/cto/ProjectMonitoring";
 import ApprovalQueue from "./pages/cfo/ApprovalQueue";
 import ApprovalDetail from "./pages/cfo/ApprovalDetail";
+import TopupRequestDetail from "./pages/TopupRequestDetail";
 import FinancialMonitoring from "./pages/cfo/FinancialMonitoring";
 import Buffer from "./pages/cfo/Buffer";
 import Recovery from "./pages/cfo/Recovery";
@@ -38,6 +40,11 @@ const Protected = ({ children }) => {
   const location = useLocation();
   if (!isAuth) return <Navigate to="/login" replace state={{ from: location }} />;
   return children;
+};
+
+const TopupsRoute = () => {
+  const { role } = useApp();
+  return role === "TPM" ? <TpmTopups /> : <Topups />;
 };
 
 function App() {
@@ -58,7 +65,7 @@ function App() {
               <Route path="/projects" element={<Projects />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/approvals" element={<Approvals />} />
-              <Route path="/topups" element={<Topups />} />
+              <Route path="/topups" element={<TopupsRoute />} />
               <Route path="/reimbursements" element={<Reimbursements />} />
               <Route path="/audit" element={<AuditLog />} />
               <Route path="/team" element={<Team />} />
@@ -75,6 +82,7 @@ function App() {
               <Route path="/monitoring" element={<ProjectMonitoring />} />
               <Route path="/approval-queue" element={<ApprovalQueue />} />
               <Route path="/approval-queue/:id" element={<ApprovalDetail />} />
+              <Route path="/topup-requests/:id" element={<TopupRequestDetail />} />
               <Route path="/financial-monitoring" element={<FinancialMonitoring />} />
               <Route path="/buffer" element={<Buffer />} />
               <Route path="/recovery" element={<Recovery />} />

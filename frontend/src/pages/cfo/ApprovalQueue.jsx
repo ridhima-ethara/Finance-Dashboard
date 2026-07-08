@@ -1,8 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { BUDGET_REVIEWS } from "../../data/mockTpm";
-import { PROJECTS } from "../../data/mockProjects";
-import { fmtCurrency } from "../../lib/format";
+import { useApp } from "../../context/AppContext";
 import {
   ChevronRight,
   FileText,
@@ -12,8 +11,19 @@ import {
   Circle,
 } from "lucide-react";
 
+const topupStatusLabel = (status) => {
+  switch (status) {
+    case "pending-cto": return "CTO Review";
+    case "pending-cfo": return "Pending";
+    case "approved": return "Approved";
+    case "partial": return "Partially Approved";
+    case "rejected": return "Rejected";
+    default: return "Pending";
+  }
+};
+
 // Merge budget reviews + top-up requests into one unified queue
-const buildQueue = () => {
+const buildQueue = (topupRequests) => {
   const items = [];
   let seq = 100;
   // Budget requests
@@ -21,6 +31,7 @@ const buildQueue = () => {
     seq += 1;
     items.push({
       id: r.id,
+      href: `/approval-queue/${r.id}`,
       requestId: `BBR/2026/00${seq}`,
       type: "Budget",
       title: r.type,
@@ -34,23 +45,23 @@ const buildQueue = () => {
       raw: r,
     });
   });
-  // Top-ups
-  PROJECTS.slice(0, 5).forEach((p, i) => {
+  // Real top-up requests from context
+  topupRequests.forEach((r) => {
     seq += 1;
-    const st = i === 0 ? "Pending" : i === 1 ? "CTO Review" : i === 2 ? "Approved" : i === 3 ? "Changes Required" : "Partially Approved";
     items.push({
-      id: `tu-${p.id}`,
-      requestId: `BBR/2026/00${seq}`,
+      id: r.id,
+      href: `/topup-requests/${r.id}`,
+      requestId: `TUR/2026/00${seq}`,
       type: "Top-up",
-      title: "Top-up request",
-      project: p.name,
-      subLabel: p.name.split(" ")[0].toUpperCase(),
-      raisedBy: p.tpm,
-      raisedRole: "TPM",
-      raisedDate: "Jul 7, 2026",
-      status: st,
-      amount: [2500, 4000, 5000, 3500, 6000][i],
-      raw: p,
+      title: `${r.phaseName} top-up`,
+      project: r.projectName,
+      subLabel: r.phaseName,
+      raisedBy: r.requester,
+      raisedRole: r.requesterRole,
+      raisedDate: new Date(r.requestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      status: topupStatusLabel(r.status),
+      amount: r.amount,
+      raw: r,
     });
   });
   // New Model
@@ -123,7 +134,8 @@ const rowTint = {
 };
 
 const ApprovalQueue = () => {
-  const queue = useMemo(buildQueue, []);
+  const { topupRequests } = useApp();
+  const queue = useMemo(() => buildQueue(topupRequests), [topupRequests]);
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
 
@@ -220,14 +232,14 @@ const ApprovalQueue = () => {
                     className={`border-b border-white/5 transition-colors ${rowTint[q.status] || "hover:bg-white/[0.03]"}`}
                   >
                     <td className="py-3 px-4">
-                      <Link to={`/approval-queue/${q.id}`} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold bg-fuchsia-500/10 border border-fuchsia-500/25 text-fuchsia-200">
+                      <Link to={q.href} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold bg-fuchsia-500/10 border border-fuchsia-500/25 text-fuchsia-200">
                         <Icon className="w-3 h-3" />
                         {q.type}
                       </Link>
                     </td>
                     <td className="py-3 px-4 text-zinc-300 tabular text-xs">{q.requestId}</td>
                     <td className="py-3 px-4">
-                      <Link to={`/approval-queue/${q.id}`} className="block hover:text-fuchsia-300">
+                      <Link to={q.href} className="block hover:text-fuchsia-300">
                         <div className="text-white font-medium">{q.title}</div>
                         <div className="text-[11px] text-zinc-500">{q.project}</div>
                       </Link>
@@ -246,7 +258,7 @@ const ApprovalQueue = () => {
                     </td>
                     <td className="py-3 px-4 text-right text-white font-semibold tabular">${q.amount.toLocaleString()}</td>
                     <td className="py-3 px-2">
-                      <Link to={`/approval-queue/${q.id}`} data-testid={`open-${q.id}`}>
+                      <Link to={q.href} data-testid={`open-${q.id}`}>
                         <ChevronRight className="w-4 h-4 text-zinc-500 hover:text-fuchsia-300" />
                       </Link>
                     </td>

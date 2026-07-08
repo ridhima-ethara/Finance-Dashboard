@@ -1,20 +1,24 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { fmtCurrency, fmtPct, healthColor, utilColor, varianceColor } from "../lib/format";
-import { Search, Filter, Plus, ChevronRight } from "lucide-react";
+import { Search, Filter, Plus, ChevronRight, ArrowUpRightSquare, Lock } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useApp } from "../context/AppContext";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 import NewProjectDialog from "../components/NewProjectDialog";
+import TopupRequestDialog from "../components/TopupRequestDialog";
 
 const Projects = () => {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("all");
   const [requestOpen, setRequestOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [topupOpen, setTopupOpen] = useState(false);
   const { role, scope, visibleProjects } = useApp();
   const isPL = role === "PL";
   const isCTO = role === "CTO";
+  const isTPM = role === "TPM";
+  const isCFO = role === "CFO";
 
   const filtered = visibleProjects.filter((p) => {
     if (scope !== "all" && p.type !== scope) return false;
@@ -33,7 +37,10 @@ const Projects = () => {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display font-semibold text-3xl tracking-tight text-white">Projects</h1>
-          <p className="text-sm text-zinc-500 mt-1">All active engagements · click a project to drill in</p>
+          <p className="text-sm text-zinc-500 mt-1">
+            All active engagements · click a project to drill in
+            {isCFO && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-400"><Lock className="w-2.5 h-2.5" /> Read-only</span>}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {isPL && (
@@ -54,6 +61,16 @@ const Projects = () => {
             >
               <Plus className="w-4 h-4" />
               New project
+            </Button>
+          )}
+          {isTPM && (
+            <Button
+              onClick={() => setTopupOpen(true)}
+              className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+              data-testid="btn-raise-topup"
+            >
+              <ArrowUpRightSquare className="w-4 h-4" />
+              Raise top-up
             </Button>
           )}
         </div>
@@ -168,6 +185,7 @@ const Projects = () => {
 
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
       <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
+      <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} />
     </div>
   );
 };

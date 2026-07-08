@@ -12,10 +12,13 @@ import {
   Shield,
   Receipt,
   Check,
+  Lock,
+  ArrowUpRightSquare,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { toast } from "sonner";
 import { THRESHOLDS } from "../data/mockData";
+import TopupRequestDialog from "../components/TopupRequestDialog";
 
 const StatBlock = ({ label, value, hint, tone }) => (
   <div className="bg-[#12121A] rounded-2xl border border-white/10 p-5">
@@ -41,8 +44,11 @@ const ProjectDetail = () => {
   const p = projects.find((x) => x.id === id);
   const [bufferInput, setBufferInput] = useState(p?.buffer ?? 10);
   const [recoveryInput, setRecoveryInput] = useState(p?.recoveredAmount ?? 0);
-  const canEditBuffer = role === "CTO" || role === "CFO"; // Admin-level
-  const canEditRecovery = role === "CFO"; // Finance
+  const [topupOpen, setTopupOpen] = useState(false);
+  const canEditBuffer = role === "CTO" || role === "CFO";
+  const canEditRecovery = role === "CFO";
+  const isTPM = role === "TPM";
+  const isCFO = role === "CFO";
 
   if (!p) {
     return (
@@ -87,10 +93,22 @@ const ProjectDetail = () => {
               <Sparkles className="w-3.5 h-3.5 text-fuchsia-400" />
               Ask AI about this project
             </Button>
-            <Button size="sm" className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-request-topup">
-              <Plus className="w-3.5 h-3.5" />
-              Request top-up
-            </Button>
+            {isTPM && (
+              <Button
+                size="sm"
+                onClick={() => setTopupOpen(true)}
+                className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2"
+                data-testid="btn-request-topup"
+              >
+                <ArrowUpRightSquare className="w-3.5 h-3.5" />
+                Request top-up
+              </Button>
+            )}
+            {isCFO && (
+              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300" data-testid="cfo-readonly-badge">
+                <Lock className="w-3 h-3" /> Read-only view
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -467,6 +485,8 @@ const ProjectDetail = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} project={p} />
     </div>
   );
 };
