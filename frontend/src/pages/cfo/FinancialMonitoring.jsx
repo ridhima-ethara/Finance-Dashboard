@@ -52,15 +52,13 @@ const FinancialMonitoring = () => {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <Stat label="Org spend" value={fmtCurrency(PORTFOLIO.actualSpend)} icon={Wallet} tone="magenta" testid="fm-org" />
         <Stat label="Daily spend" value={fmtCurrency(today.spend, { compact: false })} icon={Activity} sub={`avg $${(dailyAvg / 1000).toFixed(1)}k`} testid="fm-daily" />
         <Stat label="Monthly spend" value={fmtCurrency(monthly.actual)} icon={TrendingUp} tone={monthly.actual > monthly.budget ? "negative" : "positive"} testid="fm-monthly" />
         <Stat label="Variance" value={fmtCurrency(Math.abs(variance), { compact: false })} sub={variance >= 0 ? "under plan" : "over plan"} tone={variance >= 0 ? "positive" : "negative"} testid="fm-var" />
         <Stat label="EAC forecast" value={fmtCurrency(PORTFOLIO.eac)} icon={Gauge} testid="fm-forecast" />
-        <Stat label="Cash flow (Jul)" value={fmtCurrency(CASH_FLOW[0].net, { compact: false })} tone={CASH_FLOW[0].net >= 0 ? "positive" : "negative"} icon={DollarSign} testid="fm-cash" />
         <Stat label="Financial risk" value={risk} tone={risk === "High" ? "negative" : risk === "Medium" ? "warning" : "positive"} icon={AlertTriangle} testid="fm-risk" />
-        <Stat label="Exhaustion in" value={runway ? `${runway}d` : "—"} sub={exhaustDate} icon={Clock3} tone={runway < 14 ? "negative" : "warning"} testid="fm-exhaust" />
       </div>
 
       {/* Charts */}
@@ -77,26 +75,6 @@ const FinancialMonitoring = () => {
                 <Line type="monotone" dataKey="spend" name="Actual" stroke="#E619B8" strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="estimate" name="Estimate" stroke="#F59E0B" strokeWidth={2} strokeDasharray="4 4" dot={false} />
               </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
-
-        <Panel testid="chart-cash-flow" title="Cash flow forecast" subtitle="Next 6 months · inflow vs outflow">
-          <div className="h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={CASH_FLOW}>
-                <defs>
-                  <linearGradient id="in" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#10B981" stopOpacity={0.5} /><stop offset="100%" stopColor="#10B981" stopOpacity={0} /></linearGradient>
-                  <linearGradient id="out" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#EF4444" stopOpacity={0.5} /><stop offset="100%" stopColor="#EF4444" stopOpacity={0} /></linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => fmtCurrency(v)} />
-                <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
-                <Area type="monotone" dataKey="inflow" name="Inflow" stroke="#10B981" fill="url(#in)" strokeWidth={2} />
-                <Area type="monotone" dataKey="outflow" name="Outflow" stroke="#EF4444" fill="url(#out)" strokeWidth={2} />
-              </AreaChart>
             </ResponsiveContainer>
           </div>
         </Panel>

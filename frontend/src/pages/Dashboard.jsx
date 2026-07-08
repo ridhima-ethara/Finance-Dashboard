@@ -171,7 +171,7 @@ const Dashboard = () => {
             </div>
             <ChevronRight className="w-4 h-4 text-emerald-300" />
           </Link>
-          <Link to="/topups" data-testid="cfo-tile-topups" className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] hover:bg-amber-500/[0.10] transition-colors p-4 flex items-center gap-3">
+          <Link to="/approval-queue" data-testid="cfo-tile-topups" className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] hover:bg-amber-500/[0.10] transition-colors p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
               <ArrowUpRightSquare className="w-4 h-4 text-amber-300" />
             </div>

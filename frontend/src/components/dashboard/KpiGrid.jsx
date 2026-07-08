@@ -82,15 +82,6 @@ const KpiGrid = () => {
         tone={PORTFOLIO.utilization >= 100 ? "negative" : PORTFOLIO.utilization >= 85 ? "warning" : "positive"}
       />
       <KpiCard
-        testid="kpi-eac"
-        label="EAC · Forecast"
-        icon={Target}
-        value={fmtCurrency(PORTFOLIO.eac)}
-        sublabel="Estimate at completion"
-        delta={`${PORTFOLIO.forecastVariance >= 0 ? "+" : ""}${fmtCurrency(PORTFOLIO.forecastVariance)}`}
-        tone={varTone}
-      />
-      <KpiCard
         testid="kpi-cpi"
         label="Cost Performance (CPI)"
         icon={Gauge}
@@ -114,15 +105,6 @@ const KpiGrid = () => {
         sublabel="At current burn rate"
         delta={PORTFOLIO.cashRunwayDays >= 30 ? "Comfortable" : PORTFOLIO.cashRunwayDays >= 14 ? "Monitor" : "Critical"}
         tone={runwayTone}
-      />
-      <KpiCard
-        testid="kpi-ai-ratio"
-        label="AI Model Cost Ratio"
-        icon={Cpu}
-        value={`${PORTFOLIO.aiCostRatio}%`}
-        sublabel={`${fmtCurrency(PORTFOLIO.aiModelSpend)} on LLM APIs`}
-        delta={PORTFOLIO.aiCostRatio > 60 ? "Watch" : "Nominal"}
-        tone={aiRatioTone}
       />
       <KpiCard
         testid="kpi-pending-approvals"

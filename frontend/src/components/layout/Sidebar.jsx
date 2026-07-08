@@ -38,11 +38,11 @@ const NAV_CTO = [
 
 const NAV_CFO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
+  { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/approval-queue", label: "Approval Queue", icon: ClipboardCheck, testid: "nav-approval-queue" },
   { to: "/financial-monitoring", label: "Financial Monitoring", icon: Activity, testid: "nav-financial-monitoring" },
   { to: "/early-warning", label: "Early Warning", icon: Bell, testid: "nav-early-warning" },
   { to: "/monthly-forecast", label: "Monthly Forecast", icon: Activity, testid: "nav-monthly-forecast" },
-  { to: "/topups", label: "Budget Management", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/buffer", label: "Contingency Buffer", icon: ShieldCheck, testid: "nav-buffer" },
   { to: "/recovery", label: "Client Recovery", icon: Receipt, testid: "nav-recovery" },
   { to: "/ai-cost", label: "AI Cost Analytics", icon: Zap, testid: "nav-ai-cost" },

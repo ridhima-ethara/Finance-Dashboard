@@ -24,6 +24,7 @@ import BudgetReviewWorkspace from "./pages/cto/BudgetReviewWorkspace";
 import ChangeRequests from "./pages/cto/ChangeRequests";
 import ProjectMonitoring from "./pages/cto/ProjectMonitoring";
 import ApprovalQueue from "./pages/cfo/ApprovalQueue";
+import ApprovalDetail from "./pages/cfo/ApprovalDetail";
 import FinancialMonitoring from "./pages/cfo/FinancialMonitoring";
 import Buffer from "./pages/cfo/Buffer";
 import Recovery from "./pages/cfo/Recovery";
@@ -73,6 +74,7 @@ function App() {
               <Route path="/change-requests" element={<ChangeRequests />} />
               <Route path="/monitoring" element={<ProjectMonitoring />} />
               <Route path="/approval-queue" element={<ApprovalQueue />} />
+              <Route path="/approval-queue/:id" element={<ApprovalDetail />} />
               <Route path="/financial-monitoring" element={<FinancialMonitoring />} />
               <Route path="/buffer" element={<Buffer />} />
               <Route path="/recovery" element={<Recovery />} />

@@ -1,8 +1,10 @@
 import { Fragment, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, ChevronDown } from "lucide-react";
+import { ChevronRight, ChevronDown, X, User, Calendar, Cpu, Layers } from "lucide-react";
 import { fmtCurrency, fmtPct, healthColor, varianceColor, utilColor } from "../../lib/format";
 import { useApp } from "../../context/AppContext";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "../ui/sheet";
+import { getPhaseTasks, DAILY_CONSUMPTION_LOG } from "../../data/mockTpm";
 
 const HealthBadge = ({ h }) => {
   const c = healthColor(h);
@@ -16,6 +18,7 @@ const HealthBadge = ({ h }) => {
 
 const ProjectsTable = () => {
   const [expanded, setExpanded] = useState({ "crowley-gen": true });
+  const [drawer, setDrawer] = useState(null); // { project, phase }
   const nav = useNavigate();
   const { scope, visibleProjects } = useApp();
 
@@ -159,7 +162,7 @@ const ProjectsTable = () => {
                                     <td className="py-2.5 px-4"><HealthBadge h={ph.health} /></td>
                                     <td className="py-2.5 px-4 text-right">
                                       <button
-                                        onClick={() => nav(`/projects/${p.id}`)}
+                                        onClick={() => setDrawer({ project: p, phase: ph })}
                                         className="text-xs text-fuchsia-400 hover:text-fuchsia-300 font-medium"
                                         data-testid={`phase-view-${p.id}-${ph.id}`}
                                       >
@@ -198,6 +201,111 @@ const ProjectsTable = () => {
           </tbody>
         </table>
       </div>
+
+      {/* Phase detail drawer */}
+      <Sheet open={!!drawer} onOpenChange={(o) => !o && setDrawer(null)}>
+        <SheetContent className="bg-[#0F0F16] border-white/10 text-zinc-100 w-full sm:max-w-lg overflow-y-auto" data-testid="phase-drawer">
+          {drawer && <PhaseDrawerContent project={drawer.project} phase={drawer.phase} />}
+        </SheetContent>
+      </Sheet>
+    </div>
+  );
+};
+
+const PhaseDrawerContent = ({ project, phase }) => {
+  const tasks = getPhaseTasks(project.id, phase.id);
+  const doneCount = tasks.filter((t) => t.status === "done").length;
+  const inProgress = tasks.filter((t) => t.status === "in-progress").length;
+  const dailyLog = DAILY_CONSUMPTION_LOG.filter((d) => d.projectId === project.id).slice(-7).reverse();
+  const utilization = phase.estimated ? Math.round((phase.actual / phase.estimated) * 100) : 0;
+
+  return (
+    <>
+      <SheetHeader>
+        <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-400">
+          {project.name} · {project.client}
+        </div>
+        <SheetTitle className="font-display text-2xl text-white">{phase.name}</SheetTitle>
+        <SheetDescription className="text-xs text-zinc-400">{phase.dates} · TPM {project.tpm}</SheetDescription>
+      </SheetHeader>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-2 mt-4">
+        <DrawerStat label="Estimated" value={fmtCurrency(phase.estimated)} />
+        <DrawerStat label="Actual" value={fmtCurrency(phase.actual)} tone="magenta" />
+        <DrawerStat label="Utilization" value={fmtPct(utilization)} tone={utilization >= 100 ? "negative" : utilization >= 85 ? "warning" : "positive"} />
+        <DrawerStat label="Tasks done" value={`${doneCount}/${tasks.length}`} />
+      </div>
+
+      {/* Tasks */}
+      <div className="mt-5">
+        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 flex items-center gap-1">
+          <Layers className="w-3 h-3" /> Tasks ({tasks.length})
+        </div>
+        <div className="space-y-1.5">
+          {tasks.map((t) => (
+            <div key={t.id} data-testid={`drawer-task-${t.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02]">
+              <span className={`w-1.5 h-6 rounded-full flex-shrink-0 ${t.status === "done" ? "bg-emerald-500" : t.status === "in-progress" ? "bg-fuchsia-500" : "bg-zinc-600"}`} />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs text-white font-medium truncate">{t.name}</div>
+                <div className="text-[10px] text-zinc-500 truncate">
+                  <User className="w-2.5 h-2.5 inline mr-0.5" /> {t.owner} · <Cpu className="w-2.5 h-2.5 inline mx-0.5" /> {t.model}
+                </div>
+              </div>
+              <div className="text-right flex-shrink-0">
+                <div className="text-xs text-white tabular">{fmtCurrency(t.actualCost, { compact: false }) || "—"}</div>
+                <div className="text-[10px] text-zinc-500 tabular">est {fmtCurrency(t.estCost, { compact: false })}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Daily log */}
+      <div className="mt-5">
+        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 flex items-center gap-1">
+          <Calendar className="w-3 h-3" /> Daily task log · last 7 days (TPM)
+        </div>
+        <div className="rounded-lg border border-white/5 bg-white/[0.02] overflow-hidden">
+          <table className="w-full text-xs" data-testid="drawer-daily-log">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-widest text-zinc-500 border-b border-white/5">
+                <th className="text-left py-2 px-2">Date</th>
+                <th className="text-left py-2 px-2">Model</th>
+                <th className="text-right py-2 px-2">Tasks</th>
+                <th className="text-right py-2 px-2">Traj.</th>
+                <th className="text-right py-2 px-2">Cost</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dailyLog.length === 0 ? (
+                <tr><td colSpan="5" className="py-4 text-center text-zinc-500">No entries yet</td></tr>
+              ) : dailyLog.map((d, i) => (
+                <tr key={i} className="border-b border-white/5 last:border-b-0">
+                  <td className="py-2 px-2 text-white tabular">{new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
+                  <td className="py-2 px-2 text-fuchsia-300">{d.model}</td>
+                  <td className="py-2 px-2 text-right tabular">{d.tasks}</td>
+                  <td className="py-2 px-2 text-right tabular">{d.trajectories}</td>
+                  <td className="py-2 px-2 text-right text-white font-semibold tabular">{fmtCurrency(d.spent, { compact: false })}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-2 text-[10px] text-zinc-500">
+          Approved daily budget: <span className="text-white font-semibold tabular">{fmtCurrency(Math.round(project.approvedBudget / 30), { compact: false })}</span>
+        </div>
+      </div>
+    </>
+  );
+};
+
+const DrawerStat = ({ label, value, tone = "neutral" }) => {
+  const tones = { positive: "text-emerald-300", negative: "text-red-300", warning: "text-amber-300", neutral: "text-white", magenta: "text-fuchsia-300" };
+  return (
+    <div className="rounded-lg bg-white/[0.03] border border-white/5 p-2.5">
+      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+      <div className={`text-base font-display font-semibold tabular mt-0.5 ${tones[tone]}`}>{value}</div>
     </div>
   );
 };
