@@ -59,7 +59,7 @@ const NAV_TPM = [
   { to: "/budget-builder", label: "Budget Builder", icon: ClipboardCheck, testid: "nav-budget-builder" },
   { to: "/consumption", label: "Daily Consumption", icon: Calendar, testid: "nav-consumption" },
   { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
-  { to: "/approvals", label: "Pending Approvals", icon: ShieldCheck, testid: "nav-approvals" },
+  { to: "/approvals", label: "My Requests", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
 ];
