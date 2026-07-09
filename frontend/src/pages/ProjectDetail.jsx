@@ -15,6 +15,8 @@ import { TEAM } from "../data/mockUsers";
 import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
 import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
+import { DAILY_ACTIVITY } from "../data/mockAi";
+import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
 
 // Deterministic seed of team members per project — uses project id hash for stability.
 const seedTeam = (project) => {
@@ -221,103 +223,196 @@ const ProjectDetail = () => {
 
         {/* ---- Budget ---- */}
         <TabsContent value="budget" className="mt-6 space-y-4" data-testid="budget-panel">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatBlock label="Approved" value={fmtCurrency(p.approvedBudget)} hint="Locked baseline" icon={Wallet} />
-            <StatBlock label="Actual spend" value={fmtCurrency(p.actualSpend)} hint={`Est. ${fmtCurrency(p.estimatedBudget)}`} tone="magenta" icon={DollarSign} />
-            <StatBlock label="Remaining" value={fmtCurrency(p.remaining)} tone={p.remaining >= 0 ? "positive" : "negative"} icon={p.remaining >= 0 ? TrendingUp : TrendingDown} />
-            <StatBlock label="Utilization" value={fmtPct(p.utilization)} tone={p.utilization >= 90 ? "warning" : "positive"} hint={`Forecast ${fmtCurrency(p.forecast)}`} icon={Percent} />
-          </div>
-
-          <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <div className="font-display font-semibold text-[15px] text-white">Consumption tracker</div>
-                <div className="text-xs text-zinc-500 mt-0.5">Approved · actual · buffer coverage · projected end-of-project</div>
-              </div>
-              <div className={`text-xs font-semibold ${utilColor(p.utilization)}`}>{fmtPct(p.utilization)} used</div>
-            </div>
-            <div className="relative w-full h-3 rounded-full bg-white/[0.04] overflow-visible">
-              <div
-                className="absolute inset-y-0 left-0 rounded-full"
-                style={{ width: `${Math.min(p.utilization, 100)}%`, background: p.utilization >= 100 ? "#EF4444" : p.utilization >= 90 ? "#F59E0B" : "#E619B8" }}
-              />
-              {[50, 75, 90, 100].map((t) => (
-                <div key={t} className="absolute -top-1 -bottom-1 flex flex-col items-center" style={{ left: `${t}%`, transform: "translateX(-50%)" }}>
-                  <div className={`w-px h-full ${p.utilization >= t ? "bg-fuchsia-400" : "bg-white/20"}`} />
-                  <div className={`text-[9px] mt-0.5 tabular ${p.utilization >= t ? "text-fuchsia-300" : "text-zinc-600"}`}>{t}%</div>
+          {(() => {
+            const spent = Number(p.actualSpend || 0);
+            const cap = Number(p.approvedBudget || 0);
+            const remaining = Number(p.remaining || (cap - spent));
+            const utilPct = cap > 0 ? Math.round((spent / cap) * 100) : 0;
+            const remainingPct = cap > 0 ? Math.round((remaining / cap) * 100) : 0;
+            const budgetCount = (p.phases || []).length || 1;
+            const burnRate = Number(p.burnRate || 0);
+            const runwayDays = burnRate > 0 && remaining > 0 ? Math.floor(remaining / burnRate) : 0;
+            // Scale portfolio DAILY_ACTIVITY to this project's proportion for a per-project daily-burn series
+            const scale = cap > 0 ? Math.min(1, cap / 250000) : 0.05;
+            const burnSeries = DAILY_ACTIVITY.slice(-15).map((d) => ({
+              date: d.date.slice(5),
+              total: Math.round(d.spend * scale),
+            }));
+            return (
+              <>
+                <div>
+                  <h2 className="font-display font-semibold text-xl text-white">Budget</h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">Budget usage and forecast for this project.</p>
                 </div>
-              ))}
-            </div>
-            <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-3">
-              <MiniStat label="Approved" value={fmtCurrency(p.approvedBudget)} />
-              <MiniStat label="Actual" value={fmtCurrency(p.actualSpend)} tone="magenta" />
-              <MiniStat label="Buffer ($)" value={fmtCurrency(Math.round(p.approvedBudget * p.buffer / 100))} />
-              <MiniStat label="Effective ceiling" value={fmtCurrency(Math.round(p.approvedBudget * (1 + p.buffer / 100)))} tone="emerald" />
-            </div>
-          </div>
 
-          <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
-            <div className="font-display font-semibold text-[15px] text-white mb-4">Cost breakdown</div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { l: "Infrastructure", v: p.infrastructureCost, c: "#7C3AED" },
-                { l: "AI Models", v: p.aiModelCost, c: "#3B82F6" },
-                { l: "Employee", v: p.employeeCost, c: "#10B981" },
-                { l: "Purchase", v: p.purchaseCost, c: "#F59E0B" },
-                { l: "Reimbursements", v: p.reimbursements, c: "#EC4899" },
-                { l: "Dinner", v: p.dinnerExpenses, c: "#F97316" },
-                { l: "Misc", v: p.miscExpenses, c: "#94A3B8" },
-                { l: "Top-ups", v: p.topupsTotal, c: "#EF4444" },
-              ].map((x) => (
-                <div key={x.l} className="flex items-center gap-3 p-3 rounded-xl border border-white/5 bg-white/[0.02]">
-                  <div className="w-1 h-8 rounded-full flex-shrink-0" style={{ background: x.c }} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{x.l}</div>
-                    <div className="text-sm font-semibold text-white tabular">{fmtCurrency(x.v)}</div>
+                {/* KPI grid — Spent/Cap card spans 2 rows */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div
+                    className="md:row-span-2 rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-500/[0.14] via-fuchsia-500/[0.05] to-transparent p-5 flex flex-col justify-between min-h-[220px]"
+                    data-testid="budget-kpi-spent-cap"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-200">Spent / Cap</span>
+                        {cap === 0 && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-semibold bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-500/30">No Budget</span>
+                        )}
+                      </div>
+                      <div className="mt-4 font-display font-semibold text-white text-3xl tabular leading-tight">
+                        {fmtCurrency(spent, { compact: false })}
+                        <span className="text-fuchsia-200/60 text-xl"> / {fmtCurrency(cap, { compact: false })}</span>
+                      </div>
+                    </div>
+                    <div className="mt-6">
+                      <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+                        <div
+                          className={`h-full transition-all ${utilPct >= 100 ? "bg-red-400" : utilPct >= 90 ? "bg-amber-400" : "bg-fuchsia-400"}`}
+                          style={{ width: `${Math.min(utilPct, 100)}%` }}
+                          data-testid="budget-kpi-spent-cap-bar"
+                        />
+                      </div>
+                      <div className="mt-2 text-[11px] text-fuchsia-200/70">
+                        {cap === 0 ? "awaiting budget setup" : `${utilPct}% consumed · ${fmtCurrency(remaining, { compact: false })} left`}
+                      </div>
+                    </div>
+                  </div>
+
+                  <MiniKpi testid="budget-kpi-count" label="Budget Count" value={String(budgetCount)} />
+                  <MiniKpi testid="budget-kpi-total" label="Total Budget" value={fmtCurrency(cap, { compact: false })} sub={`${cap > 0 ? "100" : "0"}%`} />
+                  <MiniKpi testid="budget-kpi-consumed" label="Total Consumed" value={fmtCurrency(spent, { compact: false })} sub={`${utilPct}%`} accent={utilPct >= 90 ? "text-red-300" : "text-white"} />
+                  <MiniKpi testid="budget-kpi-remaining" label="Total Remaining" value={fmtCurrency(remaining, { compact: false })} sub={`${remainingPct}%`} accent={remaining >= 0 ? "text-emerald-300" : "text-red-300"} />
+                  <MiniKpi testid="budget-kpi-burn-rate" label="Daily Burn Rate" value={fmtCurrency(burnRate, { compact: false })} sub={cap > 0 ? `${Math.round((burnRate / cap) * 100 * 100) / 100}% of cap/day` : "0%"} />
+                  <MiniKpi testid="budget-kpi-runway" label="Runway Days" value={String(runwayDays)} sub={burnRate > 0 ? "at current burn" : "—"} />
+                </div>
+
+                {/* Daily Burn rate chart */}
+                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="daily-burn-rate-chart">
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <div className="font-display font-semibold text-[15px] text-white">Daily Burn rate</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Last 15 days · per-project daily consumption</div>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
+                      <span className="w-2 h-2 rounded-full bg-fuchsia-400" />
+                      Total
+                    </div>
+                  </div>
+                  <div className="h-[240px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={burnSeries}>
+                        <defs>
+                          <linearGradient id={`brn-${p.id}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#E619B8" stopOpacity={0.35} />
+                            <stop offset="100%" stopColor="#E619B8" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`)} />
+                        <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => fmtCurrency(v, { compact: false })} />
+                        <Area type="monotone" dataKey="total" name="Total" stroke="#E619B8" strokeWidth={2.5} fill={`url(#brn-${p.id})`} dot={{ r: 3, fill: "#E619B8" }} activeDot={{ r: 5 }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
 
-          <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <ArrowUpRightSquare className="w-4 h-4 text-fuchsia-300" />
-                <div className="font-display font-semibold text-[15px] text-white">Top-up requests</div>
-              </div>
-              {isTPM && (
-                <Button size="sm" onClick={() => setTopupOpen(true)} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
-                  <Plus className="w-3 h-3" /> Raise top-up
-                </Button>
-              )}
-            </div>
-            {projectTopups.length === 0 ? (
-              <div className="text-xs text-zinc-500 py-4 text-center">No top-ups raised for this project.</div>
-            ) : (
-              <div className="space-y-2">
-                {projectTopups.map((r) => {
-                  const st = statusMap[r.status] || statusMap["pending-cto"];
-                  return (
-                    <Link to={`/topup-requests/${r.id}`} key={r.id} className="flex items-center gap-3 p-3 rounded-lg border border-white/5 hover:border-fuchsia-500/25 bg-white/[0.02]">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${st.cls}`}>
-                        <st.Icon className="w-3 h-3" /> {st.label}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-white font-medium">{r.phaseName}</div>
-                        <div className="text-[11px] text-zinc-500 line-clamp-1">{r.reason}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xs text-zinc-500">Requested</div>
-                        <div className="text-sm text-white font-semibold tabular">{fmtCurrency(r.amount, { compact: false })}</div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-zinc-500" />
-                    </Link>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                {/* Burn per phase table */}
+                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="burn-per-phase-table">
+                  <div className="mb-3">
+                    <div className="font-display font-semibold text-[15px] text-white">Burn per phase</div>
+                    <div className="text-xs text-zinc-500 mt-0.5">Batch-level breakdown of tasks, burn, approval, and feedback</div>
+                  </div>
+                  {(p.phases || []).length === 0 ? (
+                    <div className="text-xs text-zinc-500 py-6 text-center">No phases defined yet.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                            <th className="text-left py-2 px-3">Batch</th>
+                            <th className="text-right py-2 px-3">Videos</th>
+                            <th className="text-right py-2 px-3">Burn</th>
+                            <th className="text-right py-2 px-3">Approval</th>
+                            <th className="text-left py-2 px-3">Feedback</th>
+                            <th className="w-10" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(p.phases || []).map((ph) => {
+                            const videos = Number(ph.totalTasks || ph.tasks || 0);
+                            const burn = Number(ph.actual || 0);
+                            const est = Number(ph.estimated || 0);
+                            const apprPct = est > 0 ? Math.round((burn / est) * 100) : 0;
+                            const fbTone = ph.health === "healthy" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30"
+                              : ph.health === "warning" ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
+                              : "text-red-300 bg-red-500/15 border-red-500/30";
+                            return (
+                              <tr key={ph.id} data-testid={`burn-phase-${ph.id}`} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                                <td className="py-3 px-3 text-white font-medium">{ph.name}</td>
+                                <td className="py-3 px-3 text-right tabular text-zinc-200">{videos || "—"}</td>
+                                <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(burn, { compact: false })}</td>
+                                <td className="py-3 px-3 text-right tabular">
+                                  <span className={apprPct >= 100 ? "text-red-300" : apprPct >= 90 ? "text-amber-300" : "text-emerald-300"}>{apprPct}%</span>
+                                </td>
+                                <td className="py-3 px-3">
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border capitalize ${fbTone}`}>{ph.health || "healthy"}</span>
+                                </td>
+                                <td className="py-3 px-3 text-right">
+                                  <Link to={`/projects/${p.id}/phase/${ph.id}`} className="text-zinc-500 hover:text-fuchsia-300 inline-flex">
+                                    <ChevronRight className="w-4 h-4" />
+                                  </Link>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Top-up requests (kept — accessible from within the specific project) */}
+                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <ArrowUpRightSquare className="w-4 h-4 text-fuchsia-300" />
+                      <div className="font-display font-semibold text-[15px] text-white">Top-up requests</div>
+                    </div>
+                    {isTPM && (
+                      <Button size="sm" onClick={() => setTopupOpen(true)} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1" data-testid="btn-raise-topup-project">
+                        <Plus className="w-3 h-3" /> Raise top-up
+                      </Button>
+                    )}
+                  </div>
+                  {projectTopups.length === 0 ? (
+                    <div className="text-xs text-zinc-500 py-4 text-center">No top-ups raised for this project.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {projectTopups.map((r) => {
+                        const st = statusMap[r.status] || statusMap["pending-cto"];
+                        return (
+                          <Link to={`/topup-requests/${r.id}`} key={r.id} className="flex items-center gap-3 p-3 rounded-lg border border-white/5 hover:border-fuchsia-500/25 bg-white/[0.02]">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${st.cls}`}>
+                              <st.Icon className="w-3 h-3" /> {st.label}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm text-white font-medium">{r.phaseName}</div>
+                              <div className="text-[11px] text-zinc-500 line-clamp-1">{r.reason}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs text-zinc-500">Requested</div>
+                              <div className="text-sm text-white font-semibold tabular">{fmtCurrency(r.amount, { compact: false })}</div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-zinc-500" />
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            );
+          })()}
         </TabsContent>
 
         {/* ---- Tasks ---- */}
@@ -671,6 +766,15 @@ const MiniStat = ({ label, value, tone = "neutral" }) => {
     </div>
   );
 };
+
+// KPI card used in the Budget tab redesign (Spent/Cap + smaller stat cells)
+const MiniKpi = ({ label, value, sub, accent = "text-white", testid }) => (
+  <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4" data-testid={testid}>
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className={`mt-2 font-display text-2xl font-semibold tabular ${accent}`}>{value}</div>
+    {sub && <div className="text-[11px] text-zinc-500 mt-1 tabular">{sub}</div>}
+  </div>
+);
 
 const SubList = ({ title, icon: Icon, children, empty, testid }) => (
   <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={testid}>
