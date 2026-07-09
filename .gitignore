@@ -98,3 +98,9 @@ frontend/node_modules/.cache/default-development/14.pack
 frontend/node_modules/.cache/default-development/22.pack
 frontend/node_modules/.cache/default-development/30.pack
 frontend/node_modules/.cache/default-development/23.pack
+.env
+.env.*
+*.env
+credentials.json
+*.key
+.credentials
