@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { ArrowUpRightSquare, DollarSign, Send, X, Layers, Zap, Info } from "lucide-react";
+import { ArrowUpRightSquare, DollarSign, Send, X, Zap, Info } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 
@@ -25,19 +25,19 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
 
   const submit = () => {
     if (!activeProject) { toast.error("Select a project"); return; }
-    if (!activePhase) { toast.error("Select a phase"); return; }
     if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return; }
-    if (!reason.trim()) { toast.error("Business justification is required"); return; }
+    if (!reason.trim()) { toast.error("Justification is required"); return; }
+    const effectivePhase = activePhase || phases[0] || { id: "general", name: "Project-wide" };
     createTopupRequest({
       projectId: activeProject.id,
-      phaseId: activePhase.id,
-      phaseName: activePhase.name,
+      phaseId: effectivePhase.id,
+      phaseName: effectivePhase.name,
       amount,
       reason,
       urgency,
     });
     toast.success("Top-up request submitted", {
-      description: `${activeProject.name} · ${activePhase.name} · $${Number(amount).toLocaleString()} · routed to CTO`,
+      description: `${activeProject.name} · $${Number(amount).toLocaleString()} · routed to CTO`,
     });
     setAmount(2500); setReason(""); setUrgency("Normal");
     onOpenChange(false);
@@ -76,32 +76,8 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
             </Field>
           )}
 
-          <Field label="Phase">
-            <div className="relative">
-              <Layers className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <select
-                value={phaseId}
-                onChange={(e) => setPhaseId(e.target.value)}
-                data-testid="tur-phase"
-                className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-              >
-                {phases.map((ph) => {
-                  const label = `${ph.name} · ${ph.dates}`;
-                  return (
-                    <option key={ph.id} value={ph.id} className="bg-[#12121A]">{label}</option>
-                  );
-                })}
-              </select>
-            </div>
-          </Field>
+          {/* Phase selection removed per product spec — top-up applies project-wide */}
 
-          {activePhase && (
-            <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 grid grid-cols-3 gap-3">
-              <MiniStat label="Estimated" value={`$${activePhase.estimated.toLocaleString()}`} />
-              <MiniStat label="Actual" value={`$${activePhase.actual.toLocaleString()}`} />
-              <MiniStat label="Variance" value={`${activePhase.estimated - activePhase.actual >= 0 ? "+" : ""}$${(activePhase.estimated - activePhase.actual).toLocaleString()}`} tone={activePhase.estimated - activePhase.actual >= 0 ? "positive" : "negative"} />
-            </div>
-          )}
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Additional amount (USD)">
@@ -135,7 +111,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
             </Field>
           </div>
 
-          <Field label="Business justification">
+          <Field label="Justification">
             <textarea
               value={reason}
               onChange={(e) => setReason(e.target.value)}
@@ -150,7 +126,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
             <Zap className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-zinc-300 leading-relaxed">
               <span className="text-fuchsia-200 font-semibold">Flow: </span>
-              CTO reviews & may partially approve → CFO gives final sign-off. Approved amount is added to <span className="text-white font-semibold">{activeProject?.name} · {activePhase?.name}</span>.
+              CTO reviews & may partially approve → CFO gives final sign-off. Approved amount is added to <span className="text-white font-semibold">{activeProject?.name}</span>.
             </div>
           </div>
 
@@ -188,15 +164,5 @@ const Field = ({ label, children }) => (
     {children}
   </div>
 );
-
-const MiniStat = ({ label, value, tone = "neutral" }) => {
-  const tones = { positive: "text-emerald-300", negative: "text-red-300", neutral: "text-white" };
-  return (
-    <div>
-      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
-      <div className={`text-sm font-semibold tabular mt-0.5 ${tones[tone]}`}>{value}</div>
-    </div>
-  );
-};
 
 export default TopupRequestDialog;

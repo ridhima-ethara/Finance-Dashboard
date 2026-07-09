@@ -154,7 +154,7 @@ export const AppProvider = ({ children }) => {
     let list = projects;
     if (user.role === "TPM") list = list.filter((p) => p.tpm === user.name);
     else if (user.role === "PL") list = list.filter((p) => p.pl === user.name);
-    else if (user.role === "R&D") list = list.filter((p) => (p.rndMembers || []).includes(user.name) || p.tpm === user.name);
+    else if (user.role === "R&D") list = list.filter((p) => (p.rndMembers || []).includes(user.name) || p.rnd === user.name || p.tpm === user.name);
     if (scope === "R&D") list = list.filter((p) => p.type === "R&D");
     else if (scope === "Production") list = list.filter((p) => p.type === "Production");
     return list;

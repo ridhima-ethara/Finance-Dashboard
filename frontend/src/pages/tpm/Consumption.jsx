@@ -362,7 +362,7 @@ const Consumption = () => {
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="chart-approved-vs-actual">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <div className="font-display font-semibold text-[15px] text-white">Approved vs Actual (last 14 days)</div>
+            <div className="font-display font-semibold text-[15px] text-white">Approved vs Actual (last 15 days)</div>
             <div className="text-xs text-zinc-500 mt-0.5">Sum of daily approved budget vs actual consumption per project</div>
           </div>
         </div>

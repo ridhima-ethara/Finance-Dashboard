@@ -64,9 +64,10 @@ const Panel = ({ title, subtitle, right, children, testid }) => (
 );
 
 const TpmDashboard = () => {
-  const { user, visibleProjects, budgetReviews } = useApp();
+  const { user, visibleProjects, budgetReviews, role } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
   const [crOpen, setCrOpen] = useState(false);
+  const isRnd = role === "R&D";
 
   // Returned budgets addressed to me (or my role)
   const myReturnedBudgets = (budgetReviews || []).filter((r) => (
@@ -122,7 +123,7 @@ const TpmDashboard = () => {
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-sky-300">
             <span className="w-6 h-px bg-sky-400" />
-            TPM Portal
+            {isRnd ? "R&D Portal" : "TPM Portal"}
           </div>
           <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">
             Welcome back, {user?.name?.split(" ")[0]}
@@ -148,8 +149,8 @@ const TpmDashboard = () => {
         </div>
       </div>
 
-      {/* KPI Grid - 11 cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+      {/* KPI Grid */}
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${isRnd ? "lg:grid-cols-5" : "lg:grid-cols-6"} gap-3`}>
         <KpiCard testid="kpi-active-projects" label="Active projects" value={String(visibleProjects.length)} icon={FolderKanban} tone="magenta" />
         <KpiCard testid="kpi-pending-approvals" label="Pending approvals" value={String(pendingActions.length)} icon={ShieldCheck} tone="warning" />
         <KpiCard testid="kpi-util" label="Budget utilization" value={fmtPct(util)} icon={Gauge} tone={util >= 90 ? "negative" : util >= 75 ? "warning" : "positive"} />
@@ -159,7 +160,9 @@ const TpmDashboard = () => {
         <KpiCard testid="kpi-pending-cr" label="Pending change requests" value={String(CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
         <KpiCard testid="kpi-health" label="Budget health" value={health} icon={Heart} tone={health === "Green" ? "positive" : health === "Amber" ? "warning" : "negative"} sublabel={fmtPct(util)} />
         <KpiCard testid="kpi-burn-rate" label="Burn rate" value={`$${burnRate.toLocaleString()}/day`} icon={Flame} />
-        <KpiCard testid="kpi-exhaustion" label="Exhaustion in" value={typeof runway === "number" ? `${runway} days` : runway} icon={Clock3} tone={typeof runway === "number" && runway < 14 ? "negative" : "neutral"} sublabel="At current burn" />
+        {!isRnd && (
+          <KpiCard testid="kpi-exhaustion" label="Exhaustion in" value={typeof runway === "number" ? `${runway} days` : runway} icon={Clock3} tone={typeof runway === "number" && runway < 14 ? "negative" : "neutral"} sublabel="At current burn" />
+        )}
         <KpiCard testid="kpi-over" label="Over budget" value={String(overBudget)} icon={AlertTriangle} tone={overBudget > 0 ? "negative" : "positive"} />
       </div>
 
@@ -311,32 +314,34 @@ const TpmDashboard = () => {
       <ProjectsTable />
 
       {/* Widgets: pending actions / notifications / upcoming phase */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Panel testid="widget-upcoming-phase" title="Upcoming phase" subtitle={visibleProjects[0]?.name || "No project"}>
-          {upcomingPhase ? (
-            <Link to={`/projects/${visibleProjects[0].id}/phase/${upcomingPhase.id}`} className="block hover:opacity-90 transition-opacity" data-testid="link-upcoming-phase">
-              <div className="text-sm font-semibold text-white">{upcomingPhase.name}</div>
-              <div className="text-xs text-zinc-500 mt-1">{upcomingPhase.dates}</div>
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                <div className="rounded-lg bg-white/[0.03] p-2">
-                  <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Est.</div>
-                  <div className="text-sm font-semibold text-white tabular">{fmtCurrency(upcomingPhase.estimated)}</div>
+      <div className={`grid grid-cols-1 ${isRnd ? "" : "lg:grid-cols-3"} gap-4`}>
+        {!isRnd && (
+          <Panel testid="widget-upcoming-phase" title="Upcoming phase" subtitle={visibleProjects[0]?.name || "No project"}>
+            {upcomingPhase ? (
+              <Link to={`/projects/${visibleProjects[0].id}/phase/${upcomingPhase.id}`} className="block hover:opacity-90 transition-opacity" data-testid="link-upcoming-phase">
+                <div className="text-sm font-semibold text-white">{upcomingPhase.name}</div>
+                <div className="text-xs text-zinc-500 mt-1">{upcomingPhase.dates}</div>
+                <div className="mt-3 grid grid-cols-3 gap-2">
+                  <div className="rounded-lg bg-white/[0.03] p-2">
+                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Est.</div>
+                    <div className="text-sm font-semibold text-white tabular">{fmtCurrency(upcomingPhase.estimated)}</div>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.03] p-2">
+                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Actual</div>
+                    <div className="text-sm font-semibold text-white tabular">{fmtCurrency(upcomingPhase.actual)}</div>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.03] p-2">
+                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Health</div>
+                    <div className="text-sm font-semibold text-white capitalize">{upcomingPhase.health}</div>
+                  </div>
                 </div>
-                <div className="rounded-lg bg-white/[0.03] p-2">
-                  <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Actual</div>
-                  <div className="text-sm font-semibold text-white tabular">{fmtCurrency(upcomingPhase.actual)}</div>
+                <div className="mt-3 inline-flex items-center gap-1 text-[11px] text-fuchsia-300 font-medium">
+                  Open phase workspace <ChevronRight className="w-3 h-3" />
                 </div>
-                <div className="rounded-lg bg-white/[0.03] p-2">
-                  <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Health</div>
-                  <div className="text-sm font-semibold text-white capitalize">{upcomingPhase.health}</div>
-                </div>
-              </div>
-              <div className="mt-3 inline-flex items-center gap-1 text-[11px] text-fuchsia-300 font-medium">
-                Open phase workspace <ChevronRight className="w-3 h-3" />
-              </div>
-            </Link>
-          ) : <div className="text-xs text-zinc-500">No upcoming phase.</div>}
-        </Panel>
+              </Link>
+            ) : <div className="text-xs text-zinc-500">No upcoming phase.</div>}
+          </Panel>
+        )}
 
         <Panel testid="widget-pending-actions" title="Pending actions" subtitle="what needs your attention">
           <div className="space-y-2">
@@ -355,19 +360,21 @@ const TpmDashboard = () => {
           </div>
         </Panel>
 
-        <Panel testid="widget-notifications" title="Notifications" subtitle="latest alerts" right={<Bell className="w-4 h-4 text-zinc-500" />}>
-          <div className="space-y-2">
-            {recentNotifs.map((n) => (
-              <div key={n.id} className="flex items-start gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02]">
-                <div className={`w-1 self-stretch rounded-full ${n.type === "danger" ? "bg-red-400" : n.type === "warning" ? "bg-amber-400" : n.type === "success" ? "bg-emerald-400" : "bg-sky-400"}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-white">{n.title}</div>
-                  <div className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{n.detail}</div>
+        {!isRnd && (
+          <Panel testid="widget-notifications" title="Notifications" subtitle="latest alerts" right={<Bell className="w-4 h-4 text-zinc-500" />}>
+            <div className="space-y-2">
+              {recentNotifs.map((n) => (
+                <div key={n.id} className="flex items-start gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02]">
+                  <div className={`w-1 self-stretch rounded-full ${n.type === "danger" ? "bg-red-400" : n.type === "warning" ? "bg-amber-400" : n.type === "success" ? "bg-emerald-400" : "bg-sky-400"}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-semibold text-white">{n.title}</div>
+                    <div className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{n.detail}</div>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
+              ))}
+            </div>
+          </Panel>
+        )}
       </div>
 
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
