@@ -270,31 +270,53 @@ export const CategoryDonut = () => {
   );
 };
 
-// ---------- Utilization gauge/bar ----------
+// ---------- Utilization gauge/bar with buffer range ----------
 export const UtilizationBars = () => {
-  const data = PROJECTS.map((p) => ({ name: p.name, util: p.utilization }));
+  const data = PROJECTS.map((p) => ({ name: p.name, util: p.utilization, buffer: p.buffer || 10 }));
   return (
     <CardShell
       testid="chart-utilization"
       title="Budget utilization"
-      subtitle="per project · % of approved"
+      subtitle="per project · % of approved · dashed marker = 100 + buffer"
     >
       <div className="space-y-3">
         {data.map((d) => {
           const color = d.util >= 100 ? "#EF4444" : d.util >= 85 ? "#F59E0B" : "#10B981";
           const bg = d.util >= 100 ? "#FEE2E2" : d.util >= 85 ? "#FEF3C7" : "#D1FAE5";
+          // Bar scale: 0 → 100 + buffer% (so buffer range is always visible)
+          const scaleMax = 100 + Number(d.buffer || 0);
+          const utilLeft = Math.min((Math.min(d.util, scaleMax) / scaleMax) * 100, 100);
+          const bufferStartPct = (100 / scaleMax) * 100;      // where 100% sits on the bar
+          const bufferWidthPct = 100 - bufferStartPct;         // remaining right portion = buffer range
           return (
-            <div key={d.name}>
+            <div key={d.name} data-testid={`util-bar-${d.name}`}>
               <div className="flex items-center justify-between text-xs mb-1">
                 <span className="text-zinc-200 font-medium">{d.name}</span>
-                <span className="font-semibold tabular" style={{ color }}>
-                  {fmtPct(d.util)}
+                <span className="font-semibold tabular flex items-center gap-2">
+                  <span style={{ color }}>{fmtPct(d.util)}</span>
+                  <span className="text-[9px] text-zinc-500 font-medium">buffer +{d.buffer}%</span>
                 </span>
               </div>
-              <div className="h-2 rounded-full" style={{ background: bg }}>
+              <div className="relative h-2.5 rounded-full" style={{ background: bg }}>
+                {/* Buffer range zone (100% → 100+buffer%) rendered as diagonal fill */}
                 <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width: `${Math.min(d.util, 100)}%`, background: color }}
+                  className="absolute inset-y-0 rounded-r-full"
+                  style={{
+                    left: `${bufferStartPct}%`,
+                    width: `${bufferWidthPct}%`,
+                    backgroundImage: "repeating-linear-gradient(45deg, rgba(0,0,0,0.14) 0 3px, transparent 3px 6px)",
+                  }}
+                  data-testid={`util-buffer-${d.name}`}
+                />
+                {/* Actual utilization fill */}
+                <div
+                  className="absolute inset-y-0 left-0 rounded-full transition-all"
+                  style={{ width: `${utilLeft}%`, background: color }}
+                />
+                {/* 100% marker line */}
+                <div
+                  className="absolute inset-y-0 w-px bg-zinc-800"
+                  style={{ left: `${bufferStartPct}%` }}
                 />
               </div>
             </div>

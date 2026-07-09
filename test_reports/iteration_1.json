@@ -28,7 +28,7 @@
   "seed_data_creation": "None — all data is mocked in /app/frontend/src/data/mockData.js (8 projects, 4 approvals, 16 top-ups, 6 reimbursements, 32 audit entries, 6 notifications, 8 team members, 4 AI insights).",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "App is a pure frontend Ethara.AI demo. Base URL: https://budget-forge-8.preview.emergentagent.com. Router in /app/frontend/src/App.js. Row expansion in ProjectsTable defaults 'crowley-gen' to expanded, so tests must query expand element BEFORE clicking the toggle, or use another project. All data-testid conventions differ slightly from the review spec; use the code as the source of truth (see naming list in action_items).",
+  "context_for_next_testing_agent": "App is a pure frontend Ethara.AI demo. Base URL: https://budget-mgmt-preview.preview.emergentagent.com. Router in /app/frontend/src/App.js. Row expansion in ProjectsTable defaults 'crowley-gen' to expanded, so tests must query expand element BEFORE clicking the toggle, or use another project. All data-testid conventions differ slightly from the review spec; use the code as the source of truth (see naming list in action_items).",
   "detailed_results": {
     "dashboard": {
       "hero-amount-at-risk": "FOUND — shows $1.18M / $987.2k approved · 3 of 8 flagged",

@@ -47,10 +47,13 @@ const AmountAtRisk = () => {
           <span>{PORTFOLIO.flagged} of {PORTFOLIO.total} projects flagged · forecast overrun {fmtCurrency(Math.abs(PORTFOLIO.forecastVariance))}</span>
         </div>
 
-        <div className="mt-7 grid grid-cols-3 gap-5">
+        <div className="mt-7 grid grid-cols-3 gap-5" data-testid="amount-at-risk-metrics">
           <Metric label="Over budget" value={`${PORTFOLIO.projectsOverBudget} projects`} tone="danger" />
           <Metric label="Health score" value={`${PORTFOLIO.healthScore}/100`} tone="warning" />
           <Metric label="Est. accuracy" value={fmtPct(PORTFOLIO.accuracy)} tone="magenta" />
+          <Metric label="Flagged" value={`${PORTFOLIO.flagged} / ${PORTFOLIO.total}`} tone="warning" />
+          <Metric label="Forecast overrun" value={fmtCurrency(Math.abs(PORTFOLIO.forecastVariance))} tone="danger" />
+          <Metric label="Approved cap" value={fmtCurrency(PORTFOLIO.approvedBudget)} tone="magenta" />
         </div>
       </div>
     </div>

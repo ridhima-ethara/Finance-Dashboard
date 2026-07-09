@@ -1,0 +1,16 @@
+<analysis>localStorageProjectsTable.jsxtesting_agent_v3_fork/app/frontend/src/components/dashboard/CostPerTaskView.jsx<select>onChangevisibleProjectstesting_agent_v3_fork/app/frontend/src/components/dashboard/ProjectsTable.jsx/app/frontend/src/pages/ProjectDetail.jsx/app/frontend/src/pages/Projects.jsxProjectDetailtext
+/app/frontend/src/
+├── components/
+│   ├── dashboard/
+│   │   ├── ProjectsTable.jsx      # Currently being edited for phase detailed views
+│   │   ├── CostPerTaskView.jsx    # Needs dropdown bug fix
+│   │   └── AmountAtRisk.jsx       # Just updated to 3-3 grid
+│   ├── ui/                        # Shadcn components
+├── context/
+│   └── AppContext.jsx             # Massive mock data state context
+├── data/
+│   ├── mockProjects.js, mockAi.js # Mock Data
+├── pages/
+│   ├── ProjectDetail.jsx          # Needs kickoff mail logic added
+│   └── tpm/
+AppContextisCfoisTpmView()/app/frontend/src/components/dashboard/ProjectsTable.jsx/app/frontend/src/components/dashboard/CostPerTaskView.jsx/app/frontend/src/pages/ProjectDetail.jsx/app/frontend/src/components/dashboard/Charts.jsxAppContext.jsxProjectsTable.jsx<system_reminder>testing_agent_v3_forklocalStoragebg-[#12121A]fuchsia-500/app/memory/PRD.md/app/test_reports/iteration_9.json/logincto@ethara.aicfo@ethara.aitpm@ethara.airnd@ethara.aidemo123ProjectsTable.jsxCostPerTaskView.jsx</analysis>

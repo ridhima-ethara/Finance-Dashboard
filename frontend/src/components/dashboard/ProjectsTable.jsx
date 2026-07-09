@@ -331,129 +331,77 @@ const PhaseDrawerContent = ({ project, phase }) => {
         <DrawerStat label="Tasks done" value={`${doneCount}/${tasks.length}`} />
       </div>
 
-      {/* TPM logged tasks */}
-      <div className="mt-5">
-        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 flex items-center gap-1">
-          <FileText className="w-3 h-3" /> TPM logged tasks ({tpmLogs.length})
-          {isCFO && <span className="ml-1 text-zinc-600">· read-only</span>}
-        </div>
-        {tpmLogs.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-4 text-center text-xs text-zinc-500">
-            {isTPM ? "No tasks logged yet. Click \"Log daily task\" to add one." : "No TPM logs for this phase yet."}
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {tpmLogs.map((log) => {
-              const editable = isTaskEditable(log);
-              return (
-                <div key={log.id} data-testid={`log-${log.id}`} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-white font-medium truncate">{log.name}</div>
-                      <div className="text-[10px] text-zinc-500 mt-0.5">
-                        <User className="w-2.5 h-2.5 inline mr-0.5" /> {log.assignee} · {log.date} · {log.hours}h
-                      </div>
-                      {log.notes && <div className="text-[10px] text-zinc-400 mt-1 line-clamp-2">{log.notes}</div>}
-                      {log.evidence && (
-                        <a href={log.evidence} target="_blank" rel="noreferrer" className="text-[10px] text-fuchsia-300 hover:text-fuchsia-200 truncate inline-block max-w-full">
-                          {log.evidence}
-                        </a>
-                      )}
-                    </div>
-                    <div className="text-right flex-shrink-0">
-                      <div className="text-xs text-white tabular font-semibold">{fmtCurrency(log.cost, { compact: false })}</div>
-                      {canEdit && (
-                        <div className="flex items-center gap-0.5 justify-end mt-1">
-                          {editable ? (
-                            <>
-                              <button
-                                onClick={() => openEdit(log)}
-                                data-testid={`log-edit-${log.id}`}
-                                className="w-6 h-6 rounded-md hover:bg-fuchsia-500/15 text-zinc-500 hover:text-fuchsia-300 flex items-center justify-center"
-                                title="Edit (within 24h)"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => onDelete(log)}
-                                data-testid={`log-delete-${log.id}`}
-                                className="w-6 h-6 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center"
-                                title="Delete (within 24h)"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </>
-                          ) : (
-                            <span className="text-[9px] text-zinc-600 inline-flex items-center gap-0.5"><Lock className="w-2.5 h-2.5" /> locked</span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      {/* TPM logged tasks & Planned tasks sections removed per product spec — surfaced via Daily consumption below */}
 
-      {/* Existing planned tasks */}
-      <div className="mt-5">
-        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 flex items-center gap-1">
-          <Layers className="w-3 h-3" /> Planned tasks ({tasks.length})
-        </div>
-        <div className="space-y-1.5">
-          {tasks.map((t) => (
-            <div key={t.id} data-testid={`drawer-task-${t.id}`} className="flex items-center gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02]">
-              <span className={`w-1.5 h-6 rounded-full flex-shrink-0 ${t.status === "done" ? "bg-emerald-500" : t.status === "in-progress" ? "bg-fuchsia-500" : "bg-zinc-600"}`} />
-              <div className="flex-1 min-w-0">
-                <div className="text-xs text-white font-medium truncate">{t.name}</div>
-                <div className="text-[10px] text-zinc-500 truncate">
-                  <User className="w-2.5 h-2.5 inline mr-0.5" /> {t.owner} · <Cpu className="w-2.5 h-2.5 inline mx-0.5" /> {t.model}
-                </div>
-              </div>
-              <div className="text-right flex-shrink-0">
-                <div className="text-xs text-white tabular">{fmtCurrency(t.actualCost, { compact: false }) || "—"}</div>
-                <div className="text-[10px] text-zinc-500 tabular">est {fmtCurrency(t.estCost, { compact: false })}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Daily log */}
+      {/* Daily consumption · last 7 days · scrollable · shows every TPM-logged task with dates */}
       <div className="mt-5">
         <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2 flex items-center gap-1">
           <Calendar className="w-3 h-3" /> Daily consumption · last 7 days
+          {isCFO && <span className="ml-1 text-zinc-600">· read-only</span>}
         </div>
         <div className="rounded-lg border border-white/5 bg-white/[0.02] overflow-hidden">
-          <table className="w-full text-xs" data-testid="drawer-daily-log">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-widest text-zinc-500 border-b border-white/5">
-                <th className="text-left py-2 px-2">Date</th>
-                <th className="text-left py-2 px-2">Model</th>
-                <th className="text-right py-2 px-2">Tasks</th>
-                <th className="text-right py-2 px-2">Traj.</th>
-                <th className="text-right py-2 px-2">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {dailyLog.length === 0 ? (
-                <tr><td colSpan="5" className="py-4 text-center text-zinc-500">No entries yet</td></tr>
-              ) : dailyLog.map((d, i) => (
-                <tr key={i} className="border-b border-white/5 last:border-b-0">
-                  <td className="py-2 px-2 text-white tabular">{new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</td>
-                  <td className="py-2 px-2 text-fuchsia-300">{d.model}</td>
-                  <td className="py-2 px-2 text-right tabular">{d.tasks}</td>
-                  <td className="py-2 px-2 text-right tabular">{d.trajectories}</td>
-                  <td className="py-2 px-2 text-right text-white font-semibold tabular">{fmtCurrency(d.spent, { compact: false })}</td>
+          <div className="max-h-64 overflow-y-auto" data-testid="drawer-daily-log-scroll">
+            <table className="w-full text-xs" data-testid="drawer-daily-log">
+              <thead className="sticky top-0 bg-[#12121A]/95 backdrop-blur">
+                <tr className="text-[10px] uppercase tracking-widest text-zinc-500 border-b border-white/5">
+                  <th className="text-left py-2 px-2">Date</th>
+                  <th className="text-left py-2 px-2">Task</th>
+                  <th className="text-right py-2 px-2">Tasks done</th>
+                  <th className="text-right py-2 px-2">Est. cost</th>
+                  <th className="w-6"></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {tpmLogs.length === 0 ? (
+                  <tr><td colSpan="5" className="py-4 text-center text-zinc-500">
+                    {isTPM ? "No tasks logged yet — use Log daily task above." : "No TPM logs for this phase yet."}
+                  </td></tr>
+                ) : tpmLogs.map((log) => {
+                  const editable = isTaskEditable(log);
+                  return (
+                    <tr key={log.id} data-testid={`daily-log-${log.id}`} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.03]">
+                      <td className="py-2 px-2 text-white tabular whitespace-nowrap">
+                        {new Date(log.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </td>
+                      <td className="py-2 px-2">
+                        <div className="text-zinc-100 truncate max-w-[220px]">{log.name}</div>
+                        {log.notes && <div className="text-[10px] text-zinc-500 truncate max-w-[220px]">{log.notes}</div>}
+                      </td>
+                      <td className="py-2 px-2 text-right tabular text-white font-semibold">{Number(log.tasksDone || 0).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right tabular text-fuchsia-300 font-semibold">{fmtCurrency(log.cost, { compact: false })}</td>
+                      <td className="py-2 px-1 text-right">
+                        {canEdit && editable ? (
+                          <div className="inline-flex items-center gap-0.5">
+                            <button
+                              onClick={() => openEdit(log)}
+                              data-testid={`daily-log-edit-${log.id}`}
+                              className="w-5 h-5 rounded hover:bg-fuchsia-500/15 text-zinc-500 hover:text-fuchsia-300 flex items-center justify-center"
+                              title="Edit (within 24h)"
+                            >
+                              <Pencil className="w-2.5 h-2.5" />
+                            </button>
+                            <button
+                              onClick={() => onDelete(log)}
+                              data-testid={`daily-log-delete-${log.id}`}
+                              className="w-5 h-5 rounded hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center"
+                              title="Delete (within 24h)"
+                            >
+                              <Trash2 className="w-2.5 h-2.5" />
+                            </button>
+                          </div>
+                        ) : canEdit ? (
+                          <Lock className="w-2.5 h-2.5 text-zinc-600 inline" />
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
         <div className="mt-2 text-[10px] text-zinc-500">
-          Approved daily budget: <span className="text-white font-semibold tabular">{fmtCurrency(Math.round(project.approvedBudget / 30), { compact: false })}</span>
+          Approved daily budget: <span className="text-white font-semibold tabular">{fmtCurrency(Math.round(project.approvedBudget / 30), { compact: false })}</span> · showing {tpmLogs.length} log{tpmLogs.length === 1 ? "" : "s"}
         </div>
       </div>
 
