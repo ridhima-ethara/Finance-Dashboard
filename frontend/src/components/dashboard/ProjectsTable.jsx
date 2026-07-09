@@ -26,7 +26,8 @@ const ProjectsTable = () => {
   const [expanded, setExpanded] = useState({ "crowley-gen": true });
   const [drawer, setDrawer] = useState(null); // { project, phase }
   const nav = useNavigate();
-  const { scope, visibleProjects } = useApp();
+  const { scope, visibleProjects, role } = useApp();
+  const isRnd = role === "R&D";
 
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
@@ -51,7 +52,7 @@ const ProjectsTable = () => {
             Projects — budget by project
           </div>
           <div className="text-xs text-zinc-500 mt-0.5">
-            {projects.length} projects · {fmtCurrency(totals.actual)} of {fmtCurrency(totals.approved)} · expand a row for phases
+            {projects.length} projects · {fmtCurrency(totals.actual)} of {fmtCurrency(totals.approved)}{!isRnd ? " · expand a row for phases" : ""}
           </div>
         </div>
         <div className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 tabular">
@@ -78,7 +79,7 @@ const ProjectsTable = () => {
           </thead>
           <tbody>
             {projects.map((p) => {
-              const isOpen = !!expanded[p.id];
+              const isOpen = !isRnd && !!expanded[p.id];
               return (
                 <Fragment key={p.id}>
                   <tr
@@ -87,15 +88,15 @@ const ProjectsTable = () => {
                   >
                     <td className="py-3 pl-6 pr-2">
                       <button
-                        onClick={() => toggle(p.id)}
+                        onClick={() => isRnd ? nav(`/projects/${p.id}`) : toggle(p.id)}
                         data-testid={`row-toggle-${p.id}`}
                         className="flex items-center gap-2 text-left"
                       >
-                        {isOpen ? (
+                        {!isRnd && (isOpen ? (
                           <ChevronDown className="w-4 h-4 text-zinc-500" />
                         ) : (
                           <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-zinc-400" />
-                        )}
+                        ))}
                         <div>
                           <div className="flex items-center gap-2">
                             <div className="text-sm font-medium text-white">{p.name}</div>
