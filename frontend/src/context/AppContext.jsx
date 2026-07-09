@@ -286,7 +286,7 @@ export const AppProvider = ({ children }) => {
   const getPhaseLogs = (projectId, phaseId) => taskLogs[taskKey(projectId, phaseId)] || [];
 
   // ---- Top-up Requests (2-stage: CTO → CFO) ----
-  const createTopupRequest = ({ projectId, phaseId, phaseName, amount, reason, urgency }) => {
+  const createTopupRequest = ({ projectId, phaseId, phaseName, amount, reason, urgency, breakdown }) => {
     const proj = projects.find((p) => p.id === projectId);
     const id = `tur-${Date.now().toString(36)}`;
     const entry = {
@@ -304,6 +304,7 @@ export const AppProvider = ({ children }) => {
       status: "pending-cto",
       ctoDecision: null,
       cfoDecision: null,
+      breakdown: breakdown || null,
       history: [
         { at: new Date().toISOString(), actor: `${user?.name || "TPM"} · TPM`, action: "Submitted top-up request", detail: `${phaseName || phaseId} · $${Number(amount).toLocaleString()}` },
       ],

@@ -159,7 +159,7 @@ const ProjectDetail = () => {
                   className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                 />
               </div>
-              {isTPM && (
+              {isTPM && role !== "R&D" && (
                 <Button size="sm" onClick={() => toast.info("Add member — coming soon")} data-testid="btn-add-member" className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]">
                   <Plus className="w-3.5 h-3.5" /> Add member
                 </Button>
@@ -450,7 +450,7 @@ const ProjectDetail = () => {
                 No phases defined yet. Use Budget Builder to add phases.
               </div>
             )}
-            {(p.phases || []).map((ph) => {
+            {(role === "R&D" ? (p.phases || []).slice(0, 1) : (p.phases || [])).map((ph) => {
               const delivery = projectBatches.find((b) => b.phaseId === ph.id);
               const topupsForPhase = projectTopups.filter((r) => r.phaseId === ph.id);
               const variance = ph.estimated - ph.actual;

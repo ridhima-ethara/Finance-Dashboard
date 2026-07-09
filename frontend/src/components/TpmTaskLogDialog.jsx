@@ -1,17 +1,16 @@
 import { useMemo, useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { CalendarDays, DollarSign, Send, User as UserIcon, X, ClipboardList, Layers, ListChecks, StickyNote, FolderKanban } from "lucide-react";
+import { CalendarDays, DollarSign, Send, X, ClipboardList, Layers, ListChecks, StickyNote, FolderKanban } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
-import { TEAM } from "../data/mockUsers";
 import { fmtCurrency } from "../lib/format";
 
 // Dialog to log a daily task entry (TPM only). Now supports:
 //  • Project picker + Phase picker (inside the dialog)
 //  • Estimated cost, tasks done count, progress bar vs phase total, note.
 const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) => {
-  const { logPhaseTask, updatePhaseTask, getPhaseLogs, visibleProjects } = useApp();
+  const { logPhaseTask, updatePhaseTask, getPhaseLogs, visibleProjects, user } = useApp();
   const isEdit = !!editingLog;
 
   // If a project was passed in (opened from a specific project page), lock to it.
@@ -38,8 +37,6 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
   const currentPhase = projectPhases.find((p) => p.id === phaseId) || phase || null;
 
-  const [name, setName] = useState(editingLog?.name || "");
-  const [assignee, setAssignee] = useState(editingLog?.assignee || TEAM[0]?.name || "");
   const [estCost, setEstCost] = useState(editingLog?.cost ?? 0);
   const [tasksDone, setTasksDone] = useState(editingLog?.tasksDone ?? 1);
   const [date, setDate] = useState(editingLog?.date || new Date().toISOString().slice(0, 10));
@@ -53,20 +50,20 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   const progressPct = phaseTotalTasks > 0 ? Math.min(100, Math.round((projectedDone / phaseTotalTasks) * 100)) : 0;
 
   const reset = () => {
-    setName(""); setAssignee(TEAM[0]?.name || ""); setEstCost(0); setTasksDone(1);
+    setEstCost(0); setTasksDone(1);
     setDate(new Date().toISOString().slice(0, 10)); setNotes("");
   };
 
   const submit = () => {
     if (!activeProject) { toast.error("Select a project"); return; }
     if (!phaseId) { toast.error("Select a phase"); return; }
-    if (!name.trim()) { toast.error("Task name is required"); return; }
-    if (!assignee) { toast.error("Assignee is required"); return; }
     if (!date) { toast.error("Date is required"); return; }
     if (Number(tasksDone) <= 0) { toast.error("Enter how many tasks were completed"); return; }
+    if (!Number(estCost) || Number(estCost) <= 0) { toast.error("Estimated cost is required"); return; }
+    const autoName = `${currentPhase?.name || "Phase"} · ${date} · ${tasksDone} task${Number(tasksDone) === 1 ? "" : "s"}`;
     const payload = {
-      name,
-      assignee,
+      name: autoName,
+      assignee: user?.name || "TPM",
       hours: 0,
       cost: Number(estCost) || 0,
       tasksDone: Number(tasksDone) || 0,
@@ -80,7 +77,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     } else {
       logPhaseTask({ projectId: activeProject.id, phaseId, ...payload });
       toast.success("Daily task logged", {
-        description: `${activeProject.name} · ${currentPhase?.name || phaseId} · ${assignee} · ${tasksDone} task${Number(tasksDone) === 1 ? "" : "s"}`,
+        description: `${activeProject.name} · ${currentPhase?.name || phaseId} · ${tasksDone} task${Number(tasksDone) === 1 ? "" : "s"}`,
       });
       reset();
     }
@@ -166,48 +163,18 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             </div>
           )}
 
-          <Field label="Task name *">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Opus 4.8 fine-tune sweep · run 12"
-              data-testid="task-name"
-              className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-            />
+          <Field label="Date *">
+            <div className="relative">
+              <CalendarDays className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                data-testid="task-date"
+                className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+              />
+            </div>
           </Field>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Assignee *">
-              <div className="relative">
-                <UserIcon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <select
-                  value={assignee}
-                  onChange={(e) => setAssignee(e.target.value)}
-                  data-testid="task-assignee"
-                  className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                >
-                  {TEAM.map((m) => (
-                    <option key={m.id} value={m.name} className="bg-[#12121A]">
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </Field>
-
-            <Field label="Date *">
-              <div className="relative">
-                <CalendarDays className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="date"
-                  value={date}
-                  onChange={(e) => setDate(e.target.value)}
-                  data-testid="task-date"
-                  className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                />
-              </div>
-            </Field>
-          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <Field label="Tasks done *" hint="Count completed today">

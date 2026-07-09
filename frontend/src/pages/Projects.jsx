@@ -64,16 +64,7 @@ const Projects = () => {
               New project
             </Button>
           )}
-          {isTPM && (
-            <Button
-              onClick={() => setTopupOpen(true)}
-              className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"
-              data-testid="btn-raise-topup"
-            >
-              <ArrowUpRightSquare className="w-4 h-4" />
-              Raise top-up
-            </Button>
-          )}
+          {/* Raise top-up removed from Projects list — available inside each project's detail page */}
         </div>
       </div>
 

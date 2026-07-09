@@ -215,6 +215,38 @@ P2
 - Manual smoke tests via screenshots verified all 5 pages render correctly (CFO Buffer, Financial Monitoring w/ buffer bars, Recovery with expandable phase drops, AI Cost tabs, Reports with real downloads). No automated agent run this iteration per user request.
 
 
+## What's Implemented (2026-02-09 · iteration 14) — Dashboard/Consumption/AI Cost cleanup + Bifurcated Top-up & Change Request + R&D Batch Review
+
+### R&D and TPM Dashboard
+- **Pending actions widget removed** entirely (previously bottom-left panel). TPM/R&D dashboards no longer show it.
+- Bottom widget grid now: TPM sees 2 columns (Upcoming Phase + Notifications); R&D sees nothing beyond the KPI/charts/projects widgets.
+
+### R&D / TPM My Projects
+- **"Raise top-up" removed** from the Projects listing page (`/projects`). Top-up flow now lives inside each project's detail page (per-phase drawer).
+- **"Add member"** button hidden for R&D users on the Team tab.
+- **R&D Batch tab is locked to a single phase** — R&D users see only the first phase in the Batch panel. TPM continues to see all phases.
+- **Log Daily Task** dialog stripped to spec: Phase, Date, Tasks Done, Estimated Cost, Note. **Removed** Task Name and Assignee fields; auto-generated internally.
+- **Deliver batch (TPM)** — **removed** "Client representative (optional)" field. Now just Phase actual, Suggested recovery, Proposed recoverable amount, Client comment/reason received.
+- **Deliver batch (R&D)** — new spec: **Task count submitted, Estimated $/task, Trajectories, Models used, Client comments** + **Mark as: Accept / Changes requested / Reject**. Once R&D marks Accept, TPM is notified that the estimate is confirmed.
+
+### Top-up & Change Request · Bifurcated by budget items
+- **TopupRequestDialog** rebuilt with a bifurcated ask: three toggleable line items (**Models · Infrastructure · Subscriptions**), each with amount + line-note. Total ask computed live. Payload includes `breakdown = { models, infra, subs }` stored on the request record — visible to CTO first, then CFO after CTO approves.
+- **ChangeRequestDialog** rebuilt with the same bifurcation (Models/Infra/Subs toggle + amount + line-note) + Urgency, Justification, Phase, Tasks, Timeline fields.
+
+### R&D and TPM Daily Consumption
+- **"Today's log" submission table removed** — task logging now lives exclusively in the My Projects → Tasks tab (single source of truth).
+- Chart renamed: **"Approved vs Actual (last 15 days)" → "Estimated vs Actual (last 15 days)"**. Bar legend now reads *Estimated / Actual*.
+- Recent Submissions table — **Model column removed**.
+- Consumption heatmap subtitle now explicitly notes "each day evaluated independently" — cell `pct = day.spent / day.approvedDaily × 100`, per-day comparison only (day-N overrun does not roll into day-N+1).
+
+### R&D / TPM AI Cost
+- **Task Log tab removed** entirely.
+- **Tab bar removed** — Model Spend + Usage Analysis merged into a single scrollable dashboard.
+- Consequently task-log filters (`taskFilter`, `statusFilter`) and `buildTaskLog`/`deriveEstimateStatus` helpers become unused inline (kept in file, non-blocking).
+
+### Testing
+- Self-tested each surface via targeted Playwright screenshots — R&D dashboard confirmed pending-actions gone; Log Task dialog confirms new field set; Raise Top-up dialog shows bifurcated Models/Infra/Subs; R&D Batch dialog shows Accept/Changes/Reject decision; TPM Deliver batch has no Client representative field; Consumption page has no Today's log & new bar chart labels; AI Cost is single-screen with no tabs.
+
 ## What's Implemented (2026-02-08 · iteration 13) — CFO Unit Economics & Exponential Task-Cost Forecast
 
 ### CFO Dashboard · Unit economics (`data-testid=cfo-cost-per-task-view`)

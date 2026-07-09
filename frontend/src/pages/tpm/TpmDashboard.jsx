@@ -313,9 +313,9 @@ const TpmDashboard = () => {
       {/* Projects table with expandable phase drawer (log daily task / raise top-up per phase) */}
       <ProjectsTable />
 
-      {/* Widgets: pending actions / notifications / upcoming phase */}
-      <div className={`grid grid-cols-1 ${isRnd ? "" : "lg:grid-cols-3"} gap-4`}>
-        {!isRnd && (
+      {/* Widgets: notifications / upcoming phase (TPM only) */}
+      {!isRnd && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <Panel testid="widget-upcoming-phase" title="Upcoming phase" subtitle={visibleProjects[0]?.name || "No project"}>
             {upcomingPhase ? (
               <Link to={`/projects/${visibleProjects[0].id}/phase/${upcomingPhase.id}`} className="block hover:opacity-90 transition-opacity" data-testid="link-upcoming-phase">
@@ -341,26 +341,7 @@ const TpmDashboard = () => {
               </Link>
             ) : <div className="text-xs text-zinc-500">No upcoming phase.</div>}
           </Panel>
-        )}
 
-        <Panel testid="widget-pending-actions" title="Pending actions" subtitle="what needs your attention">
-          <div className="space-y-2">
-            {[
-              { label: "Submit today's consumption for your projects", link: "/consumption", icon: Calendar, tone: "text-fuchsia-300" },
-              { label: "Approve reimbursement · $420", link: "/reimbursements", icon: ShieldCheck, tone: "text-sky-300" },
-              { label: "Confirm phase 2 completion — Talos", link: "/projects/talos", icon: ChevronRight, tone: "text-emerald-300" },
-              { label: "Raise change request for Crowley Sourcing", link: "#", icon: GitPullRequest, tone: "text-amber-300" },
-            ].map((a, i) => (
-              <Link key={i} to={a.link} className="flex items-center gap-3 p-2.5 rounded-lg border border-white/5 hover:border-fuchsia-500/30 bg-white/[0.02] hover:bg-white/[0.06] transition-all" data-testid={`action-${i}`}>
-                <a.icon className={`w-4 h-4 ${a.tone} flex-shrink-0`} />
-                <span className="flex-1 text-xs text-zinc-100">{a.label}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-zinc-500" />
-              </Link>
-            ))}
-          </div>
-        </Panel>
-
-        {!isRnd && (
           <Panel testid="widget-notifications" title="Notifications" subtitle="latest alerts" right={<Bell className="w-4 h-4 text-zinc-500" />}>
             <div className="space-y-2">
               {recentNotifs.map((n) => (
@@ -374,8 +355,8 @@ const TpmDashboard = () => {
               ))}
             </div>
           </Panel>
-        )}
-      </div>
+        </div>
+      )}
 
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
       <ChangeRequestDialog open={crOpen} onOpenChange={setCrOpen} />

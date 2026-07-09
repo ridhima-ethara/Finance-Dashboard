@@ -143,153 +143,7 @@ const Consumption = () => {
         <Stat label="Projects logged" value={String(rows.filter((r) => Number(r.cost) > 0 || Number(r.tasks) > 0).length)} icon={Activity} testid="stat-logged" />
       </div>
 
-      {/* Submission table */}
-      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="submit-consumption">
-        <div className="flex items-start justify-between mb-4 gap-3 flex-wrap">
-          <div>
-            <div className="font-display font-semibold text-[15px] text-white">Today&apos;s log · {today}</div>
-            <div className="text-xs text-zinc-500 mt-0.5">
-              Enter per-project actuals — model, tasks, trajectories and cost for today
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={addRow}
-              variant="outline"
-              className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
-              data-testid="btn-add-row"
-            >
-              <Plus className="w-3.5 h-3.5" /> Add row
-            </Button>
-            <Button
-              onClick={submit}
-              className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
-              data-testid="btn-submit-consumption"
-            >
-              <Save className="w-3.5 h-3.5" />
-              Submit today&apos;s log
-            </Button>
-          </div>
-        </div>
-
-        <div className="overflow-x-auto -mx-1">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                <th className="text-left py-2 px-3 w-1/3">Project</th>
-                <th className="text-left py-2 px-3">Model</th>
-                <th className="text-right py-2 px-3">Tasks</th>
-                <th className="text-right py-2 px-3">Trajectories</th>
-                <th className="text-right py-2 px-3">Cost (USD)</th>
-                <th className="text-right py-2 px-3">Approved / day</th>
-                <th className="w-10" />
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row) => {
-                const project = visibleProjects.find((p) => p.id === row.projectId);
-                const approvedDaily = project ? Math.round(project.approvedBudget / 30) : 0;
-                const cost = Number(row.cost) || 0;
-                const pctOfApproved = approvedDaily ? Math.round((cost / approvedDaily) * 100) : 0;
-                return (
-                  <tr key={row.id} data-testid={`row-${row.id}`} className="border-b border-white/5">
-                    <td className="py-3 px-3">
-                      <select
-                        value={row.projectId}
-                        onChange={(e) => updateRow(row.id, "projectId", e.target.value)}
-                        data-testid={`select-project-${row.id}`}
-                        className="w-full h-9 px-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      >
-                        {visibleProjects.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-3 px-3">
-                      <select
-                        value={row.model}
-                        onChange={(e) => updateRow(row.id, "model", e.target.value)}
-                        data-testid={`select-model-${row.id}`}
-                        className="w-full h-9 px-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      >
-                        {MODELS.map((m) => (
-                          <option key={m} value={m}>
-                            {m}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="py-3 px-3">
-                      <input
-                        type="number"
-                        value={row.tasks}
-                        onChange={(e) => updateRow(row.id, "tasks", e.target.value)}
-                        placeholder="0"
-                        data-testid={`input-tasks-${row.id}`}
-                        className="w-full h-9 px-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-right text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      />
-                    </td>
-                    <td className="py-3 px-3">
-                      <input
-                        type="number"
-                        value={row.trajectories}
-                        onChange={(e) => updateRow(row.id, "trajectories", e.target.value)}
-                        placeholder="0"
-                        data-testid={`input-traj-${row.id}`}
-                        className="w-full h-9 px-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-right text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      />
-                    </td>
-                    <td className="py-3 px-3">
-                      <div className="relative">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500 text-sm">$</span>
-                        <input
-                          type="number"
-                          value={row.cost}
-                          onChange={(e) => updateRow(row.id, "cost", e.target.value)}
-                          placeholder="0"
-                          data-testid={`input-cost-${row.id}`}
-                          className="w-full h-9 pl-6 pr-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-right text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                        />
-                      </div>
-                    </td>
-                    <td className="py-3 px-3 text-right">
-                      <div className="text-xs text-zinc-300 tabular">{fmtCurrency(approvedDaily, { compact: false })}</div>
-                      {cost > 0 && (
-                        <div
-                          className={`text-[10px] font-semibold tabular mt-0.5 ${
-                            pctOfApproved >= 100 ? "text-red-300" : pctOfApproved >= 80 ? "text-amber-300" : "text-emerald-300"
-                          }`}
-                        >
-                          {pctOfApproved}% used
-                        </div>
-                      )}
-                    </td>
-                    <td className="py-3 px-2 text-right">
-                      <button
-                        onClick={() => removeRow(row.id)}
-                        data-testid={`btn-remove-${row.id}`}
-                        className="w-8 h-8 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center transition-colors"
-                        disabled={rows.length === 1}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 flex items-start gap-2 text-xs text-zinc-400">
-          <Info className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
-          <span>
-            Costs entered here are compared against the approved daily budget for each project. Anomalies (over 100% of daily budget) are highlighted and surfaced to CTO in Project Monitoring.
-          </span>
-        </div>
-      </div>
+      {/* Today's log removed — task logs now originate from My Projects → Tasks tab */}
 
       {/* HEATMAP */}
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="heatmap">
@@ -299,7 +153,7 @@ const Consumption = () => {
               Consumption heatmap
             </div>
             <div className="text-xs text-zinc-500 mt-0.5">
-              % of approved daily budget consumed · last 14 days · project × day
+              % of approved daily budget consumed · last 14 days · project × day · each day evaluated independently
             </div>
           </div>
           <div className="flex items-center gap-3 text-[10px] text-zinc-400">
@@ -362,7 +216,7 @@ const Consumption = () => {
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="chart-approved-vs-actual">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <div className="font-display font-semibold text-[15px] text-white">Approved vs Actual (last 15 days)</div>
+            <div className="font-display font-semibold text-[15px] text-white">Estimated vs Actual (last 15 days)</div>
             <div className="text-xs text-zinc-500 mt-0.5">Sum of daily approved budget vs actual consumption per project</div>
           </div>
         </div>
@@ -377,7 +231,7 @@ const Consumption = () => {
                 formatter={(v) => fmtCurrency(v, { compact: false })}
               />
               <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="approved" name="Approved" fill="#3B82F6" radius={[3, 3, 0, 0]} maxBarSize={22} />
+              <Bar dataKey="approved" name="Estimated" fill="#3B82F6" radius={[3, 3, 0, 0]} maxBarSize={22} />
               <Bar dataKey="actual" name="Actual" fill="#E619B8" radius={[3, 3, 0, 0]} maxBarSize={22} />
             </BarChart>
           </ResponsiveContainer>
@@ -393,7 +247,6 @@ const Consumption = () => {
               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
                 <th className="text-left py-2 px-3">Date</th>
                 <th className="text-left py-2 px-3">Project</th>
-                <th className="text-left py-2 px-3">Model</th>
                 <th className="text-right py-2 px-3">Tasks</th>
                 <th className="text-right py-2 px-3">Trajectories</th>
                 <th className="text-right py-2 px-3">Cost</th>
@@ -413,7 +266,6 @@ const Consumption = () => {
                         {new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </td>
                       <td className="py-3 px-3 text-zinc-200">{d.projectName}</td>
-                      <td className="py-3 px-3 text-fuchsia-300 text-xs">{d.model}</td>
                       <td className="py-3 px-3 text-right text-zinc-200 tabular">{d.tasks}</td>
                       <td className="py-3 px-3 text-right text-zinc-200 tabular">{d.trajectories}</td>
                       <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(d.spent, { compact: false })}</td>

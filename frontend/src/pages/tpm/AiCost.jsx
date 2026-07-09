@@ -137,10 +137,7 @@ const deriveEstimateStatus = (r) => {
 const AiCost = () => {
   const { user } = useApp();
   const [range, setRange] = useState("30d");
-  const [tab, setTab] = useState("model-spend"); // model-spend | task-log | usage-analysis
   const [selectedModel, setSelectedModel] = useState(null);
-  const [taskFilter, setTaskFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
 
   const trend = useMemo(
     () => (range === "7d" ? AI_COST_TREND.slice(-7) : AI_COST_TREND),
@@ -148,19 +145,6 @@ const AiCost = () => {
   );
   const projectedOverrun = AI_COST_MONTHLY.projected - AI_COST_MONTHLY.budget;
   const wowUp = AI_COST_TODAY.wowChange > 0;
-  const taskLog = useMemo(buildTaskLog, []);
-  const enrichedTaskLog = useMemo(
-    () => taskLog.map((r) => ({ ...r, status: deriveEstimateStatus(r) })),
-    [taskLog]
-  );
-  const filteredTaskLog = useMemo(() => {
-    return enrichedTaskLog.filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (!taskFilter.trim()) return true;
-      const q = taskFilter.toLowerCase();
-      return r.task.toLowerCase().includes(q) || r.project.toLowerCase().includes(q) || r.model.toLowerCase().includes(q) || r.owner.toLowerCase().includes(q);
-    });
-  }, [enrichedTaskLog, taskFilter, statusFilter]);
 
   return (
     <div className="space-y-6" data-testid="page-ai-cost">
@@ -204,16 +188,8 @@ const AiCost = () => {
         <StatCard testid="kpi-requests" label="Requests (today)" value={AI_COST_TODAY.requests.toLocaleString()} sub={`avg ${AI_COST_TODAY.avgLatencyMs}ms latency`} icon={Activity} />
       </div>
 
-      {/* Tabs — replace Token Usage Analysis with Model Spend / Task Log / Usage Analysis */}
-      <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1 gap-1" data-testid="ai-cost-tabs">
-        <TabBtn active={tab === "model-spend"} onClick={() => setTab("model-spend")} icon={BarChart3} label="Model Spend" testid="tab-model-spend" />
-        <TabBtn active={tab === "task-log"} onClick={() => setTab("task-log")} icon={ListChecks} label="Task Log" testid="tab-task-log" />
-        <TabBtn active={tab === "usage-analysis"} onClick={() => setTab("usage-analysis")} icon={Gauge} label="Usage Analysis" testid="tab-usage-analysis" />
-      </div>
-
-      {/* Tab: Model Spend */}
-      {tab === "model-spend" && (
-        <div className="space-y-4" data-testid="section-model-spend">
+      {/* Model Spend + Usage Analysis merged */}
+      <div className="space-y-4" data-testid="section-ai-cost-analysis">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <Panel testid="chart-cost-trend" title="Daily AI cost trend" subtitle={`${range === "7d" ? "Last 7 days" : "Last 30 days"} · stacked by provider`} className="lg:col-span-2">
               <div className="h-[280px]">
@@ -335,97 +311,7 @@ const AiCost = () => {
             </div>
           </Panel>
         </div>
-      )}
 
-      {/* Tab: Task Log */}
-      {tab === "task-log" && (
-        <div className="space-y-4" data-testid="section-task-log">
-          <Panel testid="task-log-panel" title="Task log" subtitle="Every task recorded across phases with the model, owner, and cost delta">
-            <div className="flex items-center gap-2 flex-wrap mb-3">
-              <input
-                value={taskFilter}
-                onChange={(e) => setTaskFilter(e.target.value)}
-                placeholder="Search tasks, projects, models, owners…"
-                data-testid="task-log-search"
-                className="h-9 flex-1 min-w-[220px] px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-              />
-              <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1 h-9">
-                {["all", "under", "okay", "over", "planned"].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setStatusFilter(s)}
-                    data-testid={`task-log-status-${s}`}
-                    className={`px-3 rounded-md text-xs font-medium capitalize ${statusFilter === s ? "bg-fuchsia-500/15 text-fuchsia-300" : "text-zinc-400 hover:text-zinc-100"}`}
-                    title={
-                      s === "under" ? "Actual < 90% of estimate"
-                      : s === "okay" ? "Actual within ±10% of estimate"
-                      : s === "over" ? "Actual > 110% of estimate"
-                      : s === "planned" ? "No actual spend yet"
-                      : "All statuses"
-                    }
-                  >
-                    {s === "all" ? "All" : s}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                    <th className="text-left py-2 px-3">Task</th>
-                    <th className="text-left py-2 px-3">Owner</th>
-                    <th className="text-left py-2 px-3">Model</th>
-                    <th className="text-right py-2 px-3">Tasks</th>
-                    <th className="text-right py-2 px-3">Trajectories</th>
-                    <th className="text-right py-2 px-3">Estimated</th>
-                    <th className="text-right py-2 px-3">Actual</th>
-                    <th className="text-right py-2 px-3">Variance</th>
-                    <th className="text-left py-2 px-3">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredTaskLog.length === 0 && (
-                    <tr><td colSpan="9" className="py-6 text-center text-xs text-zinc-500">No tasks match</td></tr>
-                  )}
-                  {filteredTaskLog.map((t) => {
-                    const statusStyle =
-                      t.status === "under" ? "bg-emerald-500/15 text-emerald-300"
-                      : t.status === "over" ? "bg-red-500/15 text-red-300"
-                      : t.status === "okay" ? "bg-sky-500/15 text-sky-300"
-                      : "bg-white/[0.05] text-zinc-400";
-                    return (
-                      <tr key={t.id} data-testid={`task-log-row-${t.id}`} className="border-b border-white/5 hover:bg-white/[0.03]">
-                        <td className="py-3 px-3">
-                          <div className="text-white font-medium">{t.task}</div>
-                        </td>
-                        <td className="py-3 px-3 text-xs text-zinc-300">{t.owner}</td>
-                        <td className="py-3 px-3 text-xs text-fuchsia-300">{t.model}</td>
-                        <td className="py-3 px-3 text-right tabular text-zinc-200">{t.tasks.toLocaleString()}</td>
-                        <td className="py-3 px-3 text-right tabular text-zinc-200">{t.trajectories.toLocaleString()}</td>
-                        <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(t.estCost, { compact: false })}</td>
-                        <td className="py-3 px-3 text-right text-white font-semibold tabular">{t.actualCost > 0 ? fmtCurrency(t.actualCost, { compact: false }) : "—"}</td>
-                        <td className="py-3 px-3 text-right tabular">
-                          <span className={t.variance >= 0 ? "text-emerald-300" : "text-red-300"}>{t.variance >= 0 ? "+" : ""}{fmtCurrency(t.variance, { compact: false })}</span>
-                        </td>
-                        <td className="py-3 px-3">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold capitalize ${statusStyle}`}>
-                            {t.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
-        </div>
-      )}
-
-      {/* Tab: Usage Analysis */}
-      {tab === "usage-analysis" && (
-        <div className="space-y-4" data-testid="section-usage-analysis">
           <Panel testid="chart-cost-per-model" title="Cost per model (MTD)" subtitle="Absolute spend across all providers">
             <div className="h-[280px]">
               <ResponsiveContainer width="100%" height="100%">
@@ -496,8 +382,6 @@ const AiCost = () => {
               </div>
             </Panel>
           </div>
-        </div>
-      )}
     </div>
   );
 };
