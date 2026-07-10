@@ -15,7 +15,9 @@ import { TEAM } from "../../data/mockUsers";
 const uid = () => Math.random().toString(36).slice(2, 8);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const plusDaysISO = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+const splitPhaseDates = (value = "") => String(value).split("→").map((part) => part.trim());
 const HOURS_PER_MONTH = 730; // AWS standard
+const DIRECT_COST_BUDGET_TYPES = ["Testing", "Sample"];
 
 // Seed cost/task from the Bedrock catalog (~4K in + 1K out per trajectory) — user can override.
 const seedCostPerTask = (model) => {
@@ -57,6 +59,11 @@ const BudgetBuilder = () => {
   const nav = useNavigate();
   const [params] = useSearchParams();
   const editReviewId = params.get("edit");
+  const requestedProjectId = params.get("projectId") || params.get("project") || "";
+  const requestedBudgetType = params.get("budgetType") || "";
+  const requestedPhaseId = params.get("phaseId") || "";
+  const requestedSampleIteration = Math.max(Number(params.get("sampleIteration") || 1), 1);
+  const requestedSourceDeliveryId = params.get("sourceDeliveryId") || null;
   const { visibleProjects, submitBudget, budgetReviews, role, user } = useApp();
   const isRnd = role === "R&D";
 
@@ -69,11 +76,20 @@ const BudgetBuilder = () => {
   }, [editReviewId, budgetReviews]);
 
   // ---- Step 1: Details ----
-  const [projectId, setProjectId] = useState(returnedReview?.projectId || visibleProjects[0]?.id || "");
+  const [projectId, setProjectId] = useState(
+    returnedReview?.projectId
+    || (visibleProjects.some((project) => project.id === requestedProjectId) ? requestedProjectId : "")
+    || visibleProjects[0]?.id
+    || ""
+  );
   const [priority, setPriority] = useState("Medium");
-  // R&D users are locked to "RnD"; TPM can pick RnD or Production
-  const initialBudgetType = isRnd ? "RnD" : (returnedReview ? "Production" : "Production");
+  const budgetTypeOptions = isRnd ? ["Testing", "Sample", "RnD"] : ["Production", "RnD"];
+  const initialBudgetType =
+    returnedReview?.budgetType
+    || (budgetTypeOptions.includes(requestedBudgetType) ? requestedBudgetType : null)
+    || (isRnd ? "Testing" : "Production");
   const [budgetType, setBudgetType] = useState(initialBudgetType);
+  const isDirectCostBudget = DIRECT_COST_BUDGET_TYPES.includes(budgetType);
   // R&D locked to single phase
   const [deliveryMode, setDeliveryMode] = useState(isRnd ? "single" : "single");
 
@@ -88,7 +104,7 @@ const BudgetBuilder = () => {
   // ---- Step 2: Budget items ----
   const [selectedTypes, setSelectedTypes] = useState({ models: true, infra: true, subs: true });
   const [activeTab, setActiveTab] = useState("models");
-  const [models, setModels] = useState([emptyModelItem(500 * 3)]);
+  const [models, setModels] = useState([emptyModelItem(DIRECT_COST_BUDGET_TYPES.includes(initialBudgetType) ? 0 : 500 * 3)]);
   const [infra, setInfra] = useState([emptyInfraItem()]);
   const [subs, setSubs] = useState([emptySubItem()]);
 
@@ -105,19 +121,35 @@ const BudgetBuilder = () => {
 
   const project = visibleProjects.find((p) => p.id === projectId);
 
+  useEffect(() => {
+    if (!project || returnedReview || !requestedPhaseId) return;
+    const requestedPhase = (project.phases || []).find((phase) => phase.id === requestedPhaseId);
+    if (!requestedPhase) return;
+    const [phaseStart, phaseEnd] = splitPhaseDates(requestedPhase.dates);
+    setSinglePhase((current) => ({
+      tasks: Number(requestedPhase.totalTasks || requestedPhase.tasks || current.tasks || 0),
+      trajectories: Number(requestedPhase.trajectoriesPerTask || current.trajectories || 0),
+    }));
+    if (phaseStart) setSingleStart(phaseStart);
+    if (phaseEnd) setSingleEnd(phaseEnd);
+  }, [project, requestedPhaseId, returnedReview]);
+
   // Trajectories drive model volume (tasks × trajectories × costPerTraj)
   const totalTrajectories = useMemo(() => {
+    if (isDirectCostBudget) return 0;
     if (deliveryMode === "single") return Number(singlePhase.tasks || 0) * Number(singlePhase.trajectories || 0);
     return phases.reduce((s, p) => s + Number(p.tasks || 0) * Number(p.trajectories || 0), 0);
-  }, [deliveryMode, singlePhase, phases]);
+  }, [deliveryMode, singlePhase, phases, isDirectCostBudget]);
 
   const totalTasks = useMemo(() => {
+    if (isDirectCostBudget) return 0;
     if (deliveryMode === "single") return Number(singlePhase.tasks || 0);
     return phases.reduce((s, p) => s + Number(p.tasks || 0), 0);
-  }, [deliveryMode, singlePhase, phases]);
+  }, [deliveryMode, singlePhase, phases, isDirectCostBudget]);
 
   // Recompute model estCost whenever total trajectory volume changes (keeps user-entered costPerTask)
   useEffect(() => {
+    if (isDirectCostBudget) return;
     setModels((rows) => rows.map((r) => {
       const meta = BEDROCK_MODELS.find((m) => m.id === r.modelId) || BEDROCK_MODELS[0];
       return {
@@ -126,7 +158,11 @@ const BudgetBuilder = () => {
         estCost: Math.round(Number(r.costPerTask || 0) * totalTrajectories * 100) / 100,
       };
     }));
-  }, [totalTrajectories]);
+  }, [totalTrajectories, isDirectCostBudget]);
+
+  useEffect(() => {
+    if (isDirectCostBudget && deliveryMode !== "single") setDeliveryMode("single");
+  }, [isDirectCostBudget, deliveryMode]);
 
   const totals = useMemo(() => {
     const m = selectedTypes.models ? models.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
@@ -146,6 +182,10 @@ const BudgetBuilder = () => {
         const meta = BEDROCK_MODELS.find((m) => m.id === next.modelId) || BEDROCK_MODELS[0];
         next.provider = meta.provider;
         next.costPerTask = seedCostPerTask(meta);
+      }
+      if (isDirectCostBudget) {
+        if (key === "estCost") next.estCost = Number(v) || 0;
+        return next;
       }
       next.estCost = Math.round(Number(next.costPerTask || 0) * totalTrajectories * 100) / 100;
       return next;
@@ -190,7 +230,15 @@ const BudgetBuilder = () => {
 
   const distributedPhases = useMemo(() => {
     if (deliveryMode === "single") {
-      return [{ id: "p1", name: "Delivery", start: singleStart, end: singleEnd, budget: totals.total, tasks: Number(singlePhase.tasks), trajectories: Number(singlePhase.trajectories) }];
+      return [{
+        id: "p1",
+        name: isDirectCostBudget ? `${budgetType} estimate` : "Delivery",
+        start: singleStart,
+        end: singleEnd,
+        budget: totals.total,
+        tasks: isDirectCostBudget ? 0 : Number(singlePhase.tasks),
+        trajectories: isDirectCostBudget ? 0 : Number(singlePhase.trajectories),
+      }];
     }
     // weight by tasks × trajectories
     const totalTraj = phases.reduce((s, p) => s + Number(p.tasks || 0) * Number(p.trajectories || 0), 0) || 1;
@@ -199,13 +247,15 @@ const BudgetBuilder = () => {
       const share = traj / totalTraj;
       return { ...p, budget: Math.round(totals.total * share) };
     });
-  }, [deliveryMode, phases, singleStart, singleEnd, singlePhase, totals.total]);
+  }, [deliveryMode, phases, singleStart, singleEnd, singlePhase, totals.total, isDirectCostBudget, budgetType]);
 
   const canProceedDetails = () => {
     if (!projectId) { toast.error("Select a project"); return false; }
     if (deliveryMode === "single") {
-      if (!singlePhase.tasks || Number(singlePhase.tasks) <= 0) { toast.error("Enter number of tasks"); return false; }
-      if (!singlePhase.trajectories || Number(singlePhase.trajectories) <= 0) { toast.error("Enter estimated trajectories per task"); return false; }
+      if (!isDirectCostBudget) {
+        if (!singlePhase.tasks || Number(singlePhase.tasks) <= 0) { toast.error("Enter number of tasks"); return false; }
+        if (!singlePhase.trajectories || Number(singlePhase.trajectories) <= 0) { toast.error("Enter estimated trajectories per task"); return false; }
+      }
       if (!singleStart || !singleEnd) { toast.error("Set estimated start & end date"); return false; }
     } else {
       if (!phases.length) { toast.error("Add at least one phase"); return false; }
@@ -243,6 +293,8 @@ const BudgetBuilder = () => {
       items,
       totals,
       resubmitOfReviewId: returnedReview?.id || null,
+      sampleIteration: budgetType === "Sample" ? requestedSampleIteration : 1,
+      sourceDeliveryId: requestedSourceDeliveryId,
     });
     toast.success(returnedReview ? "Budget resubmitted to CTO" : "Budget submitted", {
       description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · ${distributedPhases.length} ${distributedPhases.length === 1 ? "phase" : "phases"}`,
@@ -274,7 +326,7 @@ const BudgetBuilder = () => {
             {project?.name || "New budget"}
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Running total <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.total, { compact: false })}</span> · {deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} · <span className="text-zinc-300 tabular">{totalTrajectories.toLocaleString()}</span> trajectories
+            Running total <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.total, { compact: false })}</span> · {deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} · {isDirectCostBudget ? <span className="text-zinc-300">{budgetType} direct-cost estimate</span> : <span className="text-zinc-300 tabular">{totalTrajectories.toLocaleString()}</span>} {!isDirectCostBudget && "trajectories"}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -320,30 +372,29 @@ const BudgetBuilder = () => {
                 {["Low", "Medium", "High", "Critical"].map((p) => <option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label={isRnd ? "Budget type · locked to R&D" : "Budget type *"}>
+            <Field label="Budget type *" hint={isRnd ? "Testing before Sample" : null}>
               <select
                 value={budgetType}
                 onChange={(e) => setBudgetType(e.target.value)}
                 data-testid="bb-budget-type"
-                disabled={isRnd}
-                className={ipStyle + (isRnd ? " opacity-70 cursor-not-allowed" : "")}
+                className={ipStyle}
               >
-                {(isRnd ? ["RnD"] : ["Production", "RnD"]).map((b) => <option key={b} value={b}>{b}</option>)}
+                {budgetTypeOptions.map((b) => <option key={b} value={b}>{b}</option>)}
               </select>
             </Field>
           </div>
 
-          <div className="mt-5">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project delivery {isRnd && <span className="text-fuchsia-300">· R&D locked to single phase</span>}</div>
-            <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
-              <button
-                onClick={() => setDeliveryMode("single")}
-                data-testid="bb-delivery-single"
-                className={`px-4 py-1.5 rounded-md text-xs font-medium ${deliveryMode === "single" ? "bg-fuchsia-500 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]" : "text-zinc-400 hover:text-zinc-100"}`}
-              >
-                Single phase
-              </button>
-              {!isRnd && (
+          {!isRnd && (
+            <div className="mt-5">
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project delivery</div>
+              <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                <button
+                  onClick={() => setDeliveryMode("single")}
+                  data-testid="bb-delivery-single"
+                  className={`px-4 py-1.5 rounded-md text-xs font-medium ${deliveryMode === "single" ? "bg-fuchsia-500 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]" : "text-zinc-400 hover:text-zinc-100"}`}
+                >
+                  Single phase
+                </button>
                 <button
                   onClick={() => setDeliveryMode("multiple")}
                   data-testid="bb-delivery-multiple"
@@ -351,23 +402,32 @@ const BudgetBuilder = () => {
                 >
                   Multiple phases
                 </button>
-              )}
+              </div>
             </div>
-          </div>
+          )}
 
           {deliveryMode === "single" && (
             <div className="mt-4 space-y-3" data-testid="bb-single-phase">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Field label="Number of tasks *">
-                  <input type="number" min="1" value={singlePhase.tasks} onChange={(e) => setSinglePhase((s) => ({ ...s, tasks: e.target.value }))} data-testid="bb-single-tasks" className={ipStyle + " tabular"} />
-                </Field>
-                <Field label="Est. trajectories / task *">
-                  <input type="number" min="1" value={singlePhase.trajectories} onChange={(e) => setSinglePhase((s) => ({ ...s, trajectories: e.target.value }))} data-testid="bb-single-trajectories" className={ipStyle + " tabular"} />
-                </Field>
-              </div>
-              <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 text-[11px] text-zinc-400" data-testid="bb-single-total-trajectories">
-                Total trajectories · <span className="text-fuchsia-300 font-semibold tabular">{(Number(singlePhase.tasks || 0) * Number(singlePhase.trajectories || 0)).toLocaleString()}</span>
-              </div>
+              {!isDirectCostBudget && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Field label="Number of tasks *">
+                      <input type="number" min="1" value={singlePhase.tasks} onChange={(e) => setSinglePhase((s) => ({ ...s, tasks: e.target.value }))} data-testid="bb-single-tasks" className={ipStyle + " tabular"} />
+                    </Field>
+                    <Field label="Est. trajectories / task *">
+                      <input type="number" min="1" value={singlePhase.trajectories} onChange={(e) => setSinglePhase((s) => ({ ...s, trajectories: e.target.value }))} data-testid="bb-single-trajectories" className={ipStyle + " tabular"} />
+                    </Field>
+                  </div>
+                  <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 text-[11px] text-zinc-400" data-testid="bb-single-total-trajectories">
+                    Total trajectories · <span className="text-fuchsia-300 font-semibold tabular">{(Number(singlePhase.tasks || 0) * Number(singlePhase.trajectories || 0)).toLocaleString()}</span>
+                  </div>
+                </>
+              )}
+              {isDirectCostBudget && (
+                <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.05] px-3 py-2 text-[11px] text-sky-200" data-testid="bb-direct-cost-note">
+                  {budgetType} budgets are raised as direct cost estimates. No task count or trajectory count is required here; add only model, infra, and subscription costs in the next step.
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <Field label="Estimated Start Date *">
                   <input type="date" value={singleStart} onChange={(e) => setSingleStart(e.target.value)} data-testid="bb-single-start" className={ipStyle} />
@@ -431,7 +491,9 @@ const BudgetBuilder = () => {
 
           <div className="mt-6 flex items-center justify-between">
             <div className="text-xs text-zinc-400">
-              Total trajectories: <span className="text-fuchsia-300 font-semibold tabular">{totalTrajectories.toLocaleString()}</span> · {totalTasks.toLocaleString()} tasks
+              {isDirectCostBudget
+                ? `${budgetType} estimate · direct cost only`
+                : <>Total trajectories: <span className="text-fuchsia-300 font-semibold tabular">{totalTrajectories.toLocaleString()}</span> · {totalTasks.toLocaleString()} tasks</>}
             </div>
             <Button
               onClick={() => canProceedDetails() && setStep(2)}
@@ -446,12 +508,12 @@ const BudgetBuilder = () => {
 
       {/* Step 2 — Budget Items */}
       {step === 2 && (
-        <Card title="2. Budget Items" subtitle={`Trajectories: ${totalTrajectories.toLocaleString()} · costs auto-update from step 1`} testid="bb-step-items">
+        <Card title="2. Budget Items" subtitle={isDirectCostBudget ? `${budgetType} estimate · direct model, infra, and subscription costing` : `Trajectories: ${totalTrajectories.toLocaleString()} · costs auto-update from step 1`} testid="bb-step-items">
           <div>
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Budget types</div>
             <div className="flex items-center gap-2 flex-wrap">
               {[
-                { k: "models", label: "Models", desc: "AI models · cost = provider × trajectories" },
+                { k: "models", label: "Models", desc: isDirectCostBudget ? "Direct model-cost estimate" : "AI models · cost = provider × trajectories" },
                 { k: "infra", label: "Infrastructure", desc: "Enter monthly $ — daily cost auto-shown" },
                 { k: "subs", label: "Subscriptions", desc: "$ per seat + assign members" },
               ].map((t) => {
@@ -500,42 +562,64 @@ const BudgetBuilder = () => {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-fuchsia-300" />
-                  <div className="text-sm font-semibold text-white">AI Models · Bedrock</div>
-                  <span className="text-[11px] text-zinc-500">· est. cost = tasks × trajectories × cost/task</span>
+                  <div className="text-sm font-semibold text-white">{isDirectCostBudget ? "AI Models · direct estimate" : "AI Models · Bedrock"}</div>
+                  <span className="text-[11px] text-zinc-500">
+                    {isDirectCostBudget ? "· enter the model-cost estimate directly" : "· est. cost = tasks × trajectories × cost/task"}
+                  </span>
                 </div>
-                <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem(totalTrajectories)])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
+                <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem(isDirectCostBudget ? 0 : totalTrajectories)])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add model
                 </Button>
               </div>
               <div className="space-y-1.5">
-                <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
-                  <span>Model</span><span>Provider</span><span className="text-right">Cost / task ($)</span><span className="text-right">Est. cost</span><span />
+                <div className={`grid ${isDirectCostBudget ? "grid-cols-[1.8fr_1fr_1fr_28px]" : "grid-cols-[1.5fr_1fr_1fr_1fr_28px]"} gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5`}>
+                  <span>Model</span>
+                  <span>Provider</span>
+                  {!isDirectCostBudget && <span className="text-right">Cost / task ($)</span>}
+                  <span className="text-right">Est. cost</span>
+                  <span />
                 </div>
                 {models.map((r) => {
                   const meta = BEDROCK_MODELS.find((m) => m.id === r.modelId);
                   return (
-                    <div key={r.id} data-testid={`bb-row-model-${r.id}`} className="grid grid-cols-[1.5fr_1fr_1fr_1fr_28px] gap-2 items-center py-1">
+                    <div key={r.id} data-testid={`bb-row-model-${r.id}`} className={`grid ${isDirectCostBudget ? "grid-cols-[1.8fr_1fr_1fr_28px]" : "grid-cols-[1.5fr_1fr_1fr_1fr_28px]"} gap-2 items-center py-1`}>
                       <select value={r.modelId} onChange={(e) => updateModelRow(r.id, "modelId", e.target.value)} data-testid={`bb-model-select-${r.id}`} className={rowInp}>
                         {BEDROCK_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 leading-8 truncate">{meta?.provider}</div>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.001"
-                        value={r.costPerTask}
-                        onChange={(e) => updateModelRow(r.id, "costPerTask", e.target.value)}
-                        data-testid={`bb-model-cost-per-task-${r.id}`}
-                        className={rowInp + " tabular text-right"}
-                      />
+                      {!isDirectCostBudget && (
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={r.costPerTask}
+                          onChange={(e) => updateModelRow(r.id, "costPerTask", e.target.value)}
+                          data-testid={`bb-model-cost-per-task-${r.id}`}
+                          className={rowInp + " tabular text-right"}
+                        />
+                      )}
+                      {isDirectCostBudget ? (
+                        <input
+                          type="number"
+                          min="0"
+                          step="10"
+                          value={r.estCost}
+                          onChange={(e) => updateModelRow(r.id, "estCost", e.target.value)}
+                          data-testid={`bb-model-estimate-${r.id}`}
+                          className={rowInp + " tabular text-right"}
+                        />
+                      ) : (
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8" data-testid={`bb-model-est-cost-${r.id}`}>{fmtCurrency(r.estCost, { compact: false })}</div>
+                      )}
                       <RemoveBtn onClick={() => removeRow(setModels)(r.id)} testid={`bb-model-remove-${r.id}`} />
                     </div>
                   );
                 })}
               </div>
               <div className="mt-2 text-[11px] text-zinc-500">
-                Formula: <span className="text-fuchsia-300 font-semibold tabular">{totalTasks.toLocaleString()}</span> tasks × <span className="text-fuchsia-300 font-semibold tabular">{deliveryMode === "single" ? singlePhase.trajectories : "avg"}</span> trajectories/task × cost/task · Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span>
+                {isDirectCostBudget
+                  ? <>Direct model-cost total: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span></>
+                  : <>Formula: <span className="text-fuchsia-300 font-semibold tabular">{totalTasks.toLocaleString()}</span> tasks × <span className="text-fuchsia-300 font-semibold tabular">{deliveryMode === "single" ? singlePhase.trajectories : "avg"}</span> trajectories/task × cost/task · Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span></>}
               </div>
             </div>
           )}
@@ -655,8 +739,8 @@ const BudgetBuilder = () => {
           <Card title="3. Preview & Submit" subtitle="Final review before submitting" testid="bb-step-preview">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <MiniStat label="Total budget" value={fmtCurrency(totals.total, { compact: false })} tone="magenta" />
-              <MiniStat label="Trajectories" value={totalTrajectories.toLocaleString()} />
-              <MiniStat label="Tasks" value={totalTasks.toLocaleString()} />
+              <MiniStat label={isDirectCostBudget ? "Estimate mode" : "Trajectories"} value={isDirectCostBudget ? "Direct cost" : totalTrajectories.toLocaleString()} />
+              <MiniStat label={isDirectCostBudget ? "Budget type" : "Tasks"} value={isDirectCostBudget ? budgetType : totalTasks.toLocaleString()} />
               <MiniStat label="Delivery" value={deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -671,7 +755,7 @@ const BudgetBuilder = () => {
               <Sparkles className="w-4 h-4 text-fuchsia-300 mt-0.5 flex-shrink-0" />
               <div className="text-zinc-300">
                 <span className="text-fuchsia-200 font-semibold">AI insight: </span>
-                Model spend ({fmtCurrency(totals.models, { compact: false })}) is <span className="text-fuchsia-300 font-semibold">{totals.total ? Math.round((totals.models / totals.total) * 100) : 0}%</span> of total. {totalTrajectories > 5000 && "High trajectory count — consider a cheaper primary model to reduce variance."}
+                Model spend ({fmtCurrency(totals.models, { compact: false })}) is <span className="text-fuchsia-300 font-semibold">{totals.total ? Math.round((totals.models / totals.total) * 100) : 0}%</span> of total. {isDirectCostBudget ? "This estimate is set up as a direct pre-delivery budget, so approvals will review model, infra, and subscription cost only." : totalTrajectories > 5000 ? "High trajectory count — consider a cheaper primary model to reduce variance." : "Trajectory-driven estimate is balanced against the selected infrastructure mix."}
               </div>
             </div>
           </Card>

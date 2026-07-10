@@ -1,10 +1,51 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { ArrowUpRightSquare, DollarSign, Send, X, Zap, Info, Cpu, Server, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
+import { BEDROCK_MODELS, EC2_INSTANCES, SUBSCRIPTION_CATALOG } from "../data/mockCatalog";
+
+const MODEL_OPTIONS = BEDROCK_MODELS.map((model) => ({
+  value: model.id,
+  label: `${model.name} · ${model.provider}`,
+}));
+
+const INFRA_OPTIONS = EC2_INSTANCES.map((instance) => ({
+  value: instance.code,
+  label: `${instance.code} · ${instance.family} · ${instance.vCPU} vCPU · ${instance.memoryGiB} GiB`,
+}));
+
+const SUBSCRIPTION_OPTIONS = SUBSCRIPTION_CATALOG.map((subscription) => ({
+  value: subscription.id,
+  label: `${subscription.name} · $${subscription.monthly}/month`,
+}));
+
+const buildModelState = (enabled = true) => ({
+  enabled,
+  amount: 1500,
+  note: "",
+  optionId: MODEL_OPTIONS[0]?.value || "",
+  optionLabel: MODEL_OPTIONS[0]?.label || "",
+});
+
+const buildInfraState = (enabled = true) => ({
+  enabled,
+  amount: 800,
+  note: "",
+  optionId: INFRA_OPTIONS[0]?.value || "",
+  optionLabel: INFRA_OPTIONS[0]?.label || "",
+});
+
+const buildSubState = (enabled = false) => ({
+  enabled,
+  amount: 0,
+  note: "",
+  optionId: SUBSCRIPTION_OPTIONS[0]?.value || "",
+  optionLabel: SUBSCRIPTION_OPTIONS[0]?.label || "",
+  billingUnit: "per month",
+});
 
 // TPM/R&D top-up request dialog — bifurcated into Models / Infra / Subscriptions asks
 // with per-line justification. Routed to CTO first, then CFO for final sign-off.
@@ -17,15 +58,40 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     () => projectList.find((p) => p.id === projectId) || project,
     [projectId, projectList, project]
   );
-  const phases = activeProject?.phases || [];
+  const phases = useMemo(() => activeProject?.phases || [], [activeProject]);
   const [phaseId, setPhaseId] = useState(defaultPhaseId || phases[0]?.id || "");
   const [urgency, setUrgency] = useState("Normal");
   const [reason, setReason] = useState("");
 
   // Bifurcated budget items
-  const [models, setModels] = useState({ enabled: true, amount: 1500, note: "" });
-  const [infra, setInfra] = useState({ enabled: true, amount: 800, note: "" });
-  const [subs, setSubs] = useState({ enabled: false, amount: 0, note: "" });
+  const [models, setModels] = useState(() => buildModelState(true));
+  const [infra, setInfra] = useState(() => buildInfraState(true));
+  const [subs, setSubs] = useState(() => buildSubState(false));
+
+  useEffect(() => {
+    if (project?.id) {
+      setProjectId(project.id);
+      return;
+    }
+    if (!projectList.some((entry) => entry.id === projectId)) {
+      setProjectId(projectList[0]?.id || "");
+    }
+  }, [project, projectId, projectList]);
+
+  useEffect(() => {
+    if (!phases.length) {
+      setPhaseId("");
+      return;
+    }
+    if (defaultPhaseId && phases.some((phase) => phase.id === defaultPhaseId) && phaseId !== defaultPhaseId) {
+      setPhaseId(defaultPhaseId);
+      return;
+    }
+    const fallbackPhaseId = phases.some((phase) => phase.id === defaultPhaseId) ? defaultPhaseId : phases[0]?.id;
+    if (!phases.some((phase) => phase.id === phaseId)) {
+      setPhaseId(fallbackPhaseId || "");
+    }
+  }, [defaultPhaseId, phaseId, phases]);
 
   const activePhase = phases.find((ph) => ph.id === phaseId);
   const totalAmount = (models.enabled ? Number(models.amount) || 0 : 0)
@@ -34,13 +100,30 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
 
   const submit = () => {
     if (!activeProject) { toast.error("Select a project"); return; }
+    if (!activePhase && phases.length) { toast.error("Select a phase"); return; }
     if (totalAmount <= 0) { toast.error("Enter at least one budget-item amount"); return; }
     if (!reason.trim()) { toast.error("Justification is required"); return; }
     const effectivePhase = activePhase || phases[0] || { id: "general", name: "Project-wide" };
     const breakdown = {
-      models: models.enabled ? { amount: Number(models.amount) || 0, note: models.note } : null,
-      infra: infra.enabled ? { amount: Number(infra.amount) || 0, note: infra.note } : null,
-      subs: subs.enabled ? { amount: Number(subs.amount) || 0, note: subs.note } : null,
+      models: models.enabled ? {
+        amount: Number(models.amount) || 0,
+        note: models.note,
+        optionId: models.optionId,
+        optionLabel: models.optionLabel,
+      } : null,
+      infra: infra.enabled ? {
+        amount: Number(infra.amount) || 0,
+        note: infra.note,
+        optionId: infra.optionId,
+        optionLabel: infra.optionLabel,
+      } : null,
+      subs: subs.enabled ? {
+        amount: Number(subs.amount) || 0,
+        note: subs.note,
+        optionId: subs.optionId,
+        optionLabel: subs.optionLabel,
+        billingUnit: "per month",
+      } : null,
     };
     createTopupRequest({
       projectId: activeProject.id,
@@ -54,9 +137,9 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     toast.success("Top-up request submitted", {
       description: `${activeProject.name} · ${fmtCurrency(totalAmount, { compact: false })} · routed to CTO → CFO`,
     });
-    setModels({ enabled: true, amount: 1500, note: "" });
-    setInfra({ enabled: true, amount: 800, note: "" });
-    setSubs({ enabled: false, amount: 0, note: "" });
+    setModels(buildModelState(true));
+    setInfra(buildInfraState(true));
+    setSubs(buildSubState(false));
     setReason(""); setUrgency("Normal");
     onOpenChange(false);
   };
@@ -94,6 +177,21 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
             </Field>
           )}
 
+          {phases.length > 0 && (
+            <Field label="Phase">
+              <select
+                value={phaseId}
+                onChange={(e) => setPhaseId(e.target.value)}
+                data-testid="tur-phase"
+                className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+              >
+                {phases.map((phase) => (
+                  <option key={phase.id} value={phase.id} className="bg-[#12121A]">{phase.name}</option>
+                ))}
+              </select>
+            </Field>
+          )}
+
           {/* Bifurcated ask */}
           <div>
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">Ask · budget items</div>
@@ -105,6 +203,9 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
                 helper="AI model spend (Bedrock, OpenAI, Anthropic)"
                 value={models}
                 onChange={setModels}
+                optionLabel="Bedrock model"
+                options={MODEL_OPTIONS}
+                notePlaceholder="Why this model change is needed"
               />
               <ItemRow
                 testidPrefix="tur-infra"
@@ -113,14 +214,20 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
                 helper="Compute (EC2), storage, networking"
                 value={infra}
                 onChange={setInfra}
+                optionLabel="EC2 instance"
+                options={INFRA_OPTIONS}
+                notePlaceholder="Why this infra uplift is needed"
               />
               <ItemRow
                 testidPrefix="tur-subs"
                 icon={CreditCard}
                 label="Subscriptions"
-                helper="Seat-based tools (GitHub, Copilot, etc.)"
+                helper="Seat-based tools billed monthly"
                 value={subs}
                 onChange={setSubs}
+                optionLabel="Subscription · per month"
+                options={SUBSCRIPTION_OPTIONS}
+                notePlaceholder="Seats, teams, or tooling context"
               />
             </div>
             <div className="mt-3 flex items-center justify-between text-xs">
@@ -193,7 +300,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
   );
 };
 
-const ItemRow = ({ icon: Icon, label, helper, value, onChange, testidPrefix }) => (
+const ItemRow = ({ icon: Icon, label, helper, value, onChange, testidPrefix, optionLabel, options, notePlaceholder }) => (
   <div className={`rounded-xl border p-3 transition-colors ${value.enabled ? "border-fuchsia-500/30 bg-fuchsia-500/[0.04]" : "border-white/5 bg-white/[0.02]"}`} data-testid={`${testidPrefix}-row`}>
     <div className="flex items-center gap-3">
       <button
@@ -223,13 +330,40 @@ const ItemRow = ({ icon: Icon, label, helper, value, onChange, testidPrefix }) =
       </div>
     </div>
     {value.enabled && (
-      <input
-        value={value.note}
-        onChange={(e) => onChange({ ...value, note: e.target.value })}
-        placeholder="Line note · e.g. Opus 4.8 fine-tune sweep"
-        data-testid={`${testidPrefix}-note`}
-        className="mt-2 w-full h-8 px-3 rounded-md bg-white/[0.03] border border-white/10 text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-fuchsia-500/40"
-      />
+      <div className="mt-2 grid gap-2 md:grid-cols-2">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">{optionLabel}</div>
+          <select
+            value={value.optionId}
+            onChange={(e) => {
+              const option = options.find((entry) => entry.value === e.target.value);
+              onChange({
+                ...value,
+                optionId: e.target.value,
+                optionLabel: option?.label || "",
+              });
+            }}
+            data-testid={`${testidPrefix}-option`}
+            className="w-full h-9 px-3 rounded-md bg-white/[0.03] border border-white/10 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-fuchsia-500/40"
+          >
+            {options.map((option) => (
+              <option key={option.value} value={option.value} className="bg-[#12121A]">
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Line note</div>
+          <input
+            value={value.note}
+            onChange={(e) => onChange({ ...value, note: e.target.value })}
+            placeholder={notePlaceholder}
+            data-testid={`${testidPrefix}-note`}
+            className="w-full h-9 px-3 rounded-md bg-white/[0.03] border border-white/10 text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-fuchsia-500/40"
+          />
+        </div>
+      </div>
     )}
   </div>
 );

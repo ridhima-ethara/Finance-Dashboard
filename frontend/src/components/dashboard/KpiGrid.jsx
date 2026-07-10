@@ -24,7 +24,7 @@ const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", icon: Icon, 
   return (
     <div
       data-testid={testid}
-      className="bg-[#12121A] rounded-2xl border border-white/5 p-5 card-hover cursor-pointer relative overflow-hidden"
+      className="h-full bg-[#12121A] rounded-2xl border border-white/5 p-5 card-hover cursor-pointer relative overflow-hidden"
     >
       <div className="flex items-center justify-between">
         <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
@@ -118,7 +118,10 @@ const KpiGrid = () => {
   ];
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="kpi-grid">
+    <div
+      className={`grid gap-4 auto-rows-fr ${role === "CFO" ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-2" : "grid-cols-2 md:grid-cols-4"}`}
+      data-testid="kpi-grid"
+    >
       {cards
         .filter((card) => !card.hidden)
         .map((card) => (

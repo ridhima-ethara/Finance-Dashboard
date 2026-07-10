@@ -20,6 +20,7 @@ const Projects = () => {
   const isCTO = role === "CTO";
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
+  const canCreateProject = isCTO || isTPM || role === "R&D";
 
   const filtered = visibleProjects.filter((p) => {
     if (scope !== "all" && p.type !== scope) return false;
@@ -54,7 +55,7 @@ const Projects = () => {
               Request Budget
             </Button>
           )}
-          {isCTO && (
+          {canCreateProject && (
             <Button
               onClick={() => setNewProjectOpen(true)}
               className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"

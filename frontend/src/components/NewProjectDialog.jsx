@@ -5,7 +5,26 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { TEAM } from "../data/mockUsers";
-import { FolderPlus, User, Calendar as CalIcon, Link2, FileText, Users, Beaker } from "lucide-react";
+import { FolderPlus, User, Calendar as CalIcon, Link2, FileText, Users, Beaker, Mail, Upload, X } from "lucide-react";
+
+const MAX_ATTACHMENTS = 3;
+const MAX_ATTACHMENT_SIZE = 750 * 1024;
+
+const buildEmptyForm = (today) => ({
+  clientProjectName: "",
+  internalName: "",
+  startDate: today,
+  docUrl: "",
+  tpm: "",
+  rndMembers: [],
+  attachments: [],
+});
+
+const formatFileSize = (size) => {
+  if (!size) return "0 KB";
+  if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(size / 1024))} KB`;
+};
 
 const NewProjectDialog = ({ open, onOpenChange }) => {
   const nav = useNavigate();
@@ -13,14 +32,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const [form, setForm] = useState({
-    clientProjectName: "",
-    internalName: "",
-    startDate: today,
-    docUrl: "",
-    tpm: "",
-    rndMembers: [],
-  });
+  const [form, setForm] = useState(() => buildEmptyForm(today));
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const toggleRnd = (name) =>
@@ -30,6 +42,57 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
         ? f.rndMembers.filter((n) => n !== name)
         : [...f.rndMembers, name],
     }));
+  const handleFilePick = (event) => {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    const oversize = files.find((file) => file.size > MAX_ATTACHMENT_SIZE);
+    if (oversize) {
+      toast.error("Attachment too large", {
+        description: `${oversize.name} is above ${formatFileSize(MAX_ATTACHMENT_SIZE)}.`,
+      });
+      event.target.value = "";
+      return;
+    }
+
+    setForm((current) => {
+      const existing = new Set(current.attachments.map((file) => `${file.name}:${file.size}`));
+      const next = files
+        .filter((file) => !existing.has(`${file.name}:${file.size}`))
+        .map((file) => ({
+          id: `att-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+          name: file.name,
+          size: file.size,
+          type: file.type || "application/octet-stream",
+          kind: "file",
+        }));
+      const merged = [...current.attachments, ...next];
+      if (merged.length > MAX_ATTACHMENTS) {
+        toast.error(`Only ${MAX_ATTACHMENTS} files can be attached in this workspace.`);
+      }
+      return {
+        ...current,
+        attachments: merged.slice(0, MAX_ATTACHMENTS),
+      };
+    });
+
+    event.target.value = "";
+  };
+  const removeAttachment = (attachmentId) =>
+    setForm((current) => ({
+      ...current,
+      attachments: current.attachments.filter((file) => file.id !== attachmentId),
+    }));
+
+  const selectedMembers = Array.from(new Set([form.tpm, ...form.rndMembers].filter(Boolean))).map((name) => {
+    const match = TEAM.find((member) => member.name === name);
+    return {
+      id: match?.id || `member-${name.toLowerCase().replace(/\s+/g, "-")}`,
+      name,
+      role: name === form.tpm ? "TPM" : match?.role || "R&D",
+      email: match?.email || `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai`,
+    };
+  });
 
   const submit = () => {
     if (!form.clientProjectName.trim()) return toast.error("Enter the client project name");
@@ -40,12 +103,13 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
     const proj = addProject({
       ...form,
       createdBy: user?.name || "CTO",
+      createdByRole: user?.role || "CTO",
     });
     toast.success("Project created", {
-      description: `${proj.name} · TPM ${proj.tpm}${form.rndMembers.length ? ` · ${form.rndMembers.length} R&D` : ""}`,
+      description: `${proj.name} · kickoff sent to ${selectedMembers.length} member${selectedMembers.length === 1 ? "" : "s"}`,
     });
     onOpenChange(false);
-    setForm({ clientProjectName: "", internalName: "", startDate: today, docUrl: "", tpm: "", rndMembers: [] });
+    setForm(buildEmptyForm(today));
     setTimeout(() => nav(`/projects/${proj.id}`), 250);
   };
 
@@ -57,7 +121,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
       <DialogContent className="bg-[#0F0F16] border-white/10 text-zinc-100 max-w-lg max-h-[90vh] overflow-y-auto" data-testid="dialog-new-project">
         <DialogHeader>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
-            <FolderPlus className="w-3 h-3" /> CTO · Create project
+            <FolderPlus className="w-3 h-3" /> {user?.role || "CTO"} · Create project
           </div>
           <DialogTitle className="font-display text-xl text-white mt-1">New project</DialogTitle>
           <DialogDescription className="text-xs text-zinc-400">
@@ -116,6 +180,44 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
                 className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               />
             </div>
+            <div className="mt-2 flex items-center gap-2 flex-wrap">
+              <label className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-white/10 bg-white/[0.04] text-xs text-zinc-200 cursor-pointer hover:bg-white/[0.07]">
+                <Upload className="w-3.5 h-3.5 text-fuchsia-300" />
+                Attach file
+                <input
+                  type="file"
+                  multiple
+                  onChange={handleFilePick}
+                  data-testid="input-doc-files"
+                  className="hidden"
+                />
+              </label>
+              <span className="text-[10px] text-zinc-500">Add up to {MAX_ATTACHMENTS} files. Each file can be up to {formatFileSize(MAX_ATTACHMENT_SIZE)}.</span>
+            </div>
+            {form.attachments.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {form.attachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
+                    data-testid={`attachment-${attachment.id}`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-xs text-white truncate">{attachment.name}</div>
+                      <div className="text-[10px] text-zinc-500">{formatFileSize(attachment.size)}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(attachment.id)}
+                      className="w-7 h-7 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center flex-shrink-0"
+                      data-testid={`remove-attachment-${attachment.id}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </Field>
 
           <Field label="Assign TPM" hint="Owns budget building &amp; delivery">
@@ -168,6 +270,29 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
                 {form.rndMembers.length} R&amp;D assigned · {form.rndMembers.join(", ")}
               </div>
             )}
+          </Field>
+
+          <Field label="Kickoff recipients" hint="Will receive kickoff mail + project access">
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2 space-y-1.5" data-testid="kickoff-recipient-list">
+              {selectedMembers.length === 0 ? (
+                <div className="px-2 py-2 text-xs text-zinc-500">
+                  Assign a TPM and optional R&amp;D members to preview the kickoff recipient list.
+                </div>
+              ) : (
+                selectedMembers.map((member) => (
+                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-xs text-white truncate">{member.name}</div>
+                      <div className="text-[10px] text-zinc-500 truncate">{member.role}</div>
+                    </div>
+                    <div className="inline-flex items-center gap-1 text-[10px] text-zinc-400 min-w-0">
+                      <Mail className="w-3 h-3 text-fuchsia-300 flex-shrink-0" />
+                      <span className="truncate">{member.email}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </Field>
         </div>
 

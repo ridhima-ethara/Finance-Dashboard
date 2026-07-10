@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { USERS, ROLES, PROJECTS } from "../data/mockData";
+import { TEAM } from "../data/mockUsers";
 
 const AppContext = createContext(null);
 const SESSION_KEY = "ethara.session.v1";
@@ -127,7 +128,12 @@ export const AppProvider = ({ children }) => {
 
   // Merge overrides + apply approved top-ups (partial or full) into project budgets
   const projects = useMemo(() => {
-    const merged = [...PROJECTS, ...customProjects].map((p) => ({
+    const baseIds = new Set(PROJECTS.map((project) => project.id));
+    const overrides = new Map(customProjects.map((project) => [project.id, project]));
+    const merged = [
+      ...PROJECTS.map((project) => ({ ...project, ...(overrides.get(project.id) || {}) })),
+      ...customProjects.filter((project) => !baseIds.has(project.id)),
+    ].map((p) => ({
       ...p,
       buffer: buffers[p.id] ?? p.buffer,
       recoveredAmount: recoveries[p.id] ?? p.recoveredAmount,
@@ -170,10 +176,61 @@ export const AppProvider = ({ children }) => {
       ...prev,
       [projectId]: Array.from(new Set([...(prev[projectId] || []), memberId])),
     }));
+  const upsertProjectOverride = (projectId, updater) =>
+    setCustomProjects((current) => {
+      const existing = current.find((project) => project.id === projectId);
+      const base = existing || projects.find((project) => project.id === projectId);
+      if (!base) return current;
+      const updated = { ...updater(base), __custom: true };
+      return [updated, ...current.filter((project) => project.id !== projectId)];
+    });
 
   const addProject = (payload) => {
     const id = `p-${Date.now().toString(36)}`;
     const rndMembers = payload.rndMembers || [];
+    const allTeamNames = Array.from(new Set([payload.tpm, ...rndMembers].filter(Boolean)));
+    const teamMembers = allTeamNames.map((name, index) => {
+      const member = TEAM.find((entry) => entry.name === name);
+      return {
+        id: member?.id || `${id}-tm-${index + 1}`,
+        name,
+        role: name === payload.tpm ? "TPM" : member?.role || "R&D",
+        email: member?.email || `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai`,
+        status: name === payload.tpm ? "Online" : "Pending kickoff",
+        tasksDone: 0,
+      };
+    });
+    const docs = [
+      ...(payload.docUrl
+        ? [{
+            id: `${id}-doc-link`,
+            name: "Project brief link",
+            url: payload.docUrl,
+            kind: "link",
+          }]
+        : []),
+      ...((payload.attachments || []).map((attachment, index) => ({
+        id: attachment.id || `${id}-doc-${index + 1}`,
+        name: attachment.name,
+        size: attachment.size || 0,
+        type: attachment.type || "application/octet-stream",
+        kind: "file",
+      }))),
+    ];
+    const kickoffAt = new Date().toISOString();
+    const kickoffMail = {
+      sentAt: kickoffAt,
+      subject: `${payload.internalName} kickoff`,
+      sentBy: payload.createdBy || "CTO",
+      sentByRole: payload.createdByRole || "CTO",
+      recipients: teamMembers.map((member) => ({
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        email: member.email,
+      })),
+      attachmentCount: docs.length,
+    };
     const proj = {
       id,
       name: payload.internalName,
@@ -181,8 +238,12 @@ export const AppProvider = ({ children }) => {
       client: payload.clientProjectName || "New Engagement",
       pl: payload.tpm,
       tpm: payload.tpm,
+      rnd: rndMembers[0] || null,
       rndMembers,
       docUrl: payload.docUrl || "",
+      docs,
+      teamMembers,
+      kickoffMail,
       startDate: payload.startDate,
       estimatedEndDate: "",
       status: "Discovery",
@@ -215,10 +276,17 @@ export const AppProvider = ({ children }) => {
       auditLog: [
         {
           id: `a-${id}-1`,
-          ts: new Date().toISOString(),
+          ts: kickoffAt,
           actor: payload.createdBy || "CTO",
           action: "Project created",
-          detail: `Assigned TPM: ${payload.tpm}${rndMembers.length ? ` · R&D: ${rndMembers.join(", ")}` : ""}. Start ${payload.startDate}${payload.docUrl ? ` · doc attached` : ""}`,
+          detail: `Assigned TPM: ${payload.tpm}${rndMembers.length ? ` · R&D: ${rndMembers.join(", ")}` : ""}. Start ${payload.startDate}${docs.length ? ` · ${docs.length} attachment${docs.length === 1 ? "" : "s"}` : ""}`,
+        },
+        {
+          id: `a-${id}-2`,
+          ts: kickoffAt,
+          actor: `${payload.createdBy || "CTO"} · ${payload.createdByRole || "CTO"}`,
+          action: "Kickoff mail sent",
+          detail: `${teamMembers.length} recipient${teamMembers.length === 1 ? "" : "s"} · ${teamMembers.map((member) => member.email).join(", ")}`,
         },
       ],
       comments: [],
@@ -425,8 +493,7 @@ export const AppProvider = ({ children }) => {
           : r
       )));
     }
-    setCustomProjects((cps) => cps.map((p) => {
-      if (p.id !== payload.projectId) return p;
+    upsertProjectOverride(payload.projectId, (project) => {
       const newPhases = (payload.phases || []).map((ph, idx) => ({
         id: ph.id || `p${idx + 1}`,
         name: ph.name || `Phase ${idx + 1}`,
@@ -439,16 +506,22 @@ export const AppProvider = ({ children }) => {
       }));
       const approved = (payload.phases || []).reduce((s, ph) => s + Number(ph.budget || 0), 0) || payload.totals?.total || 0;
       return {
-        ...p,
+        ...project,
         approvedBudget: approved,
         estimatedBudget: approved,
         remaining: approved,
-        phases: newPhases.length ? newPhases : p.phases,
+        phases: newPhases.length ? newPhases : project.phases,
         budgetItems: payload.items,
         deliveryMode: payload.delivery?.mode,
         totalTasks: payload.totalTasks,
+        lastBudgetSubmission: {
+          budgetType: payload.budgetType,
+          sampleIteration: payload.sampleIteration || 1,
+          sourceDeliveryId: payload.sourceDeliveryId || null,
+          submittedAt: new Date().toISOString(),
+        },
       };
-    }));
+    });
     return entry;
   };
 
@@ -456,6 +529,17 @@ export const AppProvider = ({ children }) => {
   const deliverBatch = ({ projectId, phaseId, phaseName, proposedAmount, clientComment, clientRepresentative, ...details }) => {
     const proj = projects.find((p) => p.id === projectId);
     const id = `bd-${Date.now().toString(36)}`;
+    const stage = details.rnd ? "rnd-review" : "cfo-recovery";
+    const rndDecision = details.rnd?.decision || null;
+    const status =
+      stage === "rnd-review"
+        ? rndDecision === "accept"
+          ? "sample-approved"
+          : rndDecision === "reject"
+            ? "sample-rejected"
+            : "changes-requested"
+        : "pending-cfo";
+    const deliveredAt = new Date().toISOString();
     const entry = {
       id,
       projectId,
@@ -467,16 +551,55 @@ export const AppProvider = ({ children }) => {
       clientComment: clientComment || "",
       clientRepresentative: clientRepresentative || "",
       deliveredBy: user?.name || "TPM",
-      deliveredAt: new Date().toISOString(),
-      status: "pending-cfo",
+      deliveredAt,
+      stage,
+      sampleIteration: Number(details.sampleIteration || 1),
+      status,
       actualRecovered: null,
       cfoNote: "",
       cfoAt: null,
       cfoBy: null,
+      history: [
+        stage === "rnd-review"
+          ? {
+              at: deliveredAt,
+              actor: `${user?.name || "R&D"} · ${user?.role || "R&D"}`,
+              action:
+                rndDecision === "accept"
+                  ? "Accepted sample delivery"
+                  : rndDecision === "reject"
+                    ? "Rejected sample delivery"
+                    : "Requested changes on sample delivery",
+              detail: `${phaseName || phaseId} · ${Number(proposedAmount).toLocaleString()}`,
+            }
+          : {
+              at: deliveredAt,
+              actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
+              action: "Delivered batch to CFO",
+              detail: `${phaseName || phaseId} · ${Number(proposedAmount).toLocaleString()}`,
+            },
+      ],
       ...details,
     };
     setBatchDeliveries((arr) => [entry, ...arr]);
-    setPhaseLogApprovalStatus(projectId, phaseId, "pending-cfo");
+    setPhaseLogApprovalStatus(
+      projectId,
+      phaseId,
+      stage === "rnd-review"
+        ? rndDecision === "accept"
+          ? "approved"
+          : rndDecision === "reject"
+            ? "rejected"
+            : "changes-requested"
+        : "pending-cfo"
+    );
+    if (stage === "rnd-review" && rndDecision === "accept") {
+      upsertProjectOverride(projectId, (project) => ({
+        ...project,
+        type: "Production",
+        promotedToProductionAt: deliveredAt,
+      }));
+    }
     return entry;
   };
 

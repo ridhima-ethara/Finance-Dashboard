@@ -18,20 +18,24 @@ const CfoBatchDeliveries = () => {
   const { batchDeliveries, recordActualRecovery, role } = useApp();
   const [drafts, setDrafts] = useState({}); // { [id]: { amount, note } }
   const [filter, setFilter] = useState("all");
+  const financeDeliveries = useMemo(
+    () => batchDeliveries.filter((delivery) => delivery.stage !== "rnd-review"),
+    [batchDeliveries]
+  );
 
   const stats = useMemo(() => {
-    const proposed = batchDeliveries.reduce((s, d) => s + d.proposedAmount, 0);
-    const recovered = batchDeliveries.reduce((s, d) => s + (d.actualRecovered || 0), 0);
-    const pending = batchDeliveries.filter((d) => d.status === "pending-cfo").length;
-    return { total: batchDeliveries.length, pending, proposed, recovered };
-  }, [batchDeliveries]);
+    const proposed = financeDeliveries.reduce((s, d) => s + d.proposedAmount, 0);
+    const recovered = financeDeliveries.reduce((s, d) => s + (d.actualRecovered || 0), 0);
+    const pending = financeDeliveries.filter((d) => d.status === "pending-cfo").length;
+    return { total: financeDeliveries.length, pending, proposed, recovered };
+  }, [financeDeliveries]);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return batchDeliveries;
-    if (filter === "pending") return batchDeliveries.filter((d) => d.status === "pending-cfo");
-    if (filter === "recovered") return batchDeliveries.filter((d) => d.status === "recovered" || d.status === "partial-recovered");
-    return batchDeliveries;
-  }, [filter, batchDeliveries]);
+    if (filter === "all") return financeDeliveries;
+    if (filter === "pending") return financeDeliveries.filter((d) => d.status === "pending-cfo");
+    if (filter === "recovered") return financeDeliveries.filter((d) => d.status === "recovered" || d.status === "partial-recovered");
+    return financeDeliveries;
+  }, [filter, financeDeliveries]);
 
   const setDraft = (id, key, val) => setDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), [key]: val } }));
   const save = (d) => {

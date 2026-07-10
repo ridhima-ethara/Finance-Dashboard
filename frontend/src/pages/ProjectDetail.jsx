@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import {
   ArrowLeft, Sparkles, Lock, ArrowUpRightSquare, Users, Wallet, ListChecks, PackageCheck, ScrollText,
   Search, Plus, ChevronRight, User as UserIcon, Circle, CheckCircle2, Clock3, XCircle, Percent,
-  Trash2, Pencil, FileText, Layers, MessageSquare, Shield,
+  Trash2, Pencil, FileText, Layers, MessageSquare, Shield, Mail,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { isTpmView } from "../lib/roles";
@@ -23,10 +23,23 @@ import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaCh
 // Deterministic seed of team members per project — uses project id hash for stability.
 const seedTeam = (project) => {
   if (!project) return [];
+  if (Array.isArray(project.teamMembers) && project.teamMembers.length) {
+    return project.teamMembers.map((member, index) => ({
+      id: member.id || `${project.id}-tm-${index + 1}`,
+      name: member.name,
+      role: member.role || (member.name === project.tpm ? "TPM" : "R&D"),
+      email: member.email || `${member.name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai`,
+      status: member.status || (index === 0 ? "Online" : "Pending kickoff"),
+      tasksDone: Number(member.tasksDone || 0),
+    }));
+  }
+  const explicitMembers = (project.rndMembers || [])
+    .map((name) => TEAM.find((member) => member.name === name) || { name, role: "R&D", email: `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` });
   const roster = [
     { name: project.tpm || "Arjun Mehta", role: "TPM", email: `${(project.tpm || "arjun").toLowerCase().split(" ")[0]}@ethara.ai` },
     { name: project.pl || "Aanya Sharma", role: "Project Lead", email: `${(project.pl || "aanya").toLowerCase().split(" ")[0]}@ethara.ai` },
-    ...TEAM.filter((m) => m.role === "Engineer" || m.role === "Project Lead").slice(0, 2),
+    ...explicitMembers,
+    ...TEAM.filter((m) => m.role === "Engineer" || m.role === "Project Lead").slice(0, Math.max(0, 2 - explicitMembers.length)),
   ];
   // Dedupe by name
   const seen = new Set();
@@ -50,6 +63,9 @@ const statusMap = {
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
   recovered: { label: "Recovered · full", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "partial-recovered": { label: "Recovered · partial", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
+  "changes-requested": { label: "Changes requested", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
+  "sample-approved": { label: "Sample accepted", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
+  "sample-rejected": { label: "Sample rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
 };
 
 const ProjectDetail = () => {
@@ -128,6 +144,15 @@ const ProjectDetail = () => {
 
   const prjCode = `PRJ${String(Math.abs((p.id || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0)) % 100000).padStart(5, "0")}`;
   const startDate = p.phases?.[0]?.dates?.split(" ")[0] || p.status;
+  const projectDocs = (Array.isArray(p.docs) && p.docs.length)
+    ? p.docs
+    : p.docUrl
+      ? [{ id: `${p.id}-legacy-doc`, name: "Project brief link", url: p.docUrl, kind: "link" }]
+      : [];
+  const kickoffRecipients = p.kickoffMail?.recipients || team;
+  const kickoffSentAt = p.kickoffMail?.sentAt
+    ? new Date(p.kickoffMail.sentAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
+    : null;
 
   return (
     <div className="space-y-6" data-testid={`page-project-${p.id}`}>
@@ -172,6 +197,79 @@ const ProjectDetail = () => {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3" data-testid="project-setup-grid">
+        <SetupCard title="Docs & attachments" icon={FileText} testid="project-setup-docs">
+          {projectDocs.length === 0 ? (
+            <EmptySetupState message="No project docs or attachments added yet." />
+          ) : (
+            <div className="space-y-2">
+              {projectDocs.map((doc) => (
+                <div key={doc.id} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+                  {doc.url ? (
+                    <a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-fuchsia-300 hover:text-fuchsia-200">
+                      <FileText className="w-3.5 h-3.5" />
+                      {doc.name}
+                    </a>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 text-sm text-white">
+                      <FileText className="w-3.5 h-3.5 text-fuchsia-300" />
+                      {doc.name}
+                    </div>
+                  )}
+                  <div className="mt-1 text-[10px] text-zinc-500">
+                    {doc.kind === "file" ? `Attached file${doc.size ? ` · ${Math.max(1, Math.round(doc.size / 1024))} KB` : ""}` : "Shared link"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SetupCard>
+
+        <SetupCard title="Kickoff mail" icon={Mail} testid="project-setup-kickoff">
+          {kickoffRecipients.length === 0 ? (
+            <EmptySetupState message="No kickoff recipients recorded for this project." />
+          ) : (
+            <div className="space-y-2">
+              <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] px-3 py-2.5">
+                <div className="text-xs text-white font-medium">{p.kickoffMail?.subject || `${p.name} kickoff`}</div>
+                <div className="mt-1 text-[10px] text-zinc-500">
+                  {kickoffSentAt ? `Sent ${kickoffSentAt}` : "Kickoff notification recorded"}
+                  {p.kickoffMail?.attachmentCount ? ` · ${p.kickoffMail.attachmentCount} attachment${p.kickoffMail.attachmentCount === 1 ? "" : "s"}` : ""}
+                </div>
+              </div>
+              {kickoffRecipients.map((member) => (
+                <div key={member.id || member.email} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+                  <div className="text-sm text-white">{member.name}</div>
+                  <div className="mt-1 text-[10px] text-zinc-500">{member.role} · {member.email}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SetupCard>
+
+        <SetupCard title="Assigned members" icon={Users} testid="project-setup-members">
+          {team.length === 0 ? (
+            <EmptySetupState message="No members assigned yet." />
+          ) : (
+            <div className="space-y-2">
+              {team.map((member) => (
+                <div key={member.id} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm text-white">{member.name}</div>
+                      <div className="mt-1 text-[10px] text-zinc-500">{member.role} · {member.email}</div>
+                    </div>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border border-white/10 bg-white/[0.03] text-zinc-300">
+                      {member.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SetupCard>
       </div>
 
       {/* Tabs */}
@@ -744,7 +842,8 @@ const ProjectDetail = () => {
               </div>
             )}
             {(role === "R&D" ? (p.phases || []).slice(0, 1) : (p.phases || [])).map((ph) => {
-              const delivery = projectBatches.find((b) => b.phaseId === ph.id);
+              const deliveriesForPhase = projectBatches.filter((batch) => batch.phaseId === ph.id);
+              const delivery = deliveriesForPhase[0] || null;
               const topupsForPhase = projectTopups.filter((r) => r.phaseId === ph.id);
               const changesForPhase = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
               const variance = ph.estimated - ph.actual;
@@ -760,8 +859,12 @@ const ProjectDetail = () => {
               const modelNames = collectResourceNames([
                 ...(delivery?.rnd?.models ? String(delivery.rnd.models).split(",") : []),
                 ...seededTasks.map((task) => task.model).filter(Boolean),
+                ...topupsForPhase.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
               ]);
-              const infraNames = collectResourceNames(seededTasks.map((task) => task.infra).filter(Boolean));
+              const infraNames = collectResourceNames([
+                ...seededTasks.map((task) => task.infra).filter(Boolean),
+                ...topupsForPhase.map((request) => request.breakdown?.infra?.optionLabel).filter(Boolean),
+              ]);
               const approvalMeta = delivery ? (statusMap[delivery.status] || statusMap["pending-cfo"]) : null;
               return (
                 <div key={ph.id} data-testid={`batch-phase-${ph.id}`} className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
@@ -813,11 +916,11 @@ const ProjectDetail = () => {
                         <Button
                           size="sm"
                           onClick={() => setDeliverPhase(ph)}
-                          disabled={!!delivery}
+                          disabled={!!delivery && delivery.status !== "changes-requested"}
                           data-testid={`btn-deliver-${ph.id}`}
                           className="h-8 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/25 disabled:text-emerald-200 text-white text-xs gap-1"
                         >
-                          <PackageCheck className="w-3 h-3" /> {delivery ? "Delivered" : "Deliver batch"}
+                          <PackageCheck className="w-3 h-3" /> {delivery?.status === "changes-requested" ? "Deliver revised sample" : delivery ? "Delivered" : "Deliver batch"}
                         </Button>
                       </div>
                     )}
@@ -892,26 +995,87 @@ const ProjectDetail = () => {
                       testid={`sub-delivery-${ph.id}`}
                     >
                       {delivery && (
-                        <div className="p-2.5 rounded-lg bg-emerald-500/[0.05] border border-emerald-500/20 space-y-2">
+                        <div className={`p-2.5 rounded-lg border space-y-2 ${
+                          delivery.stage === "rnd-review"
+                            ? "bg-white/[0.02] border-white/10"
+                            : "bg-emerald-500/[0.05] border-emerald-500/20"
+                        }`}>
                           {approvalMeta && (
                             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${approvalMeta.cls}`}>
                               <approvalMeta.Icon className="w-2.5 h-2.5" />
                               {approvalMeta.label}
                             </span>
                           )}
+                          {delivery.stage === "rnd-review" && (
+                            <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                              <span>Sample cycle</span>
+                              <span className="text-[11px] text-white font-semibold tabular">Sample {delivery.sampleIteration || 1}</span>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between text-[10px] text-zinc-400">
                             <span>Proposed</span>
                             <span className="text-[11px] text-white font-semibold tabular">{fmtCurrency(delivery.proposedAmount, { compact: false })}</span>
                           </div>
-                          <div className="flex items-center justify-between text-[10px] text-zinc-400">
-                            <span>Recovered</span>
-                            <span className={`text-[11px] font-semibold tabular ${delivery.actualRecovered != null ? "text-emerald-300" : "text-zinc-500"}`}>
-                              {delivery.actualRecovered != null ? fmtCurrency(delivery.actualRecovered, { compact: false }) : "Awaiting CFO"}
-                            </span>
-                          </div>
+                          {delivery.stage === "cfo-recovery" ? (
+                            <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                              <span>Recovered</span>
+                              <span className={`text-[11px] font-semibold tabular ${delivery.actualRecovered != null ? "text-emerald-300" : "text-zinc-500"}`}>
+                                {delivery.actualRecovered != null ? fmtCurrency(delivery.actualRecovered, { compact: false }) : "Awaiting CFO"}
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                              <span>Outcome</span>
+                              <span className={`text-[11px] font-semibold ${
+                                delivery.status === "sample-approved"
+                                  ? "text-emerald-300"
+                                  : delivery.status === "sample-rejected"
+                                    ? "text-red-300"
+                                    : "text-amber-300"
+                              }`}>
+                                {delivery.status === "sample-approved"
+                                  ? "Accepted and moved to production"
+                                  : delivery.status === "sample-rejected"
+                                    ? "Rejected"
+                                    : "Budget revision needed"}
+                              </span>
+                            </div>
+                          )}
+                          {delivery.rnd?.models && (
+                            <div className="text-[10px] text-zinc-300 leading-relaxed pt-1 border-t border-white/5">
+                              <span className="text-zinc-500">Models: </span>{delivery.rnd.models}
+                            </div>
+                          )}
                           {delivery.clientComment && (
                             <div className="text-[10px] text-zinc-300 leading-relaxed pt-1 border-t border-white/5">
-                              <span className="text-emerald-200 font-semibold">Client: </span>{delivery.clientComment}
+                              <span className="text-emerald-200 font-semibold">{delivery.stage === "rnd-review" ? "Notes: " : "Client: "}</span>{delivery.clientComment}
+                            </div>
+                          )}
+                          {delivery.stage === "rnd-review" && delivery.status === "changes-requested" && (
+                            <Link
+                              to={`/budget-builder?projectId=${p.id}&budgetType=Sample&phaseId=${ph.id}&sampleIteration=${Number(delivery.sampleIteration || 1) + 1}&sourceDeliveryId=${delivery.id}`}
+                              className="inline-flex items-center gap-1 text-[11px] text-fuchsia-300 hover:text-fuchsia-200 font-medium pt-1"
+                            >
+                              Raise Sample {Number(delivery.sampleIteration || 1) + 1} budget <ChevronRight className="w-3 h-3" />
+                            </Link>
+                          )}
+                          {deliveriesForPhase.length > 1 && (
+                            <div className="pt-2 border-t border-white/5 space-y-1">
+                              <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Earlier logs</div>
+                              {deliveriesForPhase.slice(1).map((entry) => {
+                                const entryMeta = statusMap[entry.status] || statusMap["pending-cfo"];
+                                return (
+                                  <div key={entry.id} className="flex items-center justify-between gap-2 text-[10px] text-zinc-400">
+                                    <span className="truncate">
+                                      Sample {entry.sampleIteration || 1} · {fmtDate(entry.deliveredAt)}
+                                    </span>
+                                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${entryMeta.cls}`}>
+                                      <entryMeta.Icon className="w-2.5 h-2.5" />
+                                      {entryMeta.label}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -1037,6 +1201,22 @@ const TabTrigger = ({ value, icon: Icon, label, testid }) => (
   </TabsTrigger>
 );
 
+const SetupCard = ({ title, icon: Icon, children, testid }) => (
+  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid={testid}>
+    <div className="flex items-center gap-2 mb-3">
+      <Icon className="w-4 h-4 text-fuchsia-300" />
+      <div className="font-display font-semibold text-[15px] text-white">{title}</div>
+    </div>
+    {children}
+  </div>
+);
+
+const EmptySetupState = ({ message }) => (
+  <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] px-3 py-6 text-center text-xs text-zinc-500">
+    {message}
+  </div>
+);
+
 // KPI card used in the Budget tab redesign (Spent/Cap + smaller stat cells)
 const MiniKpi = ({ label, value, sub, accent = "text-white", testid }) => (
   <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4" data-testid={testid}>
@@ -1062,6 +1242,7 @@ const TopupRequestCard = ({ request }) => {
   const status = statusMap[request.status] || statusMap["pending-cto"];
   const breakdown = getTopupBreakdownAmounts(request);
   const hasBreakdown = Object.values(breakdown).some((value) => value > 0);
+  const breakdownSelections = getTopupBreakdownSelections(request);
 
   return (
     <Link
@@ -1083,6 +1264,11 @@ const TopupRequestCard = ({ request }) => {
             <TopupBreakdownPill label="Infra" value={breakdown.infra} />
             <TopupBreakdownPill label="Subs" value={breakdown.subs} />
           </div>
+          {breakdownSelections.length > 0 && (
+            <div className="mt-2 text-[10px] text-zinc-400 leading-relaxed">
+              {breakdownSelections.join(" · ")}
+            </div>
+          )}
           {!hasBreakdown && (
             <div className="mt-2 text-[10px] text-zinc-600">
               Line-item breakdown was not captured on this request.
@@ -1148,6 +1334,7 @@ const taskApprovalStatusMap = {
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   partial: { label: "Partially approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
+  "changes-requested": { label: "Changes requested", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
 };
 
 const normalizePhaseLabel = (value = "") => String(value).toLowerCase().replace(/\s+/g, " ").trim();
@@ -1169,7 +1356,7 @@ const buildProjectBudgetRequests = ({ projectId, submittedBudgets, liveBudgetRev
     .filter((entry) => entry.projectId === projectId)
     .map((entry) => ({
       id: `budget-${entry.id}`,
-      title: entry.resubmitOfReviewId ? "Resubmitted budget" : "Budget request",
+      title: formatSubmittedBudgetTitle(entry.budgetType, entry.resubmitOfReviewId, entry.sampleIteration),
       amount: Number(entry.totals?.total || 0),
       status: entry.status || "submitted",
       phaseIds: (entry.phases || []).map((phase) => phase.id).filter(Boolean),
@@ -1200,6 +1387,16 @@ const buildProjectBudgetRequests = ({ projectId, submittedBudgets, liveBudgetRev
   return [...submitted, ...reviews];
 };
 
+const formatSubmittedBudgetTitle = (budgetType, resubmitOfReviewId, sampleIteration = 1) => {
+  const base =
+    budgetType === "Testing" ? "Testing budget"
+      : budgetType === "Sample" ? `Sample ${sampleIteration > 1 ? sampleIteration : ""} budget`.replace("  ", " ")
+        : budgetType === "RnD" ? "R&D budget"
+          : budgetType === "Production" ? "Production budget"
+            : "Budget request";
+  return resubmitOfReviewId ? `Resubmitted ${base}` : base;
+};
+
 const getBudgetRequestMeta = (request) => budgetRequestStatusMap[request.status] || budgetRequestStatusMap.submitted;
 const getChangeRequestMeta = (request) => changeRequestStatusMap[request.stage] || changeRequestStatusMap["CTO Review"];
 
@@ -1217,6 +1414,14 @@ const getTopupBreakdownAmounts = (request) => ({
   infra: Number(request.breakdown?.infra?.amount || 0),
   subs: Number(request.breakdown?.subs?.amount || 0),
 });
+
+const getTopupBreakdownSelections = (request) => (
+  [
+    request.breakdown?.models ? `Model: ${formatBreakdownEntry(request.breakdown.models)}` : null,
+    request.breakdown?.infra ? `Infra: ${formatBreakdownEntry(request.breakdown.infra)}` : null,
+    request.breakdown?.subs ? `Subs: ${formatBreakdownEntry(request.breakdown.subs)}` : null,
+  ].filter(Boolean)
+);
 
 const estimatePhaseCostBreakdown = (project, phase, topups) => {
   const totalEstimated = (project.phases || []).reduce((sum, item) => sum + Number(item.estimated || 0), 0) || 1;
@@ -1237,10 +1442,14 @@ const estimatePhaseCostBreakdown = (project, phase, topups) => {
 
 const collectResourceNames = (values) => Array.from(new Set(values.map((value) => String(value || "").trim()).filter((value) => value && value !== "—")));
 
+const formatBreakdownEntry = (entry) => (
+  [entry.optionLabel, entry.note].map((value) => String(value || "").trim()).filter(Boolean).join(" · ")
+);
+
 const getSubscriptionSummary = (topups) => {
   const requested = topups
     .filter((request) => Number(request.breakdown?.subs?.amount || 0) > 0)
-    .map((request) => `${fmtCurrency(request.breakdown.subs.amount, { compact: false })}${request.breakdown.subs.note ? ` · ${request.breakdown.subs.note}` : ""}`);
+    .map((request) => `${fmtCurrency(request.breakdown.subs.amount, { compact: false })}${formatBreakdownEntry(request.breakdown.subs) ? ` · ${formatBreakdownEntry(request.breakdown.subs)}` : ""}`);
   return requested.length ? requested.join(" | ") : "No subscription ask raised for this phase.";
 };
 

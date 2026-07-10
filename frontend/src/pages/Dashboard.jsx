@@ -225,11 +225,11 @@ const Dashboard = () => {
       )}
 
       {/* Hero + KPIs */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 animate-fade-up">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch animate-fade-up">
         <div className="lg:col-span-1">
           <AmountAtRisk />
         </div>
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 h-full">
           <KpiGrid />
         </div>
       </div>

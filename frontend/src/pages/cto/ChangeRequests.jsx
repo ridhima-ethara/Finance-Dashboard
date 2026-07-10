@@ -157,7 +157,7 @@ const ChangeRequests = () => {
                       <span>·</span>
                       <span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(cr.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                       <span>·</span>
-                      <span>{cr.affectedPhase}</span>
+                      <span>{cr.expectedTasks || "Expected tasks not specified"}</span>
                       <span>·</span>
                       <span>Timeline delta {cr.timelineDelta}</span>
                     </div>
@@ -190,7 +190,7 @@ const ChangeRequests = () => {
                   <div className="grid grid-cols-3 gap-3">
                     <ImpactBox label="Budget impact" value={`+${fmtCurrency(cr.amount, { compact: false })}`} tone="warning" />
                     <ImpactBox label="Timeline impact" value={cr.timelineDelta} tone={cr.timelineDelta === "0 days" ? "neutral" : "warning"} />
-                    <ImpactBox label="Affected phase" value={cr.affectedPhase} tone="neutral" />
+                    <ImpactBox label="Expected tasks" value={cr.expectedTasks || "Not specified"} tone="neutral" />
                   </div>
 
                   {/* Full reason */}

@@ -35,9 +35,8 @@ const BudgetReviewWorkspace = () => {
   const priorModification = useMemo(() => budgetReviews.find((r) => r.id === review.id), [budgetReviews, review]);
 
   const [tab, setTab] = useState("overview");
-  const [amount, setAmount] = useState(review.recommendedBudget);
+  const amount = review.recommendedBudget;
   const [comment, setComment] = useState("");
-  const [returnTarget, setReturnTarget] = useState("TPM");
 
   const phases = project?.phases || [];
   const buildInitialPhases = () => {
@@ -72,6 +71,7 @@ const BudgetReviewWorkspace = () => {
   const currentBudget = review.currentBudget;
   const recommended = review.recommendedBudget;
   const isRndReview = (review.recoveryType || "").toLowerCase().includes("r&d") || (review.type || "").toLowerCase().includes("r&d");
+  const returnTarget = isRndReview ? "R&D" : "TPM";
 
   const phaseTotals = modifiedPhases.map((p) => ({
     ...p,
@@ -363,19 +363,6 @@ const BudgetReviewWorkspace = () => {
             </div>
 
             <div className="mt-4">
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Return to</div>
-              <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1 w-full mb-3" data-testid="return-target-toggle">
-                {["TPM", "R&D"].map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setReturnTarget(r)}
-                    data-testid={`return-target-${r.replace(/&/g, "and")}`}
-                    className={`flex-1 px-2 py-1 rounded-md text-[11px] font-medium ${returnTarget === r ? "bg-fuchsia-500/15 text-fuchsia-200" : "text-zinc-400 hover:text-zinc-100"}`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
               <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Comment {`(required for reject / return)`}</div>
               <textarea
                 value={comment}

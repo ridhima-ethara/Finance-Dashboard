@@ -5,20 +5,20 @@ import { GitPullRequest, X, Send, Cpu, Server, CreditCard, DollarSign } from "lu
 import { useApp } from "../../context/AppContext";
 import { toast } from "sonner";
 import { fmtCurrency } from "../../lib/format";
+import { BEDROCK_MODELS, EC2_INSTANCES, SUBSCRIPTION_CATALOG } from "../../data/mockCatalog";
 
 // Bifurcated change request — mirrors TopupRequestDialog structure: per-line ask + note.
 const ChangeRequestDialog = ({ open, onOpenChange }) => {
   const { visibleProjects } = useApp();
   const [project, setProject] = useState(visibleProjects[0]?.id || "");
   const [reason, setReason] = useState("");
-  const [phase, setPhase] = useState("");
-  const [tasks, setTasks] = useState("");
+  const [expectedTasks, setExpectedTasks] = useState("");
   const [timeline, setTimeline] = useState("");
   const [urgency, setUrgency] = useState("Normal");
 
-  const [models, setModels] = useState({ enabled: false, amount: 0, note: "" });
-  const [infra, setInfra] = useState({ enabled: false, amount: 0, note: "" });
-  const [subs, setSubs] = useState({ enabled: false, amount: 0, note: "" });
+  const [models, setModels] = useState({ enabled: false, amount: 0, note: "", option: BEDROCK_MODELS[0]?.id || "" });
+  const [infra, setInfra] = useState({ enabled: false, amount: 0, note: "", option: EC2_INSTANCES[0]?.code || "" });
+  const [subs, setSubs] = useState({ enabled: false, amount: 0, note: "", option: SUBSCRIPTION_CATALOG[0]?.name || "" });
 
   const totalAsk = (models.enabled ? Number(models.amount) || 0 : 0)
     + (infra.enabled ? Number(infra.amount) || 0 : 0)
@@ -30,10 +30,10 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
       description: `${visibleProjects.find((p) => p.id === project)?.name || "Project"} · ${totalAsk > 0 ? fmtCurrency(totalAsk, { compact: false }) : "no $ ask"} · ${urgency} · routed to CTO`,
     });
     onOpenChange(false);
-    setReason(""); setPhase(""); setTasks(""); setTimeline("");
-    setModels({ enabled: false, amount: 0, note: "" });
-    setInfra({ enabled: false, amount: 0, note: "" });
-    setSubs({ enabled: false, amount: 0, note: "" });
+    setReason(""); setExpectedTasks(""); setTimeline("");
+    setModels({ enabled: false, amount: 0, note: "", option: BEDROCK_MODELS[0]?.id || "" });
+    setInfra({ enabled: false, amount: 0, note: "", option: EC2_INSTANCES[0]?.code || "" });
+    setSubs({ enabled: false, amount: 0, note: "", option: SUBSCRIPTION_CATALOG[0]?.name || "" });
   };
 
   return (
@@ -64,9 +64,45 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
           <div>
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">Budget-item asks (optional)</div>
             <div className="space-y-2">
-              <ItemRow testidPrefix="cr-models" icon={Cpu} label="Models" helper="AI model spend delta" value={models} onChange={setModels} />
-              <ItemRow testidPrefix="cr-infra" icon={Server} label="Infrastructure" helper="Compute / storage delta" value={infra} onChange={setInfra} />
-              <ItemRow testidPrefix="cr-subs" icon={CreditCard} label="Subscriptions" helper="Seat-based tools delta" value={subs} onChange={setSubs} />
+              <ItemRow
+                testidPrefix="cr-models"
+                icon={Cpu}
+                label="Models"
+                helper="Select the Bedrock model to change and enter the revised model-cost delta."
+                value={models}
+                onChange={setModels}
+                selectOptions={BEDROCK_MODELS}
+                getOptionValue={(option) => option.id}
+                getOptionLabel={(option) => `${option.name} · ${option.provider}`}
+                selectPlaceholder="Choose Bedrock model"
+                notePlaceholder="Model change note · e.g. move eval traffic to Claude Sonnet 4.6"
+              />
+              <ItemRow
+                testidPrefix="cr-infra"
+                icon={Server}
+                label="Infrastructure"
+                helper="Select the EC2 instance to change and enter the infra-cost delta."
+                value={infra}
+                onChange={setInfra}
+                selectOptions={EC2_INSTANCES}
+                getOptionValue={(option) => option.code}
+                getOptionLabel={(option) => `${option.code} · ${option.family} · ${option.vCPU} vCPU · ${option.memoryGiB} GiB`}
+                selectPlaceholder="Choose EC2 instance"
+                notePlaceholder="Infra change note · e.g. add g5.2xlarge for testing window"
+              />
+              <ItemRow
+                testidPrefix="cr-subs"
+                icon={CreditCard}
+                label="Subscriptions"
+                helper="Seat-based tools delta · enter the subscription amount per month."
+                value={subs}
+                onChange={setSubs}
+                selectOptions={SUBSCRIPTION_CATALOG}
+                getOptionValue={(option) => option.name}
+                getOptionLabel={(option) => `${option.name} · $${option.monthly}/month`}
+                selectPlaceholder="Choose subscription"
+                notePlaceholder="Subscription note · e.g. 4 seats needed during validation month"
+              />
             </div>
             <div className="mt-2 flex items-center justify-between text-xs">
               <span className="text-zinc-500">Total additional ask</span>
@@ -84,12 +120,8 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
             </div>
           </Field>
 
-          <Field label="Affected phase">
-            <input value={phase} onChange={(e) => setPhase(e.target.value)} placeholder="e.g. Phase 2 — Model tuning" data-testid="cr-phase" className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40" />
-          </Field>
-
-          <Field label="Affected tasks">
-            <input value={tasks} onChange={(e) => setTasks(e.target.value)} placeholder="Task IDs or names, comma-separated" data-testid="cr-tasks" className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40" />
+          <Field label="Expected tasks">
+            <input value={expectedTasks} onChange={(e) => setExpectedTasks(e.target.value)} placeholder="e.g. 250 expected tasks after scope change" data-testid="cr-tasks" className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-amber-500/40" />
           </Field>
 
           <Field label="Timeline change">
@@ -114,7 +146,19 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
   );
 };
 
-const ItemRow = ({ icon: Icon, label, helper, value, onChange, testidPrefix }) => (
+const ItemRow = ({
+  icon: Icon,
+  label,
+  helper,
+  value,
+  onChange,
+  testidPrefix,
+  selectOptions,
+  getOptionValue,
+  getOptionLabel,
+  selectPlaceholder,
+  notePlaceholder,
+}) => (
   <div className={`rounded-xl border p-3 transition-colors ${value.enabled ? "border-amber-500/30 bg-amber-500/[0.04]" : "border-white/5 bg-white/[0.02]"}`} data-testid={`${testidPrefix}-row`}>
     <div className="flex items-center gap-3">
       <button
@@ -144,13 +188,28 @@ const ItemRow = ({ icon: Icon, label, helper, value, onChange, testidPrefix }) =
       </div>
     </div>
     {value.enabled && (
-      <input
-        value={value.note}
-        onChange={(e) => onChange({ ...value, note: e.target.value })}
-        placeholder="Line note · e.g. Additional Opus 4.8 runs needed"
-        data-testid={`${testidPrefix}-note`}
-        className="mt-2 w-full h-8 px-3 rounded-md bg-white/[0.03] border border-white/10 text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
-      />
+      <div className="mt-2 grid grid-cols-1 md:grid-cols-[1.15fr_1fr] gap-2">
+        <select
+          value={value.option}
+          onChange={(e) => onChange({ ...value, option: e.target.value })}
+          data-testid={`${testidPrefix}-select`}
+          className="w-full h-8 px-3 rounded-md bg-white/[0.03] border border-white/10 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+        >
+          {!value.option && <option value="">{selectPlaceholder}</option>}
+          {selectOptions.map((option) => (
+            <option key={getOptionValue(option)} value={getOptionValue(option)} className="bg-[#12121A]">
+              {getOptionLabel(option)}
+            </option>
+          ))}
+        </select>
+        <input
+          value={value.note}
+          onChange={(e) => onChange({ ...value, note: e.target.value })}
+          placeholder={notePlaceholder}
+          data-testid={`${testidPrefix}-note`}
+          className="w-full h-8 px-3 rounded-md bg-white/[0.03] border border-white/10 text-[11px] text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-amber-500/40"
+        />
+      </div>
     )}
   </div>
 );
