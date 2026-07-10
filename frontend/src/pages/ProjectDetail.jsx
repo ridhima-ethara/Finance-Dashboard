@@ -1,17 +1,19 @@
 import { useState, useMemo } from "react";
 import { Link, useParams } from "react-router-dom";
-import { fmtCurrency, fmtPct, fmtDate, healthColor, utilColor, varianceColor } from "../lib/format";
+import { fmtCurrency, fmtPct, fmtDate, healthColor } from "../lib/format";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Button } from "../components/ui/button";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import {
   ArrowLeft, Sparkles, Lock, ArrowUpRightSquare, Users, Wallet, ListChecks, PackageCheck, ScrollText,
   Search, Plus, ChevronRight, User as UserIcon, Circle, CheckCircle2, Clock3, XCircle, Percent,
-  Trash2, Pencil, FileText, Layers, Building2, MessageSquare, Shield, DollarSign, TrendingUp, TrendingDown,
+  Trash2, Pencil, FileText, Layers, MessageSquare, Shield,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { isTpmView } from "../lib/roles";
 import { toast } from "sonner";
 import { TEAM } from "../data/mockUsers";
+import { BUDGET_REVIEWS, CHANGE_REQUESTS, getPhaseTasks } from "../data/mockTpm";
 import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
 import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
@@ -53,19 +55,25 @@ const statusMap = {
 const ProjectDetail = () => {
   const { id } = useParams();
   const {
-    setAiOpen, projects, role, topupRequests, batchDeliveries, getPhaseLogs, isTaskEditable, deletePhaseTask,
+    setAiOpen, projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
+    removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask,
   } = useApp();
   const p = projects.find((x) => x.id === id);
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
 
   const [topupOpen, setTopupOpen] = useState(false);
+  const [topupPhaseId, setTopupPhaseId] = useState("");
   const [deliverPhase, setDeliverPhase] = useState(null); // {project, phase} or null
   const [taskLogPhase, setTaskLogPhase] = useState(null); // phase for log dialog
   const [editingLog, setEditingLog] = useState(null);
   const [teamSearch, setTeamSearch] = useState("");
+  const [selectedPhaseId, setSelectedPhaseId] = useState(() => p?.phases?.[0]?.id || "");
 
-  const team = useMemo(() => seedTeam(p), [p]);
+  const team = useMemo(() => {
+    const removedTeamIds = teamRemovals[p?.id] || [];
+    return seedTeam(p).filter((member) => !removedTeamIds.includes(member.id));
+  }, [p, teamRemovals]);
   const filteredTeam = team.filter((m) =>
     !teamSearch.trim() || m.name.toLowerCase().includes(teamSearch.toLowerCase()) || m.email.toLowerCase().includes(teamSearch.toLowerCase())
   );
@@ -79,6 +87,35 @@ const ProjectDetail = () => {
   // Top-ups + batch deliveries for this project (used in the Batch tab)
   const projectTopups = useMemo(() => topupRequests.filter((r) => r.projectId === id), [topupRequests, id]);
   const projectBatches = useMemo(() => batchDeliveries.filter((b) => b.projectId === id), [batchDeliveries, id]);
+  const projectBudgetRequests = useMemo(
+    () => buildProjectBudgetRequests({ projectId: id, submittedBudgets: budgets, liveBudgetReviews: budgetReviews, seedBudgetReviews: BUDGET_REVIEWS }),
+    [id, budgets, budgetReviews]
+  );
+  const projectChangeRequests = useMemo(() => CHANGE_REQUESTS.filter((request) => request.projectId === id), [id]);
+  const selectedPhase = useMemo(
+    () => (p?.phases || []).find((phase) => phase.id === selectedPhaseId) || p?.phases?.[0] || null,
+    [p, selectedPhaseId]
+  );
+  const selectedPhaseTopups = useMemo(
+    () => (selectedPhase ? projectTopups.filter((request) => request.phaseId === selectedPhase.id) : []),
+    [projectTopups, selectedPhase]
+  );
+  const selectedPhaseChanges = useMemo(
+    () => (selectedPhase ? projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, selectedPhase)) : []),
+    [projectChangeRequests, selectedPhase]
+  );
+  const selectedPhaseBudgetItems = useMemo(
+    () => (selectedPhase ? projectBudgetRequests.filter((request) => requestMatchesPhase(request, selectedPhase)) : []),
+    [projectBudgetRequests, selectedPhase]
+  );
+  const selectedPhaseLogs = useMemo(
+    () => (selectedPhase ? getPhaseLogs(p.id, selectedPhase.id) : []),
+    [selectedPhase, getPhaseLogs, p]
+  );
+  const selectedPhaseDelivery = useMemo(
+    () => (selectedPhase ? projectBatches.find((batch) => batch.phaseId === selectedPhase.id) || null : null),
+    [selectedPhase, projectBatches]
+  );
 
   if (!p) {
     return (
@@ -124,13 +161,13 @@ const ProjectDetail = () => {
               Ask AI
             </Button>
             {isTPM && (
-              <Button size="sm" onClick={() => setTopupOpen(true)} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-request-topup">
+              <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-request-topup">
                 <ArrowUpRightSquare className="w-3.5 h-3.5" /> Request top-up
               </Button>
             )}
             {isCFO && (
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300" data-testid="cfo-readonly-badge">
-                <Lock className="w-3 h-3" /> Read-only view
+                <Lock className="w-3 h-3" /> Finance view
               </span>
             )}
           </div>
@@ -173,13 +210,12 @@ const ProjectDetail = () => {
                   <th className="text-left py-3 px-5">Name</th>
                   <th className="text-left py-3 px-2">Role</th>
                   <th className="text-left py-3 px-2">Status</th>
-                  <th className="text-right py-3 px-2">Tasks Done</th>
                   <th className="text-right py-3 px-5 w-14">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTeam.length === 0 && (
-                  <tr><td colSpan="5" className="py-6 text-center text-xs text-zinc-500">No team members match.</td></tr>
+                  <tr><td colSpan="4" className="py-6 text-center text-xs text-zinc-500">No team members match.</td></tr>
                 )}
                 {filteredTeam.map((m) => (
                   <tr key={m.id} data-testid={`team-row-${m.id}`} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
@@ -203,13 +239,29 @@ const ProjectDetail = () => {
                         {m.status}
                       </span>
                     </td>
-                    <td className="py-3 px-2 text-right tabular text-white font-semibold">{m.tasksDone}</td>
                     <td className="py-3 px-5 text-right text-zinc-500">
-                      <button className="w-7 h-7 rounded-md hover:bg-white/[0.06] inline-flex items-center justify-center" title="More">
-                        <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
-                        <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
-                        <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
-                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="w-7 h-7 rounded-md hover:bg-white/[0.06] inline-flex items-center justify-center" title="Actions" data-testid={`team-actions-${m.id}`}>
+                            <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
+                            <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
+                            <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44 border-white/10 bg-[#12121A] text-zinc-200">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              removeProjectTeamMember(p.id, m.id);
+                              toast.success("Team member removed", { description: `${m.name} removed from ${p.name}` });
+                            }}
+                            className="focus:bg-red-500/10 focus:text-red-300"
+                            data-testid={`team-remove-${m.id}`}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 text-red-300" />
+                            Remove member
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))}
@@ -325,49 +377,200 @@ const ProjectDetail = () => {
                   {(p.phases || []).length === 0 ? (
                     <div className="text-xs text-zinc-500 py-6 text-center">No phases defined yet.</div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                            <th className="text-left py-2 px-3">Batch</th>
-                            <th className="text-right py-2 px-3">Videos</th>
-                            <th className="text-right py-2 px-3">Burn</th>
-                            <th className="text-right py-2 px-3">Approval</th>
-                            <th className="text-left py-2 px-3">Feedback</th>
-                            <th className="w-10" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(p.phases || []).map((ph) => {
-                            const videos = Number(ph.totalTasks || ph.tasks || 0);
-                            const burn = Number(ph.actual || 0);
-                            const est = Number(ph.estimated || 0);
-                            const apprPct = est > 0 ? Math.round((burn / est) * 100) : 0;
-                            const fbTone = ph.health === "healthy" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30"
-                              : ph.health === "warning" ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
-                              : "text-red-300 bg-red-500/15 border-red-500/30";
-                            return (
-                              <tr key={ph.id} data-testid={`burn-phase-${ph.id}`} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
-                                <td className="py-3 px-3 text-white font-medium">{ph.name}</td>
-                                <td className="py-3 px-3 text-right tabular text-zinc-200">{videos || "—"}</td>
-                                <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(burn, { compact: false })}</td>
-                                <td className="py-3 px-3 text-right tabular">
-                                  <span className={apprPct >= 100 ? "text-red-300" : apprPct >= 90 ? "text-amber-300" : "text-emerald-300"}>{apprPct}%</span>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border capitalize ${fbTone}`}>{ph.health || "healthy"}</span>
-                                </td>
-                                <td className="py-3 px-3 text-right">
-                                  <Link to={`/projects/${p.id}/phase/${ph.id}`} className="text-zinc-500 hover:text-fuchsia-300 inline-flex">
-                                    <ChevronRight className="w-4 h-4" />
-                                  </Link>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                              <th className="text-left py-2 px-3">Batch</th>
+                              <th className="text-right py-2 px-3">Videos</th>
+                              <th className="text-right py-2 px-3">Burn</th>
+                              <th className="text-right py-2 px-3">Approval</th>
+                              <th className="text-left py-2 px-3">Feedback</th>
+                              <th className="w-10" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(p.phases || []).map((ph) => {
+                              const videos = Number(ph.totalTasks || ph.tasks || 0);
+                              const burn = Number(ph.actual || 0);
+                              const est = Number(ph.estimated || 0);
+                              const apprPct = est > 0 ? Math.round((burn / est) * 100) : 0;
+                              const fbTone = ph.health === "healthy" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30"
+                                : ph.health === "warning" ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
+                                : "text-red-300 bg-red-500/15 border-red-500/30";
+                              const isSelected = selectedPhase?.id === ph.id;
+                              return (
+                                <tr
+                                  key={ph.id}
+                                  data-testid={`burn-phase-${ph.id}`}
+                                  onClick={() => setSelectedPhaseId(ph.id)}
+                                  className={`border-b border-white/5 last:border-0 hover:bg-white/[0.03] cursor-pointer transition-colors ${isSelected ? "bg-fuchsia-500/[0.06]" : ""}`}
+                                >
+                                  <td className="py-3 px-3 text-white font-medium">{ph.name}</td>
+                                  <td className="py-3 px-3 text-right tabular text-zinc-200">{videos || "—"}</td>
+                                  <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(burn, { compact: false })}</td>
+                                  <td className="py-3 px-3 text-right tabular">
+                                    <span className={apprPct >= 100 ? "text-red-300" : apprPct >= 90 ? "text-amber-300" : "text-emerald-300"}>{apprPct}%</span>
+                                  </td>
+                                  <td className="py-3 px-3">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border capitalize ${fbTone}`}>{ph.health || "healthy"}</span>
+                                  </td>
+                                  <td className="py-3 px-3 text-right">
+                                    <Link
+                                      to={`/projects/${p.id}/phase/${ph.id}`}
+                                      onClick={(event) => event.stopPropagation()}
+                                      className="text-zinc-500 hover:text-fuchsia-300 inline-flex"
+                                    >
+                                      <ChevronRight className="w-4 h-4" />
+                                    </Link>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {selectedPhase && (
+                        <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-4" data-testid={`phase-detail-${selectedPhase.id}`}>
+                          <div className="flex items-start justify-between gap-3 flex-wrap">
+                            <div>
+                              <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Phase request drill-down</div>
+                              <div className="mt-1 font-display text-lg font-semibold text-white">{selectedPhase.name}</div>
+                              <div className="text-xs text-zinc-500 mt-0.5">
+                                Budget requests, top-ups, changes, and logged tasks for this phase.
+                              </div>
+                            </div>
+                            <Link to={`/projects/${p.id}/phase/${selectedPhase.id}`} className="text-xs text-fuchsia-300 hover:text-fuchsia-200 inline-flex items-center gap-1">
+                              Open full phase
+                              <ChevronRight className="w-3.5 h-3.5" />
+                            </Link>
+                          </div>
+
+                          <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+                            <RequestSummaryCard
+                              title={`Budget requests (${selectedPhaseBudgetItems.length})`}
+                              icon={Wallet}
+                              empty="No budget requests mapped to this phase."
+                              testid={`phase-budget-requests-${selectedPhase.id}`}
+                            >
+                              {selectedPhaseBudgetItems.map((request) => {
+                                const status = getBudgetRequestMeta(request);
+                                return (
+                                  <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div>
+                                        <div className="text-[11px] text-white font-medium">{request.title}</div>
+                                        <div className="text-[10px] text-zinc-500 mt-0.5">{request.scope}</div>
+                                      </div>
+                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
+                                        <status.Icon className="w-2.5 h-2.5" />
+                                        {status.label}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
+                                      <span>{request.when}</span>
+                                      <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </RequestSummaryCard>
+
+                            <RequestSummaryCard
+                              title={`Top-ups (${selectedPhaseTopups.length})`}
+                              icon={ArrowUpRightSquare}
+                              empty="No top-up requests mapped to this phase."
+                              testid={`phase-topup-requests-${selectedPhase.id}`}
+                            >
+                              {selectedPhaseTopups.map((request) => (
+                                <TopupRequestCard key={request.id} request={request} />
+                              ))}
+                            </RequestSummaryCard>
+
+                            <RequestSummaryCard
+                              title={`Changes (${selectedPhaseChanges.length})`}
+                              icon={Shield}
+                              empty="No change requests mapped to this phase."
+                              testid={`phase-change-requests-${selectedPhase.id}`}
+                            >
+                              {selectedPhaseChanges.map((request) => {
+                                const status = getChangeRequestMeta(request);
+                                return (
+                                  <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div>
+                                        <div className="text-[11px] text-white font-medium">{request.type}</div>
+                                        <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-2">{request.reason}</div>
+                                      </div>
+                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
+                                        <status.Icon className="w-2.5 h-2.5" />
+                                        {status.label}
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
+                                      <span>{fmtDate(request.createdAt)}</span>
+                                      <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </RequestSummaryCard>
+                          </div>
+
+                          <div className="mt-4 rounded-lg border border-white/5 bg-[#12121A] overflow-hidden">
+                            <div className="px-4 py-3 border-b border-white/5">
+                              <div className="font-display font-semibold text-[15px] text-white">Logged tasks &amp; approval status</div>
+                              <div className="text-xs text-zinc-500 mt-0.5">
+                                {selectedPhaseLogs.length} logged task{selectedPhaseLogs.length === 1 ? "" : "s"} · approvals reflect current phase delivery state
+                              </div>
+                            </div>
+                            {selectedPhaseLogs.length === 0 ? (
+                              <div className="py-8 text-center text-xs text-zinc-500">No tasks have been logged for this phase yet.</div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.02]">
+                                      <th className="text-left py-2.5 px-3">Task</th>
+                                      <th className="text-left py-2.5 px-3">Assignee</th>
+                                      <th className="text-right py-2.5 px-3">Tasks</th>
+                                      <th className="text-right py-2.5 px-3">Trajectories</th>
+                                      <th className="text-right py-2.5 px-3">Cost</th>
+                                      <th className="text-left py-2.5 px-3">Approval status</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {selectedPhaseLogs.map((log) => {
+                                      const approval = getTaskApprovalState(log, selectedPhaseDelivery);
+                                      return (
+                                        <tr key={log.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                                          <td className="py-3 px-3">
+                                            <div className="text-white font-medium">{log.name}</div>
+                                            {log.notes && <div className="text-[11px] text-zinc-500 mt-0.5 line-clamp-1">{log.notes}</div>}
+                                          </td>
+                                          <td className="py-3 px-3 text-xs text-zinc-300">{log.assignee}</td>
+                                          <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.tasksDone || 0).toLocaleString()}</td>
+                                          <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.trajectories || 0).toLocaleString()}</td>
+                                          <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(log.cost, { compact: false })}</td>
+                                          <td className="py-3 px-3">
+                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${approval.cls}`}>
+                                              <approval.Icon className="w-3 h-3" />
+                                              {approval.label}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
 
@@ -379,7 +582,7 @@ const ProjectDetail = () => {
                       <div className="font-display font-semibold text-[15px] text-white">Top-up requests</div>
                     </div>
                     {isTPM && (
-                      <Button size="sm" onClick={() => setTopupOpen(true)} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1" data-testid="btn-raise-topup-project">
+                      <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1" data-testid="btn-raise-topup-project">
                         <Plus className="w-3 h-3" /> Raise top-up
                       </Button>
                     )}
@@ -388,25 +591,9 @@ const ProjectDetail = () => {
                     <div className="text-xs text-zinc-500 py-4 text-center">No top-ups raised for this project.</div>
                   ) : (
                     <div className="space-y-2">
-                      {projectTopups.map((r) => {
-                        const st = statusMap[r.status] || statusMap["pending-cto"];
-                        return (
-                          <Link to={`/topup-requests/${r.id}`} key={r.id} className="flex items-center gap-3 p-3 rounded-lg border border-white/5 hover:border-fuchsia-500/25 bg-white/[0.02]">
-                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${st.cls}`}>
-                              <st.Icon className="w-3 h-3" /> {st.label}
-                            </span>
-                            <div className="flex-1 min-w-0">
-                              <div className="text-sm text-white font-medium">{r.phaseName}</div>
-                              <div className="text-[11px] text-zinc-500 line-clamp-1">{r.reason}</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-xs text-zinc-500">Requested</div>
-                              <div className="text-sm text-white font-semibold tabular">{fmtCurrency(r.amount, { compact: false })}</div>
-                            </div>
-                            <ChevronRight className="w-4 h-4 text-zinc-500" />
-                          </Link>
-                        );
-                      })}
+                      {projectTopups.map((request) => (
+                        <TopupRequestCard key={request.id} request={request} />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -429,7 +616,7 @@ const ProjectDetail = () => {
               {isTPM && p.phases?.[0] && (
                 <Button
                   size="sm"
-                  onClick={() => { setEditingLog(null); setTaskLogPhase(p.phases[0]); }}
+                  onClick={() => { setEditingLog(null); setTaskLogPhase(selectedPhase || p.phases[0]); }}
                   data-testid="btn-log-task"
                   className="h-8 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
                 >
@@ -474,8 +661,10 @@ const ProjectDetail = () => {
                       <th className="text-left py-2 px-3">Task</th>
                       <th className="text-left py-2 px-3">Phase</th>
                       <th className="text-left py-2 px-3">Assignee</th>
-                      <th className="text-right py-2 px-3">Tasks Done</th>
+                      <th className="text-right py-2 px-3">Tasks</th>
+                      <th className="text-right py-2 px-3">Trajectories</th>
                       <th className="text-right py-2 px-3">Est. cost</th>
+                      <th className="text-left py-2 px-3">Approval status</th>
                       <th className="text-left py-2 px-3">Date</th>
                       {isTPM && <th className="text-right py-2 px-3">Actions</th>}
                     </tr>
@@ -483,6 +672,8 @@ const ProjectDetail = () => {
                   <tbody>
                     {allLogs.map((l) => {
                       const editable = isTaskEditable(l);
+                      const delivery = projectBatches.find((batch) => batch.phaseId === l.phaseId) || null;
+                      const approval = getTaskApprovalState(l, delivery);
                       return (
                         <tr key={l.id} data-testid={`task-row-${l.id}`} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
                           <td className="py-3 px-3">
@@ -494,7 +685,14 @@ const ProjectDetail = () => {
                             <span className="inline-flex items-center gap-1"><UserIcon className="w-3 h-3 text-zinc-500" /> {l.assignee}</span>
                           </td>
                           <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(l.tasksDone || 0).toLocaleString()}</td>
+                          <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(l.trajectories || 0).toLocaleString()}</td>
                           <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(l.cost, { compact: false })}</td>
+                          <td className="py-3 px-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${approval.cls}`}>
+                              <approval.Icon className="w-3 h-3" />
+                              {approval.label}
+                            </span>
+                          </td>
                           <td className="py-3 px-3 text-xs text-zinc-400 tabular">{l.date}</td>
                           {isTPM && (
                             <td className="py-3 px-3 text-right">
@@ -548,10 +746,23 @@ const ProjectDetail = () => {
             {(role === "R&D" ? (p.phases || []).slice(0, 1) : (p.phases || [])).map((ph) => {
               const delivery = projectBatches.find((b) => b.phaseId === ph.id);
               const topupsForPhase = projectTopups.filter((r) => r.phaseId === ph.id);
+              const changesForPhase = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
               const variance = ph.estimated - ph.actual;
               const util = ph.estimated ? Math.round((ph.actual / ph.estimated) * 100) : 0;
               const hc = healthColor(ph.health);
               const logs = getPhaseLogs(p.id, ph.id);
+              const seededTasks = getPhaseTasks(p.id, ph.id);
+              const loggedTasks = logs.reduce((sum, log) => sum + (Number(log.tasksDone) || 0), 0);
+              const loggedTrajectories = logs.reduce((sum, log) => sum + (Number(log.trajectories) || 0), 0);
+              const plannedTasks = Number(ph.totalTasks || ph.tasks || 0);
+              const costPerTask = loggedTasks > 0 ? Math.round((Number(ph.actual || 0) / loggedTasks) * 100) / 100 : null;
+              const phaseBreakdown = estimatePhaseCostBreakdown(p, ph, topupsForPhase);
+              const modelNames = collectResourceNames([
+                ...(delivery?.rnd?.models ? String(delivery.rnd.models).split(",") : []),
+                ...seededTasks.map((task) => task.model).filter(Boolean),
+              ]);
+              const infraNames = collectResourceNames(seededTasks.map((task) => task.infra).filter(Boolean));
+              const approvalMeta = delivery ? (statusMap[delivery.status] || statusMap["pending-cfo"]) : null;
               return (
                 <div key={ph.id} data-testid={`batch-phase-${ph.id}`} className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -570,11 +781,15 @@ const ProjectDetail = () => {
                         )}
                       </div>
                       <div className="mt-2 text-xs text-zinc-500 tabular">{ph.dates}</div>
-                      <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2">
-                        <MiniStat label="Estimated" value={fmtCurrency(ph.estimated, { compact: false })} />
-                        <MiniStat label="Actual" value={fmtCurrency(ph.actual, { compact: false })} tone="magenta" />
-                        <MiniStat label="Variance" value={`${variance > 0 ? "+" : ""}${fmtCurrency(variance, { compact: false })}`} tone={variance >= 0 ? "emerald" : "red"} />
-                        <MiniStat label="Utilization" value={fmtPct(util)} tone={util >= 90 ? "warning" : "emerald"} />
+                      <div className="mt-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
+                        <PhaseMetric label="Estimated" value={fmtCurrency(ph.estimated, { compact: false })} />
+                        <PhaseMetric label="Actual" value={fmtCurrency(ph.actual, { compact: false })} tone="magenta" />
+                        <PhaseMetric label="Variance" value={`${variance > 0 ? "+" : ""}${fmtCurrency(variance, { compact: false })}`} tone={variance >= 0 ? "emerald" : "red"} />
+                        <PhaseMetric label="Utilization" value={fmtPct(util)} tone={util >= 90 ? "warning" : "emerald"} />
+                        <PhaseMetric label="Tasks" value={`${loggedTasks || 0}/${plannedTasks || 0}`} />
+                        <PhaseMetric label="Trajectories" value={loggedTrajectories.toLocaleString()} />
+                        <PhaseMetric label="Cost / task" value={costPerTask != null ? fmtCurrency(costPerTask, { compact: false }) : "—"} />
+                        <PhaseMetric label="Delivered" value={delivery ? "Yes" : "No"} tone={delivery ? "emerald" : "warning"} />
                       </div>
                     </div>
                     {isTPM && (
@@ -589,7 +804,7 @@ const ProjectDetail = () => {
                         </Button>
                         <Button
                           size="sm"
-                          onClick={() => setTopupOpen(true)}
+                          onClick={() => { setTopupPhaseId(ph.id); setTopupOpen(true); }}
                           data-testid={`btn-topup-${ph.id}`}
                           className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1"
                         >
@@ -608,70 +823,153 @@ const ProjectDetail = () => {
                     )}
                   </div>
 
-                  {/* Sub-lists: logs + top-ups + delivery status */}
-                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <SubList
-                      title={`Tasks (${logs.length})`}
-                      icon={FileText}
-                      empty={logs.length === 0 ? "No tasks logged." : null}
-                      testid={`sub-logs-${ph.id}`}
-                    >
-                      {logs.slice(0, 3).map((l) => (
-                        <div key={l.id} className="p-2 rounded-md bg-white/[0.02] border border-white/5">
-                          <div className="text-[11px] text-white font-medium truncate">{l.name}</div>
-                          <div className="text-[10px] text-zinc-500 tabular">{l.assignee} · {l.hours}h · {fmtCurrency(l.cost, { compact: false })}</div>
-                        </div>
-                      ))}
-                      {logs.length > 3 && <div className="text-[10px] text-zinc-500 pl-1">+{logs.length - 3} more</div>}
-                    </SubList>
+                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+                    <ResourceSummaryCard
+                      title="Models"
+                      value={fmtCurrency(phaseBreakdown.models, { compact: false })}
+                      detail={modelNames.length ? modelNames.join(", ") : "No model attribution recorded yet."}
+                      testid={`batch-models-${ph.id}`}
+                    />
+                    <ResourceSummaryCard
+                      title="Infra"
+                      value={fmtCurrency(phaseBreakdown.infra, { compact: false })}
+                      detail={infraNames.length ? infraNames.join(", ") : "No infra attribution recorded yet."}
+                      testid={`batch-infra-${ph.id}`}
+                    />
+                    <ResourceSummaryCard
+                      title="Subs"
+                      value={fmtCurrency(phaseBreakdown.subs, { compact: false })}
+                      detail={getSubscriptionSummary(topupsForPhase)}
+                      testid={`batch-subs-${ph.id}`}
+                    />
+                  </div>
 
-                    <SubList
-                      title={`Top-ups (${topupsForPhase.length})`}
+                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+                    <RequestSummaryCard
+                      title={`Top-up requests (${topupsForPhase.length})`}
                       icon={ArrowUpRightSquare}
-                      empty={topupsForPhase.length === 0 ? "No top-ups for this phase." : null}
+                      empty="No top-up requests for this phase."
                       testid={`sub-topups-${ph.id}`}
                     >
-                      {topupsForPhase.map((r) => {
-                        const st = statusMap[r.status] || statusMap["pending-cto"];
+                      {topupsForPhase.map((request) => (
+                        <TopupRequestCard key={request.id} request={request} />
+                      ))}
+                    </RequestSummaryCard>
+
+                    <RequestSummaryCard
+                      title={`Changes (${changesForPhase.length})`}
+                      icon={Shield}
+                      empty="No change requests raised for this phase."
+                      testid={`sub-changes-${ph.id}`}
+                    >
+                      {changesForPhase.map((request) => {
+                        const status = getChangeRequestMeta(request);
                         return (
-                          <Link to={`/topup-requests/${r.id}`} key={r.id} className="block p-2 rounded-md bg-white/[0.02] border border-white/5 hover:border-fuchsia-500/25">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${st.cls}`}>
-                                <st.Icon className="w-2.5 h-2.5" /> {st.label}
+                          <div key={request.id} className="p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="text-[11px] text-white font-medium">{request.type}</div>
+                                <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-2">{request.reason}</div>
+                              </div>
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
+                                <status.Icon className="w-2.5 h-2.5" />
+                                {status.label}
                               </span>
-                              <span className="text-[11px] text-white tabular font-semibold">{fmtCurrency(r.amount, { compact: false })}</span>
                             </div>
-                          </Link>
+                            <div className="mt-2 text-[10px] text-zinc-500 flex items-center justify-between">
+                              <span>{fmtDate(request.createdAt)}</span>
+                              <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
+                            </div>
+                          </div>
                         );
                       })}
-                    </SubList>
+                    </RequestSummaryCard>
 
-                    <SubList
+                    <RequestSummaryCard
                       title="Delivery"
                       icon={PackageCheck}
-                      empty={!delivery ? "Not delivered yet." : null}
+                      empty="Not delivered yet."
                       testid={`sub-delivery-${ph.id}`}
                     >
                       {delivery && (
-                        <div className="p-2 rounded-md bg-emerald-500/[0.05] border border-emerald-500/20 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-zinc-400">Proposed</span>
+                        <div className="p-2.5 rounded-lg bg-emerald-500/[0.05] border border-emerald-500/20 space-y-2">
+                          {approvalMeta && (
+                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${approvalMeta.cls}`}>
+                              <approvalMeta.Icon className="w-2.5 h-2.5" />
+                              {approvalMeta.label}
+                            </span>
+                          )}
+                          <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                            <span>Proposed</span>
                             <span className="text-[11px] text-white font-semibold tabular">{fmtCurrency(delivery.proposedAmount, { compact: false })}</span>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-zinc-400">Recovered</span>
+                          <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                            <span>Recovered</span>
                             <span className={`text-[11px] font-semibold tabular ${delivery.actualRecovered != null ? "text-emerald-300" : "text-zinc-500"}`}>
                               {delivery.actualRecovered != null ? fmtCurrency(delivery.actualRecovered, { compact: false }) : "Awaiting CFO"}
                             </span>
                           </div>
                           {delivery.clientComment && (
-                            <div className="text-[10px] text-zinc-300 leading-relaxed pt-1 border-t border-white/5 line-clamp-3">
+                            <div className="text-[10px] text-zinc-300 leading-relaxed pt-1 border-t border-white/5">
                               <span className="text-emerald-200 font-semibold">Client: </span>{delivery.clientComment}
                             </div>
                           )}
                         </div>
                       )}
-                    </SubList>
+                    </RequestSummaryCard>
+                  </div>
+
+                  <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden" data-testid={`batch-task-detail-${ph.id}`}>
+                    <div className="px-4 py-3 border-b border-white/5">
+                      <div className="font-display font-semibold text-[15px] text-white">Logged tasks for this phase</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">
+                        Detailed view of task counts, trajectories, costs, and approval outcome.
+                      </div>
+                    </div>
+                    {logs.length === 0 ? (
+                      <div className="py-8 text-center text-xs text-zinc-500">No tasks logged for this phase yet.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.02]">
+                              <th className="text-left py-2.5 px-3">Task</th>
+                              <th className="text-left py-2.5 px-3">Assignee</th>
+                              <th className="text-right py-2.5 px-3">Tasks</th>
+                              <th className="text-right py-2.5 px-3">Trajectories</th>
+                              <th className="text-right py-2.5 px-3">Cost / task</th>
+                              <th className="text-right py-2.5 px-3">Cost</th>
+                              <th className="text-left py-2.5 px-3">Approval</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {logs.map((log) => {
+                              const approval = getTaskApprovalState(log, delivery);
+                              const logCostPerTask = Number(log.tasksDone) > 0 ? Number(log.cost) / Number(log.tasksDone) : 0;
+                              return (
+                                <tr key={log.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                                  <td className="py-3 px-3">
+                                    <div className="text-white font-medium">{log.name}</div>
+                                    {log.notes && <div className="text-[11px] text-zinc-500 mt-0.5 line-clamp-1">{log.notes}</div>}
+                                  </td>
+                                  <td className="py-3 px-3 text-xs text-zinc-300">{log.assignee}</td>
+                                  <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.tasksDone || 0).toLocaleString()}</td>
+                                  <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.trajectories || 0).toLocaleString()}</td>
+                                  <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.tasksDone) > 0 ? fmtCurrency(logCostPerTask, { compact: false }) : "—"}</td>
+                                  <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(log.cost, { compact: false })}</td>
+                                  <td className="py-3 px-3">
+                                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${approval.cls}`}>
+                                      <approval.Icon className="w-3 h-3" />
+                                      {approval.label}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -711,7 +1009,7 @@ const ProjectDetail = () => {
         </TabsContent>
       </Tabs>
 
-      <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} project={p} />
+      <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} project={p} defaultPhaseId={topupPhaseId} />
       <DeliverBatchDialog
         open={!!deliverPhase}
         onOpenChange={(o) => !o && setDeliverPhase(null)}
@@ -739,34 +1037,6 @@ const TabTrigger = ({ value, icon: Icon, label, testid }) => (
   </TabsTrigger>
 );
 
-const StatBlock = ({ label, value, hint, tone = "neutral", icon: Icon }) => {
-  const tones = { positive: "text-emerald-300", negative: "text-red-300", warning: "text-amber-300", neutral: "text-white", magenta: "text-fuchsia-300" };
-  return (
-    <div className="bg-[#12121A] rounded-2xl border border-white/10 p-5">
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] uppercase font-semibold tracking-widest text-zinc-500">{label}</div>
-        {Icon && (
-          <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center">
-            <Icon className={`w-3.5 h-3.5 ${tones[tone]}`} />
-          </div>
-        )}
-      </div>
-      <div className={`mt-2 font-display font-semibold text-2xl tabular ${tones[tone]}`}>{value}</div>
-      {hint && <div className="text-xs text-zinc-500 mt-1">{hint}</div>}
-    </div>
-  );
-};
-
-const MiniStat = ({ label, value, tone = "neutral" }) => {
-  const tones = { emerald: "text-emerald-300", magenta: "text-fuchsia-300", warning: "text-amber-300", red: "text-red-300", neutral: "text-white" };
-  return (
-    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
-      <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
-      <div className={`mt-0.5 text-sm font-semibold tabular ${tones[tone]}`}>{value}</div>
-    </div>
-  );
-};
-
 // KPI card used in the Budget tab redesign (Spent/Cap + smaller stat cells)
 const MiniKpi = ({ label, value, sub, accent = "text-white", testid }) => (
   <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4" data-testid={testid}>
@@ -776,13 +1046,202 @@ const MiniKpi = ({ label, value, sub, accent = "text-white", testid }) => (
   </div>
 );
 
-const SubList = ({ title, icon: Icon, children, empty, testid }) => (
-  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={testid}>
-    <div className="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
-      <Icon className="w-3 h-3" /> {title}
+const RequestSummaryCard = ({ title, icon: Icon, children, empty, testid }) => {
+  const hasContent = Array.isArray(children) ? children.length > 0 : !!children;
+  return (
+    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={testid}>
+      <div className="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+        <Icon className="w-3 h-3" /> {title}
+      </div>
+      {!hasContent ? <div className="text-[11px] text-zinc-600 italic">{empty}</div> : <div className="space-y-1.5">{children}</div>}
     </div>
-    {empty ? <div className="text-[11px] text-zinc-600 italic">{empty}</div> : <div className="space-y-1.5">{children}</div>}
+  );
+};
+
+const TopupRequestCard = ({ request }) => {
+  const status = statusMap[request.status] || statusMap["pending-cto"];
+  const breakdown = getTopupBreakdownAmounts(request);
+  const hasBreakdown = Object.values(breakdown).some((value) => value > 0);
+
+  return (
+    <Link
+      to={`/topup-requests/${request.id}`}
+      className="block rounded-lg border border-white/5 bg-white/[0.02] p-2.5 hover:border-fuchsia-500/25"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-[11px] text-white font-medium">{request.phaseName}</div>
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
+              <status.Icon className="w-2.5 h-2.5" />
+              {status.label}
+            </span>
+          </div>
+          <div className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{request.reason}</div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <TopupBreakdownPill label="Models" value={breakdown.models} />
+            <TopupBreakdownPill label="Infra" value={breakdown.infra} />
+            <TopupBreakdownPill label="Subs" value={breakdown.subs} />
+          </div>
+          {!hasBreakdown && (
+            <div className="mt-2 text-[10px] text-zinc-600">
+              Line-item breakdown was not captured on this request.
+            </div>
+          )}
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-[10px] text-zinc-500">{fmtDate(request.requestedAt)}</div>
+          <div className="mt-1 text-[11px] font-semibold tabular text-white">{fmtCurrency(request.amount, { compact: false })}</div>
+        </div>
+      </div>
+    </Link>
+  );
+};
+
+const TopupBreakdownPill = ({ label, value }) => (
+  <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-zinc-400">
+    <span>{label}</span>
+    <span className="font-semibold tabular text-zinc-100">{value > 0 ? fmtCurrency(value, { compact: false }) : "—"}</span>
   </div>
 );
+
+const PhaseMetric = ({ label, value, tone = "neutral" }) => {
+  const tones = { emerald: "text-emerald-300", magenta: "text-fuchsia-300", warning: "text-amber-300", red: "text-red-300", neutral: "text-white" };
+  return (
+    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+      <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+      <div className={`mt-0.5 text-sm font-semibold tabular ${tones[tone]}`}>{value}</div>
+    </div>
+  );
+};
+
+const ResourceSummaryCard = ({ title, value, detail, testid }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3" data-testid={testid}>
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{title}</div>
+    <div className="mt-2 text-lg font-display font-semibold text-white tabular">{value}</div>
+    <div className="mt-1 text-[11px] text-zinc-500 leading-relaxed">{detail}</div>
+  </div>
+);
+
+const budgetRequestStatusMap = {
+  submitted: { label: "Submitted", cls: "bg-white/[0.04] text-zinc-300 border-white/10", Icon: Clock3 },
+  resubmitted: { label: "Resubmitted", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
+  forwarded: { label: "Forwarded", cls: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30", Icon: ChevronRight },
+  "CTO Review": { label: "CTO review", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "COO Approval": { label: "COO approval", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
+  approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
+  partial: { label: "Partially approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
+  rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
+  returned: { label: "Returned", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+};
+
+const changeRequestStatusMap = {
+  "CTO Review": { label: "CTO review", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "COO Approval": { label: "COO approval", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
+  approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
+  rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
+};
+
+const taskApprovalStatusMap = {
+  logged: { label: "Logged", cls: "bg-white/[0.04] text-zinc-300 border-white/10", Icon: FileText },
+  "pending-cfo": { label: "Pending approval", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
+  partial: { label: "Partially approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
+  rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
+};
+
+const normalizePhaseLabel = (value = "") => String(value).toLowerCase().replace(/\s+/g, " ").trim();
+
+const matchesPhaseLabel = (label, phase) => {
+  if (!label || !phase) return false;
+  const normalizedLabel = normalizePhaseLabel(label);
+  return normalizedLabel.includes(normalizePhaseLabel(phase.name)) || normalizedLabel.includes(normalizePhaseLabel(phase.id));
+};
+
+const requestMatchesPhase = (request, phase) => {
+  if (!request || !phase) return false;
+  if (!request.phaseIds.length && !request.phaseNames.length) return true;
+  return request.phaseIds.includes(phase.id) || request.phaseNames.some((name) => matchesPhaseLabel(name, phase));
+};
+
+const buildProjectBudgetRequests = ({ projectId, submittedBudgets, liveBudgetReviews, seedBudgetReviews }) => {
+  const submitted = submittedBudgets
+    .filter((entry) => entry.projectId === projectId)
+    .map((entry) => ({
+      id: `budget-${entry.id}`,
+      title: entry.resubmitOfReviewId ? "Resubmitted budget" : "Budget request",
+      amount: Number(entry.totals?.total || 0),
+      status: entry.status || "submitted",
+      phaseIds: (entry.phases || []).map((phase) => phase.id).filter(Boolean),
+      phaseNames: (entry.phases || []).map((phase) => phase.name).filter(Boolean),
+      scope: (entry.phases || []).length ? (entry.phases || []).map((phase) => phase.name).filter(Boolean).join(", ") : "Project-wide",
+      when: fmtDate(entry.submittedAt),
+    }));
+
+  const mergedReviews = new Map();
+  seedBudgetReviews.filter((review) => review.projectId === projectId).forEach((review) => mergedReviews.set(review.id, review));
+  liveBudgetReviews.filter((review) => review.projectId === projectId).forEach((review) => mergedReviews.set(review.id, review));
+
+  const reviews = Array.from(mergedReviews.values()).map((review) => ({
+    id: `review-${review.id}`,
+    title: review.type || "Budget review",
+    amount: Number(review.modifiedTotal || review.requestedBudget || review.currentBudget || 0),
+    status:
+      review.status === "forwarded-cfo" ? "forwarded"
+        : review.status === "rejected-by-cto" ? "rejected"
+          : review.status === "returned-to-tpm" ? "returned"
+            : review.status || review.stage || "submitted",
+    phaseIds: (review.modifiedPhases || []).map((phase) => phase.id).filter(Boolean),
+    phaseNames: (review.modifiedPhases || []).map((phase) => phase.name).filter(Boolean),
+    scope: (review.modifiedPhases || []).length ? (review.modifiedPhases || []).map((phase) => phase.name).filter(Boolean).join(", ") : "Project-wide",
+    when: fmtDate(review.ctoAt || review.submittedAt),
+  }));
+
+  return [...submitted, ...reviews];
+};
+
+const getBudgetRequestMeta = (request) => budgetRequestStatusMap[request.status] || budgetRequestStatusMap.submitted;
+const getChangeRequestMeta = (request) => changeRequestStatusMap[request.stage] || changeRequestStatusMap["CTO Review"];
+
+const getTaskApprovalState = (log, delivery) => {
+  if (log?.approvalStatus && taskApprovalStatusMap[log.approvalStatus]) return taskApprovalStatusMap[log.approvalStatus];
+  if (!delivery) return taskApprovalStatusMap.logged;
+  if (delivery.actualRecovered === 0) return taskApprovalStatusMap.rejected;
+  if (delivery.actualRecovered != null && delivery.actualRecovered >= delivery.proposedAmount) return taskApprovalStatusMap.approved;
+  if (delivery.actualRecovered != null) return taskApprovalStatusMap.partial;
+  return taskApprovalStatusMap["pending-cfo"];
+};
+
+const getTopupBreakdownAmounts = (request) => ({
+  models: Number(request.breakdown?.models?.amount || 0),
+  infra: Number(request.breakdown?.infra?.amount || 0),
+  subs: Number(request.breakdown?.subs?.amount || 0),
+});
+
+const estimatePhaseCostBreakdown = (project, phase, topups) => {
+  const totalEstimated = (project.phases || []).reduce((sum, item) => sum + Number(item.estimated || 0), 0) || 1;
+  const share = Number(phase?.estimated || 0) / totalEstimated;
+  const licenseSpend = (project.expenses || [])
+    .filter((expense) => expense.category === "Licenses")
+    .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+  const topupModels = topups.reduce((sum, request) => sum + Number(request.breakdown?.models?.amount || 0), 0);
+  const topupInfra = topups.reduce((sum, request) => sum + Number(request.breakdown?.infra?.amount || 0), 0);
+  const topupSubs = topups.reduce((sum, request) => sum + Number(request.breakdown?.subs?.amount || 0), 0);
+
+  return {
+    models: Math.round(((project.aiModelCost || 0) * share) + topupModels),
+    infra: Math.round(((project.infrastructureCost || 0) * share) + topupInfra),
+    subs: Math.round((licenseSpend * share) + topupSubs),
+  };
+};
+
+const collectResourceNames = (values) => Array.from(new Set(values.map((value) => String(value || "").trim()).filter((value) => value && value !== "—")));
+
+const getSubscriptionSummary = (topups) => {
+  const requested = topups
+    .filter((request) => Number(request.breakdown?.subs?.amount || 0) > 0)
+    .map((request) => `${fmtCurrency(request.breakdown.subs.amount, { compact: false })}${request.breakdown.subs.note ? ` · ${request.breakdown.subs.note}` : ""}`);
+  return requested.length ? requested.join(" | ") : "No subscription ask raised for this phase.";
+};
 
 export default ProjectDetail;

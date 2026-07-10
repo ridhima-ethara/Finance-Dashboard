@@ -1,4 +1,4 @@
-import { AlertTriangle, TrendingDown } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { PORTFOLIO } from "../../data/mockData";
 
@@ -42,18 +42,10 @@ const AmountAtRisk = () => {
           </div>
         </div>
 
-        <div className="mt-3 text-sm text-zinc-400 flex items-center gap-2">
-          <TrendingDown className="w-3.5 h-3.5 text-red-400" />
-          <span>{PORTFOLIO.flagged} of {PORTFOLIO.total} projects flagged · forecast overrun {fmtCurrency(Math.abs(PORTFOLIO.forecastVariance))}</span>
-        </div>
-
-        <div className="mt-7 grid grid-cols-3 gap-5" data-testid="amount-at-risk-metrics">
+        <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl" data-testid="amount-at-risk-metrics">
           <Metric label="Over budget" value={`${PORTFOLIO.projectsOverBudget} projects`} tone="danger" />
           <Metric label="Health score" value={`${PORTFOLIO.healthScore}/100`} tone="warning" />
           <Metric label="Est. accuracy" value={fmtPct(PORTFOLIO.accuracy)} tone="magenta" />
-          <Metric label="Flagged" value={`${PORTFOLIO.flagged} / ${PORTFOLIO.total}`} tone="warning" />
-          <Metric label="Forecast overrun" value={fmtCurrency(Math.abs(PORTFOLIO.forecastVariance))} tone="danger" />
-          <Metric label="Approved cap" value={fmtCurrency(PORTFOLIO.approvedBudget)} tone="magenta" />
         </div>
       </div>
     </div>
@@ -64,7 +56,7 @@ const Metric = ({ label, value, tone }) => {
   const dot =
     tone === "danger" ? "bg-red-400" : tone === "warning" ? "bg-amber-400" : tone === "magenta" ? "bg-fuchsia-400" : "bg-white/60";
   return (
-    <div>
+    <div className="h-full rounded-xl border border-white/5 bg-white/[0.03] p-4">
       <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
         <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
         {label}

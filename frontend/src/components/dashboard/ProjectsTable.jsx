@@ -28,6 +28,7 @@ const ProjectsTable = () => {
   const nav = useNavigate();
   const { scope, visibleProjects, role } = useApp();
   const isRnd = role === "R&D";
+  const ownerLabel = role === "CFO" ? "TPM" : "PL";
 
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
@@ -73,7 +74,7 @@ const ProjectsTable = () => {
               <th className="text-right py-2.5 px-2">Util %</th>
               <th className="text-right py-2.5 px-2">Run rate</th>
               <th className="text-left py-2.5 px-2">Health</th>
-              <th className="text-left py-2.5 px-2">PL</th>
+              <th className="text-left py-2.5 px-2">{ownerLabel}</th>
               <th className="text-right py-2.5 pr-6 pl-2">Top model</th>
             </tr>
           </thead>
@@ -124,7 +125,7 @@ const ProjectsTable = () => {
                       ${p.burnRate.toFixed(1)}k/day
                     </td>
                     <td className="py-3 px-2"><HealthBadge h={p.health} /></td>
-                    <td className="py-3 px-2 text-xs text-zinc-400">{p.pl}</td>
+                    <td className="py-3 px-2 text-xs text-zinc-400">{role === "CFO" ? p.tpm : p.pl}</td>
                     <td className="py-3 pr-6 pl-2 text-right">
                       <button
                         onClick={() => nav(`/projects/${p.id}`)}

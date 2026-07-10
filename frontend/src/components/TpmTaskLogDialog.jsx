@@ -39,6 +39,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
   const [estCost, setEstCost] = useState(editingLog?.cost ?? 0);
   const [tasksDone, setTasksDone] = useState(editingLog?.tasksDone ?? 1);
+  const [trajectories, setTrajectories] = useState(editingLog?.trajectories ?? 0);
   const [date, setDate] = useState(editingLog?.date || new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState(editingLog?.notes || "");
 
@@ -50,7 +51,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   const progressPct = phaseTotalTasks > 0 ? Math.min(100, Math.round((projectedDone / phaseTotalTasks) * 100)) : 0;
 
   const reset = () => {
-    setEstCost(0); setTasksDone(1);
+    setEstCost(0); setTasksDone(1); setTrajectories(0);
     setDate(new Date().toISOString().slice(0, 10)); setNotes("");
   };
 
@@ -58,15 +59,17 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     if (!activeProject) { toast.error("Select a project"); return; }
     if (!phaseId) { toast.error("Select a phase"); return; }
     if (!date) { toast.error("Date is required"); return; }
-    if (Number(tasksDone) <= 0) { toast.error("Enter how many tasks were completed"); return; }
+    if (Number(tasksDone) <= 0) { toast.error("Enter task count"); return; }
+    if (Number(trajectories) <= 0) { toast.error("Enter trajectory count"); return; }
     if (!Number(estCost) || Number(estCost) <= 0) { toast.error("Estimated cost is required"); return; }
-    const autoName = `${currentPhase?.name || "Phase"} · ${date} · ${tasksDone} task${Number(tasksDone) === 1 ? "" : "s"}`;
+    const autoName = `${currentPhase?.name || "Phase"} · ${date} · ${tasksDone} task${Number(tasksDone) === 1 ? "" : "s"} · ${trajectories} trajector${Number(trajectories) === 1 ? "y" : "ies"}`;
     const payload = {
       name: autoName,
       assignee: user?.name || "TPM",
       hours: 0,
       cost: Number(estCost) || 0,
       tasksDone: Number(tasksDone) || 0,
+      trajectories: Number(trajectories) || 0,
       date,
       notes,
       evidence: "",
@@ -177,7 +180,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
           </Field>
 
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Tasks done *" hint="Count completed today">
+            <Field label="Tasks *" hint="Count completed in this log">
               <div className="relative">
                 <ListChecks className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -192,7 +195,24 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
               </div>
             </Field>
 
-            <Field label="Estimated cost (USD) *" hint="Spend attributed to these tasks">
+            <Field label="Trajectories *" hint="Total trajectories used">
+              <div className="relative">
+                <Layers className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={trajectories}
+                  onChange={(e) => setTrajectories(Number(e.target.value) || 0)}
+                  data-testid="task-trajectories"
+                  className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                />
+              </div>
+            </Field>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3">
+            <Field label="Estimated cost (USD) *" hint="Spend attributed to this log">
               <div className="relative">
                 <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -208,9 +228,14 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             </Field>
           </div>
 
-          {tasksDone > 0 && estCost > 0 && (
-            <div className="text-[11px] text-zinc-500">
-              Avg cost / task: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(Number(estCost) / Math.max(Number(tasksDone), 1), { compact: false })}</span>
+          {(tasksDone > 0 || trajectories > 0) && estCost > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] text-zinc-500">
+              <div>
+                Avg cost / task: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(Number(estCost) / Math.max(Number(tasksDone), 1), { compact: false })}</span>
+              </div>
+              <div>
+                Avg cost / trajectory: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(Number(estCost) / Math.max(Number(trajectories), 1), { compact: false })}</span>
+              </div>
             </div>
           )}
 

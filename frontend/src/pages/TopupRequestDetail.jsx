@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import {
   ArrowLeft, ArrowUpRightSquare, Check, X, Percent, CheckCircle2, XCircle, Sparkles,
-  User as UserIcon, Building2, Layers, Wallet, AlertTriangle, ShieldCheck,
+  User as UserIcon, Building2, Layers, Wallet, AlertTriangle, ShieldCheck, Cpu, Server, CreditCard,
 } from "lucide-react";
 
 const stageChip = {
@@ -46,6 +46,33 @@ const TopupRequestDetail = () => {
 
   const currentPhase = project?.phases.find((ph) => ph.id === req.phaseId);
   const stage = stageChip[req.status] || stageChip["pending-cto"];
+  const breakdownItems = [
+    {
+      key: "models",
+      label: "Models",
+      icon: Cpu,
+      tone: "magenta",
+      helper: "AI model spend and routing-related ask.",
+      entry: req.breakdown?.models || null,
+    },
+    {
+      key: "infra",
+      label: "Infra",
+      icon: Server,
+      tone: "emerald",
+      helper: "Compute, storage, and networking required for this phase.",
+      entry: req.breakdown?.infra || null,
+    },
+    {
+      key: "subs",
+      label: "Subscriptions",
+      icon: CreditCard,
+      tone: "positive",
+      helper: "Seat-based tools and other recurring software needs.",
+      entry: req.breakdown?.subs || null,
+    },
+  ];
+  const hasBreakdown = breakdownItems.some((item) => item.entry);
 
   const doCtoApprove = () => {
     ctoDecideTopup(req.id, { amount: req.amount, comment, decision: "approve" });
@@ -159,6 +186,55 @@ const TopupRequestDetail = () => {
             </div>
           </div>
 
+          <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="topup-breakdown">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <div className="font-display font-semibold text-[15px] text-white">Top-up breakdown</div>
+                <div className="text-xs text-zinc-500 mt-0.5">
+                  Total ask plus the exact model, infra, and subscription line items raised for this phase.
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Total ask</div>
+                <div className="text-xl font-display font-semibold text-fuchsia-300 tabular">
+                  {fmtCurrency(req.amount, { compact: false })}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <MiniStat label="Total ask" value={fmtCurrency(req.amount, { compact: false })} tone="magenta" />
+              {breakdownItems.map((item) => (
+                <MiniStat
+                  key={item.key}
+                  label={item.label}
+                  value={item.entry ? fmtCurrency(item.entry.amount, { compact: false }) : "—"}
+                  tone={item.tone}
+                  icon={item.icon}
+                />
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+              {breakdownItems.map((item) => (
+                <BreakdownSection
+                  key={item.key}
+                  title={item.label}
+                  icon={item.icon}
+                  entry={item.entry}
+                  helper={item.helper}
+                  tone={item.tone}
+                />
+              ))}
+            </div>
+
+            {!hasBreakdown && (
+              <div className="mt-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
+                This request predates line-item capture, so only the total top-up amount is available.
+              </div>
+            )}
+          </div>
+
           {/* Phase snapshot */}
           {currentPhase && (
             <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="phase-snapshot">
@@ -191,27 +267,6 @@ const TopupRequestDetail = () => {
             <div className="text-xs text-zinc-200 leading-relaxed">
               <span className="text-fuchsia-200 font-semibold">AI recommendation: </span>
               Approve at <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(Math.round(req.amount * 0.85), { compact: false })}</span> (85%) — projected model routing changes will reduce actual need next sprint.
-            </div>
-          </div>
-
-          {/* Activity log */}
-          <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="activity-log">
-            <div className="font-display font-semibold text-[15px] text-white mb-3">Activity log</div>
-            <div className="space-y-3">
-              {req.history.map((h, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <div className="w-6 h-6 rounded-full bg-fuchsia-500/15 border border-fuchsia-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 text-fuchsia-300" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm text-zinc-100 font-medium">{h.action}</div>
-                    <div className="text-[11px] text-zinc-500">{h.detail}</div>
-                    <div className="text-[10px] text-zinc-600 tabular mt-0.5">
-                      {h.actor} · {new Date(h.at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                    </div>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </div>
@@ -325,6 +380,14 @@ const TopupRequestDetail = () => {
             <div className="font-display font-semibold text-[15px] text-white mb-3">Financial summary</div>
             <div className="space-y-2 text-sm">
               <Row label="Requested" value={fmtCurrency(req.amount, { compact: false })} />
+              {breakdownItems.map((item) => (
+                <Row
+                  key={item.key}
+                  label={item.label}
+                  value={item.entry ? fmtCurrency(item.entry.amount, { compact: false }) : "—"}
+                  color={item.entry ? "text-zinc-100" : "text-zinc-500"}
+                />
+              ))}
               <Row label="CTO approved" value={req.ctoDecision ? fmtCurrency(req.ctoDecision.amount, { compact: false }) : "—"} color={req.ctoDecision?.decision === "reject" ? "text-red-300" : "text-zinc-100"} />
               <Row label="CFO approved" value={req.cfoDecision ? fmtCurrency(req.cfoDecision.amount, { compact: false }) : "—"} color={req.cfoDecision?.decision === "reject" ? "text-red-300" : req.cfoDecision ? "text-emerald-300" : "text-zinc-100"} />
               <div className="border-t border-white/5 my-2" />
@@ -354,6 +417,32 @@ const MiniStat = ({ label, value, tone = "neutral", icon: Icon }) => {
         {Icon && <Icon className="w-3 h-3" />} {label}
       </div>
       <div className={`text-base font-semibold tabular mt-0.5 ${tones[tone]}`}>{value}</div>
+    </div>
+  );
+};
+
+const BreakdownSection = ({ title, icon: Icon, entry, helper, tone = "magenta" }) => {
+  const tones = {
+    positive: "text-emerald-300",
+    magenta: "text-fuchsia-300",
+    emerald: "text-emerald-300",
+    neutral: "text-white",
+  };
+  return (
+    <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 flex items-center gap-1">
+            <Icon className="w-3 h-3" /> {title}
+          </div>
+          <div className={`mt-1 text-lg font-display font-semibold tabular ${tones[tone] || tones.neutral}`}>
+            {entry ? fmtCurrency(entry.amount, { compact: false }) : "—"}
+          </div>
+        </div>
+      </div>
+      <div className="mt-2 text-[11px] text-zinc-400 leading-relaxed">
+        {entry?.note?.trim() || (entry ? helper : "No line item added for this category.")}
+      </div>
     </div>
   );
 };

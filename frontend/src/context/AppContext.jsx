@@ -11,6 +11,7 @@ const TOPUP_REQ_KEY = "ethara.topupRequests.v1";
 const BUDGETS_KEY = "ethara.budgets.v1";
 const BATCH_DELIVERIES_KEY = "ethara.batchDeliveries.v1";
 const BUDGET_REVIEWS_KEY = "ethara.budgetReviews.v1";
+const TEAM_REMOVALS_KEY = "ethara.teamRemovals.v1";
 
 const readJSON = (key, fallback) => {
   try {
@@ -90,6 +91,7 @@ export const AppProvider = ({ children }) => {
   const [budgets, setBudgets] = useState(() => readJSON(BUDGETS_KEY, []));
   const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, []));
   const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, []));
+  const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, {}));
 
   useEffect(() => {
     if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
@@ -103,6 +105,7 @@ export const AppProvider = ({ children }) => {
   useEffect(() => localStorage.setItem(BUDGETS_KEY, JSON.stringify(budgets)), [budgets]);
   useEffect(() => localStorage.setItem(BATCH_DELIVERIES_KEY, JSON.stringify(batchDeliveries)), [batchDeliveries]);
   useEffect(() => localStorage.setItem(BUDGET_REVIEWS_KEY, JSON.stringify(budgetReviews)), [budgetReviews]);
+  useEffect(() => localStorage.setItem(TEAM_REMOVALS_KEY, JSON.stringify(teamRemovals)), [teamRemovals]);
 
   const login = ({ email, password, role }) => {
     if (role) {
@@ -162,6 +165,11 @@ export const AppProvider = ({ children }) => {
 
   const setBuffer = (projectId, pct) => setBuffers((b) => ({ ...b, [projectId]: Number(pct) }));
   const setRecovery = (projectId, amount) => setRecoveries((r) => ({ ...r, [projectId]: Number(amount) }));
+  const removeProjectTeamMember = (projectId, memberId) =>
+    setTeamRemovals((prev) => ({
+      ...prev,
+      [projectId]: Array.from(new Set([...(prev[projectId] || []), memberId])),
+    }));
 
   const addProject = (payload) => {
     const id = `p-${Date.now().toString(36)}`;
@@ -226,7 +234,7 @@ export const AppProvider = ({ children }) => {
 
   const isTaskEditable = (log) => Date.now() - new Date(log.createdAt).getTime() < TASK_EDIT_WINDOW_MS;
 
-  const logPhaseTask = ({ projectId, phaseId, name, assignee, hours, cost, tasksDone, date, notes, evidence }) => {
+  const logPhaseTask = ({ projectId, phaseId, name, assignee, hours, cost, tasksDone, trajectories, date, notes, evidence, approvalStatus }) => {
     const id = `tl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const entry = {
       id,
@@ -237,6 +245,8 @@ export const AppProvider = ({ children }) => {
       hours: Number(hours) || 0,
       cost: Number(cost) || 0,
       tasksDone: Number(tasksDone) || 0,
+      trajectories: Number(trajectories) || 0,
+      approvalStatus: approvalStatus || "logged",
       date,
       notes: notes || "",
       evidence: evidence || "",
@@ -266,6 +276,8 @@ export const AppProvider = ({ children }) => {
             hours: Number(patch.hours ?? t.hours),
             cost: Number(patch.cost ?? t.cost),
             tasksDone: Number(patch.tasksDone ?? t.tasksDone ?? 0),
+            trajectories: Number(patch.trajectories ?? t.trajectories ?? 0),
+            approvalStatus: patch.approvalStatus ?? t.approvalStatus ?? "logged",
           };
         }),
       };
@@ -284,6 +296,18 @@ export const AppProvider = ({ children }) => {
   };
 
   const getPhaseLogs = (projectId, phaseId) => taskLogs[taskKey(projectId, phaseId)] || [];
+
+  const setPhaseLogApprovalStatus = (projectId, phaseId, approvalStatus) => {
+    setTaskLogs((prev) => {
+      const key = taskKey(projectId, phaseId);
+      const list = prev[key] || [];
+      if (!list.length) return prev;
+      return {
+        ...prev,
+        [key]: list.map((log) => ({ ...log, approvalStatus })),
+      };
+    });
+  };
 
   // ---- Top-up Requests (2-stage: CTO → CFO) ----
   const createTopupRequest = ({ projectId, phaseId, phaseName, amount, reason, urgency, breakdown }) => {
@@ -429,7 +453,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // ---- Batch deliveries (TPM "Deliver batch" per phase) ----
-  const deliverBatch = ({ projectId, phaseId, phaseName, proposedAmount, clientComment, clientRepresentative }) => {
+  const deliverBatch = ({ projectId, phaseId, phaseName, proposedAmount, clientComment, clientRepresentative, ...details }) => {
     const proj = projects.find((p) => p.id === projectId);
     const id = `bd-${Date.now().toString(36)}`;
     const entry = {
@@ -449,24 +473,35 @@ export const AppProvider = ({ children }) => {
       cfoNote: "",
       cfoAt: null,
       cfoBy: null,
+      ...details,
     };
     setBatchDeliveries((arr) => [entry, ...arr]);
+    setPhaseLogApprovalStatus(projectId, phaseId, "pending-cfo");
     return entry;
   };
 
   const recordActualRecovery = (id, { actualRecovered, cfoNote }) => {
+    const target = batchDeliveries.find((delivery) => delivery.id === id);
+    const amount = Number(actualRecovered);
     setBatchDeliveries((arr) => arr.map((d) => (
       d.id === id
         ? {
             ...d,
-            actualRecovered: Number(actualRecovered),
+            actualRecovered: amount,
             cfoNote: cfoNote || "",
             cfoAt: new Date().toISOString(),
             cfoBy: user?.name || "CFO",
-            status: Number(actualRecovered) >= d.proposedAmount ? "recovered" : "partial-recovered",
+            status: amount >= d.proposedAmount ? "recovered" : "partial-recovered",
           }
         : d
     )));
+    if (target) {
+      setPhaseLogApprovalStatus(
+        target.projectId,
+        target.phaseId,
+        amount === 0 ? "rejected" : amount >= target.proposedAmount ? "approved" : "partial"
+      );
+    }
   };
 
   // ---- Budget Reviews (CTO edits original TPM ask, forwards to CFO for final decision) ----
@@ -588,6 +623,8 @@ export const AppProvider = ({ children }) => {
     setScope,
     projects,
     visibleProjects,
+    teamRemovals,
+    removeProjectTeamMember,
     setBuffer,
     setRecovery,
     addProject,
