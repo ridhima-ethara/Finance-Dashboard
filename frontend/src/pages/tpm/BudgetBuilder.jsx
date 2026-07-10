@@ -101,7 +101,7 @@ const BudgetBuilder = () => {
     toast.info("Returned budget loaded — edit and resubmit", {
       description: returnedReview.ctoComment || "Address CTO comments below",
     });
-  }, [returnedReview?.id]);
+  }, [returnedReview, visibleProjects]);
 
   const project = visibleProjects.find((p) => p.id === projectId);
 

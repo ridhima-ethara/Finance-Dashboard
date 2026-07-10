@@ -573,53 +573,50 @@ export const AppProvider = ({ children }) => {
   };
 
   const role = user?.role || null;
-  const value = useMemo(
-    () => ({
-      user,
-      role,
-      isAuth: !!user,
-      login,
-      logout,
-      roles: ROLES,
-      aiOpen,
-      setAiOpen,
-      notifOpen,
-      setNotifOpen,
-      scope,
-      setScope,
-      projects,
-      visibleProjects,
-      setBuffer,
-      setRecovery,
-      addProject,
-      // task logs
-      taskLogs,
-      getPhaseLogs,
-      logPhaseTask,
-      updatePhaseTask,
-      deletePhaseTask,
-      isTaskEditable,
-      TASK_EDIT_WINDOW_MS,
-      // top-ups
-      topupRequests,
-      createTopupRequest,
-      ctoDecideTopup,
-      cfoDecideTopup,
-      // budgets & batch deliveries
-      budgets,
-      submitBudget,
-      batchDeliveries,
-      deliverBatch,
-      recordActualRecovery,
-      // CTO budget review modifications
-      budgetReviews,
-      ctoModifyBudgetReview,
-      ctoRejectBudgetReview,
-      ctoReturnBudgetReview,
-      cfoDecideBudgetReview,
-    }),
-    [user, role, aiOpen, notifOpen, scope, projects, visibleProjects, taskLogs, topupRequests, budgets, batchDeliveries, budgetReviews]
-  );
+  const value = {
+    user,
+    role,
+    isAuth: !!user,
+    login,
+    logout,
+    roles: ROLES,
+    aiOpen,
+    setAiOpen,
+    notifOpen,
+    setNotifOpen,
+    scope,
+    setScope,
+    projects,
+    visibleProjects,
+    setBuffer,
+    setRecovery,
+    addProject,
+    // task logs
+    taskLogs,
+    getPhaseLogs,
+    logPhaseTask,
+    updatePhaseTask,
+    deletePhaseTask,
+    isTaskEditable,
+    TASK_EDIT_WINDOW_MS,
+    // top-ups
+    topupRequests,
+    createTopupRequest,
+    ctoDecideTopup,
+    cfoDecideTopup,
+    // budgets & batch deliveries
+    budgets,
+    submitBudget,
+    batchDeliveries,
+    deliverBatch,
+    recordActualRecovery,
+    // CTO budget review modifications
+    budgetReviews,
+    ctoModifyBudgetReview,
+    ctoRejectBudgetReview,
+    ctoReturnBudgetReview,
+    cfoDecideBudgetReview,
+  };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
 

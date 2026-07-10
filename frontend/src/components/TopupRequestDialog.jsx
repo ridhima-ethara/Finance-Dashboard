@@ -10,7 +10,7 @@ import { fmtCurrency } from "../lib/format";
 // with per-line justification. Routed to CTO first, then CFO for final sign-off.
 const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => {
   const { createTopupRequest, visibleProjects } = useApp();
-  const projectList = project ? [project] : visibleProjects;
+  const projectList = useMemo(() => (project ? [project] : visibleProjects), [project, visibleProjects]);
 
   const [projectId, setProjectId] = useState(project?.id || projectList[0]?.id || "");
   const activeProject = useMemo(

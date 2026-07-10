@@ -4,14 +4,13 @@ import {
   Wallet,
   Activity,
   Gauge,
-  Target,
   Flame,
   Clock3,
-  Cpu,
   CheckSquare,
 } from "lucide-react";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { PORTFOLIO } from "../../data/mockData";
+import { useApp } from "../../context/AppContext";
 
 // Individual KPI card - finance-grade
 const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", icon: Icon, testid }) => {
@@ -58,63 +57,73 @@ const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", icon: Icon, 
 };
 
 const KpiGrid = () => {
+  const { role } = useApp();
   const cpiTone = PORTFOLIO.cpi >= 1 ? "positive" : "negative";
-  const varTone = PORTFOLIO.forecastVariance >= 0 ? "positive" : "negative";
   const runwayTone = PORTFOLIO.cashRunwayDays >= 30 ? "positive" : PORTFOLIO.cashRunwayDays >= 14 ? "warning" : "negative";
-  const aiRatioTone = PORTFOLIO.aiCostRatio > 60 ? "warning" : "neutral";
+  const hideCfoCards = role === "CFO";
+
+  const cards = [
+    {
+      testid: "kpi-approved-budget",
+      label: "Approved Budget",
+      icon: Wallet,
+      value: fmtCurrency(PORTFOLIO.approvedBudget),
+      sublabel: `${PORTFOLIO.activeProjects} active projects · locked`,
+    },
+    {
+      testid: "kpi-actual-spend",
+      label: "Actual Spend",
+      icon: Activity,
+      value: fmtCurrency(PORTFOLIO.actualSpend),
+      sublabel: `${fmtPct(PORTFOLIO.utilization)} of approved`,
+      delta: `${fmtPct(PORTFOLIO.utilization)} util`,
+      tone: PORTFOLIO.utilization >= 100 ? "negative" : PORTFOLIO.utilization >= 85 ? "warning" : "positive",
+    },
+    {
+      testid: "kpi-cpi",
+      label: "Cost Performance (CPI)",
+      icon: Gauge,
+      value: PORTFOLIO.cpi.toFixed(2),
+      sublabel: PORTFOLIO.cpi >= 1 ? "Under budget · efficient" : "Over budget · investigate",
+      delta: PORTFOLIO.cpi >= 1 ? "Efficient" : "Overrun",
+      tone: cpiTone,
+    },
+    {
+      testid: "kpi-burn-rate",
+      label: "Burn Rate",
+      icon: Flame,
+      value: `${fmtCurrency(PORTFOLIO.burnRate, { compact: false })}/day`,
+      sublabel: "Portfolio-wide 30-day avg",
+    },
+    {
+      testid: "kpi-runway",
+      label: "Cash Runway",
+      icon: Clock3,
+      value: PORTFOLIO.cashRunwayDays ? `${PORTFOLIO.cashRunwayDays} days` : "—",
+      sublabel: "At current burn rate",
+      delta: PORTFOLIO.cashRunwayDays >= 30 ? "Comfortable" : PORTFOLIO.cashRunwayDays >= 14 ? "Monitor" : "Critical",
+      tone: runwayTone,
+      hidden: hideCfoCards,
+    },
+    {
+      testid: "kpi-pending-approvals",
+      label: "Pending Approvals",
+      icon: CheckSquare,
+      value: `${PORTFOLIO.pendingApprovals}`,
+      sublabel: `${fmtCurrency(PORTFOLIO.pendingApprovalValue)} awaiting decision`,
+      delta: "Action needed",
+      tone: "magenta",
+      hidden: hideCfoCards,
+    },
+  ];
 
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="kpi-grid">
-      <KpiCard
-        testid="kpi-approved-budget"
-        label="Approved Budget"
-        icon={Wallet}
-        value={fmtCurrency(PORTFOLIO.approvedBudget)}
-        sublabel={`${PORTFOLIO.activeProjects} active projects · locked`}
-      />
-      <KpiCard
-        testid="kpi-actual-spend"
-        label="Actual Spend"
-        icon={Activity}
-        value={fmtCurrency(PORTFOLIO.actualSpend)}
-        sublabel={`${fmtPct(PORTFOLIO.utilization)} of approved`}
-        delta={`${fmtPct(PORTFOLIO.utilization)} util`}
-        tone={PORTFOLIO.utilization >= 100 ? "negative" : PORTFOLIO.utilization >= 85 ? "warning" : "positive"}
-      />
-      <KpiCard
-        testid="kpi-cpi"
-        label="Cost Performance (CPI)"
-        icon={Gauge}
-        value={PORTFOLIO.cpi.toFixed(2)}
-        sublabel={PORTFOLIO.cpi >= 1 ? "Under budget · efficient" : "Over budget · investigate"}
-        delta={PORTFOLIO.cpi >= 1 ? "Efficient" : "Overrun"}
-        tone={cpiTone}
-      />
-      <KpiCard
-        testid="kpi-burn-rate"
-        label="Burn Rate"
-        icon={Flame}
-        value={`${fmtCurrency(PORTFOLIO.burnRate, { compact: false })}/day`}
-        sublabel="Portfolio-wide 30-day avg"
-      />
-      <KpiCard
-        testid="kpi-runway"
-        label="Cash Runway"
-        icon={Clock3}
-        value={PORTFOLIO.cashRunwayDays ? `${PORTFOLIO.cashRunwayDays} days` : "—"}
-        sublabel="At current burn rate"
-        delta={PORTFOLIO.cashRunwayDays >= 30 ? "Comfortable" : PORTFOLIO.cashRunwayDays >= 14 ? "Monitor" : "Critical"}
-        tone={runwayTone}
-      />
-      <KpiCard
-        testid="kpi-pending-approvals"
-        label="Pending Approvals"
-        icon={CheckSquare}
-        value={`${PORTFOLIO.pendingApprovals}`}
-        sublabel={`${fmtCurrency(PORTFOLIO.pendingApprovalValue)} awaiting decision`}
-        delta="Action needed"
-        tone="magenta"
-      />
+      {cards
+        .filter((card) => !card.hidden)
+        .map((card) => (
+          <KpiCard key={card.testid} {...card} />
+        ))}
     </div>
   );
 };

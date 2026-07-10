@@ -25,7 +25,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     () => projectList.find((p) => p.id === projectId) || project || projectList[0] || null,
     [projectId, projectList, project]
   );
-  const projectPhases = activeProject?.phases || [];
+  const projectPhases = useMemo(() => activeProject?.phases || [], [activeProject]);
   const [phaseId, setPhaseId] = useState(phase?.id || projectPhases[0]?.id || "");
 
   // Keep the selected phase in sync when the project changes
@@ -33,7 +33,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     if (!projectPhases.find((p) => p.id === phaseId)) {
       setPhaseId(projectPhases[0]?.id || "");
     }
-  }, [projectId, projectPhases, phaseId]);
+  }, [projectPhases, phaseId]);
 
   const currentPhase = projectPhases.find((p) => p.id === phaseId) || phase || null;
 
