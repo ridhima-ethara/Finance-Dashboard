@@ -1,6 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { USERS, ROLES, PROJECTS } from "../data/mockData";
+import { BUDGET_REVIEWS } from "../data/mockTpm";
 import { TEAM } from "../data/mockUsers";
+import { BEDROCK_MODELS } from "../data/mockCatalog";
+import { MODEL_KEYS } from "../data/mockAi";
+import { formatBudgetTypeLabel, normalizeBudgetType } from "../lib/projectMetrics";
 
 const AppContext = createContext(null);
 const SESSION_KEY = "ethara.session.v1";
@@ -13,6 +17,8 @@ const BUDGETS_KEY = "ethara.budgets.v1";
 const BATCH_DELIVERIES_KEY = "ethara.batchDeliveries.v1";
 const BUDGET_REVIEWS_KEY = "ethara.budgetReviews.v1";
 const TEAM_REMOVALS_KEY = "ethara.teamRemovals.v1";
+const MODEL_KEYS_KEY = "ethara.modelKeys.v1";
+const IT_PROVISIONING_KEY = "ethara.itProvisioning.v1";
 
 const readJSON = (key, fallback) => {
   try {
@@ -20,6 +26,93 @@ const readJSON = (key, fallback) => {
   } catch {
     return fallback;
   }
+};
+
+const maskKey = (full) => `${full.slice(0, 7)}${"•".repeat(18)}${full.slice(-4)}`;
+const providerPrefix = {
+  Anthropic: "ant",
+  Amazon: "amz",
+  Meta: "met",
+  Mistral: "mis",
+  Cohere: "coh",
+  AI21: "ai21",
+  "Stability AI": "stb",
+  OpenAI: "oai",
+  Google: "gog",
+  xAI: "xai",
+};
+
+const buildSyntheticKey = ({ provider, env, seed }) => {
+  const prefix = providerPrefix[provider] || "mdl";
+  const mode = env === "production" ? "live" : "test";
+  const safeSeed = String(seed || "demo").replace(/[^a-z0-9]/gi, "").slice(0, 14) || Math.random().toString(36).slice(2, 10);
+  return `sk-${prefix}-${mode}-${safeSeed}${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const normalizeMemberRecord = (member, fallbackRole = "Member", fallbackStatus = "Pending kickoff") => ({
+  id: member.id,
+  name: member.name,
+  role: member.role || fallbackRole,
+  email: member.email || `${member.name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai`,
+  status: member.status || fallbackStatus,
+  tasksDone: Number(member.tasksDone || 0),
+});
+
+const buildTeamMember = ({ projectId, name, role, fallbackStatus = "Pending kickoff", index = 0 }) => {
+  const member = TEAM.find((entry) => entry.name === name);
+  return normalizeMemberRecord({
+    id: member?.id || `${projectId}-tm-${index + 1}`,
+    name,
+    role: role || member?.role || "R&D",
+    email: member?.email || `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai`,
+    status: role === "TPM" ? "Online" : fallbackStatus,
+  }, role || member?.role || "R&D", fallbackStatus);
+};
+
+const mergeTeamMembers = (existing = [], incoming = []) => {
+  const merged = new Map();
+  [...existing, ...incoming].forEach((member, index) => {
+    const key = member.id || member.email || member.name || `member-${index}`;
+    if (!merged.has(key)) merged.set(key, normalizeMemberRecord(member));
+  });
+  return Array.from(merged.values());
+};
+
+const summarizeRequestedLines = (items = {}, fallbackProject) => {
+  const modelLines = (items.models || []).map((line, index) => {
+    const meta = line.meta || BEDROCK_MODELS.find((model) => model.id === line.modelId);
+    return {
+      id: line.id || `mdl-${index + 1}`,
+      modelId: line.modelId || meta?.id || "",
+      label: meta?.name || line.modelName || "Model access",
+      provider: meta?.provider || line.provider || fallbackProject?.topModel || "Anthropic",
+      amount: Number(line.estCost || line.amount || 0),
+    };
+  });
+
+  if (!modelLines.length && fallbackProject?.topModel) {
+    modelLines.push({
+      id: `${fallbackProject.id}-default-model`,
+      modelId: "",
+      label: fallbackProject.topModel,
+      provider: "Anthropic",
+      amount: 0,
+    });
+  }
+
+  return {
+    models: modelLines,
+    infra: (items.infra || []).map((line, index) => ({
+      id: line.id || `inf-${index + 1}`,
+      label: line.meta?.code || line.instance || line.optionLabel || "EC2 instance",
+      amount: Number(line.estCost || line.amount || 0),
+    })),
+    subs: (items.subs || []).map((line, index) => ({
+      id: line.id || `sub-${index + 1}`,
+      label: line.subscription || line.optionLabel || "Subscription",
+      amount: Number(line.estCost || line.amount || 0),
+    })),
+  };
 };
 
 // Seed a couple of demo top-up requests so CTO/CFO have items to act on
@@ -93,6 +186,14 @@ export const AppProvider = ({ children }) => {
   const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, []));
   const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, []));
   const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, {}));
+  const [modelKeyRecords, setModelKeyRecords] = useState(() =>
+    readJSON(MODEL_KEYS_KEY, MODEL_KEYS.map((entry) => ({
+      ...entry,
+      maskedKey: entry.maskedKey || maskKey(entry.fullKey),
+      members: entry.members || [],
+    })))
+  );
+  const [itProvisioningRequests, setItProvisioningRequests] = useState(() => readJSON(IT_PROVISIONING_KEY, []));
 
   useEffect(() => {
     if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
@@ -107,6 +208,8 @@ export const AppProvider = ({ children }) => {
   useEffect(() => localStorage.setItem(BATCH_DELIVERIES_KEY, JSON.stringify(batchDeliveries)), [batchDeliveries]);
   useEffect(() => localStorage.setItem(BUDGET_REVIEWS_KEY, JSON.stringify(budgetReviews)), [budgetReviews]);
   useEffect(() => localStorage.setItem(TEAM_REMOVALS_KEY, JSON.stringify(teamRemovals)), [teamRemovals]);
+  useEffect(() => localStorage.setItem(MODEL_KEYS_KEY, JSON.stringify(modelKeyRecords)), [modelKeyRecords]);
+  useEffect(() => localStorage.setItem(IT_PROVISIONING_KEY, JSON.stringify(itProvisioningRequests)), [itProvisioningRequests]);
 
   const login = ({ email, password, role }) => {
     if (role) {
@@ -185,21 +288,72 @@ export const AppProvider = ({ children }) => {
       return [updated, ...current.filter((project) => project.id !== projectId)];
     });
 
+  const addProjectTeamMembers = (projectId, members = [], source = "Budget Builder") => {
+    if (!members.length) return;
+    upsertProjectOverride(projectId, (project) => {
+      const incoming = members.map((member, index) => buildTeamMember({
+        projectId,
+        name: member.name,
+        role: member.role,
+        fallbackStatus: "Added later",
+        index: (project.teamMembers || []).length + index,
+      }));
+      const teamMembers = mergeTeamMembers(project.teamMembers || [], incoming);
+      const rndMembers = Array.from(new Set([
+        ...(project.rndMembers || []),
+        ...incoming.filter((member) => member.role === "R&D").map((member) => member.name),
+      ]));
+      const plMembers = Array.from(new Set([
+        ...(project.plMembers || []),
+        ...incoming.filter((member) => member.role === "PL / QL" || member.role === "Project Lead").map((member) => member.name),
+      ]));
+      const qlMembers = Array.from(new Set([
+        ...(project.qlMembers || []),
+        ...incoming.filter((member) => member.role === "QL" || member.role === "Quality Lead").map((member) => member.name),
+      ]));
+      const auditEntry = {
+        id: `a-${projectId}-${Date.now().toString(36)}`,
+        ts: new Date().toISOString(),
+        actor: `${user?.name || "System"} · ${user?.role || "System"}`,
+        action: "Project members updated",
+        detail: `${source} added ${incoming.map((member) => `${member.name} (${member.role})`).join(", ")}`,
+      };
+      const kickoffRecipients = mergeTeamMembers(project.kickoffMail?.recipients || [], incoming);
+      return {
+        ...project,
+        teamMembers,
+        rndMembers,
+        plMembers,
+        qlMembers,
+        kickoffMail: project.kickoffMail
+          ? { ...project.kickoffMail, recipients: kickoffRecipients }
+          : project.kickoffMail,
+        auditLog: [auditEntry, ...(project.auditLog || [])],
+      };
+    });
+  };
+
   const addProject = (payload) => {
     const id = `p-${Date.now().toString(36)}`;
     const rndMembers = payload.rndMembers || [];
-    const allTeamNames = Array.from(new Set([payload.tpm, ...rndMembers].filter(Boolean)));
-    const teamMembers = allTeamNames.map((name, index) => {
-      const member = TEAM.find((entry) => entry.name === name);
-      return {
-        id: member?.id || `${id}-tm-${index + 1}`,
-        name,
-        role: name === payload.tpm ? "TPM" : member?.role || "R&D",
-        email: member?.email || `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai`,
-        status: name === payload.tpm ? "Online" : "Pending kickoff",
-        tasksDone: 0,
-      };
-    });
+    const plMembers = payload.plMembers || [];
+    const qlMembers = payload.qlMembers || [];
+    const allMembers = [
+      payload.tpm ? { name: payload.tpm, role: "TPM", status: "Online" } : null,
+      ...plMembers.map((name) => ({ name, role: "PL / QL" })),
+      ...qlMembers.map((name) => ({ name, role: "QL" })),
+      ...rndMembers.map((name) => ({ name, role: "R&D" })),
+    ].filter(Boolean);
+    const teamMembers = mergeTeamMembers(
+      [],
+      allMembers.map((member, index) => buildTeamMember({
+        projectId: id,
+        name: member.name,
+        role: member.role,
+        fallbackStatus: member.status || "Pending kickoff",
+        index,
+      }))
+    );
     const docs = [
       ...(payload.docUrl
         ? [{
@@ -236,10 +390,12 @@ export const AppProvider = ({ children }) => {
       name: payload.internalName,
       clientProjectName: payload.clientProjectName,
       client: payload.clientProjectName || "New Engagement",
-      pl: payload.tpm,
+      pl: plMembers[0] || payload.tpm,
       tpm: payload.tpm,
       rnd: rndMembers[0] || null,
       rndMembers,
+      plMembers,
+      qlMembers,
       docUrl: payload.docUrl || "",
       docs,
       teamMembers,
@@ -279,7 +435,7 @@ export const AppProvider = ({ children }) => {
           ts: kickoffAt,
           actor: payload.createdBy || "CTO",
           action: "Project created",
-          detail: `Assigned TPM: ${payload.tpm}${rndMembers.length ? ` · R&D: ${rndMembers.join(", ")}` : ""}. Start ${payload.startDate}${docs.length ? ` · ${docs.length} attachment${docs.length === 1 ? "" : "s"}` : ""}`,
+          detail: `Assigned TPM: ${payload.tpm}${plMembers.length ? ` · PL/QL: ${plMembers.join(", ")}` : ""}${qlMembers.length ? ` · QL: ${qlMembers.join(", ")}` : ""}${rndMembers.length ? ` · R&D: ${rndMembers.join(", ")}` : ""}. Start ${payload.startDate}${docs.length ? ` · ${docs.length} attachment${docs.length === 1 ? "" : "s"}` : ""}`,
         },
         {
           id: `a-${id}-2`,
@@ -302,7 +458,25 @@ export const AppProvider = ({ children }) => {
 
   const isTaskEditable = (log) => Date.now() - new Date(log.createdAt).getTime() < TASK_EDIT_WINDOW_MS;
 
-  const logPhaseTask = ({ projectId, phaseId, name, assignee, hours, cost, tasksDone, trajectories, date, notes, evidence, approvalStatus }) => {
+  const logPhaseTask = ({
+    projectId,
+    phaseId,
+    name,
+    assignee,
+    hours,
+    cost,
+    tasksDone,
+    trajectories,
+    date,
+    notes,
+    evidence,
+    approvalStatus,
+    modelId,
+    modelName,
+    inputTokens,
+    outputTokens,
+    modelUsage,
+  }) => {
     const id = `tl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const entry = {
       id,
@@ -318,6 +492,18 @@ export const AppProvider = ({ children }) => {
       date,
       notes: notes || "",
       evidence: evidence || "",
+      modelId: modelId || "",
+      modelName: modelName || "",
+      inputTokens: Number(inputTokens || 0),
+      outputTokens: Number(outputTokens || 0),
+      modelUsage: Array.isArray(modelUsage) ? modelUsage.map((usage) => ({
+        modelId: usage.modelId || "",
+        modelName: usage.modelName || "",
+        tasksDone: Number(usage.tasksDone || 0),
+        cost: Number(usage.cost || 0),
+        inputTokens: Number(usage.inputTokens || 0),
+        outputTokens: Number(usage.outputTokens || 0),
+      })) : [],
       createdAt: new Date().toISOString(),
       createdBy: user?.name || "TPM",
     };
@@ -346,6 +532,20 @@ export const AppProvider = ({ children }) => {
             tasksDone: Number(patch.tasksDone ?? t.tasksDone ?? 0),
             trajectories: Number(patch.trajectories ?? t.trajectories ?? 0),
             approvalStatus: patch.approvalStatus ?? t.approvalStatus ?? "logged",
+            modelId: patch.modelId ?? t.modelId ?? "",
+            modelName: patch.modelName ?? t.modelName ?? "",
+            inputTokens: Number(patch.inputTokens ?? t.inputTokens ?? 0),
+            outputTokens: Number(patch.outputTokens ?? t.outputTokens ?? 0),
+            modelUsage: Array.isArray(patch.modelUsage)
+              ? patch.modelUsage.map((usage) => ({
+                  modelId: usage.modelId || "",
+                  modelName: usage.modelName || "",
+                  tasksDone: Number(usage.tasksDone || 0),
+                  cost: Number(usage.cost || 0),
+                  inputTokens: Number(usage.inputTokens || 0),
+                  outputTokens: Number(usage.outputTokens || 0),
+                }))
+              : t.modelUsage ?? [],
           };
         }),
       };
@@ -471,9 +671,11 @@ export const AppProvider = ({ children }) => {
   const submitBudget = (payload) => {
     // payload: { projectId, projectName, budgetType, priority, totalTasks, delivery, phases, items, totals, resubmitOfReviewId? }
     const id = `bud-${Date.now().toString(36)}`;
+    const normalizedBudgetType = normalizeBudgetType(payload.budgetType);
     const entry = {
       id,
       ...payload,
+      budgetType: normalizedBudgetType,
       submittedBy: user?.name || "TPM",
       submittedRole: user?.role || "TPM",
       submittedAt: new Date().toISOString(),
@@ -505,6 +707,59 @@ export const AppProvider = ({ children }) => {
         trajectoriesPerTask: Number(ph.trajectories || 0),
       }));
       const approved = (payload.phases || []).reduce((s, ph) => s + Number(ph.budget || 0), 0) || payload.totals?.total || 0;
+      const additionalMembers = (payload.additionalMembers || []).map((member, index) => buildTeamMember({
+        projectId: payload.projectId,
+        name: member.name,
+        role: member.role,
+        fallbackStatus: "Added via budget",
+        index: (project.teamMembers || []).length + index,
+      }));
+      const teamMembers = mergeTeamMembers(project.teamMembers || [], additionalMembers);
+      const rndMembers = Array.from(new Set([
+        ...(project.rndMembers || []),
+        ...additionalMembers.filter((member) => member.role === "R&D").map((member) => member.name),
+      ]));
+      const plMembers = Array.from(new Set([
+        ...(project.plMembers || []),
+        ...additionalMembers.filter((member) => member.role === "PL / QL" || member.role === "Project Lead").map((member) => member.name),
+      ]));
+      const qlMembers = Array.from(new Set([
+        ...(project.qlMembers || []),
+        ...additionalMembers.filter((member) => member.role === "QL" || member.role === "Quality Lead").map((member) => member.name),
+      ]));
+      const historyEntry = {
+        id,
+        projectId: payload.projectId,
+        budgetType: normalizedBudgetType,
+        total: approved,
+        totals: payload.totals,
+        totalTasks: Number(payload.totalTasks || 0),
+        totalTrajectories: Number(payload.totalTrajectories || 0),
+        submittedAt: entry.submittedAt,
+        submittedBy: entry.submittedBy,
+        status: "submitted",
+        items: payload.items,
+        phases: payload.phases,
+        sourceDeliveryId: payload.sourceDeliveryId || null,
+        sampleIteration: payload.sampleIteration || 1,
+      };
+      const auditEntries = [];
+      if (additionalMembers.length) {
+        auditEntries.push({
+          id: `a-${payload.projectId}-${Date.now().toString(36)}-members`,
+          ts: new Date().toISOString(),
+          actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
+          action: "Members added during budget build",
+          detail: additionalMembers.map((member) => `${member.name} (${member.role})`).join(", "),
+        });
+      }
+      auditEntries.push({
+        id: `a-${payload.projectId}-${Date.now().toString(36)}-budget`,
+        ts: new Date().toISOString(),
+        actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
+        action: `${formatBudgetTypeLabel(normalizedBudgetType)} budget submitted`,
+        detail: `$${approved.toLocaleString()} · ${Number(payload.totalTasks || 0).toLocaleString()} tasks · ${Number(payload.totalTrajectories || 0).toLocaleString()} trajectories`,
+      });
       return {
         ...project,
         approvedBudget: approved,
@@ -512,14 +767,26 @@ export const AppProvider = ({ children }) => {
         remaining: approved,
         phases: newPhases.length ? newPhases : project.phases,
         budgetItems: payload.items,
+        teamMembers,
+        rndMembers,
+        plMembers,
+        qlMembers,
         deliveryMode: payload.delivery?.mode,
-        totalTasks: payload.totalTasks,
+        totalTasks: Number(payload.totalTasks || project.totalTasks || 0),
+        kickoffMail: project.kickoffMail
+          ? { ...project.kickoffMail, recipients: mergeTeamMembers(project.kickoffMail.recipients || [], additionalMembers) }
+          : project.kickoffMail,
+        budgetTrackHistory: [
+          historyEntry,
+          ...((project.budgetTrackHistory || []).filter((item) => item.id !== id)),
+        ],
         lastBudgetSubmission: {
-          budgetType: payload.budgetType,
+          budgetType: normalizedBudgetType,
           sampleIteration: payload.sampleIteration || 1,
           sourceDeliveryId: payload.sourceDeliveryId || null,
           submittedAt: new Date().toISOString(),
         },
+        auditLog: [...auditEntries, ...(project.auditLog || [])],
       };
     });
     return entry;
@@ -709,25 +976,162 @@ export const AppProvider = ({ children }) => {
     });
   };
 
-  const cfoDecideBudgetReview = (reviewId, { decision, amount, comment }) => {
-    // decision: 'approve' | 'partial' | 'reject' | 'return'
-    setBudgetReviews((arr) => arr.map((r) => {
-      if (r.id !== reviewId) return r;
-      const at = new Date().toISOString();
-      const statusMap = { approve: "approved", partial: "partial", reject: "rejected", return: "returned" };
-      const actionLabel = {
-        approve: "CFO approved",
-        partial: "CFO partial approval",
-        reject: "CFO rejected",
-        return: "CFO returned for changes",
-      }[decision];
-      return {
-        ...r,
-        status: statusMap[decision] || "returned",
-        cfoDecision: { decision, amount: Number(amount || 0), comment: comment || "", at, by: user?.name || "CFO" },
-        history: [...(r.history || []), { at, actor: `${user?.name || "CFO"} · CFO`, action: actionLabel, detail: comment || "" }],
+  const cfoDecideBudgetReview = (reviewId, { decision, amount, comment, reviewSeed }) => {
+    const at = new Date().toISOString();
+    const baseReview = budgetReviews.find((review) => review.id === reviewId)
+      || reviewSeed
+      || BUDGET_REVIEWS.find((review) => review.id === reviewId);
+
+    if (!baseReview) return null;
+
+    const approvedAmount = Number(
+      amount
+      || baseReview.modifiedTotal
+      || baseReview.recommendedBudget
+      || baseReview.requestedBudget
+      || 0
+    );
+    const statusMap = { approve: "approved", partial: "partial", reject: "rejected", return: "returned" };
+    const actionLabel = {
+      approve: "CFO approved",
+      partial: "CFO partial approval",
+      reject: "CFO rejected",
+      return: "CFO returned for changes",
+    }[decision];
+    const nextReview = {
+      ...baseReview,
+      status: statusMap[decision] || "returned",
+      cfoDecision: {
+        decision,
+        amount: approvedAmount,
+        comment: comment || "",
+        at,
+        by: user?.name || "CFO",
+      },
+      history: [
+        ...(baseReview.history || []),
+        { at, actor: `${user?.name || "CFO"} · CFO`, action: actionLabel, detail: comment || "" },
+      ],
+    };
+
+    setBudgetReviews((arr) => {
+      const exists = arr.some((review) => review.id === reviewId);
+      if (!exists) return [nextReview, ...arr];
+      return arr.map((review) => (review.id === reviewId ? nextReview : review));
+    });
+
+    if (decision === "approve" || decision === "partial") {
+      const project = projects.find((entry) => entry.id === baseReview.projectId);
+      const members = mergeTeamMembers(project?.teamMembers || [], project?.kickoffMail?.recipients || []);
+      const requestedLines = summarizeRequestedLines(project?.budgetItems || baseReview.items || {}, project);
+      const itEntry = {
+        id: `it-${reviewId}`,
+        sourceReviewId: reviewId,
+        sourceType: "budget-review",
+        projectId: baseReview.projectId,
+        projectName: baseReview.projectName,
+        approvedAmount,
+        status: "pending-it",
+        approvedAt: at,
+        approvedBy: user?.name || "CFO",
+        approvedRole: user?.role || "CFO",
+        budgetType: normalizeBudgetType(project?.lastBudgetSubmission?.budgetType || baseReview.type || "Production"),
+        requestedModels: requestedLines.models,
+        requestedInfra: requestedLines.infra,
+        requestedSubs: requestedLines.subs,
+        members,
+        note: comment || "",
       };
-    }));
+      setItProvisioningRequests((arr) => [itEntry, ...arr.filter((request) => request.id !== itEntry.id)]);
+      upsertProjectOverride(baseReview.projectId, (projectEntry) => ({
+        ...projectEntry,
+        itProvisioningStatus: "pending-it",
+        auditLog: [
+          {
+            id: `a-${baseReview.projectId}-${Date.now().toString(36)}-it`,
+            ts: at,
+            actor: `${user?.name || "CFO"} · CFO`,
+            action: "Budget approved and routed to IT",
+            detail: `${formatBudgetTypeLabel(itEntry.budgetType)} · ${approvedAmount.toLocaleString()} · ${members.length} member${members.length === 1 ? "" : "s"} queued for access`,
+          },
+          ...(projectEntry.auditLog || []),
+        ],
+      }));
+    }
+
+    return nextReview;
+  };
+
+  const provisionModelKeys = (requestId, { lines = [], note = "" }) => {
+    const request = itProvisioningRequests.find((entry) => entry.id === requestId);
+    if (!request) return null;
+    const at = new Date().toISOString();
+    const project = projects.find((entry) => entry.id === request.projectId);
+
+    const createdKeys = lines
+      .filter((line) => line.fullKey && String(line.fullKey).trim())
+      .map((line, index) => {
+        const teamMembers = request.members.filter((member) => (line.memberIds || []).includes(member.id));
+        const fullKey = String(line.fullKey).trim();
+        return {
+          id: `k-${request.projectId}-${Date.now().toString(36)}-${index + 1}`,
+          project: request.projectId,
+          projectName: request.projectName,
+          provider: line.provider || "Anthropic",
+          model: line.label,
+          type: request.budgetType === "Production" ? "Production" : "R&D",
+          env: line.env || "testing",
+          fullKey,
+          maskedKey: maskKey(fullKey),
+          tags: [request.budgetType.toLowerCase(), line.env || "testing", "it-provisioned"],
+          lastUsed: at,
+          usage: 0,
+          createdBy: user?.name || "IT",
+          createdAt: at,
+          status: "active",
+          members: teamMembers.map((member) => ({
+            id: member.id,
+            name: member.name,
+            role: member.role,
+            email: member.email,
+          })),
+          sourceReviewId: request.sourceReviewId,
+        };
+      });
+
+    setModelKeyRecords((arr) => [...createdKeys, ...arr]);
+    setItProvisioningRequests((arr) => arr.map((entry) => (
+      entry.id === requestId
+        ? {
+            ...entry,
+            status: "completed",
+            provisionedAt: at,
+            provisionedBy: user?.name || "IT",
+            note,
+            lines: lines.map((line) => ({
+              ...line,
+              maskedKey: line.fullKey ? maskKey(String(line.fullKey).trim()) : "",
+            })),
+          }
+        : entry
+    )));
+    if (project) {
+      upsertProjectOverride(project.id, (projectEntry) => ({
+        ...projectEntry,
+        itProvisioningStatus: "completed",
+        auditLog: [
+          {
+            id: `a-${project.id}-${Date.now().toString(36)}-keys`,
+            ts: at,
+            actor: `${user?.name || "IT"} · ${user?.role || "IT"}`,
+            action: "Model keys provisioned",
+            detail: `${createdKeys.length} key${createdKeys.length === 1 ? "" : "s"} provisioned${note ? ` · ${note}` : ""}`,
+          },
+          ...(projectEntry.auditLog || []),
+        ],
+      }));
+    }
+    return createdKeys;
   };
 
   const role = user?.role || null;
@@ -748,6 +1152,7 @@ export const AppProvider = ({ children }) => {
     visibleProjects,
     teamRemovals,
     removeProjectTeamMember,
+    addProjectTeamMembers,
     setBuffer,
     setRecovery,
     addProject,
@@ -776,6 +1181,9 @@ export const AppProvider = ({ children }) => {
     ctoRejectBudgetReview,
     ctoReturnBudgetReview,
     cfoDecideBudgetReview,
+    modelKeyRecords,
+    itProvisioningRequests,
+    provisionModelKeys,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

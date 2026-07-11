@@ -76,6 +76,13 @@ const NAV_PL = [
   { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
 ];
 
+const NAV_IT = [
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
+  { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
+  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
+  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
+];
+
 const pickNav = (role) => {
   switch (role) {
     case "CTO":
@@ -87,6 +94,8 @@ const pickNav = (role) => {
       return NAV_TPM;
     case "PL":
       return NAV_PL;
+    case "IT":
+      return NAV_IT;
     default:
       return NAV_PL;
   }

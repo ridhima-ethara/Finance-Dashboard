@@ -12,6 +12,7 @@ const roleAccent = {
   TPM: { border: "border-sky-500/40", text: "text-sky-300", dot: "bg-sky-400", glow: "hover:shadow-[0_0_24px_rgba(56,189,248,0.35)]" },
   "R&D": { border: "border-violet-500/40", text: "text-violet-300", dot: "bg-violet-400", glow: "hover:shadow-[0_0_24px_rgba(139,92,246,0.35)]" },
   PL: { border: "border-amber-500/40", text: "text-amber-300", dot: "bg-amber-400", glow: "hover:shadow-[0_0_24px_rgba(245,158,11,0.35)]" },
+  IT: { border: "border-cyan-500/40", text: "text-cyan-300", dot: "bg-cyan-400", glow: "hover:shadow-[0_0_24px_rgba(34,211,238,0.35)]" },
 };
 
 const roleLabel = {
@@ -20,6 +21,7 @@ const roleLabel = {
   TPM: "Technical Program Manager",
   "R&D": "R&D Team · TPM view",
   PL: "Project Lead",
+  IT: "IT Access Administration",
 };
 
 // Ethara.AI logo — provided by user
@@ -113,7 +115,7 @@ const Login = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 max-w-4xl mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 max-w-5xl mx-auto">
             {USERS.filter((u) => u.role !== "PL").map((u) => {
               const a = roleAccent[u.role];
               return (

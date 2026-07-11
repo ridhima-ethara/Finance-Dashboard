@@ -24,6 +24,8 @@ import { BUDGET_REVIEWS, CHANGE_REQUESTS } from "../data/mockTpm";
 import { PROJECTS } from "../data/mockProjects";
 import { BUFFER, RECOVERY } from "../data/mockCfo";
 import { fmtCurrency, fmtPct } from "../lib/format";
+import { summarizeLoggedProject } from "../lib/projectMetrics";
+import ItDashboard from "./it/ItDashboard";
 
 const Dashboard = () => {
   const { role, scope, visibleProjects, batchDeliveries } = useApp();
@@ -41,6 +43,8 @@ const Dashboard = () => {
   if (isTpmView(role)) return <TpmDashboard />;
   // CTO gets a project-focused ops dashboard (no CFO-style whole-budget views)
   if (role === "CTO") return <CtoDashboard />;
+  if (role === "IT") return <ItDashboard />;
+  if (!isCFO) return <LeadDashboardView />;
 
   const pendingReviews = BUDGET_REVIEWS.filter((r) => r.stage === "CTO Review").length;
   const pendingCRs = CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length;
@@ -257,5 +261,79 @@ const Dashboard = () => {
     </div>
   );
 };
+
+const LeadDashboardView = () => {
+  const { visibleProjects, taskLogs, role } = useApp();
+  const summaries = useMemo(
+    () => visibleProjects.map((project) => summarizeLoggedProject(project, taskLogs)),
+    [visibleProjects, taskLogs]
+  );
+  const approved = visibleProjects.reduce((sum, project) => sum + Number(project.approvedBudget || 0), 0);
+  const logged = summaries.reduce((sum, summary) => sum + summary.loggedSpend, 0);
+  const targetTasks = summaries.reduce((sum, summary) => sum + summary.targetTasks, 0);
+  const doneTasks = summaries.reduce((sum, summary) => sum + summary.loggedTasks, 0);
+  const inputTokens = summaries.reduce((sum, summary) => sum + summary.inputTokens, 0);
+  const outputTokens = summaries.reduce((sum, summary) => sum + summary.outputTokens, 0);
+
+  return (
+    <div className="space-y-6" data-testid="page-lead-dashboard">
+      <div>
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-amber-300">
+          <span className="w-6 h-px bg-amber-400" />
+          {role} Portal
+        </div>
+        <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">Owned delivery dashboard</h1>
+        <p className="text-sm text-zinc-400 mt-1">
+          Logged spend, task progress, and token consumption only. Actual financial comparisons remain CFO-only.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <LeadStat label="Active projects" value={String(visibleProjects.length)} />
+        <LeadStat label="Logged spend" value={fmtCurrency(logged, { compact: false })} />
+        <LeadStat label="Target progress" value={targetTasks > 0 ? `${doneTasks}/${targetTasks}` : `${doneTasks}`} />
+        <LeadStat label="Budget coverage" value={approved > 0 ? fmtPct(Math.round((logged / approved) * 100)) : "0%"} />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <LeadPanel title="Token usage">
+          <div className="grid grid-cols-2 gap-3">
+            <LeadMini label="Input tokens" value={inputTokens.toLocaleString()} />
+            <LeadMini label="Output tokens" value={outputTokens.toLocaleString()} />
+          </div>
+        </LeadPanel>
+        <LeadPanel title="Logged spend vs approved">
+          <div className="grid grid-cols-2 gap-3">
+            <LeadMini label="Approved" value={fmtCurrency(approved, { compact: false })} />
+            <LeadMini label="Logged" value={fmtCurrency(logged, { compact: false })} />
+          </div>
+        </LeadPanel>
+      </div>
+
+      <ProjectsTable />
+    </div>
+  );
+};
+
+const LeadStat = ({ label, value }) => (
+  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4">
+    <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
+    <div className="mt-2 font-display font-semibold text-2xl text-white tabular">{value}</div>
+  </div>
+);
+
+const LeadPanel = ({ title, children }) => (
+  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
+    <div className="font-display font-semibold text-[15px] text-white mb-3">{title}</div>
+    {children}
+  </div>
+);
+
+const LeadMini = ({ label, value }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className="mt-1 text-sm font-semibold text-white tabular">{value}</div>
+  </div>
+);
 
 export default Dashboard;

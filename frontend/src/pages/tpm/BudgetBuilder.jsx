@@ -11,13 +11,14 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { EC2_INSTANCES, BEDROCK_MODELS, SUBSCRIPTION_CATALOG } from "../../data/mockCatalog";
 import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { TEAM } from "../../data/mockUsers";
+import { normalizeBudgetType } from "../../lib/projectMetrics";
 
 const uid = () => Math.random().toString(36).slice(2, 8);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const plusDaysISO = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 const splitPhaseDates = (value = "") => String(value).split("→").map((part) => part.trim());
 const HOURS_PER_MONTH = 730; // AWS standard
-const DIRECT_COST_BUDGET_TYPES = ["Testing", "Sample"];
+const DIRECT_COST_BUDGET_TYPES = ["Testing"];
 
 // Seed cost/task from the Bedrock catalog (~4K in + 1K out per trajectory) — user can override.
 const seedCostPerTask = (model) => {
@@ -60,7 +61,7 @@ const BudgetBuilder = () => {
   const [params] = useSearchParams();
   const editReviewId = params.get("edit");
   const requestedProjectId = params.get("projectId") || params.get("project") || "";
-  const requestedBudgetType = params.get("budgetType") || "";
+  const requestedBudgetType = normalizeBudgetType(params.get("budgetType") || "");
   const requestedPhaseId = params.get("phaseId") || "";
   const requestedSampleIteration = Math.max(Number(params.get("sampleIteration") || 1), 1);
   const requestedSourceDeliveryId = params.get("sourceDeliveryId") || null;
@@ -83,13 +84,17 @@ const BudgetBuilder = () => {
     || ""
   );
   const [priority, setPriority] = useState("Medium");
-  const budgetTypeOptions = isRnd ? ["Testing", "Sample", "RnD"] : ["Production", "RnD"];
+  const showReworkOption = requestedBudgetType === "Rework" || normalizeBudgetType(returnedReview?.budgetType) === "Rework";
+  const budgetTypeOptions = isRnd
+    ? ["Testing", "RnD", ...(showReworkOption ? ["Rework"] : [])]
+    : ["Production", "RnD"];
   const initialBudgetType =
     returnedReview?.budgetType
     || (budgetTypeOptions.includes(requestedBudgetType) ? requestedBudgetType : null)
     || (isRnd ? "Testing" : "Production");
   const [budgetType, setBudgetType] = useState(initialBudgetType);
   const isDirectCostBudget = DIRECT_COST_BUDGET_TYPES.includes(budgetType);
+  const isReworkBudget = budgetType === "Rework";
   // R&D locked to single phase
   const [deliveryMode, setDeliveryMode] = useState(isRnd ? "single" : "single");
 
@@ -120,6 +125,19 @@ const BudgetBuilder = () => {
   }, [returnedReview, visibleProjects]);
 
   const project = visibleProjects.find((p) => p.id === projectId);
+  const additionalMemberOptions = useMemo(() => {
+    const taken = new Set((project?.teamMembers || []).map((member) => member.name));
+    return TEAM.filter((member) => !taken.has(member.name) && !["Finance", "COO", "IT"].includes(member.role));
+  }, [project]);
+  const [additionalMembers, setAdditionalMembers] = useState([]);
+
+  const toggleAdditionalMember = (member) => {
+    setAdditionalMembers((current) => (
+      current.some((entry) => entry.name === member.name)
+        ? current.filter((entry) => entry.name !== member.name)
+        : [...current, { name: member.name, role: member.role }]
+    ));
+  };
 
   useEffect(() => {
     if (!project || returnedReview || !requestedPhaseId) return;
@@ -293,8 +311,9 @@ const BudgetBuilder = () => {
       items,
       totals,
       resubmitOfReviewId: returnedReview?.id || null,
-      sampleIteration: budgetType === "Sample" ? requestedSampleIteration : 1,
+      sampleIteration: isReworkBudget ? requestedSampleIteration : 1,
       sourceDeliveryId: requestedSourceDeliveryId,
+      additionalMembers,
     });
     toast.success(returnedReview ? "Budget resubmitted to CTO" : "Budget submitted", {
       description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · ${distributedPhases.length} ${distributedPhases.length === 1 ? "phase" : "phases"}`,
@@ -372,7 +391,7 @@ const BudgetBuilder = () => {
                 {["Low", "Medium", "High", "Critical"].map((p) => <option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Budget type *" hint={isRnd ? "Testing before Sample" : null}>
+            <Field label="Budget type *" hint={isRnd ? "Testing first, then R&D delivery. Rework appears only after changes are asked." : null}>
               <select
                 value={budgetType}
                 onChange={(e) => setBudgetType(e.target.value)}
@@ -435,6 +454,41 @@ const BudgetBuilder = () => {
                 <Field label="Estimated End Date *">
                   <input type="date" value={singleEnd} onChange={(e) => setSingleEnd(e.target.value)} data-testid="bb-single-end" className={ipStyle} />
                 </Field>
+              </div>
+            </div>
+          )}
+
+          {project && (
+            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4" data-testid="bb-additional-members">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Add members to this project</div>
+                  <div className="text-xs text-zinc-500 mt-1">Useful when TPM adds more execution members during budget build. Added members join the project roster and kickoff access list.</div>
+                </div>
+                {additionalMembers.length > 0 && (
+                  <div className="text-[11px] text-fuchsia-300 font-semibold">{additionalMembers.length} selected</div>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {additionalMemberOptions.length === 0 && (
+                  <div className="text-xs text-zinc-500">All available members are already attached to this project.</div>
+                )}
+                {additionalMemberOptions.map((member) => {
+                  const on = additionalMembers.some((entry) => entry.name === member.name);
+                  return (
+                    <button
+                      key={member.id}
+                      type="button"
+                      onClick={() => toggleAdditionalMember(member)}
+                      data-testid={`bb-add-member-${member.id}`}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                        on ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-200" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
+                      }`}
+                    >
+                      {member.name} · {member.role}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -751,6 +805,18 @@ const BudgetBuilder = () => {
               ].filter((x) => x.on)} />
               <SummaryCard title="Phase summary" rows={distributedPhases.map((p) => ({ id: p.id, k: `${p.name} · ${p.start || ""} → ${p.end || ""}`, v: p.budget }))} />
             </div>
+            {additionalMembers.length > 0 && (
+              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                <div className="text-[12px] font-semibold text-white mb-2">Members being added with this budget</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {additionalMembers.map((member) => (
+                    <span key={`${member.name}-${member.role}`} className="px-2 py-1 rounded-md text-[11px] border border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-200">
+                      {member.name} · {member.role}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="mt-4 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3 text-xs">
               <Sparkles className="w-4 h-4 text-fuchsia-300 mt-0.5 flex-shrink-0" />
               <div className="text-zinc-300">

@@ -5,7 +5,7 @@ import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { TEAM } from "../data/mockUsers";
-import { FolderPlus, User, Calendar as CalIcon, Link2, FileText, Users, Beaker, Mail, Upload, X } from "lucide-react";
+import { FolderPlus, User, Calendar as CalIcon, Link2, FileText, Users, Beaker, Upload, X } from "lucide-react";
 
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_SIZE = 750 * 1024;
@@ -16,6 +16,7 @@ const buildEmptyForm = (today) => ({
   startDate: today,
   docUrl: "",
   tpm: "",
+  plQlMembers: [],
   rndMembers: [],
   attachments: [],
 });
@@ -35,12 +36,12 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
   const [form, setForm] = useState(() => buildEmptyForm(today));
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleRnd = (name) =>
+  const toggleMulti = (key, name) =>
     setForm((f) => ({
       ...f,
-      rndMembers: f.rndMembers.includes(name)
-        ? f.rndMembers.filter((n) => n !== name)
-        : [...f.rndMembers, name],
+      [key]: f[key].includes(name)
+        ? f[key].filter((n) => n !== name)
+        : [...f[key], name],
     }));
   const handleFilePick = (event) => {
     const files = Array.from(event.target.files || []);
@@ -84,7 +85,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
       attachments: current.attachments.filter((file) => file.id !== attachmentId),
     }));
 
-  const selectedMembers = Array.from(new Set([form.tpm, ...form.rndMembers].filter(Boolean))).map((name) => {
+  const selectedMembers = Array.from(new Set([form.tpm, ...form.plQlMembers, ...form.rndMembers].filter(Boolean))).map((name) => {
     const match = TEAM.find((member) => member.name === name);
     return {
       id: match?.id || `member-${name.toLowerCase().replace(/\s+/g, "-")}`,
@@ -100,8 +101,18 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
     if (!form.tpm) return toast.error("Assign a TPM");
     if (!form.startDate) return toast.error("Set the start date");
 
+    const plMembers = form.plQlMembers.filter((name) => {
+      const member = TEAM.find((entry) => entry.name === name);
+      return member?.role !== "Quality Lead";
+    });
+    const qlMembers = form.plQlMembers.filter((name) => {
+      const member = TEAM.find((entry) => entry.name === name);
+      return member?.role === "Quality Lead";
+    });
     const proj = addProject({
       ...form,
+      plMembers,
+      qlMembers,
       createdBy: user?.name || "CTO",
       createdByRole: user?.role || "CTO",
     });
@@ -114,6 +125,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
   };
 
   const tpmOptions = TEAM.filter((t) => ["Project Lead", "Engineer", "CTO"].includes(t.role));
+  const plQlOptions = TEAM.filter((t) => ["Project Lead", "Quality Lead"].includes(t.role));
   const rndOptions = TEAM.filter((t) => t.role === "R&D" || t.role === "Engineer");
 
   return (
@@ -237,6 +249,41 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
             </div>
           </Field>
 
+          <Field label="Assign PL / QL" hint="Added to project members + kickoff">
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2 max-h-32 overflow-y-auto space-y-1" data-testid="plql-multi-picker">
+              {plQlOptions.length === 0 && (
+                <div className="text-xs text-zinc-500 px-2 py-1.5">No PL / QL members available.</div>
+              )}
+              {plQlOptions.map((t) => {
+                const on = form.plQlMembers.includes(t.name);
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => toggleMulti("plQlMembers", t.name)}
+                    data-testid={`plql-toggle-${t.id}`}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
+                      on ? "bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/30" : "text-zinc-300 hover:bg-white/[0.04] border border-transparent"
+                    }`}
+                  >
+                    <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center ${on ? "border-fuchsia-400 bg-fuchsia-500" : "border-white/20"}`}>
+                      {on && <span className="text-[9px] text-white">✓</span>}
+                    </span>
+                    <Users className="w-3 h-3 text-fuchsia-300" />
+                    <span className="font-medium">{t.name}</span>
+                    <span className="text-zinc-500 text-[10px]">· {t.role}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {form.plQlMembers.length > 0 && (
+              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-zinc-400">
+                <Users className="w-3 h-3" />
+                {form.plQlMembers.length} PL / QL assigned · {form.plQlMembers.join(", ")}
+              </div>
+            )}
+          </Field>
+
           <Field label="Assign R&amp;D members" hint="Project appears on their dashboard">
             <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2 max-h-40 overflow-y-auto space-y-1" data-testid="rnd-multi-picker">
               {rndOptions.length === 0 && (
@@ -248,7 +295,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
                   <button
                     key={t.id}
                     type="button"
-                    onClick={() => toggleRnd(t.name)}
+                    onClick={() => toggleMulti("rndMembers", t.name)}
                     data-testid={`rnd-toggle-${t.id}`}
                     className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
                       on ? "bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/30" : "text-zinc-300 hover:bg-white/[0.04] border border-transparent"
@@ -270,29 +317,6 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
                 {form.rndMembers.length} R&amp;D assigned · {form.rndMembers.join(", ")}
               </div>
             )}
-          </Field>
-
-          <Field label="Kickoff recipients" hint="Will receive kickoff mail + project access">
-            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2 space-y-1.5" data-testid="kickoff-recipient-list">
-              {selectedMembers.length === 0 ? (
-                <div className="px-2 py-2 text-xs text-zinc-500">
-                  Assign a TPM and optional R&amp;D members to preview the kickoff recipient list.
-                </div>
-              ) : (
-                selectedMembers.map((member) => (
-                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-md border border-white/5 bg-white/[0.02] px-3 py-2">
-                    <div className="min-w-0">
-                      <div className="text-xs text-white truncate">{member.name}</div>
-                      <div className="text-[10px] text-zinc-500 truncate">{member.role}</div>
-                    </div>
-                    <div className="inline-flex items-center gap-1 text-[10px] text-zinc-400 min-w-0">
-                      <Mail className="w-3 h-3 text-fuchsia-300 flex-shrink-0" />
-                      <span className="truncate">{member.email}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </Field>
         </div>
 

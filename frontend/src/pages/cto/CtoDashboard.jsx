@@ -29,43 +29,48 @@ import {
 import { Button } from "../../components/ui/button";
 import { useState } from "react";
 import NewProjectDialog from "../../components/NewProjectDialog";
+import { summarizeLoggedProject } from "../../lib/projectMetrics";
 
 const CtoDashboard = () => {
-  const { visibleProjects } = useApp();
+  const { visibleProjects, taskLogs } = useApp();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+
+  const projectUsage = useMemo(
+    () => visibleProjects.map((project) => ({ project, usage: summarizeLoggedProject(project, taskLogs) })),
+    [visibleProjects, taskLogs]
+  );
 
   const pendingReviews = BUDGET_REVIEWS.filter((r) => r.stage === "CTO Review").length;
   const pendingCRs = CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length;
-  const highRisk = visibleProjects.filter((p) => p.utilization >= 90).length;
-  const overBudget = visibleProjects.filter((p) => p.utilization >= 100).length;
+  const highRisk = projectUsage.filter((entry) => entry.usage.utilization >= 90).length;
+  const overBudget = projectUsage.filter((entry) => entry.usage.utilization >= 100).length;
 
   const inExecution = visibleProjects.filter((p) => p.status === "Execution").length;
   const inDiscovery = visibleProjects.filter((p) => p.status === "Discovery").length;
   const orgUtil = useMemo(() => {
     const totApproved = visibleProjects.reduce((s, p) => s + (p.approvedBudget || 0), 0);
-    const totActual = visibleProjects.reduce((s, p) => s + (p.actualSpend || 0), 0);
-    return totApproved ? Math.round((totActual / totApproved) * 100) : 0;
-  }, [visibleProjects]);
+    const totLogged = projectUsage.reduce((sum, entry) => sum + entry.usage.loggedSpend, 0);
+    return totApproved ? Math.round((totLogged / totApproved) * 100) : 0;
+  }, [projectUsage, visibleProjects]);
   const avgHealth = useMemo(() => {
     if (!visibleProjects.length) return "Green";
-    const overs = visibleProjects.filter((p) => p.utilization >= 100).length;
-    const watch = visibleProjects.filter((p) => p.utilization >= 85 && p.utilization < 100).length;
+    const overs = projectUsage.filter((entry) => entry.usage.utilization >= 100).length;
+    const watch = projectUsage.filter((entry) => entry.usage.utilization >= 85 && entry.usage.utilization < 100).length;
     if (overs >= 2) return "Red";
     if (overs >= 1 || watch >= 3) return "Amber";
     return "Green";
-  }, [visibleProjects]);
+  }, [projectUsage, visibleProjects]);
 
   // Per-project comparison data
   const cmpEstActual = useMemo(
-    () =>
-      visibleProjects
-        .filter((p) => (p.estimatedBudget || 0) + (p.actualSpend || 0) > 0)
-        .map((p) => ({
-          name: p.name.split(" ")[0],
-          estimated: p.estimatedBudget || 0,
-          actual: p.actualSpend || 0,
-        })),
-    [visibleProjects]
+    () => projectUsage
+      .filter(({ project, usage }) => (project.approvedBudget || 0) + usage.loggedSpend > 0)
+      .map(({ project, usage }) => ({
+        name: project.name.split(" ")[0],
+        budget: project.approvedBudget || 0,
+        logged: usage.loggedSpend || 0,
+      })),
+    [projectUsage]
   );
   const cmpReqApp = useMemo(
     () =>
@@ -92,7 +97,7 @@ const CtoDashboard = () => {
             Portfolio operations
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Project-wise utilization &amp; comparison · June 2026
+            Project-wise utilization &amp; owned consumption tracking · June 2026
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -162,29 +167,29 @@ const CtoDashboard = () => {
       </div>
 
       {/* Project-wise utilization */}
-      <Panel testid="cto-util-bars" title="Project-wise utilization" subtitle="Actual spend as % of approved budget · click to drill in">
+      <Panel testid="cto-util-bars" title="Project-wise utilization" subtitle="Logged spend as % of approved budget · click to drill in">
         <div className="space-y-2.5">
-          {visibleProjects.map((p) => {
-            const pct = p.approvedBudget ? Math.round((p.actualSpend / p.approvedBudget) * 100) : 0;
+          {projectUsage.map(({ project, usage }) => {
+            const pct = project.approvedBudget ? Math.round((usage.loggedSpend / project.approvedBudget) * 100) : 0;
             const color = pct >= 100 ? "#EF4444" : pct >= 90 ? "#F59E0B" : pct >= 70 ? "#E619B8" : "#10B981";
             return (
               <Link
-                to={`/projects/${p.id}`}
-                key={p.id}
-                data-testid={`cto-util-${p.id}`}
+                to={`/projects/${project.id}`}
+                key={project.id}
+                data-testid={`cto-util-${project.id}`}
                 className="block p-3 rounded-lg border border-white/5 bg-white/[0.02] hover:border-fuchsia-500/30 hover:bg-white/[0.04] transition-colors"
               >
                 <div className="flex items-center justify-between text-xs mb-1">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-1.5 h-4 rounded-full flex-shrink-0" style={{ background: color }} />
-                    <span className="text-white font-medium truncate">{p.name}</span>
+                    <span className="text-white font-medium truncate">{project.name}</span>
                     <span className="text-[10px] text-zinc-500 flex-shrink-0">
-                      {p.client} · TPM {p.tpm}
+                      {project.client} · TPM {project.tpm}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <span className="text-zinc-400 tabular">
-                      {fmtCurrency(p.actualSpend)} / {fmtCurrency(p.approvedBudget)}
+                      {fmtCurrency(usage.loggedSpend, { compact: false })} / {fmtCurrency(project.approvedBudget)}
                     </span>
                     <span className="font-semibold tabular w-10 text-right" style={{ color }}>
                       {fmtPct(pct)}
@@ -206,7 +211,7 @@ const CtoDashboard = () => {
 
       {/* Comparison charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Panel testid="cto-cmp-est-actual" title="Estimated vs Actual" subtitle="Per project · TPM estimates vs realized spend">
+        <Panel testid="cto-cmp-est-actual" title="Budget vs Logged" subtitle="Per project · submitted budget vs logged usage">
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cmpEstActual}>
@@ -215,8 +220,8 @@ const CtoDashboard = () => {
                 <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => fmtCurrency(v)} />
                 <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="estimated" name="TPM estimated" fill="#3B82F6" radius={[3, 3, 0, 0]} maxBarSize={26} />
-                <Bar dataKey="actual" name="Actual" fill="#E619B8" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                <Bar dataKey="budget" name="Budget" fill="#3B82F6" radius={[3, 3, 0, 0]} maxBarSize={26} />
+                <Bar dataKey="logged" name="Logged" fill="#E619B8" radius={[3, 3, 0, 0]} maxBarSize={26} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -240,7 +245,7 @@ const CtoDashboard = () => {
       </div>
 
       {/* Projects list */}
-      <Panel testid="cto-projects-list" title="Your projects" subtitle="TPM · client · phase · variance">
+      <Panel testid="cto-projects-list" title="Your projects" subtitle="TPM · client · logged usage · task completion">
         <div className="overflow-x-auto -mx-1">
           <table className="w-full text-sm">
             <thead>
@@ -250,40 +255,36 @@ const CtoDashboard = () => {
                 <th className="text-left py-2 px-3">TPM</th>
                 <th className="text-left py-2 px-3">Status</th>
                 <th className="text-right py-2 px-3">Approved</th>
-                <th className="text-right py-2 px-3">Actual</th>
-                <th className="text-right py-2 px-3">Variance</th>
+                <th className="text-right py-2 px-3">Logged</th>
+                <th className="text-right py-2 px-3">Task target</th>
+                <th className="text-right py-2 px-3">Done</th>
                 <th className="text-left py-2 px-3">Health</th>
                 <th className="w-8" />
               </tr>
             </thead>
             <tbody>
-              {visibleProjects.map((p) => {
-                const variance = (p.estimatedBudget || 0) - (p.actualSpend || 0);
+              {projectUsage.map(({ project, usage }) => {
                 return (
-                  <tr key={p.id} data-testid={`cto-row-${p.id}`} className="border-b border-white/5 hover:bg-white/[0.03]">
+                  <tr key={project.id} data-testid={`cto-row-${project.id}`} className="border-b border-white/5 hover:bg-white/[0.03]">
                     <td className="py-3 px-3">
-                      <Link to={`/projects/${p.id}`} className="font-medium text-white hover:text-fuchsia-300">
-                        {p.name}
+                      <Link to={`/projects/${project.id}`} className="font-medium text-white hover:text-fuchsia-300">
+                        {project.name}
                       </Link>
                     </td>
-                    <td className="py-3 px-3 text-xs text-zinc-300">{p.client}</td>
-                    <td className="py-3 px-3 text-xs text-zinc-300">{p.tpm}</td>
-                    <td className="py-3 px-3 text-xs text-zinc-400">{p.status}</td>
-                    <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(p.approvedBudget)}</td>
-                    <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.actualSpend)}</td>
-                    <td className="py-3 px-3 text-right tabular">
-                      <span className={variance >= 0 ? "text-emerald-300" : "text-red-300"}>
-                        {variance >= 0 ? "+" : ""}
-                        {fmtCurrency(variance, { compact: false })}
-                      </span>
-                    </td>
+                    <td className="py-3 px-3 text-xs text-zinc-300">{project.client}</td>
+                    <td className="py-3 px-3 text-xs text-zinc-300">{project.tpm}</td>
+                    <td className="py-3 px-3 text-xs text-zinc-400">{project.status}</td>
+                    <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(project.approvedBudget)}</td>
+                    <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(usage.loggedSpend, { compact: false })}</td>
+                    <td className="py-3 px-3 text-right text-zinc-200 tabular">{usage.targetTasks.toLocaleString()}</td>
+                    <td className="py-3 px-3 text-right text-fuchsia-300 font-semibold tabular">{usage.loggedTasks.toLocaleString()}</td>
                     <td className="py-3 px-3">
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                          p.health === "healthy" ? "bg-emerald-500/15 text-emerald-300" : p.health === "watch" ? "bg-amber-500/15 text-amber-300" : "bg-red-500/15 text-red-300"
+                          project.health === "healthy" ? "bg-emerald-500/15 text-emerald-300" : project.health === "watch" ? "bg-amber-500/15 text-amber-300" : "bg-red-500/15 text-red-300"
                         }`}
                       >
-                        {p.health}
+                        {project.health}
                       </span>
                     </td>
                     <td className="py-3 px-2 text-right">

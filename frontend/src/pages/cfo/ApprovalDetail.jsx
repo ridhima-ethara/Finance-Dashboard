@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { PROJECTS } from "../../data/mockProjects";
@@ -6,6 +6,7 @@ import { BUFFER } from "../../data/mockCfo";
 import { fmtCurrency } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
+import { useApp } from "../../context/AppContext";
 import {
   ArrowLeft,
   Check,
@@ -27,36 +28,68 @@ import {
 const ApprovalDetail = () => {
   const { id } = useParams();
   const nav = useNavigate();
-  const review = useMemo(() => BUDGET_REVIEWS.find((r) => r.id === id) || BUDGET_REVIEWS[0], [id]);
-  const project = useMemo(() => PROJECTS.find((p) => p.id === review?.projectId) || PROJECTS[0], [review]);
+  const { projects, budgetReviews, cfoDecideBudgetReview, itProvisioningRequests } = useApp();
+  const review = useMemo(() => budgetReviews.find((r) => r.id === id) || BUDGET_REVIEWS.find((r) => r.id === id) || BUDGET_REVIEWS[0], [budgetReviews, id]);
+  const project = useMemo(() => projects.find((p) => p.id === review?.projectId) || PROJECTS.find((p) => p.id === review?.projectId) || PROJECTS[0], [projects, review]);
 
-  const [decision, setDecision] = useState("pending"); // pending, approved, partial, rejected, returned
-  const [approvedAmt, setApprovedAmt] = useState(review.recommendedBudget);
+  const [decision, setDecision] = useState(review?.status === "approved" ? "approved" : review?.status === "partial" ? "partial" : review?.status === "rejected" ? "rejected" : review?.status === "returned" ? "returned" : "pending");
+  const [approvedAmt, setApprovedAmt] = useState(review.cfoDecision?.amount || review.modifiedTotal || review.recommendedBudget);
   const [comment, setComment] = useState("");
   const [bufferPct, setBufferPct] = useState(0);
 
+  useEffect(() => {
+    setDecision(review?.status === "approved" ? "approved" : review?.status === "partial" ? "partial" : review?.status === "rejected" ? "rejected" : review?.status === "returned" ? "returned" : "pending");
+    setApprovedAmt(review?.cfoDecision?.amount || review?.modifiedTotal || review?.recommendedBudget || 0);
+    setComment(review?.cfoDecision?.comment || "");
+  }, [review]);
+
   const requested = review.requestedBudget;
   const variance = approvedAmt - requested;
+  const itRequest = itProvisioningRequests.find((entry) => entry.sourceReviewId === review.id);
 
   const doApprove = () => {
+    cfoDecideBudgetReview(review.id, {
+      decision: "approve",
+      amount: requested,
+      comment,
+      reviewSeed: review,
+    });
     setDecision("approved");
-    toast.success("Request approved", { description: `${review.projectName} · ${fmtCurrency(requested, { compact: false })} forwarded for payment` });
+    toast.success("Request approved", { description: `${review.projectName} · ${fmtCurrency(requested, { compact: false })} routed to IT for model-key provisioning` });
   };
   const doPartial = () => {
     if (!approvedAmt || approvedAmt <= 0 || approvedAmt >= requested) {
       toast.error("Enter partial amount less than requested");
       return;
     }
+    cfoDecideBudgetReview(review.id, {
+      decision: "partial",
+      amount: approvedAmt,
+      comment,
+      reviewSeed: review,
+    });
     setDecision("partial");
-    toast.success("Partially approved", { description: `${fmtCurrency(approvedAmt, { compact: false })} · new baseline for TPM · top-ups reference this amount` });
+    toast.success("Partially approved", { description: `${fmtCurrency(approvedAmt, { compact: false })} · routed to IT with partial-approved amount` });
   };
   const doReturn = () => {
     if (!comment.trim()) { toast.error("Comment required to return"); return; }
+    cfoDecideBudgetReview(review.id, {
+      decision: "return",
+      amount: approvedAmt,
+      comment,
+      reviewSeed: review,
+    });
     setDecision("returned");
     toast.info("Returned with comments to PL/CTO");
   };
   const doReject = () => {
     if (!comment.trim()) { toast.error("Comment required to reject"); return; }
+    cfoDecideBudgetReview(review.id, {
+      decision: "reject",
+      amount: 0,
+      comment,
+      reviewSeed: review,
+    });
     setDecision("rejected");
     toast.error("Rejected", { description: comment });
   };
@@ -282,6 +315,22 @@ const ApprovalDetail = () => {
               <Row label="Approved Amount" value={`$${(decision === "approved" ? requested : decision === "partial" ? approvedAmt : 0).toLocaleString()}`} />
               <Row label="Variance" value={`${variance >= 0 ? "" : "-"}$${Math.abs(variance).toLocaleString()}`} color={variance >= 0 ? "text-emerald-300" : "text-red-300"} />
             </div>
+          </div>
+
+          <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="it-handoff">
+            <div className="font-display font-semibold text-[15px] text-white mb-3">IT handoff</div>
+            {itRequest ? (
+              <div className="space-y-2 text-sm">
+                <Row label="Status" value={itRequest.status === "completed" ? "Provisioned" : "Pending IT"} color={itRequest.status === "completed" ? "text-emerald-300" : "text-sky-300"} />
+                <Row label="Approved amount" value={fmtCurrency(itRequest.approvedAmount, { compact: false })} />
+                <Row label="Models requested" value={String(itRequest.requestedModels?.length || 0)} />
+                <Row label="Members to allocate" value={String(itRequest.members?.length || 0)} />
+              </div>
+            ) : (
+              <div className="text-xs text-zinc-500">
+                IT provisioning is created only after CFO approve / partial approve.
+              </div>
+            )}
           </div>
 
           {/* Activity log */}

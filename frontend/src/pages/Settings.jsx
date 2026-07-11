@@ -17,7 +17,7 @@ import {
   Lock,
 } from "lucide-react";
 
-const ROLE_OPTIONS = ["CTO", "CFO", "TPM", "PL"];
+const ROLE_OPTIONS = ["CTO", "CFO", "TPM", "R&D", "PL", "IT"];
 
 const Settings = () => {
   const { user } = useApp();

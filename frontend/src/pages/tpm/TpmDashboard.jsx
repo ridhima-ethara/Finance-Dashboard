@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency, fmtPct } from "../../lib/format";
-import { NOTIFICATIONS, APPROVALS, DAILY_ACTIVITY, MODEL_TRAJECTORY, THRESHOLDS } from "../../data/mockData";
-import { CHANGE_REQUESTS } from "../../data/mockTpm";
+import { NOTIFICATIONS, APPROVALS, THRESHOLDS } from "../../data/mockData";
+import { CHANGE_REQUESTS, DAILY_CONSUMPTION_LOG } from "../../data/mockTpm";
 import { Link } from "react-router-dom";
 import {
   FolderKanban, ShieldCheck, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
@@ -13,6 +13,7 @@ import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tool
 import RequestBudgetDialog from "../../components/RequestBudgetDialog";
 import ChangeRequestDialog from "./ChangeRequestDialog";
 import ProjectsTable from "../../components/dashboard/ProjectsTable";
+import { summarizeLoggedProject } from "../../lib/projectMetrics";
 
 const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid, to }) => {
   const toneMap = {
@@ -64,7 +65,7 @@ const Panel = ({ title, subtitle, right, children, testid }) => (
 );
 
 const TpmDashboard = () => {
-  const { user, visibleProjects, budgetReviews, role } = useApp();
+  const { user, visibleProjects, budgetReviews, role, taskLogs } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
   const [crOpen, setCrOpen] = useState(false);
   const isRnd = role === "R&D";
@@ -75,42 +76,74 @@ const TpmDashboard = () => {
     (r.tpm === user?.name || (user?.role === "R&D" && r.returnedTo === "R&D"))
   ));
 
+  const projectUsage = useMemo(
+    () => visibleProjects.map((project) => ({ project, usage: summarizeLoggedProject(project, taskLogs) })),
+    [visibleProjects, taskLogs]
+  );
+
   // Compute TPM-scoped KPIs
   const approved = visibleProjects.reduce((s, p) => s + p.approvedBudget, 0);
-  const actual = visibleProjects.reduce((s, p) => s + p.actualSpend, 0);
-  const remaining = approved - actual;
-  const util = approved ? Math.round((actual / approved) * 100) : 0;
-  const burnRate = Math.round(visibleProjects.reduce((s, p) => s + p.burnRate, 0) * 1000);
+  const logged = projectUsage.reduce((sum, entry) => sum + entry.usage.loggedSpend, 0);
+  const remaining = approved - logged;
+  const util = approved ? Math.round((logged / approved) * 100) : 0;
+  const burnRate = Math.round(projectUsage.reduce((sum, entry) => sum + entry.usage.runRate, 0));
   const runway = burnRate ? Math.round(remaining / burnRate) : "—";
-  const today = DAILY_ACTIVITY[DAILY_ACTIVITY.length - 1];
-  const overBudget = visibleProjects.filter((p) => p.utilization >= 100).length;
+  const latestDay = DAILY_CONSUMPTION_LOG.reduce((latest, row) => row.date > latest ? row.date : latest, "");
+  const today = DAILY_CONSUMPTION_LOG
+    .filter((row) => row.date === latestDay && visibleProjects.some((project) => project.id === row.projectId))
+    .reduce((sum, row) => ({ spend: sum.spend + row.spent, approvedDaily: sum.approvedDaily + row.approvedDaily }), { spend: 0, approvedDaily: 0 });
+  const overBudget = projectUsage.filter((entry) => entry.usage.utilization >= 100).length;
   const health = util >= 100 ? "Red" : util >= 90 ? "Amber" : util >= 75 ? "Amber" : "Green";
-  const healthColor = health === "Green" ? "text-emerald-300" : health === "Amber" ? "text-amber-300" : "text-red-300";
+  const targetTasks = projectUsage.reduce((sum, entry) => sum + entry.usage.targetTasks, 0);
+  const doneTasks = projectUsage.reduce((sum, entry) => sum + entry.usage.loggedTasks, 0);
+  const inputTokens = projectUsage.reduce((sum, entry) => sum + entry.usage.inputTokens, 0);
+  const outputTokens = projectUsage.reduce((sum, entry) => sum + entry.usage.outputTokens, 0);
 
   // Data
-  const projectBarData = visibleProjects.map((p) => ({
-    name: p.name.split(" ")[0],
-    Claimed: p.approvedBudget,
-    Actual: p.actualSpend,
-    Exceeded: Math.max(0, p.actualSpend - p.approvedBudget),
+  const projectBarData = projectUsage.map(({ project, usage }) => ({
+    name: project.name.split(" ")[0],
+    Budget: project.approvedBudget,
+    Logged: usage.loggedSpend,
+    Remaining: Math.max(0, usage.remainingBudget),
   }));
-  const modelPie = [
-    { name: "Opus 4.8", value: 42, color: "#E619B8" },
-    { name: "Gemini 2.5 Pro", value: 26, color: "#3B82F6" },
-    { name: "GPT-4o", value: 18, color: "#10B981" },
-    { name: "Sonnet", value: 9, color: "#F59E0B" },
-    { name: "Kimi", value: 5, color: "#F97316" },
-  ];
-  const infraByProj = visibleProjects.map((p) => ({
-    name: p.name.split(" ")[0],
-    Infra: p.infrastructureCost,
+  const modelUsageMap = {};
+  projectUsage.forEach(({ usage }) => {
+    usage.models.forEach((model) => {
+      modelUsageMap[model.modelName] = modelUsageMap[model.modelName] || {
+        name: model.modelName,
+        value: 0,
+        tasks: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      modelUsageMap[model.modelName].value += model.cost;
+      modelUsageMap[model.modelName].tasks += model.tasksDone;
+      modelUsageMap[model.modelName].inputTokens += model.inputTokens;
+      modelUsageMap[model.modelName].outputTokens += model.outputTokens;
+    });
+  });
+  const palette = ["#E619B8", "#3B82F6", "#10B981", "#F59E0B", "#F97316", "#94A3B8"];
+  const modelPie = Object.values(modelUsageMap)
+    .sort((left, right) => right.value - left.value)
+    .slice(0, 6)
+    .map((entry, index) => ({ ...entry, color: palette[index % palette.length] }));
+  const dailySpendData = Array.from(
+    DAILY_CONSUMPTION_LOG
+      .filter((row) => visibleProjects.some((project) => project.id === row.projectId))
+      .reduce((map, row) => {
+        const current = map.get(row.date) || { date: row.date, logged: 0, allocated: 0 };
+        current.logged += row.spent;
+        current.allocated += row.approvedDaily;
+        map.set(row.date, current);
+        return map;
+      }, new Map())
+      .values()
+  ).slice(-14);
+  const completionByProject = projectUsage.map(({ project, usage }) => ({
+    name: project.name.split(" ")[0],
+    Completion: usage.targetTasks > 0 ? Math.round((usage.loggedTasks / usage.targetTasks) * 100) : 0,
   }));
-  const subsCost = [
-    { name: "Claude Max", cost: 1600 },
-    { name: "Cursor Pro", cost: 360 },
-    { name: "GitHub", cost: 855 },
-    { name: "ChatGPT", cost: 600 },
-  ];
+  const modelSnapshot = modelPie.slice(0, 4);
 
   const upcomingPhase = visibleProjects[0]?.phases?.find((ph) => ph.health !== "healthy") || visibleProjects[0]?.phases?.[0];
   const pendingActions = APPROVALS.filter((a) => a.requester === user?.name).slice(0, 3);
@@ -155,20 +188,20 @@ const TpmDashboard = () => {
         <KpiCard testid="kpi-pending-approvals" label="Pending approvals" value={String(pendingActions.length)} icon={ShieldCheck} tone="warning" />
         <KpiCard testid="kpi-util" label="Budget utilization" value={fmtPct(util)} icon={Gauge} tone={util >= 90 ? "negative" : util >= 75 ? "warning" : "positive"} />
         <KpiCard testid="kpi-today-consumption" label="Log today's consumption" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Calendar} tone="magenta" sublabel="Tap to submit" to="/consumption" />
-        <KpiCard testid="kpi-today-actual" label="Today's actual" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Activity} tone="magenta" to="/consumption" />
+        <KpiCard testid="kpi-logged" label="Logged spend" value={fmtCurrency(logged, { compact: false })} icon={Activity} tone="magenta" sublabel="Owned usage only" />
         <KpiCard testid="kpi-remaining" label="Total remaining" value={fmtCurrency(remaining)} icon={Wallet} tone={remaining > 0 ? "positive" : "negative"} />
         <KpiCard testid="kpi-pending-cr" label="Pending change requests" value={String(CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
         <KpiCard testid="kpi-health" label="Budget health" value={health} icon={Heart} tone={health === "Green" ? "positive" : health === "Amber" ? "warning" : "negative"} sublabel={fmtPct(util)} />
-        <KpiCard testid="kpi-burn-rate" label="Burn rate" value={`$${burnRate.toLocaleString()}/day`} icon={Flame} />
+        <KpiCard testid="kpi-burn-rate" label="Burn rate" value={fmtCurrency(burnRate, { compact: false })} icon={Flame} sublabel="Logged avg / day" />
         {!isRnd && (
           <KpiCard testid="kpi-exhaustion" label="Exhaustion in" value={typeof runway === "number" ? `${runway} days` : runway} icon={Clock3} tone={typeof runway === "number" && runway < 14 ? "negative" : "neutral"} sublabel="At current burn" />
         )}
-        <KpiCard testid="kpi-over" label="Over budget" value={String(overBudget)} icon={AlertTriangle} tone={overBudget > 0 ? "negative" : "positive"} />
+        <KpiCard testid="kpi-over" label="Target progress" value={targetTasks > 0 ? `${doneTasks}/${targetTasks}` : `${doneTasks}`} icon={AlertTriangle} tone={doneTasks >= targetTasks && targetTasks > 0 ? "positive" : "warning"} />
       </div>
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Panel testid="chart-claimed-actual" title="Claimed vs Actual vs Exceeded" subtitle="per project · $ thousands" >
+        <Panel testid="chart-claimed-actual" title="Budget vs logged vs remaining" subtitle="per project · owned consumption only" >
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={projectBarData} barGap={2}>
@@ -177,30 +210,30 @@ const TpmDashboard = () => {
                 <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v/1000).toFixed(0)}k`} />
                 <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} labelStyle={{ color: "#f4f4f5" }} formatter={(v) => fmtCurrency(v, { compact: false })} />
                 <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="Claimed" fill="#E619B8" radius={[3,3,0,0]} maxBarSize={14} />
-                <Bar dataKey="Actual" fill="#F472B6" radius={[3,3,0,0]} maxBarSize={14} />
-                <Bar dataKey="Exceeded" fill="#EF4444" radius={[3,3,0,0]} maxBarSize={14} />
+                <Bar dataKey="Budget" fill="#E619B8" radius={[3,3,0,0]} maxBarSize={14} />
+                <Bar dataKey="Logged" fill="#F472B6" radius={[3,3,0,0]} maxBarSize={14} />
+                <Bar dataKey="Remaining" fill="#10B981" radius={[3,3,0,0]} maxBarSize={14} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Panel>
 
-        <Panel testid="chart-daily-spend" title="Daily spending trend" subtitle="last 30 days">
+        <Panel testid="chart-daily-spend" title="Daily logged spend vs daily budget" subtitle="last 14 days">
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={DAILY_ACTIVITY.slice(-14)}>
+              <LineChart data={dailySpendData}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(d) => d.slice(-2)} />
                 <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v/1000).toFixed(1)}k`} />
                 <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => fmtCurrency(v, { compact: false })} />
-                <Line type="monotone" dataKey="spend" name="Actual" stroke="#E619B8" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="estimate" name="Estimate" stroke="#F59E0B" strokeWidth={2} strokeDasharray="4 4" dot={false} />
+                <Line type="monotone" dataKey="logged" name="Logged" stroke="#E619B8" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="allocated" name="Allocated" stroke="#F59E0B" strokeWidth={2} strokeDasharray="4 4" dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Panel>
 
-        <Panel testid="chart-model-dist" title="Model cost distribution" subtitle="% of AI spend">
+        <Panel testid="chart-model-dist" title="Model usage distribution" subtitle="% of logged model spend">
           <div className="flex items-center gap-3 h-[240px]">
             <div className="w-40 h-40">
               <ResponsiveContainer width="100%" height="100%">
@@ -212,10 +245,11 @@ const TpmDashboard = () => {
               </ResponsiveContainer>
             </div>
             <div className="flex-1 space-y-1">
+              {modelPie.length === 0 && <div className="text-xs text-zinc-500">Log model usage to see distribution.</div>}
               {modelPie.map((m) => (
                 <div key={m.name} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-sm" style={{ background: m.color }} /><span className="text-zinc-300">{m.name}</span></div>
-                  <span className="text-white font-semibold tabular">{m.value}%</span>
+                  <span className="text-white font-semibold tabular">{fmtCurrency(m.value, { compact: false })}</span>
                 </div>
               ))}
             </div>
@@ -224,18 +258,18 @@ const TpmDashboard = () => {
 
         <Panel testid="chart-util-per-project" title="Budget utilization" subtitle="per project · thresholds 50/75/90/100%">
           <div className="space-y-2.5">
-            {visibleProjects.map((p) => {
-              const color = p.utilization >= 100 ? "#EF4444" : p.utilization >= 90 ? "#F59E0B" : p.utilization >= 75 ? "#F59E0B" : p.utilization >= 50 ? "#E619B8" : "#10B981";
+            {projectUsage.map(({ project, usage }) => {
+              const color = usage.utilization >= 100 ? "#EF4444" : usage.utilization >= 90 ? "#F59E0B" : usage.utilization >= 75 ? "#F59E0B" : usage.utilization >= 50 ? "#E619B8" : "#10B981";
               return (
-                <div key={p.id}>
+                <div key={project.id}>
                   <div className="flex items-center justify-between text-xs mb-1">
-                    <span className="text-zinc-200">{p.name}</span>
-                    <span className="font-semibold tabular" style={{ color }}>{fmtPct(p.utilization)}</span>
+                    <span className="text-zinc-200">{project.name}</span>
+                    <span className="font-semibold tabular" style={{ color }}>{fmtPct(usage.utilization)}</span>
                   </div>
                   <div className="relative h-2 rounded-full bg-white/[0.05]">
-                    <div className="h-full rounded-full" style={{ width: `${Math.min(p.utilization,100)}%`, background: color }} />
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(usage.utilization,100)}%`, background: color }} />
                     {THRESHOLDS.map((t) => (
-                      <div key={t} className="absolute top-0 bottom-0 w-px" style={{ left: `${t}%`, background: p.utilization >= t ? "rgba(232,25,184,0.7)" : "rgba(255,255,255,0.15)" }} />
+                      <div key={t} className="absolute top-0 bottom-0 w-px" style={{ left: `${t}%`, background: usage.utilization >= t ? "rgba(232,25,184,0.7)" : "rgba(255,255,255,0.15)" }} />
                     ))}
                   </div>
                 </div>
@@ -244,26 +278,34 @@ const TpmDashboard = () => {
           </div>
         </Panel>
 
-        <Panel testid="chart-infra" title="Infrastructure cost" subtitle="AWS / GCP / Azure per project">
+        <Panel testid="chart-infra" title="Task completion by project" subtitle="logged tasks vs target tasks">
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={infraByProj}>
+              <BarChart data={completionByProject}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
                 <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v/1000).toFixed(1)}k`} />
-                <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => fmtCurrency(v, { compact: false })} />
-                <Bar dataKey="Infra" fill="#3B82F6" radius={[4,4,0,0]} />
+                <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => `${v}%`} />
+                <Bar dataKey="Completion" fill="#3B82F6" radius={[4,4,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Panel>
 
-        <Panel testid="chart-subs" title="Subscription cost" subtitle="active SaaS lines">
+        <Panel testid="chart-subs" title="Model usage snapshot" subtitle="tasks, cost, and token consumption">
           <div className="space-y-2.5">
-            {subsCost.map((s) => (
-              <div key={s.name} className="flex items-center justify-between p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                <span className="text-sm text-zinc-200">{s.name}</span>
-                <span className="text-sm font-semibold text-white tabular">${s.cost.toLocaleString()}/mo</span>
+            {modelSnapshot.length === 0 && (
+              <div className="text-xs text-zinc-500">No model logs yet. Once tasks are logged with model details, the snapshot appears here.</div>
+            )}
+            {modelSnapshot.map((model) => (
+              <div key={model.name} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-zinc-200">{model.name}</span>
+                  <span className="text-sm font-semibold text-white tabular">{fmtCurrency(model.value, { compact: false })}</span>
+                </div>
+                <div className="mt-1 text-[11px] text-zinc-500">
+                  {model.tasks.toLocaleString()} tasks · {(model.inputTokens + model.outputTokens).toLocaleString()} total tokens
+                </div>
               </div>
             ))}
           </div>
@@ -327,8 +369,10 @@ const TpmDashboard = () => {
                     <div className="text-sm font-semibold text-white tabular">{fmtCurrency(upcomingPhase.estimated)}</div>
                   </div>
                   <div className="rounded-lg bg-white/[0.03] p-2">
-                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Actual</div>
-                    <div className="text-sm font-semibold text-white tabular">{fmtCurrency(upcomingPhase.actual)}</div>
+                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Logged</div>
+                    <div className="text-sm font-semibold text-white tabular">
+                      {fmtCurrency((taskLogs[`${visibleProjects[0].id}::${upcomingPhase.id}`] || []).reduce((sum, log) => sum + Number(log.cost || 0), 0), { compact: false })}
+                    </div>
                   </div>
                   <div className="rounded-lg bg-white/[0.03] p-2">
                     <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Health</div>

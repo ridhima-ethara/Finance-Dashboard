@@ -59,6 +59,12 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     [projectId, projectList, project]
   );
   const phases = useMemo(() => activeProject?.phases || [], [activeProject]);
+  const isRndProject = activeProject?.type === "R&D";
+  const phaseOptions = useMemo(() => (
+    isRndProject
+      ? [{ id: phases[0]?.id || "sample", name: "Sample" }]
+      : phases
+  ), [isRndProject, phases]);
   const [phaseId, setPhaseId] = useState(defaultPhaseId || phases[0]?.id || "");
   const [urgency, setUrgency] = useState("Normal");
   const [reason, setReason] = useState("");
@@ -79,31 +85,31 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
   }, [project, projectId, projectList]);
 
   useEffect(() => {
-    if (!phases.length) {
+    if (!phaseOptions.length) {
       setPhaseId("");
       return;
     }
-    if (defaultPhaseId && phases.some((phase) => phase.id === defaultPhaseId) && phaseId !== defaultPhaseId) {
+    if (!isRndProject && defaultPhaseId && phaseOptions.some((phase) => phase.id === defaultPhaseId) && phaseId !== defaultPhaseId) {
       setPhaseId(defaultPhaseId);
       return;
     }
-    const fallbackPhaseId = phases.some((phase) => phase.id === defaultPhaseId) ? defaultPhaseId : phases[0]?.id;
-    if (!phases.some((phase) => phase.id === phaseId)) {
+    const fallbackPhaseId = phaseOptions.some((phase) => phase.id === defaultPhaseId) ? defaultPhaseId : phaseOptions[0]?.id;
+    if (!phaseOptions.some((phase) => phase.id === phaseId)) {
       setPhaseId(fallbackPhaseId || "");
     }
-  }, [defaultPhaseId, phaseId, phases]);
+  }, [defaultPhaseId, isRndProject, phaseId, phaseOptions]);
 
-  const activePhase = phases.find((ph) => ph.id === phaseId);
+  const activePhase = phaseOptions.find((ph) => ph.id === phaseId);
   const totalAmount = (models.enabled ? Number(models.amount) || 0 : 0)
     + (infra.enabled ? Number(infra.amount) || 0 : 0)
     + (subs.enabled ? Number(subs.amount) || 0 : 0);
 
   const submit = () => {
     if (!activeProject) { toast.error("Select a project"); return; }
-    if (!activePhase && phases.length) { toast.error("Select a phase"); return; }
+    if (!activePhase && phaseOptions.length) { toast.error(`Select a ${isRndProject ? "sample" : "phase"}`); return; }
     if (totalAmount <= 0) { toast.error("Enter at least one budget-item amount"); return; }
     if (!reason.trim()) { toast.error("Justification is required"); return; }
-    const effectivePhase = activePhase || phases[0] || { id: "general", name: "Project-wide" };
+    const effectivePhase = activePhase || phaseOptions[0] || { id: "general", name: isRndProject ? "Sample" : "Project-wide" };
     const breakdown = {
       models: models.enabled ? {
         amount: Number(models.amount) || 0,
@@ -177,19 +183,27 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
             </Field>
           )}
 
-          {phases.length > 0 && (
-            <Field label="Phase">
-              <select
-                value={phaseId}
-                onChange={(e) => setPhaseId(e.target.value)}
-                data-testid="tur-phase"
-                className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-              >
-                {phases.map((phase) => (
-                  <option key={phase.id} value={phase.id} className="bg-[#12121A]">{phase.name}</option>
-                ))}
-              </select>
-            </Field>
+          {phaseOptions.length > 0 && (
+            isRndProject ? (
+              <Field label="Sample">
+                <div className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 flex items-center" data-testid="tur-phase-static">
+                  Sample
+                </div>
+              </Field>
+            ) : (
+              <Field label="Phase">
+                <select
+                  value={phaseId}
+                  onChange={(e) => setPhaseId(e.target.value)}
+                  data-testid="tur-phase"
+                  className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                >
+                  {phaseOptions.map((phase) => (
+                    <option key={phase.id} value={phase.id} className="bg-[#12121A]">{phase.name}</option>
+                  ))}
+                </select>
+              </Field>
+            )
           )}
 
           {/* Bifurcated ask */}

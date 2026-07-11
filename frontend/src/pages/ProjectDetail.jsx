@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { fmtCurrency, fmtPct, fmtDate, healthColor } from "../lib/format";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Button } from "../components/ui/button";
@@ -19,6 +19,7 @@ import DeliverBatchDialog from "../components/DeliverBatchDialog";
 import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
 import { DAILY_ACTIVITY } from "../data/mockAi";
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
+import { buildBudgetTracks, formatBudgetTypeLabel, summarizeLoggedProject } from "../lib/projectMetrics";
 
 // Deterministic seed of team members per project — uses project id hash for stability.
 const seedTeam = (project) => {
@@ -70,13 +71,15 @@ const statusMap = {
 
 const ProjectDetail = () => {
   const { id } = useParams();
+  const nav = useNavigate();
   const {
     setAiOpen, projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
-    removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask,
+    removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask, taskLogs,
   } = useApp();
   const p = projects.find((x) => x.id === id);
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
+  const isRndProject = p?.type === "R&D";
 
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
@@ -107,6 +110,8 @@ const ProjectDetail = () => {
     () => buildProjectBudgetRequests({ projectId: id, submittedBudgets: budgets, liveBudgetReviews: budgetReviews, seedBudgetReviews: BUDGET_REVIEWS }),
     [id, budgets, budgetReviews]
   );
+  const budgetTracks = useMemo(() => buildBudgetTracks(p, budgets), [p, budgets]);
+  const projectUsage = useMemo(() => summarizeLoggedProject(p, taskLogs), [p, taskLogs]);
   const projectChangeRequests = useMemo(() => CHANGE_REQUESTS.filter((request) => request.projectId === id), [id]);
   const selectedPhase = useMemo(
     () => (p?.phases || []).find((phase) => phase.id === selectedPhaseId) || p?.phases?.[0] || null,
@@ -199,77 +204,38 @@ const ProjectDetail = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3" data-testid="project-setup-grid">
-        <SetupCard title="Docs & attachments" icon={FileText} testid="project-setup-docs">
-          {projectDocs.length === 0 ? (
-            <EmptySetupState message="No project docs or attachments added yet." />
-          ) : (
-            <div className="space-y-2">
-              {projectDocs.map((doc) => (
-                <div key={doc.id} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
-                  {doc.url ? (
-                    <a href={doc.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm text-fuchsia-300 hover:text-fuchsia-200">
-                      <FileText className="w-3.5 h-3.5" />
-                      {doc.name}
-                    </a>
-                  ) : (
-                    <div className="inline-flex items-center gap-1.5 text-sm text-white">
-                      <FileText className="w-3.5 h-3.5 text-fuchsia-300" />
-                      {doc.name}
-                    </div>
-                  )}
-                  <div className="mt-1 text-[10px] text-zinc-500">
-                    {doc.kind === "file" ? `Attached file${doc.size ? ` · ${Math.max(1, Math.round(doc.size / 1024))} KB` : ""}` : "Shared link"}
-                  </div>
-                </div>
-              ))}
-            </div>
+      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4" data-testid="project-setup-grid">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="font-display font-semibold text-[15px] text-white">Project setup summary</div>
+            <div className="text-xs text-zinc-500 mt-0.5">Docs, kickoff, and member roster are kept compact here; full member detail stays in the Team tab.</div>
+          </div>
+          {projectDocs[0]?.url && (
+            <a href={projectDocs[0].url} target="_blank" rel="noreferrer" className="text-xs text-fuchsia-300 hover:text-fuchsia-200 inline-flex items-center gap-1">
+              Open primary doc <ChevronRight className="w-3 h-3" />
+            </a>
           )}
-        </SetupCard>
-
-        <SetupCard title="Kickoff mail" icon={Mail} testid="project-setup-kickoff">
-          {kickoffRecipients.length === 0 ? (
-            <EmptySetupState message="No kickoff recipients recorded for this project." />
-          ) : (
-            <div className="space-y-2">
-              <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] px-3 py-2.5">
-                <div className="text-xs text-white font-medium">{p.kickoffMail?.subject || `${p.name} kickoff`}</div>
-                <div className="mt-1 text-[10px] text-zinc-500">
-                  {kickoffSentAt ? `Sent ${kickoffSentAt}` : "Kickoff notification recorded"}
-                  {p.kickoffMail?.attachmentCount ? ` · ${p.kickoffMail.attachmentCount} attachment${p.kickoffMail.attachmentCount === 1 ? "" : "s"}` : ""}
-                </div>
-              </div>
-              {kickoffRecipients.map((member) => (
-                <div key={member.id || member.email} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
-                  <div className="text-sm text-white">{member.name}</div>
-                  <div className="mt-1 text-[10px] text-zinc-500">{member.role} · {member.email}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </SetupCard>
-
-        <SetupCard title="Assigned members" icon={Users} testid="project-setup-members">
-          {team.length === 0 ? (
-            <EmptySetupState message="No members assigned yet." />
-          ) : (
-            <div className="space-y-2">
-              {team.map((member) => (
-                <div key={member.id} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm text-white">{member.name}</div>
-                      <div className="mt-1 text-[10px] text-zinc-500">{member.role} · {member.email}</div>
-                    </div>
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border border-white/10 bg-white/[0.03] text-zinc-300">
-                      {member.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </SetupCard>
+        </div>
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
+          <CompactSetupStat
+            title="Docs & attachments"
+            value={String(projectDocs.length)}
+            meta={projectDocs[0]?.name || "No docs added"}
+            icon={FileText}
+          />
+          <CompactSetupStat
+            title="Kickoff mail"
+            value={kickoffSentAt ? "Sent" : "Pending"}
+            meta={kickoffSentAt || `${kickoffRecipients.length} recipient${kickoffRecipients.length === 1 ? "" : "s"}`}
+            icon={Mail}
+          />
+          <CompactSetupStat
+            title="Assigned members"
+            value={String(team.length)}
+            meta={team.slice(0, 3).map((member) => member.name).join(", ") || "No members yet"}
+            icon={Users}
+          />
+        </div>
       </div>
 
       {/* Tabs */}
@@ -297,7 +263,12 @@ const ProjectDetail = () => {
                 />
               </div>
               {isTPM && role !== "R&D" && (
-                <Button size="sm" onClick={() => toast.info("Add member — coming soon")} data-testid="btn-add-member" className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]">
+                <Button
+                  size="sm"
+                  onClick={() => nav(`/budget-builder?projectId=${p.id}`)}
+                  data-testid="btn-add-member"
+                  className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+                >
                   <Plus className="w-3.5 h-3.5" /> Add member
                 </Button>
               )}
@@ -374,25 +345,38 @@ const ProjectDetail = () => {
         {/* ---- Budget ---- */}
         <TabsContent value="budget" className="mt-6 space-y-4" data-testid="budget-panel">
           {(() => {
-            const spent = Number(p.actualSpend || 0);
+            const spent = Number(isCFO ? p.actualSpend || 0 : projectUsage.loggedSpend || 0);
             const cap = Number(p.approvedBudget || 0);
-            const remaining = Number(p.remaining || (cap - spent));
+            const remaining = Number(isCFO ? (p.remaining || (cap - spent)) : (projectUsage.remainingBudget || (cap - spent)));
             const utilPct = cap > 0 ? Math.round((spent / cap) * 100) : 0;
             const remainingPct = cap > 0 ? Math.round((remaining / cap) * 100) : 0;
-            const budgetCount = (p.phases || []).length || 1;
-            const burnRate = Number(p.burnRate || 0);
+            const budgetCount = isRndProject ? Math.max(budgetTracks.entries.length, 1) : ((p.phases || []).length || 1);
+            const burnRate = Number(isCFO ? (p.burnRate || 0) : (projectUsage.runRate || 0));
             const runwayDays = burnRate > 0 && remaining > 0 ? Math.floor(remaining / burnRate) : 0;
-            // Scale portfolio DAILY_ACTIVITY to this project's proportion for a per-project daily-burn series
-            const scale = cap > 0 ? Math.min(1, cap / 250000) : 0.05;
-            const burnSeries = DAILY_ACTIVITY.slice(-15).map((d) => ({
-              date: d.date.slice(5),
-              total: Math.round(d.spend * scale),
+            const spendLabel = isCFO ? "Actual / Cap" : "Logged / Cap";
+            const totalSpendLabel = isCFO ? "Total Actual" : "Total Logged";
+            const seriesByDate = projectUsage.logs.reduce((map, log) => {
+              if (!log.date) return map;
+              map.set(log.date, (map.get(log.date) || 0) + Number(log.cost || 0));
+              return map;
+            }, new Map());
+            const burnSeries = Array.from(seriesByDate.entries())
+              .sort((left, right) => new Date(left[0]).getTime() - new Date(right[0]).getTime())
+              .slice(-15)
+              .map(([date, total]) => ({ date: date.slice(5), total }));
+            const fallbackScale = cap > 0 ? Math.min(1, cap / 250000) : 0.05;
+            const fallbackSeries = DAILY_ACTIVITY.slice(-15).map((day) => ({
+              date: day.date.slice(5),
+              total: Math.round(day.spend * fallbackScale),
             }));
+            const displaySeries = burnSeries.length ? burnSeries : fallbackSeries;
             return (
               <>
                 <div>
                   <h2 className="font-display font-semibold text-xl text-white">Budget</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">Budget usage and forecast for this project.</p>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    {isCFO ? "Budget usage, approvals, and actuals for this project." : "Owned budget usage, logged spend, and delivery progress for this project."}
+                  </p>
                 </div>
 
                 {/* KPI grid — Spent/Cap card spans 2 rows */}
@@ -403,7 +387,7 @@ const ProjectDetail = () => {
                   >
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-200">Spent / Cap</span>
+                        <span className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-200">{spendLabel}</span>
                         {cap === 0 && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-semibold bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-500/30">No Budget</span>
                         )}
@@ -429,9 +413,9 @@ const ProjectDetail = () => {
 
                   <MiniKpi testid="budget-kpi-count" label="Budget Count" value={String(budgetCount)} />
                   <MiniKpi testid="budget-kpi-total" label="Total Budget" value={fmtCurrency(cap, { compact: false })} sub={`${cap > 0 ? "100" : "0"}%`} />
-                  <MiniKpi testid="budget-kpi-consumed" label="Total Consumed" value={fmtCurrency(spent, { compact: false })} sub={`${utilPct}%`} accent={utilPct >= 90 ? "text-red-300" : "text-white"} />
+                  <MiniKpi testid="budget-kpi-consumed" label={totalSpendLabel} value={fmtCurrency(spent, { compact: false })} sub={`${utilPct}%`} accent={utilPct >= 90 ? "text-red-300" : "text-white"} />
                   <MiniKpi testid="budget-kpi-remaining" label="Total Remaining" value={fmtCurrency(remaining, { compact: false })} sub={`${remainingPct}%`} accent={remaining >= 0 ? "text-emerald-300" : "text-red-300"} />
-                  <MiniKpi testid="budget-kpi-burn-rate" label="Daily Burn Rate" value={fmtCurrency(burnRate, { compact: false })} sub={cap > 0 ? `${Math.round((burnRate / cap) * 100 * 100) / 100}% of cap/day` : "0%"} />
+                  <MiniKpi testid="budget-kpi-burn-rate" label={isCFO ? "Daily Burn Rate" : "Daily Log Rate"} value={fmtCurrency(burnRate, { compact: false })} sub={cap > 0 ? `${Math.round((burnRate / cap) * 100 * 100) / 100}% of cap/day` : "0%"} />
                   <MiniKpi testid="budget-kpi-runway" label="Runway Days" value={String(runwayDays)} sub={burnRate > 0 ? "at current burn" : "—"} />
                 </div>
 
@@ -439,8 +423,8 @@ const ProjectDetail = () => {
                 <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="daily-burn-rate-chart">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <div className="font-display font-semibold text-[15px] text-white">Daily Burn rate</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">Last 15 days · per-project daily consumption</div>
+                      <div className="font-display font-semibold text-[15px] text-white">{isCFO ? "Daily Burn rate" : "Daily logged spend"}</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Last 15 days · per-project activity</div>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
                       <span className="w-2 h-2 rounded-full bg-fuchsia-400" />
@@ -449,7 +433,7 @@ const ProjectDetail = () => {
                   </div>
                   <div className="h-[240px]">
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={burnSeries}>
+                      <AreaChart data={displaySeries}>
                         <defs>
                           <linearGradient id={`brn-${p.id}`} x1="0" y1="0" x2="0" y2="1">
                             <stop offset="0%" stopColor="#E619B8" stopOpacity={0.35} />
@@ -466,211 +450,236 @@ const ProjectDetail = () => {
                   </div>
                 </div>
 
-                {/* Burn per phase table */}
-                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="burn-per-phase-table">
-                  <div className="mb-3">
-                    <div className="font-display font-semibold text-[15px] text-white">Burn per phase</div>
-                    <div className="text-xs text-zinc-500 mt-0.5">Batch-level breakdown of tasks, burn, approval, and feedback</div>
-                  </div>
-                  {(p.phases || []).length === 0 ? (
-                    <div className="text-xs text-zinc-500 py-6 text-center">No phases defined yet.</div>
-                  ) : (
-                    <>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                              <th className="text-left py-2 px-3">Batch</th>
-                              <th className="text-right py-2 px-3">Videos</th>
-                              <th className="text-right py-2 px-3">Burn</th>
-                              <th className="text-right py-2 px-3">Approval</th>
-                              <th className="text-left py-2 px-3">Feedback</th>
-                              <th className="w-10" />
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {(p.phases || []).map((ph) => {
-                              const videos = Number(ph.totalTasks || ph.tasks || 0);
-                              const burn = Number(ph.actual || 0);
-                              const est = Number(ph.estimated || 0);
-                              const apprPct = est > 0 ? Math.round((burn / est) * 100) : 0;
-                              const fbTone = ph.health === "healthy" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30"
-                                : ph.health === "warning" ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
-                                : "text-red-300 bg-red-500/15 border-red-500/30";
-                              const isSelected = selectedPhase?.id === ph.id;
-                              return (
-                                <tr
-                                  key={ph.id}
-                                  data-testid={`burn-phase-${ph.id}`}
-                                  onClick={() => setSelectedPhaseId(ph.id)}
-                                  className={`border-b border-white/5 last:border-0 hover:bg-white/[0.03] cursor-pointer transition-colors ${isSelected ? "bg-fuchsia-500/[0.06]" : ""}`}
-                                >
-                                  <td className="py-3 px-3 text-white font-medium">{ph.name}</td>
-                                  <td className="py-3 px-3 text-right tabular text-zinc-200">{videos || "—"}</td>
-                                  <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(burn, { compact: false })}</td>
-                                  <td className="py-3 px-3 text-right tabular">
-                                    <span className={apprPct >= 100 ? "text-red-300" : apprPct >= 90 ? "text-amber-300" : "text-emerald-300"}>{apprPct}%</span>
-                                  </td>
-                                  <td className="py-3 px-3">
-                                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border capitalize ${fbTone}`}>{ph.health || "healthy"}</span>
-                                  </td>
-                                  <td className="py-3 px-3 text-right">
-                                    <Link
-                                      to={`/projects/${p.id}/phase/${ph.id}`}
-                                      onClick={(event) => event.stopPropagation()}
-                                      className="text-zinc-500 hover:text-fuchsia-300 inline-flex"
-                                    >
-                                      <ChevronRight className="w-4 h-4" />
-                                    </Link>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+                {isRndProject ? (
+                  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="rnd-budget-tracks">
+                    <div className="mb-3">
+                      <div className="font-display font-semibold text-[15px] text-white">Testing, R&amp;D, and rework budget tracks</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Single-project view of submitted asks, tracked top-ups, and the current delivery target.</div>
+                    </div>
+                    {budgetTracks.ordered.length === 0 ? (
+                      <div className="text-xs text-zinc-500 py-6 text-center">No Testing, R&amp;D, or Rework budget has been submitted yet.</div>
+                    ) : (
+                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                        {budgetTracks.ordered.map((track) => (
+                          <BudgetTrackCard
+                            key={track.key}
+                            track={track}
+                            topupCount={projectTopups.length}
+                            changeCount={projectChangeRequests.length}
+                          />
+                        ))}
                       </div>
-
-                      {selectedPhase && (
-                        <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-4" data-testid={`phase-detail-${selectedPhase.id}`}>
-                          <div className="flex items-start justify-between gap-3 flex-wrap">
-                            <div>
-                              <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Phase request drill-down</div>
-                              <div className="mt-1 font-display text-lg font-semibold text-white">{selectedPhase.name}</div>
-                              <div className="text-xs text-zinc-500 mt-0.5">
-                                Budget requests, top-ups, changes, and logged tasks for this phase.
-                              </div>
-                            </div>
-                            <Link to={`/projects/${p.id}/phase/${selectedPhase.id}`} className="text-xs text-fuchsia-300 hover:text-fuchsia-200 inline-flex items-center gap-1">
-                              Open full phase
-                              <ChevronRight className="w-3.5 h-3.5" />
-                            </Link>
-                          </div>
-
-                          <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
-                            <RequestSummaryCard
-                              title={`Budget requests (${selectedPhaseBudgetItems.length})`}
-                              icon={Wallet}
-                              empty="No budget requests mapped to this phase."
-                              testid={`phase-budget-requests-${selectedPhase.id}`}
-                            >
-                              {selectedPhaseBudgetItems.map((request) => {
-                                const status = getBudgetRequestMeta(request);
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="burn-per-phase-table">
+                    <div className="mb-3">
+                      <div className="font-display font-semibold text-[15px] text-white">Burn per phase</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Batch-level breakdown of tasks, burn, approval, and feedback.</div>
+                    </div>
+                    {(p.phases || []).length === 0 ? (
+                      <div className="text-xs text-zinc-500 py-6 text-center">No phases defined yet.</div>
+                    ) : (
+                      <>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                                <th className="text-left py-2 px-3">Batch</th>
+                                <th className="text-right py-2 px-3">Videos</th>
+                                <th className="text-right py-2 px-3">{isCFO ? "Actual" : "Logged"}</th>
+                                <th className="text-right py-2 px-3">Utilization</th>
+                                <th className="text-left py-2 px-3">Feedback</th>
+                                <th className="w-10" />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(p.phases || []).map((ph) => {
+                                const videos = Number(ph.totalTasks || ph.tasks || 0);
+                                const phaseLogs = getPhaseLogs(p.id, ph.id);
+                                const burn = isCFO
+                                  ? Number(ph.actual || 0)
+                                  : phaseLogs.reduce((sum, log) => sum + Number(log.cost || 0), 0);
+                                const est = Number(ph.estimated || 0);
+                                const apprPct = est > 0 ? Math.round((burn / est) * 100) : 0;
+                                const fbTone = ph.health === "healthy" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30"
+                                  : ph.health === "warning" ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
+                                  : "text-red-300 bg-red-500/15 border-red-500/30";
+                                const isSelected = selectedPhase?.id === ph.id;
                                 return (
-                                  <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div>
-                                        <div className="text-[11px] text-white font-medium">{request.title}</div>
-                                        <div className="text-[10px] text-zinc-500 mt-0.5">{request.scope}</div>
-                                      </div>
-                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
-                                        <status.Icon className="w-2.5 h-2.5" />
-                                        {status.label}
-                                      </span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
-                                      <span>{request.when}</span>
-                                      <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
-                                    </div>
-                                  </div>
+                                  <tr
+                                    key={ph.id}
+                                    data-testid={`burn-phase-${ph.id}`}
+                                    onClick={() => setSelectedPhaseId(ph.id)}
+                                    className={`border-b border-white/5 last:border-0 hover:bg-white/[0.03] cursor-pointer transition-colors ${isSelected ? "bg-fuchsia-500/[0.06]" : ""}`}
+                                  >
+                                    <td className="py-3 px-3 text-white font-medium">{ph.name}</td>
+                                    <td className="py-3 px-3 text-right tabular text-zinc-200">{videos || "—"}</td>
+                                    <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(burn, { compact: false })}</td>
+                                    <td className="py-3 px-3 text-right tabular">
+                                      <span className={apprPct >= 100 ? "text-red-300" : apprPct >= 90 ? "text-amber-300" : "text-emerald-300"}>{apprPct}%</span>
+                                    </td>
+                                    <td className="py-3 px-3">
+                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border capitalize ${fbTone}`}>{ph.health || "healthy"}</span>
+                                    </td>
+                                    <td className="py-3 px-3 text-right">
+                                      <Link
+                                        to={`/projects/${p.id}/phase/${ph.id}`}
+                                        onClick={(event) => event.stopPropagation()}
+                                        className="text-zinc-500 hover:text-fuchsia-300 inline-flex"
+                                      >
+                                        <ChevronRight className="w-4 h-4" />
+                                      </Link>
+                                    </td>
+                                  </tr>
                                 );
                               })}
-                            </RequestSummaryCard>
-
-                            <RequestSummaryCard
-                              title={`Top-ups (${selectedPhaseTopups.length})`}
-                              icon={ArrowUpRightSquare}
-                              empty="No top-up requests mapped to this phase."
-                              testid={`phase-topup-requests-${selectedPhase.id}`}
-                            >
-                              {selectedPhaseTopups.map((request) => (
-                                <TopupRequestCard key={request.id} request={request} />
-                              ))}
-                            </RequestSummaryCard>
-
-                            <RequestSummaryCard
-                              title={`Changes (${selectedPhaseChanges.length})`}
-                              icon={Shield}
-                              empty="No change requests mapped to this phase."
-                              testid={`phase-change-requests-${selectedPhase.id}`}
-                            >
-                              {selectedPhaseChanges.map((request) => {
-                                const status = getChangeRequestMeta(request);
-                                return (
-                                  <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <div>
-                                        <div className="text-[11px] text-white font-medium">{request.type}</div>
-                                        <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-2">{request.reason}</div>
-                                      </div>
-                                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
-                                        <status.Icon className="w-2.5 h-2.5" />
-                                        {status.label}
-                                      </span>
-                                    </div>
-                                    <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
-                                      <span>{fmtDate(request.createdAt)}</span>
-                                      <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </RequestSummaryCard>
-                          </div>
-
-                          <div className="mt-4 rounded-lg border border-white/5 bg-[#12121A] overflow-hidden">
-                            <div className="px-4 py-3 border-b border-white/5">
-                              <div className="font-display font-semibold text-[15px] text-white">Logged tasks &amp; approval status</div>
-                              <div className="text-xs text-zinc-500 mt-0.5">
-                                {selectedPhaseLogs.length} logged task{selectedPhaseLogs.length === 1 ? "" : "s"} · approvals reflect current phase delivery state
-                              </div>
-                            </div>
-                            {selectedPhaseLogs.length === 0 ? (
-                              <div className="py-8 text-center text-xs text-zinc-500">No tasks have been logged for this phase yet.</div>
-                            ) : (
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.02]">
-                                      <th className="text-left py-2.5 px-3">Task</th>
-                                      <th className="text-left py-2.5 px-3">Assignee</th>
-                                      <th className="text-right py-2.5 px-3">Tasks</th>
-                                      <th className="text-right py-2.5 px-3">Trajectories</th>
-                                      <th className="text-right py-2.5 px-3">Cost</th>
-                                      <th className="text-left py-2.5 px-3">Approval status</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {selectedPhaseLogs.map((log) => {
-                                      const approval = getTaskApprovalState(log, selectedPhaseDelivery);
-                                      return (
-                                        <tr key={log.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
-                                          <td className="py-3 px-3">
-                                            <div className="text-white font-medium">{log.name}</div>
-                                            {log.notes && <div className="text-[11px] text-zinc-500 mt-0.5 line-clamp-1">{log.notes}</div>}
-                                          </td>
-                                          <td className="py-3 px-3 text-xs text-zinc-300">{log.assignee}</td>
-                                          <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.tasksDone || 0).toLocaleString()}</td>
-                                          <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.trajectories || 0).toLocaleString()}</td>
-                                          <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(log.cost, { compact: false })}</td>
-                                          <td className="py-3 px-3">
-                                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${approval.cls}`}>
-                                              <approval.Icon className="w-3 h-3" />
-                                              {approval.label}
-                                            </span>
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
+                            </tbody>
+                          </table>
                         </div>
-                      )}
-                    </>
-                  )}
-                </div>
+
+                        {selectedPhase && (
+                          <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-4" data-testid={`phase-detail-${selectedPhase.id}`}>
+                            <div className="flex items-start justify-between gap-3 flex-wrap">
+                              <div>
+                                <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Phase request drill-down</div>
+                                <div className="mt-1 font-display text-lg font-semibold text-white">{selectedPhase.name}</div>
+                                <div className="text-xs text-zinc-500 mt-0.5">
+                                  Budget requests, top-ups, changes, and logged tasks for this phase.
+                                </div>
+                              </div>
+                              <Link to={`/projects/${p.id}/phase/${selectedPhase.id}`} className="text-xs text-fuchsia-300 hover:text-fuchsia-200 inline-flex items-center gap-1">
+                                Open full phase
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+                              <RequestSummaryCard
+                                title={`Budget requests (${selectedPhaseBudgetItems.length})`}
+                                icon={Wallet}
+                                empty="No budget requests mapped to this phase."
+                                testid={`phase-budget-requests-${selectedPhase.id}`}
+                              >
+                                {selectedPhaseBudgetItems.map((request) => {
+                                  const status = getBudgetRequestMeta(request);
+                                  return (
+                                    <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                          <div className="text-[11px] text-white font-medium">{request.title}</div>
+                                          <div className="text-[10px] text-zinc-500 mt-0.5">{request.scope}</div>
+                                        </div>
+                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
+                                          <status.Icon className="w-2.5 h-2.5" />
+                                          {status.label}
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
+                                        <span>{request.when}</span>
+                                        <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </RequestSummaryCard>
+
+                              <RequestSummaryCard
+                                title={`Top-ups (${selectedPhaseTopups.length})`}
+                                icon={ArrowUpRightSquare}
+                                empty="No top-up requests mapped to this phase."
+                                testid={`phase-topup-requests-${selectedPhase.id}`}
+                              >
+                                {selectedPhaseTopups.map((request) => (
+                                  <TopupRequestCard key={request.id} request={request} />
+                                ))}
+                              </RequestSummaryCard>
+
+                              <RequestSummaryCard
+                                title={`Changes (${selectedPhaseChanges.length})`}
+                                icon={Shield}
+                                empty="No change requests mapped to this phase."
+                                testid={`phase-change-requests-${selectedPhase.id}`}
+                              >
+                                {selectedPhaseChanges.map((request) => {
+                                  const status = getChangeRequestMeta(request);
+                                  return (
+                                    <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                          <div className="text-[11px] text-white font-medium">{request.type}</div>
+                                          <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-2">{request.reason}</div>
+                                        </div>
+                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
+                                          <status.Icon className="w-2.5 h-2.5" />
+                                          {status.label}
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
+                                        <span>{fmtDate(request.createdAt)}</span>
+                                        <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </RequestSummaryCard>
+                            </div>
+
+                            <div className="mt-4 rounded-lg border border-white/5 bg-[#12121A] overflow-hidden">
+                              <div className="px-4 py-3 border-b border-white/5">
+                                <div className="font-display font-semibold text-[15px] text-white">Logged tasks &amp; approval status</div>
+                                <div className="text-xs text-zinc-500 mt-0.5">
+                                  {selectedPhaseLogs.length} logged task{selectedPhaseLogs.length === 1 ? "" : "s"} · approvals reflect current phase delivery state
+                                </div>
+                              </div>
+                              {selectedPhaseLogs.length === 0 ? (
+                                <div className="py-8 text-center text-xs text-zinc-500">No tasks have been logged for this phase yet.</div>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead>
+                                      <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.02]">
+                                        <th className="text-left py-2.5 px-3">Task</th>
+                                        <th className="text-left py-2.5 px-3">Assignee</th>
+                                        <th className="text-right py-2.5 px-3">Tasks</th>
+                                        <th className="text-right py-2.5 px-3">Trajectories</th>
+                                        <th className="text-right py-2.5 px-3">Cost</th>
+                                        <th className="text-left py-2.5 px-3">Approval status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {selectedPhaseLogs.map((log) => {
+                                        const approval = getTaskApprovalState(log, selectedPhaseDelivery);
+                                        return (
+                                          <tr key={log.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                                            <td className="py-3 px-3">
+                                              <div className="text-white font-medium">{log.name}</div>
+                                              {log.notes && <div className="text-[11px] text-zinc-500 mt-0.5 line-clamp-1">{log.notes}</div>}
+                                            </td>
+                                            <td className="py-3 px-3 text-xs text-zinc-300">{log.assignee}</td>
+                                            <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.tasksDone || 0).toLocaleString()}</td>
+                                            <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.trajectories || 0).toLocaleString()}</td>
+                                            <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(log.cost, { compact: false })}</td>
+                                            <td className="py-3 px-3">
+                                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${approval.cls}`}>
+                                                <approval.Icon className="w-3 h-3" />
+                                                {approval.label}
+                                              </span>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {/* Top-up requests (kept — accessible from within the specific project) */}
                 <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
@@ -846,15 +855,17 @@ const ProjectDetail = () => {
               const delivery = deliveriesForPhase[0] || null;
               const topupsForPhase = projectTopups.filter((r) => r.phaseId === ph.id);
               const changesForPhase = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
-              const variance = ph.estimated - ph.actual;
-              const util = ph.estimated ? Math.round((ph.actual / ph.estimated) * 100) : 0;
-              const hc = healthColor(ph.health);
               const logs = getPhaseLogs(p.id, ph.id);
+              const loggedCost = logs.reduce((sum, log) => sum + (Number(log.cost) || 0), 0);
+              const phaseSpend = isCFO ? Number(ph.actual || 0) : loggedCost;
+              const variance = Number(ph.estimated || 0) - phaseSpend;
+              const util = ph.estimated ? Math.round((phaseSpend / ph.estimated) * 100) : 0;
+              const hc = healthColor(ph.health);
               const seededTasks = getPhaseTasks(p.id, ph.id);
               const loggedTasks = logs.reduce((sum, log) => sum + (Number(log.tasksDone) || 0), 0);
               const loggedTrajectories = logs.reduce((sum, log) => sum + (Number(log.trajectories) || 0), 0);
               const plannedTasks = Number(ph.totalTasks || ph.tasks || 0);
-              const costPerTask = loggedTasks > 0 ? Math.round((Number(ph.actual || 0) / loggedTasks) * 100) / 100 : null;
+              const costPerTask = loggedTasks > 0 ? Math.round((phaseSpend / loggedTasks) * 100) / 100 : null;
               const phaseBreakdown = estimatePhaseCostBreakdown(p, ph, topupsForPhase);
               const modelNames = collectResourceNames([
                 ...(delivery?.rnd?.models ? String(delivery.rnd.models).split(",") : []),
@@ -886,7 +897,7 @@ const ProjectDetail = () => {
                       <div className="mt-2 text-xs text-zinc-500 tabular">{ph.dates}</div>
                       <div className="mt-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
                         <PhaseMetric label="Estimated" value={fmtCurrency(ph.estimated, { compact: false })} />
-                        <PhaseMetric label="Actual" value={fmtCurrency(ph.actual, { compact: false })} tone="magenta" />
+                        <PhaseMetric label={isCFO ? "Actual" : "Logged"} value={fmtCurrency(phaseSpend, { compact: false })} tone="magenta" />
                         <PhaseMetric label="Variance" value={`${variance > 0 ? "+" : ""}${fmtCurrency(variance, { compact: false })}`} tone={variance >= 0 ? "emerald" : "red"} />
                         <PhaseMetric label="Utilization" value={fmtPct(util)} tone={util >= 90 ? "warning" : "emerald"} />
                         <PhaseMetric label="Tasks" value={`${loggedTasks || 0}/${plannedTasks || 0}`} />
@@ -1053,10 +1064,10 @@ const ProjectDetail = () => {
                           )}
                           {delivery.stage === "rnd-review" && delivery.status === "changes-requested" && (
                             <Link
-                              to={`/budget-builder?projectId=${p.id}&budgetType=Sample&phaseId=${ph.id}&sampleIteration=${Number(delivery.sampleIteration || 1) + 1}&sourceDeliveryId=${delivery.id}`}
+                              to={`/budget-builder?projectId=${p.id}&budgetType=Rework&phaseId=${ph.id}&sampleIteration=${Number(delivery.sampleIteration || 1) + 1}&sourceDeliveryId=${delivery.id}`}
                               className="inline-flex items-center gap-1 text-[11px] text-fuchsia-300 hover:text-fuchsia-200 font-medium pt-1"
                             >
-                              Raise Sample {Number(delivery.sampleIteration || 1) + 1} budget <ChevronRight className="w-3 h-3" />
+                              Raise rework budget <ChevronRight className="w-3 h-3" />
                             </Link>
                           )}
                           {deliveriesForPhase.length > 1 && (
@@ -1216,6 +1227,59 @@ const EmptySetupState = ({ message }) => (
     {message}
   </div>
 );
+
+const CompactSetupStat = ({ title, value, meta, icon: Icon }) => (
+  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+    <div className="flex items-center justify-between gap-2">
+      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{title}</div>
+      <div className="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.03] flex items-center justify-center">
+        <Icon className="w-3.5 h-3.5 text-fuchsia-300" />
+      </div>
+    </div>
+    <div className="mt-3 font-display text-2xl font-semibold text-white tabular">{value}</div>
+    <div className="mt-1 text-[11px] text-zinc-500 leading-relaxed">{meta}</div>
+  </div>
+);
+
+const sumBudgetLinesTotal = (lines = []) =>
+  (Array.isArray(lines) ? lines : []).reduce((sum, line) => sum + Number(line?.estCost || line?.amount || 0), 0);
+
+const BudgetTrackCard = ({ track, topupCount, changeCount }) => {
+  const latest = track.latest || {};
+  const modelTotal = sumBudgetLinesTotal(latest.items?.models);
+  const infraTotal = sumBudgetLinesTotal(latest.items?.infra);
+  const subsTotal = sumBudgetLinesTotal(latest.items?.subs);
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">{track.label}</div>
+          <div className="mt-1 text-lg font-display font-semibold text-white">{fmtCurrency(latest.total || 0, { compact: false })}</div>
+        </div>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border border-white/10 bg-white/[0.03] text-zinc-300 capitalize">
+          {latest.status || "submitted"}
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <MiniKpi label="Tasks" value={Number(latest.totalTasks || 0).toLocaleString()} />
+        <MiniKpi label="Trajectories" value={Number(latest.totalTrajectories || 0).toLocaleString()} />
+        <MiniKpi label="Models" value={fmtCurrency(modelTotal, { compact: false })} />
+        <MiniKpi label="Infra" value={fmtCurrency(infraTotal, { compact: false })} />
+        <MiniKpi label="Subs" value={fmtCurrency(subsTotal, { compact: false })} />
+        <MiniKpi label="Requests" value={`${topupCount} top-ups · ${changeCount} changes`} />
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-white/5 text-[11px] text-zinc-500 flex items-center justify-between gap-3">
+        <span>Latest submit</span>
+        <span className="text-zinc-200 font-medium">
+          {latest.submittedAt ? new Date(latest.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+        </span>
+      </div>
+    </div>
+  );
+};
 
 // KPI card used in the Budget tab redesign (Spent/Cap + smaller stat cells)
 const MiniKpi = ({ label, value, sub, accent = "text-white", testid }) => (
@@ -1390,7 +1454,7 @@ const buildProjectBudgetRequests = ({ projectId, submittedBudgets, liveBudgetRev
 const formatSubmittedBudgetTitle = (budgetType, resubmitOfReviewId, sampleIteration = 1) => {
   const base =
     budgetType === "Testing" ? "Testing budget"
-      : budgetType === "Sample" ? `Sample ${sampleIteration > 1 ? sampleIteration : ""} budget`.replace("  ", " ")
+      : budgetType === "Sample" || budgetType === "Rework" ? `Rework${sampleIteration > 1 ? ` ${sampleIteration}` : ""} budget`
         : budgetType === "RnD" ? "R&D budget"
           : budgetType === "Production" ? "Production budget"
             : "Budget request";
