@@ -578,7 +578,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // ---- Top-up Requests (2-stage: CTO → CFO) ----
-  const createTopupRequest = ({ projectId, phaseId, phaseName, amount, reason, urgency, breakdown }) => {
+  const createTopupRequest = ({ projectId, phaseId, phaseName, amount, reason, urgency, breakdown, sampleIteration }) => {
     const proj = projects.find((p) => p.id === projectId);
     const id = `tur-${Date.now().toString(36)}`;
     const entry = {
@@ -593,12 +593,13 @@ export const AppProvider = ({ children }) => {
       requester: user?.name || "TPM",
       requesterRole: user?.role || "TPM",
       requestedAt: new Date().toISOString(),
+      sampleIteration: Number(sampleIteration || 0) || null,
       status: "pending-cto",
       ctoDecision: null,
       cfoDecision: null,
       breakdown: breakdown || null,
       history: [
-        { at: new Date().toISOString(), actor: `${user?.name || "TPM"} · TPM`, action: "Submitted top-up request", detail: `${phaseName || phaseId} · $${Number(amount).toLocaleString()}` },
+        { at: new Date().toISOString(), actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`, action: "Submitted top-up request", detail: `${phaseName || phaseId} · $${Number(amount).toLocaleString()}` },
       ],
     };
     setTopupRequests((arr) => [entry, ...arr]);
@@ -798,6 +799,7 @@ export const AppProvider = ({ children }) => {
     const id = `bd-${Date.now().toString(36)}`;
     const stage = details.rnd ? "rnd-review" : "cfo-recovery";
     const rndDecision = details.rnd?.decision || null;
+    const isRecoverable = details.isRecoverable !== false;
     const status =
       stage === "rnd-review"
         ? rndDecision === "accept"
@@ -805,7 +807,7 @@ export const AppProvider = ({ children }) => {
           : rndDecision === "reject"
             ? "sample-rejected"
             : "changes-requested"
-        : "pending-cfo";
+        : isRecoverable ? "pending-cfo" : "non-recoverable";
     const deliveredAt = new Date().toISOString();
     const entry = {
       id,
@@ -814,18 +816,19 @@ export const AppProvider = ({ children }) => {
       client: proj?.client || "—",
       phaseId,
       phaseName: phaseName || phaseId,
-      proposedAmount: Number(proposedAmount),
+      proposedAmount: Number(proposedAmount || 0),
       clientComment: clientComment || "",
       clientRepresentative: clientRepresentative || "",
       deliveredBy: user?.name || "TPM",
       deliveredAt,
       stage,
+      isRecoverable,
       sampleIteration: Number(details.sampleIteration || 1),
       status,
-      actualRecovered: null,
-      cfoNote: "",
-      cfoAt: null,
-      cfoBy: null,
+      actualRecovered: stage === "cfo-recovery" && !isRecoverable ? 0 : null,
+      cfoNote: stage === "cfo-recovery" && !isRecoverable ? "Marked non-recoverable by TPM" : "",
+      cfoAt: stage === "cfo-recovery" && !isRecoverable ? deliveredAt : null,
+      cfoBy: stage === "cfo-recovery" && !isRecoverable ? user?.name || "TPM" : null,
       history: [
         stage === "rnd-review"
           ? {
@@ -842,8 +845,8 @@ export const AppProvider = ({ children }) => {
           : {
               at: deliveredAt,
               actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
-              action: "Delivered batch to CFO",
-              detail: `${phaseName || phaseId} · ${Number(proposedAmount).toLocaleString()}`,
+              action: isRecoverable ? "Delivered batch to CFO" : "Delivered non-recoverable batch",
+              detail: `${phaseName || phaseId} · ${Number(proposedAmount || 0).toLocaleString()}`,
             },
       ],
       ...details,
@@ -858,7 +861,7 @@ export const AppProvider = ({ children }) => {
           : rndDecision === "reject"
             ? "rejected"
             : "changes-requested"
-        : "pending-cfo"
+        : isRecoverable ? "pending-cfo" : "approved"
     );
     if (stage === "rnd-review" && rndDecision === "accept") {
       upsertProjectOverride(projectId, (project) => ({

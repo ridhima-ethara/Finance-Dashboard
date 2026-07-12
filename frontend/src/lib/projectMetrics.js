@@ -118,6 +118,52 @@ export const summarizeLoggedProject = (project, taskLogs = {}) => {
   };
 };
 
+export const buildLoggedDailyRows = (projects = [], taskLogs = {}) => {
+  const rows = [];
+
+  (projects || []).forEach((project) => {
+    const approvedDaily = Math.round(Number(project?.approvedBudget || 0) / 30);
+    const daily = {};
+
+    getProjectLogs(taskLogs, project).forEach((log) => {
+      const date = log.date || log.createdAt?.slice(0, 10);
+      if (!date) return;
+      daily[date] = daily[date] || {
+        date,
+        projectId: project.id,
+        projectName: project.name,
+        spent: 0,
+        approvedDaily,
+        tasks: 0,
+        trajectories: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      daily[date].spent += Number(log.cost || 0);
+      daily[date].tasks += Number(log.tasksDone || 0);
+      daily[date].trajectories += Number(log.trajectories || 0);
+
+      const usageRows = normalizeUsageRows(log);
+      if (usageRows.length) {
+        usageRows.forEach((usage) => {
+          daily[date].inputTokens += Number(usage.inputTokens || 0);
+          daily[date].outputTokens += Number(usage.outputTokens || 0);
+        });
+      } else {
+        daily[date].inputTokens += Number(log.inputTokens || 0);
+        daily[date].outputTokens += Number(log.outputTokens || 0);
+      }
+    });
+
+    rows.push(...Object.values(daily));
+  });
+
+  return rows.sort((left, right) => (
+    new Date(left.date).getTime() - new Date(right.date).getTime()
+      || left.projectName.localeCompare(right.projectName)
+  ));
+};
+
 const normalizeTrackEntry = (entry) => {
   const normalizedType = normalizeBudgetType(entry?.budgetType);
 

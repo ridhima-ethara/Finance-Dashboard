@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { NOTIFICATIONS, APPROVALS, THRESHOLDS } from "../../data/mockData";
-import { CHANGE_REQUESTS, DAILY_CONSUMPTION_LOG } from "../../data/mockTpm";
+import { CHANGE_REQUESTS } from "../../data/mockTpm";
 import { Link } from "react-router-dom";
 import {
   FolderKanban, ShieldCheck, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
@@ -13,7 +13,7 @@ import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tool
 import RequestBudgetDialog from "../../components/RequestBudgetDialog";
 import ChangeRequestDialog from "./ChangeRequestDialog";
 import ProjectsTable from "../../components/dashboard/ProjectsTable";
-import { summarizeLoggedProject } from "../../lib/projectMetrics";
+import { buildLoggedDailyRows, summarizeLoggedProject } from "../../lib/projectMetrics";
 
 const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid, to }) => {
   const toneMap = {
@@ -80,6 +80,7 @@ const TpmDashboard = () => {
     () => visibleProjects.map((project) => ({ project, usage: summarizeLoggedProject(project, taskLogs) })),
     [visibleProjects, taskLogs]
   );
+  const dailyRows = useMemo(() => buildLoggedDailyRows(visibleProjects, taskLogs), [visibleProjects, taskLogs]);
 
   // Compute TPM-scoped KPIs
   const approved = visibleProjects.reduce((s, p) => s + p.approvedBudget, 0);
@@ -88,9 +89,9 @@ const TpmDashboard = () => {
   const util = approved ? Math.round((logged / approved) * 100) : 0;
   const burnRate = Math.round(projectUsage.reduce((sum, entry) => sum + entry.usage.runRate, 0));
   const runway = burnRate ? Math.round(remaining / burnRate) : "—";
-  const latestDay = DAILY_CONSUMPTION_LOG.reduce((latest, row) => row.date > latest ? row.date : latest, "");
-  const today = DAILY_CONSUMPTION_LOG
-    .filter((row) => row.date === latestDay && visibleProjects.some((project) => project.id === row.projectId))
+  const latestDay = dailyRows.reduce((latest, row) => row.date > latest ? row.date : latest, "");
+  const today = dailyRows
+    .filter((row) => row.date === latestDay)
     .reduce((sum, row) => ({ spend: sum.spend + row.spent, approvedDaily: sum.approvedDaily + row.approvedDaily }), { spend: 0, approvedDaily: 0 });
   const overBudget = projectUsage.filter((entry) => entry.usage.utilization >= 100).length;
   const health = util >= 100 ? "Red" : util >= 90 ? "Amber" : util >= 75 ? "Amber" : "Green";
@@ -128,16 +129,13 @@ const TpmDashboard = () => {
     .slice(0, 6)
     .map((entry, index) => ({ ...entry, color: palette[index % palette.length] }));
   const dailySpendData = Array.from(
-    DAILY_CONSUMPTION_LOG
-      .filter((row) => visibleProjects.some((project) => project.id === row.projectId))
-      .reduce((map, row) => {
-        const current = map.get(row.date) || { date: row.date, logged: 0, allocated: 0 };
-        current.logged += row.spent;
-        current.allocated += row.approvedDaily;
-        map.set(row.date, current);
-        return map;
-      }, new Map())
-      .values()
+    dailyRows.reduce((map, row) => {
+      const current = map.get(row.date) || { date: row.date, logged: 0, allocated: 0 };
+      current.logged += row.spent;
+      current.allocated += row.approvedDaily;
+      map.set(row.date, current);
+      return map;
+    }, new Map()).values()
   ).slice(-14);
   const completionByProject = projectUsage.map(({ project, usage }) => ({
     name: project.name.split(" ")[0],

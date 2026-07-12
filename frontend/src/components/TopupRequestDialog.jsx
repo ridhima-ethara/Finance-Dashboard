@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
 import { BEDROCK_MODELS, EC2_INSTANCES, SUBSCRIPTION_CATALOG } from "../data/mockCatalog";
+import { normalizeBudgetType } from "../lib/projectMetrics";
 
 const MODEL_OPTIONS = BEDROCK_MODELS.map((model) => ({
   value: model.id,
@@ -50,7 +51,7 @@ const buildSubState = (enabled = false) => ({
 // TPM/R&D top-up request dialog — bifurcated into Models / Infra / Subscriptions asks
 // with per-line justification. Routed to CTO first, then CFO for final sign-off.
 const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => {
-  const { createTopupRequest, visibleProjects } = useApp();
+  const { createTopupRequest, visibleProjects, batchDeliveries, budgets } = useApp();
   const projectList = useMemo(() => (project ? [project] : visibleProjects), [project, visibleProjects]);
 
   const [projectId, setProjectId] = useState(project?.id || projectList[0]?.id || "");
@@ -60,12 +61,30 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
   );
   const phases = useMemo(() => activeProject?.phases || [], [activeProject]);
   const isRndProject = activeProject?.type === "R&D";
+  const sampleOptions = useMemo(() => {
+    if (!isRndProject) return [];
+    const maxSampleIteration = Math.max(
+      1,
+      ...batchDeliveries
+        .filter((entry) => entry.projectId === activeProject?.id && entry.stage === "rnd-review")
+        .map((entry) => Number(entry.sampleIteration || 1)),
+      ...budgets
+        .filter((entry) => entry.projectId === activeProject?.id)
+        .map((entry) => Number(normalizeBudgetType(entry.budgetType) === "Rework" ? entry.sampleIteration || 2 : 1))
+    );
+    return Array.from({ length: Math.max(3, maxSampleIteration + 1) }, (_, index) => ({
+      id: phases[0]?.id || "sample",
+      name: `Sample ${index + 1}`,
+      sampleIteration: index + 1,
+    }));
+  }, [activeProject?.id, batchDeliveries, budgets, isRndProject, phases]);
   const phaseOptions = useMemo(() => (
     isRndProject
-      ? [{ id: phases[0]?.id || "sample", name: "Sample" }]
+      ? sampleOptions
       : phases
-  ), [isRndProject, phases]);
+  ), [isRndProject, phases, sampleOptions]);
   const [phaseId, setPhaseId] = useState(defaultPhaseId || phases[0]?.id || "");
+  const [sampleIteration, setSampleIteration] = useState(phaseOptions[0]?.sampleIteration || 1);
   const [urgency, setUrgency] = useState("Normal");
   const [reason, setReason] = useState("");
 
@@ -99,7 +118,20 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     }
   }, [defaultPhaseId, isRndProject, phaseId, phaseOptions]);
 
-  const activePhase = phaseOptions.find((ph) => ph.id === phaseId);
+  useEffect(() => {
+    if (!isRndProject) {
+      setSampleIteration(1);
+      return;
+    }
+    const matched = phaseOptions.find((option) => option.sampleIteration === sampleIteration);
+    if (!matched) {
+      setSampleIteration(phaseOptions[0]?.sampleIteration || 1);
+    }
+  }, [isRndProject, phaseOptions, sampleIteration]);
+
+  const activePhase = isRndProject
+    ? phaseOptions.find((option) => option.sampleIteration === sampleIteration) || phaseOptions[0]
+    : phaseOptions.find((ph) => ph.id === phaseId);
   const totalAmount = (models.enabled ? Number(models.amount) || 0 : 0)
     + (infra.enabled ? Number(infra.amount) || 0 : 0)
     + (subs.enabled ? Number(subs.amount) || 0 : 0);
@@ -109,7 +141,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     if (!activePhase && phaseOptions.length) { toast.error(`Select a ${isRndProject ? "sample" : "phase"}`); return; }
     if (totalAmount <= 0) { toast.error("Enter at least one budget-item amount"); return; }
     if (!reason.trim()) { toast.error("Justification is required"); return; }
-    const effectivePhase = activePhase || phaseOptions[0] || { id: "general", name: isRndProject ? "Sample" : "Project-wide" };
+    const effectivePhase = activePhase || phaseOptions[0] || { id: "general", name: isRndProject ? `Sample ${sampleIteration}` : "Project-wide" };
     const breakdown = {
       models: models.enabled ? {
         amount: Number(models.amount) || 0,
@@ -134,11 +166,12 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     createTopupRequest({
       projectId: activeProject.id,
       phaseId: effectivePhase.id,
-      phaseName: effectivePhase.name,
+      phaseName: isRndProject ? `Sample ${sampleIteration}` : effectivePhase.name,
       amount: totalAmount,
       reason,
       urgency,
       breakdown,
+      sampleIteration: isRndProject ? sampleIteration : null,
     });
     toast.success("Top-up request submitted", {
       description: `${activeProject.name} · ${fmtCurrency(totalAmount, { compact: false })} · routed to CTO → CFO`,
@@ -146,6 +179,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     setModels(buildModelState(true));
     setInfra(buildInfraState(true));
     setSubs(buildSubState(false));
+    setSampleIteration(phaseOptions[0]?.sampleIteration || 1);
     setReason(""); setUrgency("Normal");
     onOpenChange(false);
   };
@@ -186,9 +220,16 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
           {phaseOptions.length > 0 && (
             isRndProject ? (
               <Field label="Sample">
-                <div className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 flex items-center" data-testid="tur-phase-static">
-                  Sample
-                </div>
+                <select
+                  value={sampleIteration}
+                  onChange={(e) => setSampleIteration(Number(e.target.value) || 1)}
+                  data-testid="tur-sample"
+                  className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                >
+                  {phaseOptions.map((phase) => (
+                    <option key={phase.name} value={phase.sampleIteration} className="bg-[#12121A]">{phase.name}</option>
+                  ))}
+                </select>
               </Field>
             ) : (
               <Field label="Phase">

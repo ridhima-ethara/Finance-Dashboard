@@ -12,6 +12,7 @@ const statusMap = {
   "pending-cfo": { label: "Pending · CFO action", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   recovered: { label: "Recovered · full", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "partial-recovered": { label: "Recovered · partial", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: AlertTriangle },
+  "non-recoverable": { label: "Non-recoverable", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30", Icon: AlertTriangle },
 };
 
 const CfoBatchDeliveries = () => {
@@ -103,6 +104,7 @@ const CfoBatchDeliveries = () => {
           const stCfg = statusMap[d.status] || statusMap["pending-cfo"];
           const draft = drafts[d.id] || {};
           const isPending = d.status === "pending-cfo";
+          const isNonRecoverable = d.isRecoverable === false;
           const delta = (draft.amount != null ? Number(draft.amount) : d.actualRecovered) - d.proposedAmount;
           return (
             <div key={d.id} data-testid={`bd-card-${d.id}`} className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
@@ -126,8 +128,8 @@ const CfoBatchDeliveries = () => {
                   </div>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Proposed</div>
-                  <div className="font-display text-2xl font-semibold text-white tabular">{fmtCurrency(d.proposedAmount, { compact: false })}</div>
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{isNonRecoverable ? "Recovery" : "Proposed"}</div>
+                  <div className="font-display text-2xl font-semibold text-white tabular">{isNonRecoverable ? "N/A" : fmtCurrency(d.proposedAmount, { compact: false })}</div>
                 </div>
               </div>
 
@@ -146,60 +148,68 @@ const CfoBatchDeliveries = () => {
 
               {/* CFO action row */}
               <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.03] p-3">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div>
-                    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Actual amount recovered</div>
-                    <div className="relative">
-                      <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="number"
-                        min="0"
-                        step="50"
-                        value={draft.amount != null ? draft.amount : (d.actualRecovered ?? "")}
-                        onChange={(e) => setDraft(d.id, "amount", e.target.value)}
-                        disabled={!canEdit}
-                        data-testid={`bd-actual-${d.id}`}
-                        placeholder={isPending ? "Enter recovered amount" : ""}
-                        className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 disabled:opacity-60"
-                      />
-                    </div>
-                    {(draft.amount != null || d.actualRecovered != null) && (
-                      <div className="mt-1 text-[10px] tabular flex items-center gap-1">
-                        {delta >= 0 ? (
-                          <><TrendingUp className="w-3 h-3 text-emerald-300" /><span className="text-emerald-300">+{fmtCurrency(delta, { compact: false })} vs proposed</span></>
-                        ) : (
-                          <><TrendingDown className="w-3 h-3 text-red-300" /><span className="text-red-300">{fmtCurrency(delta, { compact: false })} vs proposed</span></>
+                {isNonRecoverable ? (
+                  <div className="text-sm text-zinc-300">
+                    TPM marked this delivery as non-recoverable, so no Finance recovery entry is required.
+                  </div>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Actual amount recovered</div>
+                        <div className="relative">
+                          <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                          <input
+                            type="number"
+                            min="0"
+                            step="50"
+                            value={draft.amount != null ? draft.amount : (d.actualRecovered ?? "")}
+                            onChange={(e) => setDraft(d.id, "amount", e.target.value)}
+                            disabled={!canEdit}
+                            data-testid={`bd-actual-${d.id}`}
+                            placeholder={isPending ? "Enter recovered amount" : ""}
+                            className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 disabled:opacity-60"
+                          />
+                        </div>
+                        {(draft.amount != null || d.actualRecovered != null) && (
+                          <div className="mt-1 text-[10px] tabular flex items-center gap-1">
+                            {delta >= 0 ? (
+                              <><TrendingUp className="w-3 h-3 text-emerald-300" /><span className="text-emerald-300">+{fmtCurrency(delta, { compact: false })} vs proposed</span></>
+                            ) : (
+                              <><TrendingDown className="w-3 h-3 text-red-300" /><span className="text-red-300">{fmtCurrency(delta, { compact: false })} vs proposed</span></>
+                            )}
+                          </div>
                         )}
                       </div>
+                      <div className="md:col-span-2">
+                        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">CFO note (optional)</div>
+                        <input
+                          value={draft.note != null ? draft.note : d.cfoNote || ""}
+                          onChange={(e) => setDraft(d.id, "note", e.target.value)}
+                          disabled={!canEdit}
+                          data-testid={`bd-note-${d.id}`}
+                          placeholder="Payment terms, invoice ref, etc."
+                          className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 disabled:opacity-60"
+                        />
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <div className="mt-3 flex items-center justify-end">
+                        <Button
+                          onClick={() => save(d)}
+                          data-testid={`bd-save-${d.id}`}
+                          className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+                        >
+                          <Save className="w-3.5 h-3.5" /> {d.actualRecovered != null ? "Update recovery" : "Record recovery"}
+                        </Button>
+                      </div>
                     )}
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">CFO note (optional)</div>
-                    <input
-                      value={draft.note != null ? draft.note : d.cfoNote || ""}
-                      onChange={(e) => setDraft(d.id, "note", e.target.value)}
-                      disabled={!canEdit}
-                      data-testid={`bd-note-${d.id}`}
-                      placeholder="Payment terms, invoice ref, etc."
-                      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 disabled:opacity-60"
-                    />
-                  </div>
-                </div>
-                {canEdit && (
-                  <div className="mt-3 flex items-center justify-end">
-                    <Button
-                      onClick={() => save(d)}
-                      data-testid={`bd-save-${d.id}`}
-                      className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
-                    >
-                      <Save className="w-3.5 h-3.5" /> {d.actualRecovered != null ? "Update recovery" : "Record recovery"}
-                    </Button>
-                  </div>
-                )}
-                {d.cfoAt && (
-                  <div className="mt-2 text-[10px] text-zinc-500 tabular">
-                    Last updated {new Date(d.cfoAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} · by {d.cfoBy}
-                  </div>
+                    {d.cfoAt && (
+                      <div className="mt-2 text-[10px] text-zinc-500 tabular">
+                        Last updated {new Date(d.cfoAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} · by {d.cfoBy}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             </div>

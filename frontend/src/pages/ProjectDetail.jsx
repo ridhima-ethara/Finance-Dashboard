@@ -64,6 +64,7 @@ const statusMap = {
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
   recovered: { label: "Recovered · full", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "partial-recovered": { label: "Recovered · partial", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
+  "non-recoverable": { label: "Non-recoverable", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30", Icon: Lock },
   "changes-requested": { label: "Changes requested", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
   "sample-approved": { label: "Sample accepted", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "sample-rejected": { label: "Sample rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
@@ -80,6 +81,7 @@ const ProjectDetail = () => {
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
   const isRndProject = p?.type === "R&D";
+  const showRndBudgetTracks = isRndProject && role === "R&D";
 
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
@@ -137,6 +139,14 @@ const ProjectDetail = () => {
     () => (selectedPhase ? projectBatches.find((batch) => batch.phaseId === selectedPhase.id) || null : null),
     [selectedPhase, projectBatches]
   );
+  const batchPhases = useMemo(() => (role === "R&D" ? (p?.phases || []).slice(0, 1) : (p?.phases || [])), [p?.phases, role]);
+  const activeBatchPhaseId = useMemo(() => {
+    const editable = batchPhases.find((phase) => {
+      const delivery = projectBatches.find((entry) => entry.phaseId === phase.id);
+      return !delivery || delivery.status === "changes-requested";
+    });
+    return editable?.id || null;
+  }, [batchPhases, projectBatches]);
 
   if (!p) {
     return (
@@ -355,6 +365,10 @@ const ProjectDetail = () => {
             const runwayDays = burnRate > 0 && remaining > 0 ? Math.floor(remaining / burnRate) : 0;
             const spendLabel = isCFO ? "Actual / Cap" : "Logged / Cap";
             const totalSpendLabel = isCFO ? "Total Actual" : "Total Logged";
+            const latestBudgetEntry = budgetTracks.entries[0] || null;
+            const totalTopupAmount = projectTopups.reduce((sum, request) => sum + getResolvedTopupAmount(request), 0);
+            const totalChangeAmount = projectChangeRequests.reduce((sum, request) => sum + Number(request.amount || 0), 0);
+            const currentBudgetEnvelope = cap + totalTopupAmount + totalChangeAmount;
             const seriesByDate = projectUsage.logs.reduce((map, log) => {
               if (!log.date) return map;
               map.set(log.date, (map.get(log.date) || 0) + Number(log.cost || 0));
@@ -450,7 +464,37 @@ const ProjectDetail = () => {
                   </div>
                 </div>
 
-                {isRndProject ? (
+                {!showRndBudgetTracks && (
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <MiniKpi
+                      testid="budget-kpi-last-proposed"
+                      label="Last Proposed Budget"
+                      value={fmtCurrency(latestBudgetEntry?.total || 0, { compact: false })}
+                      sub={latestBudgetEntry ? `${formatBudgetTypeLabel(latestBudgetEntry.budgetType)} · ${new Date(latestBudgetEntry.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "No budget submission yet"}
+                    />
+                    <MiniKpi
+                      testid="budget-kpi-topups-total"
+                      label="Top-ups Logged"
+                      value={fmtCurrency(totalTopupAmount, { compact: false })}
+                      sub={`${projectTopups.length} request${projectTopups.length === 1 ? "" : "s"}`}
+                    />
+                    <MiniKpi
+                      testid="budget-kpi-changes-total"
+                      label="Change Asks"
+                      value={fmtCurrency(totalChangeAmount, { compact: false })}
+                      sub={`${projectChangeRequests.length} change${projectChangeRequests.length === 1 ? "" : "s"}`}
+                    />
+                    <MiniKpi
+                      testid="budget-kpi-current-envelope"
+                      label="Current Budget Envelope"
+                      value={fmtCurrency(currentBudgetEnvelope, { compact: false })}
+                      sub="Budget + top-ups + changes"
+                      accent="text-fuchsia-300"
+                    />
+                  </div>
+                )}
+
+                {showRndBudgetTracks ? (
                   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="rnd-budget-tracks">
                     <div className="mb-3">
                       <div className="font-display font-semibold text-[15px] text-white">Testing, R&amp;D, and rework budget tracks</div>
@@ -474,8 +518,10 @@ const ProjectDetail = () => {
                 ) : (
                   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="burn-per-phase-table">
                     <div className="mb-3">
-                      <div className="font-display font-semibold text-[15px] text-white">Burn per phase</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">Batch-level breakdown of tasks, burn, approval, and feedback.</div>
+                      <div className="font-display font-semibold text-[15px] text-white">{isTPM ? "Budget records by phase" : "Burn per phase"}</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">
+                        {isTPM ? "Phase budget, logged progress, requested models, top-ups, changes, and the latest ask are connected here." : "Batch-level breakdown of tasks, burn, approval, and feedback."}
+                      </div>
                     </div>
                     {(p.phases || []).length === 0 ? (
                       <div className="text-xs text-zinc-500 py-6 text-center">No phases defined yet.</div>
@@ -486,26 +532,37 @@ const ProjectDetail = () => {
                             <thead>
                               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
                                 <th className="text-left py-2 px-3">Batch</th>
-                                <th className="text-right py-2 px-3">Videos</th>
+                                <th className="text-right py-2 px-3">Base budget</th>
+                                <th className="text-right py-2 px-3">Current total</th>
                                 <th className="text-right py-2 px-3">{isCFO ? "Actual" : "Logged"}</th>
-                                <th className="text-right py-2 px-3">Utilization</th>
-                                <th className="text-left py-2 px-3">Feedback</th>
+                                <th className="text-left py-2 px-3">Progress</th>
+                                <th className="text-left py-2 px-3">Models asked</th>
+                                <th className="text-left py-2 px-3">Requests</th>
                                 <th className="w-10" />
                               </tr>
                             </thead>
                             <tbody>
                               {(p.phases || []).map((ph) => {
-                                const videos = Number(ph.totalTasks || ph.tasks || 0);
+                                const plannedTasks = Number(ph.totalTasks || ph.tasks || 0);
                                 const phaseLogs = getPhaseLogs(p.id, ph.id);
                                 const burn = isCFO
                                   ? Number(ph.actual || 0)
                                   : phaseLogs.reduce((sum, log) => sum + Number(log.cost || 0), 0);
                                 const est = Number(ph.estimated || 0);
                                 const apprPct = est > 0 ? Math.round((burn / est) * 100) : 0;
-                                const fbTone = ph.health === "healthy" ? "text-emerald-300 bg-emerald-500/15 border-emerald-500/30"
-                                  : ph.health === "warning" ? "text-amber-300 bg-amber-500/15 border-amber-500/30"
-                                  : "text-red-300 bg-red-500/15 border-red-500/30";
                                 const isSelected = selectedPhase?.id === ph.id;
+                                const phaseTopups = projectTopups.filter((request) => request.phaseId === ph.id);
+                                const phaseChanges = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
+                                const phaseBudget = summarizePhaseBudget(ph, phaseTopups, phaseChanges);
+                                const progress = plannedTasks > 0
+                                  ? Math.min(100, Math.round((phaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0) / plannedTasks) * 100))
+                                  : 0;
+                                const phaseModelNames = collectResourceNames([
+                                  ...phaseLogs.flatMap((log) => getLogModelNames(log)),
+                                  ...phaseTopups.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
+                                  ...getPhaseTasks(p.id, ph.id).map((task) => task.model).filter(Boolean),
+                                ]);
+                                const requestSummary = `${phaseTopups.length} top-up${phaseTopups.length === 1 ? "" : "s"} · ${phaseChanges.length} change${phaseChanges.length === 1 ? "" : "s"}`;
                                 return (
                                   <tr
                                     key={ph.id}
@@ -514,13 +571,23 @@ const ProjectDetail = () => {
                                     className={`border-b border-white/5 last:border-0 hover:bg-white/[0.03] cursor-pointer transition-colors ${isSelected ? "bg-fuchsia-500/[0.06]" : ""}`}
                                   >
                                     <td className="py-3 px-3 text-white font-medium">{ph.name}</td>
-                                    <td className="py-3 px-3 text-right tabular text-zinc-200">{videos || "—"}</td>
+                                    <td className="py-3 px-3 text-right tabular text-zinc-200">{fmtCurrency(phaseBudget.base, { compact: false })}</td>
+                                    <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(phaseBudget.currentTotal, { compact: false })}</td>
                                     <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(burn, { compact: false })}</td>
-                                    <td className="py-3 px-3 text-right tabular">
-                                      <span className={apprPct >= 100 ? "text-red-300" : apprPct >= 90 ? "text-amber-300" : "text-emerald-300"}>{apprPct}%</span>
-                                    </td>
                                     <td className="py-3 px-3">
-                                      <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border capitalize ${fbTone}`}>{ph.health || "healthy"}</span>
+                                      <div className="text-[11px] text-zinc-200">{plannedTasks > 0 ? `${progress}% · ${phaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0)}/${plannedTasks} tasks` : `${apprPct}% budget util`}</div>
+                                      <div className="mt-1 h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+                                        <div className={`h-full ${progress >= 100 ? "bg-emerald-500" : "bg-fuchsia-500"}`} style={{ width: `${plannedTasks > 0 ? progress : Math.min(apprPct, 100)}%` }} />
+                                      </div>
+                                    </td>
+                                    <td className="py-3 px-3 text-[11px] text-zinc-300">
+                                      {phaseModelNames.length ? phaseModelNames.slice(0, 2).join(", ") : "No model ask yet"}
+                                    </td>
+                                    <td className="py-3 px-3 text-[11px] text-zinc-400">
+                                      {requestSummary}
+                                      <div className="text-zinc-500 mt-0.5">
+                                        +{fmtCurrency(phaseBudget.topupsTotal + phaseBudget.changesTotal, { compact: false })}
+                                      </div>
                                     </td>
                                     <td className="py-3 px-3 text-right">
                                       <Link
@@ -539,7 +606,7 @@ const ProjectDetail = () => {
                         </div>
 
                         {selectedPhase && (
-                          <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-4" data-testid={`phase-detail-${selectedPhase.id}`}>
+                            <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-4" data-testid={`phase-detail-${selectedPhase.id}`}>
                             <div className="flex items-start justify-between gap-3 flex-wrap">
                               <div>
                                 <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Phase request drill-down</div>
@@ -552,6 +619,22 @@ const ProjectDetail = () => {
                                 Open full phase
                                 <ChevronRight className="w-3.5 h-3.5" />
                               </Link>
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+                              {(() => {
+                                const phaseBudget = summarizePhaseBudget(selectedPhase, selectedPhaseTopups, selectedPhaseChanges);
+                                const selectedProgress = Number(selectedPhase.totalTasks || selectedPhase.tasks || 0) > 0
+                                  ? Math.min(100, Math.round((selectedPhaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0) / Number(selectedPhase.totalTasks || selectedPhase.tasks || 0)) * 100))
+                                  : 0;
+                                return (
+                                  <>
+                                    <MiniKpi label="Base budget" value={fmtCurrency(phaseBudget.base, { compact: false })} sub="Submitted phase budget" />
+                                    <MiniKpi label="Current total" value={fmtCurrency(phaseBudget.currentTotal, { compact: false })} sub={`Top-ups ${fmtCurrency(phaseBudget.topupsTotal, { compact: false })} · Changes ${fmtCurrency(phaseBudget.changesTotal, { compact: false })}`} accent="text-fuchsia-300" />
+                                    <MiniKpi label="Progress" value={`${selectedProgress}%`} sub={`${selectedPhaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0)} of ${Number(selectedPhase.totalTasks || selectedPhase.tasks || 0) || 0} tasks`} />
+                                  </>
+                                );
+                              })()}
                             </div>
 
                             <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -845,14 +928,53 @@ const ProjectDetail = () => {
         {/* ---- Batch ---- */}
         <TabsContent value="batch" className="mt-6" data-testid="batch-panel">
           <div className="space-y-3">
-            {(p.phases || []).length === 0 && (
+            {batchPhases.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <MiniKpi
+                  label="Delivered phases"
+                  value={String(batchPhases.filter((phase) => {
+                    const delivery = projectBatches.find((entry) => entry.phaseId === phase.id);
+                    return !!delivery && delivery.status !== "changes-requested";
+                  }).length)}
+                  sub={`${batchPhases.length} total`}
+                />
+                <MiniKpi
+                  label="Recoverable total"
+                  value={fmtCurrency(batchPhases.reduce((sum, phase) => {
+                    const entry = projectBatches.find((delivery) => delivery.phaseId === phase.id);
+                    return sum + (entry?.stage === "cfo-recovery" && entry.isRecoverable !== false ? Number(entry.proposedAmount || 0) : 0);
+                  }, 0), { compact: false })}
+                  sub="Consolidated across submitted phases"
+                  accent="text-fuchsia-300"
+                />
+                <MiniKpi
+                  label="Non-recoverable"
+                  value={String(batchPhases.filter((phase) => {
+                    const entry = projectBatches.find((delivery) => delivery.phaseId === phase.id);
+                    return entry?.stage === "cfo-recovery" && entry.isRecoverable === false;
+                  }).length)}
+                  sub="Closed deliveries"
+                />
+                <MiniKpi
+                  label="Active batch"
+                  value={batchPhases.find((phase) => phase.id === activeBatchPhaseId)?.name || "All submitted"}
+                  sub={activeBatchPhaseId ? "Only this batch can be edited now" : "No editable batch pending"}
+                />
+              </div>
+            )}
+
+            {batchPhases.length === 0 && (
               <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center text-xs text-zinc-500">
                 No phases defined yet. Use Budget Builder to add phases.
               </div>
             )}
-            {(role === "R&D" ? (p.phases || []).slice(0, 1) : (p.phases || [])).map((ph) => {
+            {batchPhases.map((ph) => {
               const deliveriesForPhase = projectBatches.filter((batch) => batch.phaseId === ph.id);
               const delivery = deliveriesForPhase[0] || null;
+              const isRevisableDelivery = delivery?.status === "changes-requested";
+              const isSubmitted = !!delivery && !isRevisableDelivery;
+              const isActivePhase = activeBatchPhaseId ? activeBatchPhaseId === ph.id : (!delivery || isRevisableDelivery);
+              const isLockedPhase = !isSubmitted && !isActivePhase && role !== "R&D";
               const topupsForPhase = projectTopups.filter((r) => r.phaseId === ph.id);
               const changesForPhase = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
               const logs = getPhaseLogs(p.id, ph.id);
@@ -877,8 +999,19 @@ const ProjectDetail = () => {
                 ...topupsForPhase.map((request) => request.breakdown?.infra?.optionLabel).filter(Boolean),
               ]);
               const approvalMeta = delivery ? (statusMap[delivery.status] || statusMap["pending-cfo"]) : null;
+              const phaseRecoverableTotal = delivery?.isRecoverable === false ? 0 : Number(delivery?.proposedAmount || 0);
               return (
-                <div key={ph.id} data-testid={`batch-phase-${ph.id}`} className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
+                <div
+                  key={ph.id}
+                  data-testid={`batch-phase-${ph.id}`}
+                  className={`rounded-2xl border p-5 transition-colors ${
+                    isSubmitted
+                      ? "bg-[#12121A] border-white/5 opacity-65"
+                      : isLockedPhase
+                        ? "bg-[#12121A] border-white/5 opacity-55"
+                        : "bg-[#12121A] border-white/5"
+                  }`}
+                >
                   <div className="flex items-start justify-between gap-3 flex-wrap">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -893,8 +1026,16 @@ const ProjectDetail = () => {
                             <PackageCheck className="w-3 h-3" /> {(statusMap[delivery.status] || statusMap["pending-cfo"]).label}
                           </span>
                         )}
+                        {isLockedPhase && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border border-white/10 bg-white/[0.03] text-zinc-400">
+                            <Lock className="w-3 h-3" /> Locked until previous batch is submitted
+                          </span>
+                        )}
                       </div>
                       <div className="mt-2 text-xs text-zinc-500 tabular">{ph.dates}</div>
+                      {isActivePhase && !isSubmitted && !isLockedPhase && (
+                        <div className="mt-2 text-[11px] text-fuchsia-300">Current editable batch</div>
+                      )}
                       <div className="mt-3 grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-2">
                         <PhaseMetric label="Estimated" value={fmtCurrency(ph.estimated, { compact: false })} />
                         <PhaseMetric label={isCFO ? "Actual" : "Logged"} value={fmtCurrency(phaseSpend, { compact: false })} tone="magenta" />
@@ -903,7 +1044,7 @@ const ProjectDetail = () => {
                         <PhaseMetric label="Tasks" value={`${loggedTasks || 0}/${plannedTasks || 0}`} />
                         <PhaseMetric label="Trajectories" value={loggedTrajectories.toLocaleString()} />
                         <PhaseMetric label="Cost / task" value={costPerTask != null ? fmtCurrency(costPerTask, { compact: false }) : "—"} />
-                        <PhaseMetric label="Delivered" value={delivery ? "Yes" : "No"} tone={delivery ? "emerald" : "warning"} />
+                        <PhaseMetric label="Recoverable" value={delivery ? (delivery.isRecoverable === false ? "No" : fmtCurrency(phaseRecoverableTotal, { compact: false })) : "—"} tone={delivery?.isRecoverable === false ? "warning" : "emerald"} />
                       </div>
                     </div>
                     {isTPM && (
@@ -911,6 +1052,7 @@ const ProjectDetail = () => {
                         <Button
                           size="sm"
                           onClick={() => { setEditingLog(null); setTaskLogPhase(ph); }}
+                          disabled={isLockedPhase || isSubmitted}
                           data-testid={`btn-log-task-${ph.id}`}
                           className="h-8 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 text-xs gap-1"
                         >
@@ -919,6 +1061,7 @@ const ProjectDetail = () => {
                         <Button
                           size="sm"
                           onClick={() => { setTopupPhaseId(ph.id); setTopupOpen(true); }}
+                          disabled={isLockedPhase || isSubmitted}
                           data-testid={`btn-topup-${ph.id}`}
                           className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1"
                         >
@@ -927,11 +1070,11 @@ const ProjectDetail = () => {
                         <Button
                           size="sm"
                           onClick={() => setDeliverPhase(ph)}
-                          disabled={!!delivery && delivery.status !== "changes-requested"}
+                          disabled={isLockedPhase || (!!delivery && delivery.status !== "changes-requested")}
                           data-testid={`btn-deliver-${ph.id}`}
                           className="h-8 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/25 disabled:text-emerald-200 text-white text-xs gap-1"
                         >
-                          <PackageCheck className="w-3 h-3" /> {delivery?.status === "changes-requested" ? "Deliver revised sample" : delivery ? "Delivered" : "Deliver batch"}
+                          <PackageCheck className="w-3 h-3" /> {delivery?.status === "changes-requested" ? "Deliver revised sample" : isSubmitted ? "Delivered" : "Deliver batch"}
                         </Button>
                       </div>
                     )}
@@ -1023,16 +1166,31 @@ const ProjectDetail = () => {
                               <span className="text-[11px] text-white font-semibold tabular">Sample {delivery.sampleIteration || 1}</span>
                             </div>
                           )}
-                          <div className="flex items-center justify-between text-[10px] text-zinc-400">
-                            <span>Proposed</span>
-                            <span className="text-[11px] text-white font-semibold tabular">{fmtCurrency(delivery.proposedAmount, { compact: false })}</span>
-                          </div>
-                          {delivery.stage === "cfo-recovery" ? (
+                          {delivery.stage === "cfo-recovery" && (
+                            <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                              <span>Recovery type</span>
+                              <span className={`text-[11px] font-semibold ${delivery.isRecoverable === false ? "text-zinc-300" : "text-emerald-300"}`}>
+                                {delivery.isRecoverable === false ? "Non-recoverable" : "Recoverable"}
+                              </span>
+                            </div>
+                          )}
+                          {delivery.isRecoverable !== false && (
+                            <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                              <span>Proposed</span>
+                              <span className="text-[11px] text-white font-semibold tabular">{fmtCurrency(delivery.proposedAmount, { compact: false })}</span>
+                            </div>
+                          )}
+                          {delivery.stage === "cfo-recovery" && delivery.isRecoverable !== false ? (
                             <div className="flex items-center justify-between text-[10px] text-zinc-400">
                               <span>Recovered</span>
                               <span className={`text-[11px] font-semibold tabular ${delivery.actualRecovered != null ? "text-emerald-300" : "text-zinc-500"}`}>
                                 {delivery.actualRecovered != null ? fmtCurrency(delivery.actualRecovered, { compact: false }) : "Awaiting CFO"}
                               </span>
+                            </div>
+                          ) : delivery.stage === "cfo-recovery" ? (
+                            <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                              <span>Recovery status</span>
+                              <span className="text-[11px] font-semibold text-zinc-300">Closed on delivery</span>
                             </div>
                           ) : (
                             <div className="flex items-center justify-between text-[10px] text-zinc-400">
@@ -1078,7 +1236,7 @@ const ProjectDetail = () => {
                                 return (
                                   <div key={entry.id} className="flex items-center justify-between gap-2 text-[10px] text-zinc-400">
                                     <span className="truncate">
-                                      Sample {entry.sampleIteration || 1} · {fmtDate(entry.deliveredAt)}
+                                      {entry.stage === "rnd-review" ? `Sample ${entry.sampleIteration || 1}` : "Batch delivery"} · {fmtDate(entry.deliveredAt)}
                                     </span>
                                     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${entryMeta.cls}`}>
                                       <entryMeta.Icon className="w-2.5 h-2.5" />
@@ -1398,6 +1556,7 @@ const taskApprovalStatusMap = {
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   partial: { label: "Partially approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
+  "non-recoverable": { label: "Closed · non-recoverable", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30", Icon: Lock },
   "changes-requested": { label: "Changes requested", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
 };
 
@@ -1467,6 +1626,7 @@ const getChangeRequestMeta = (request) => changeRequestStatusMap[request.stage] 
 const getTaskApprovalState = (log, delivery) => {
   if (log?.approvalStatus && taskApprovalStatusMap[log.approvalStatus]) return taskApprovalStatusMap[log.approvalStatus];
   if (!delivery) return taskApprovalStatusMap.logged;
+  if (delivery.status === "non-recoverable") return taskApprovalStatusMap["non-recoverable"];
   if (delivery.actualRecovered === 0) return taskApprovalStatusMap.rejected;
   if (delivery.actualRecovered != null && delivery.actualRecovered >= delivery.proposedAmount) return taskApprovalStatusMap.approved;
   if (delivery.actualRecovered != null) return taskApprovalStatusMap.partial;
@@ -1478,6 +1638,27 @@ const getTopupBreakdownAmounts = (request) => ({
   infra: Number(request.breakdown?.infra?.amount || 0),
   subs: Number(request.breakdown?.subs?.amount || 0),
 });
+
+const getResolvedTopupAmount = (request) => Number((request.cfoDecision?.amount ?? request.ctoDecision?.amount ?? request.amount) || 0);
+
+const summarizePhaseBudget = (phase, topups = [], changes = []) => {
+  const base = Number(phase?.estimated || 0);
+  const topupsTotal = topups.reduce((sum, request) => sum + getResolvedTopupAmount(request), 0);
+  const changesTotal = changes.reduce((sum, request) => sum + Number(request.amount || 0), 0);
+  return {
+    base,
+    topupsTotal,
+    changesTotal,
+    currentTotal: base + topupsTotal + changesTotal,
+  };
+};
+
+const getLogModelNames = (log) => {
+  if (Array.isArray(log?.modelUsage) && log.modelUsage.length) {
+    return log.modelUsage.map((entry) => entry.modelName || entry.modelId).filter(Boolean);
+  }
+  return [log?.modelName || log?.modelId].filter(Boolean);
+};
 
 const getTopupBreakdownSelections = (request) => (
   [

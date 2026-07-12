@@ -1,36 +1,26 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useApp } from "../../context/AppContext";
-import { DAILY_CONSUMPTION_LOG } from "../../data/mockTpm";
 import { fmtCurrency } from "../../lib/format";
-import { toast } from "sonner";
-import { Button } from "../../components/ui/button";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  CartesianGrid,
-  Legend,
-} from "recharts";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import {
   Calendar,
-  Save,
-  Plus,
-  Trash2,
   Activity,
-  Cpu,
-  Zap,
   ListChecks,
   GitBranch,
   DollarSign,
   Sparkles,
-  Info,
   CheckCircle2,
 } from "lucide-react";
+import { buildLoggedDailyRows } from "../../lib/projectMetrics";
 
-const MODELS = ["Opus 4.8", "Sonnet", "GPT-4o", "Gemini 2.5 Pro", "Kimi", "Grok-2"];
+const buildTrailingDates = (anchorDate, days) => {
+  const anchor = new Date(anchorDate);
+  return Array.from({ length: days }, (_, index) => {
+    const date = new Date(anchor);
+    date.setDate(anchor.getDate() - (days - index - 1));
+    return date.toISOString().slice(0, 10);
+  });
+};
 
 // Heat intensity helper — % of approved daily budget consumed
 const heatColor = (pct) => {
@@ -45,81 +35,50 @@ const heatColor = (pct) => {
 };
 
 const Consumption = () => {
-  const { user, visibleProjects } = useApp();
+  const { user, visibleProjects, taskLogs } = useApp();
   const today = new Date().toISOString().slice(0, 10);
+  const dailyRows = useMemo(() => buildLoggedDailyRows(visibleProjects, taskLogs), [visibleProjects, taskLogs]);
+  const latestDate = dailyRows[dailyRows.length - 1]?.date || today;
+  const todayRows = dailyRows.filter((row) => row.date === latestDate);
 
-  // Today's log rows entered by TPM
-  const [rows, setRows] = useState(() => {
-    const first = visibleProjects[0]?.id;
-    return first
-      ? [{ id: 1, projectId: first, model: "Opus 4.8", tasks: "", trajectories: "", cost: "" }]
-      : [];
-  });
-
-  const addRow = () => {
-    const first = visibleProjects[0]?.id || "";
-    setRows((r) => [
-      ...r,
-      { id: Date.now(), projectId: first, model: "Opus 4.8", tasks: "", trajectories: "", cost: "" },
-    ]);
-  };
-  const removeRow = (id) => setRows((r) => r.filter((row) => row.id !== id));
-  const updateRow = (id, key, val) => setRows((r) => r.map((row) => (row.id === id ? { ...row, [key]: val } : row)));
-
-  const totals = useMemo(() => {
-    return rows.reduce(
-      (s, r) => ({
-        tasks: s.tasks + (Number(r.tasks) || 0),
-        trajectories: s.trajectories + (Number(r.trajectories) || 0),
-        cost: s.cost + (Number(r.cost) || 0),
+  const totals = useMemo(() => (
+    todayRows.reduce(
+      (sum, row) => ({
+        tasks: sum.tasks + Number(row.tasks || 0),
+        trajectories: sum.trajectories + Number(row.trajectories || 0),
+        cost: sum.cost + Number(row.spent || 0),
       }),
       { tasks: 0, trajectories: 0, cost: 0 }
-    );
-  }, [rows]);
+    )
+  ), [todayRows]);
 
-  const submit = () => {
-    const validRows = rows.filter((r) => Number(r.cost) > 0 || Number(r.tasks) > 0);
-    if (validRows.length === 0) {
-      toast.error("Add at least one row with tasks or cost");
-      return;
-    }
-    toast.success(`Today's consumption submitted`, {
-      description: `${validRows.length} project entr${validRows.length === 1 ? "y" : "ies"} · ${totals.tasks} tasks · ${totals.trajectories} trajectories · ${fmtCurrency(totals.cost, { compact: false })}`,
-    });
-    // reset
-    setRows(rows.map((r) => ({ ...r, tasks: "", trajectories: "", cost: "" })));
-  };
-
-  // Heatmap prep: last 14 days x visibleProjects
-  const projectIds = visibleProjects.map((p) => p.id);
-  const heatmap = useMemo(() => {
-    const dates = Array.from(new Set(DAILY_CONSUMPTION_LOG.map((d) => d.date))).sort();
-    return { dates, rows: projectIds };
-  }, [projectIds]);
+  const heatDates = useMemo(() => buildTrailingDates(latestDate, 14), [latestDate]);
+  const projectIds = visibleProjects.map((project) => project.id);
+  const heatmap = useMemo(() => ({ dates: heatDates, rows: projectIds }), [heatDates, projectIds]);
 
   const cellFor = (projectId, date) => {
-    const entry = DAILY_CONSUMPTION_LOG.find((d) => d.projectId === projectId && d.date === date);
+    const entry = dailyRows.find((row) => row.projectId === projectId && row.date === date);
     if (!entry) return null;
     const pct = entry.approvedDaily ? Math.round((entry.spent / entry.approvedDaily) * 100) : 0;
     return { ...entry, pct };
   };
 
-  // Per-project comparison
-  const perProject = visibleProjects.map((p) => {
-    const entries = DAILY_CONSUMPTION_LOG.filter((d) => d.projectId === p.id);
-    const totalSpent = entries.reduce((s, e) => s + e.spent, 0);
-    const totalApproved = entries.reduce((s, e) => s + e.approvedDaily, 0);
+  const perProject = visibleProjects.map((project) => {
+    const entries = dailyRows.filter((row) => row.projectId === project.id);
+    const logged = entries.reduce((sum, row) => sum + Number(row.spent || 0), 0);
+    const allocated = entries.reduce((sum, row) => sum + Number(row.approvedDaily || 0), 0);
     return {
-      name: p.name.split(" ")[0],
-      approved: totalApproved,
-      actual: totalSpent,
-      variance: totalApproved - totalSpent,
+      name: project.name.split(" ")[0],
+      allocated,
+      logged,
+      remaining: Math.max(allocated - logged, 0),
     };
   });
 
+  const recentRows = [...dailyRows].slice(-10).reverse();
+
   return (
     <div className="space-y-6" data-testid="page-consumption">
-      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
@@ -127,25 +86,21 @@ const Consumption = () => {
             Daily consumption
           </div>
           <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">
-            Log today&apos;s consumption
+            Logged daily consumption
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · project-wise tasks, trajectories &amp; cost — {user?.role === "TPM" || user?.role === "R&D" ? "your projects" : "all projects"}
+            {new Date(latestDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · task logs roll up here automatically for {user?.role === "TPM" || user?.role === "R&D" ? "your projects" : "all projects"}
           </p>
         </div>
       </div>
 
-      {/* Live totals */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Total tasks (today)" value={String(totals.tasks || 0)} icon={ListChecks} tone="magenta" testid="stat-tasks" />
-        <Stat label="Total trajectories" value={String(totals.trajectories || 0)} icon={GitBranch} tone="magenta" testid="stat-traj" />
-        <Stat label="Total cost" value={fmtCurrency(totals.cost || 0, { compact: false })} icon={DollarSign} tone="magenta" testid="stat-cost" />
-        <Stat label="Projects logged" value={String(rows.filter((r) => Number(r.cost) > 0 || Number(r.tasks) > 0).length)} icon={Activity} testid="stat-logged" />
+        <Stat label="Tasks logged" value={String(totals.tasks || 0)} icon={ListChecks} tone="magenta" testid="stat-tasks" />
+        <Stat label="Trajectories" value={String(totals.trajectories || 0)} icon={GitBranch} tone="magenta" testid="stat-traj" />
+        <Stat label="Logged cost" value={fmtCurrency(totals.cost || 0, { compact: false })} icon={DollarSign} tone="magenta" testid="stat-cost" />
+        <Stat label="Projects active" value={String(todayRows.length || 0)} icon={Activity} testid="stat-logged" />
       </div>
 
-      {/* Today's log removed — task logs now originate from My Projects → Tasks tab */}
-
-      {/* HEATMAP */}
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="heatmap">
         <div className="flex items-start justify-between mb-4">
           <div>
@@ -153,7 +108,7 @@ const Consumption = () => {
               Consumption heatmap
             </div>
             <div className="text-xs text-zinc-500 mt-0.5">
-              % of approved daily budget consumed · last 14 days · project × day · each day evaluated independently
+              % of daily budget consumed from logged tasks · last 14 days · project × day
             </div>
           </div>
           <div className="flex items-center gap-3 text-[10px] text-zinc-400">
@@ -171,31 +126,31 @@ const Consumption = () => {
                 <th className="text-[10px] text-zinc-500 font-semibold uppercase tracking-widest text-left pr-2 pb-1 sticky left-0 bg-[#12121A]">
                   Project
                 </th>
-                {heatmap.dates.map((d) => (
-                  <th key={d} className="text-[9px] text-zinc-500 font-medium tabular pb-1 text-center w-8">
-                    {d.slice(-2)}
+                {heatmap.dates.map((date) => (
+                  <th key={date} className="text-[9px] text-zinc-500 font-medium tabular pb-1 text-center w-8">
+                    {date.slice(-2)}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {heatmap.rows.map((pid) => {
-                const proj = visibleProjects.find((p) => p.id === pid);
-                if (!proj) return null;
+              {heatmap.rows.map((projectId) => {
+                const project = visibleProjects.find((entry) => entry.id === projectId);
+                if (!project) return null;
                 return (
-                  <tr key={pid} data-testid={`heat-row-${pid}`}>
+                  <tr key={projectId} data-testid={`heat-row-${projectId}`}>
                     <td className="text-xs text-zinc-200 pr-3 py-0.5 whitespace-nowrap sticky left-0 bg-[#12121A]">
-                      <div className="truncate max-w-[140px]">{proj.name}</div>
+                      <div className="truncate max-w-[140px]">{project.name}</div>
                     </td>
-                    {heatmap.dates.map((d) => {
-                      const cell = cellFor(pid, d);
+                    {heatmap.dates.map((date) => {
+                      const cell = cellFor(projectId, date);
                       const { bg, border } = heatColor(cell?.pct);
                       return (
-                        <td key={d}>
+                        <td key={date}>
                           <div
                             className="w-7 h-7 rounded-md border cursor-default relative group"
                             style={{ background: bg, borderColor: border }}
-                            title={cell ? `${d} · ${cell.pct}% (${fmtCurrency(cell.spent, { compact: false })} of ${fmtCurrency(cell.approvedDaily, { compact: false })}) · ${cell.tasks} tasks / ${cell.trajectories} trajectories` : d}
+                            title={cell ? `${date} · ${cell.pct}% (${fmtCurrency(cell.spent, { compact: false })} of ${fmtCurrency(cell.approvedDaily, { compact: false })}) · ${cell.tasks} tasks / ${cell.trajectories} trajectories` : date}
                           >
                             {cell && cell.pct >= 100 && (
                               <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/90">!</span>
@@ -212,12 +167,11 @@ const Consumption = () => {
         </div>
       </div>
 
-      {/* Approved vs Actual */}
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="chart-approved-vs-actual">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <div className="font-display font-semibold text-[15px] text-white">Estimated vs Actual (last 15 days)</div>
-            <div className="text-xs text-zinc-500 mt-0.5">Sum of daily approved budget vs actual consumption per project</div>
+            <div className="font-display font-semibold text-[15px] text-white">Allocated vs logged (last 15 days)</div>
+            <div className="text-xs text-zinc-500 mt-0.5">Daily budget allocation compared against task-log spend per project</div>
           </div>
         </div>
         <div className="h-[260px]">
@@ -225,22 +179,21 @@ const Consumption = () => {
             <BarChart data={perProject}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} />
+              <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`} />
               <Tooltip
                 contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }}
-                formatter={(v) => fmtCurrency(v, { compact: false })}
+                formatter={(value) => fmtCurrency(value, { compact: false })}
               />
               <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
-              <Bar dataKey="approved" name="Estimated" fill="#3B82F6" radius={[3, 3, 0, 0]} maxBarSize={22} />
-              <Bar dataKey="actual" name="Actual" fill="#E619B8" radius={[3, 3, 0, 0]} maxBarSize={22} />
+              <Bar dataKey="allocated" name="Allocated" fill="#3B82F6" radius={[3, 3, 0, 0]} maxBarSize={22} />
+              <Bar dataKey="logged" name="Logged" fill="#E619B8" radius={[3, 3, 0, 0]} maxBarSize={22} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Recent submissions */}
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="recent-submissions">
-        <div className="font-display font-semibold text-[15px] text-white mb-3">Your recent submissions</div>
+        <div className="font-display font-semibold text-[15px] text-white mb-3">Recent logged days</div>
         <div className="overflow-x-auto -mx-1">
           <table className="w-full text-sm">
             <thead>
@@ -249,48 +202,51 @@ const Consumption = () => {
                 <th className="text-left py-2 px-3">Project</th>
                 <th className="text-right py-2 px-3">Tasks</th>
                 <th className="text-right py-2 px-3">Trajectories</th>
-                <th className="text-right py-2 px-3">Cost</th>
-                <th className="text-right py-2 px-3">Approved / day</th>
+                <th className="text-right py-2 px-3">Logged</th>
+                <th className="text-right py-2 px-3">Allocated / day</th>
                 <th className="text-right py-2 px-3">Health</th>
               </tr>
             </thead>
             <tbody>
-              {DAILY_CONSUMPTION_LOG.filter((d) => projectIds.includes(d.projectId))
-                .slice(-10)
-                .reverse()
-                .map((d, i) => {
-                  const pct = d.approvedDaily ? Math.round((d.spent / d.approvedDaily) * 100) : 0;
-                  return (
-                    <tr key={i} data-testid={`sub-${i}`} className="border-b border-white/5 hover:bg-white/[0.03]">
-                      <td className="py-3 px-3 text-white font-medium tabular">
-                        {new Date(d.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </td>
-                      <td className="py-3 px-3 text-zinc-200">{d.projectName}</td>
-                      <td className="py-3 px-3 text-right text-zinc-200 tabular">{d.tasks}</td>
-                      <td className="py-3 px-3 text-right text-zinc-200 tabular">{d.trajectories}</td>
-                      <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(d.spent, { compact: false })}</td>
-                      <td className="py-3 px-3 text-right text-zinc-400 tabular">{fmtCurrency(d.approvedDaily, { compact: false })}</td>
-                      <td className="py-3 px-3 text-right">
-                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                          pct >= 100 ? "bg-red-500/15 text-red-300" : pct >= 80 ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300"
-                        }`}>
-                          {pct >= 100 ? <span>Over</span> : pct >= 80 ? <span>Watch</span> : <><CheckCircle2 className="w-3 h-3" /> OK</>} · {pct}%
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
+              {recentRows.map((row, index) => {
+                const pct = row.approvedDaily ? Math.round((row.spent / row.approvedDaily) * 100) : 0;
+                return (
+                  <tr key={`${row.projectId}-${row.date}-${index}`} data-testid={`sub-${index}`} className="border-b border-white/5 hover:bg-white/[0.03]">
+                    <td className="py-3 px-3 text-white font-medium tabular">
+                      {new Date(row.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </td>
+                    <td className="py-3 px-3 text-zinc-200">{row.projectName}</td>
+                    <td className="py-3 px-3 text-right text-zinc-200 tabular">{row.tasks}</td>
+                    <td className="py-3 px-3 text-right text-zinc-200 tabular">{row.trajectories}</td>
+                    <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(row.spent, { compact: false })}</td>
+                    <td className="py-3 px-3 text-right text-zinc-400 tabular">{fmtCurrency(row.approvedDaily, { compact: false })}</td>
+                    <td className="py-3 px-3 text-right">
+                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                        pct >= 100 ? "bg-red-500/15 text-red-300" : pct >= 80 ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300"
+                      }`}>
+                        {pct >= 100 ? <span>Over</span> : pct >= 80 ? <span>Watch</span> : <><CheckCircle2 className="w-3 h-3" /> OK</>} · {pct}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {recentRows.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="py-10 text-center text-sm text-zinc-500">
+                    No task logs yet. Log tasks from the project Batch tab to start daily tracking.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* AI insight */}
       <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3">
         <Sparkles className="w-4 h-4 text-fuchsia-300 mt-0.5 flex-shrink-0" />
         <div className="text-xs text-zinc-300">
           <span className="text-fuchsia-200 font-semibold">Consumption insight: </span>
-          Submitting today&apos;s log before 6 PM ensures Finance and CTO see your true burn rate. Cells in the heatmap turn red when a day exceeds 100% of the approved daily budget — investigate immediately or raise a change request.
+          Every task log now updates this view automatically. Days turn red when logged spend crosses the daily allocation, so teams can raise top-ups or change requests before delivery gets blocked.
         </div>
       </div>
     </div>

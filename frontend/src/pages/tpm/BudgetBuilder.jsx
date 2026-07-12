@@ -95,8 +95,9 @@ const BudgetBuilder = () => {
   const [budgetType, setBudgetType] = useState(initialBudgetType);
   const isDirectCostBudget = DIRECT_COST_BUDGET_TYPES.includes(budgetType);
   const isReworkBudget = budgetType === "Rework";
+  const usesRndWorkflow = isRnd || budgetType === "RnD" || budgetType === "Testing" || budgetType === "Rework";
   // R&D locked to single phase
-  const [deliveryMode, setDeliveryMode] = useState(isRnd ? "single" : "single");
+  const [deliveryMode, setDeliveryMode] = useState("single");
 
   const [singleStart, setSingleStart] = useState(todayISO());
   const [singleEnd, setSingleEnd] = useState(plusDaysISO(30));
@@ -165,6 +166,11 @@ const BudgetBuilder = () => {
     return phases.reduce((s, p) => s + Number(p.tasks || 0), 0);
   }, [deliveryMode, singlePhase, phases, isDirectCostBudget]);
 
+  const modelPricingUnits = useMemo(() => {
+    if (isDirectCostBudget) return 0;
+    return totalTrajectories > 0 ? totalTrajectories : totalTasks;
+  }, [isDirectCostBudget, totalTasks, totalTrajectories]);
+
   // Recompute model estCost whenever total trajectory volume changes (keeps user-entered costPerTask)
   useEffect(() => {
     if (isDirectCostBudget) return;
@@ -173,14 +179,14 @@ const BudgetBuilder = () => {
       return {
         ...r,
         provider: meta.provider,
-        estCost: Math.round(Number(r.costPerTask || 0) * totalTrajectories * 100) / 100,
+        estCost: Math.round(Number(r.costPerTask || 0) * modelPricingUnits * 100) / 100,
       };
     }));
-  }, [totalTrajectories, isDirectCostBudget]);
+  }, [modelPricingUnits, isDirectCostBudget]);
 
   useEffect(() => {
-    if (isDirectCostBudget && deliveryMode !== "single") setDeliveryMode("single");
-  }, [isDirectCostBudget, deliveryMode]);
+    if ((isDirectCostBudget || usesRndWorkflow) && deliveryMode !== "single") setDeliveryMode("single");
+  }, [isDirectCostBudget, usesRndWorkflow, deliveryMode]);
 
   const totals = useMemo(() => {
     const m = selectedTypes.models ? models.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
@@ -205,7 +211,7 @@ const BudgetBuilder = () => {
         if (key === "estCost") next.estCost = Number(v) || 0;
         return next;
       }
-      next.estCost = Math.round(Number(next.costPerTask || 0) * totalTrajectories * 100) / 100;
+      next.estCost = Math.round(Number(next.costPerTask || 0) * modelPricingUnits * 100) / 100;
       return next;
     }));
   };
@@ -259,10 +265,14 @@ const BudgetBuilder = () => {
       }];
     }
     // weight by tasks × trajectories
-    const totalTraj = phases.reduce((s, p) => s + Number(p.tasks || 0) * Number(p.trajectories || 0), 0) || 1;
+    const totalTraj = phases.reduce((sum, phase) => {
+      const weightedTraj = Number(phase.tasks || 0) * Number(phase.trajectories || 0);
+      return sum + (weightedTraj > 0 ? weightedTraj : Number(phase.tasks || 0) || 1);
+    }, 0) || 1;
     return phases.map((p) => {
       const traj = Number(p.tasks || 0) * Number(p.trajectories || 0);
-      const share = traj / totalTraj;
+      const shareUnits = traj > 0 ? traj : Number(p.tasks || 0) || 1;
+      const share = shareUnits / totalTraj;
       return { ...p, budget: Math.round(totals.total * share) };
     });
   }, [deliveryMode, phases, singleStart, singleEnd, singlePhase, totals.total, isDirectCostBudget, budgetType]);
@@ -272,7 +282,6 @@ const BudgetBuilder = () => {
     if (deliveryMode === "single") {
       if (!isDirectCostBudget) {
         if (!singlePhase.tasks || Number(singlePhase.tasks) <= 0) { toast.error("Enter number of tasks"); return false; }
-        if (!singlePhase.trajectories || Number(singlePhase.trajectories) <= 0) { toast.error("Enter estimated trajectories per task"); return false; }
       }
       if (!singleStart || !singleEnd) { toast.error("Set estimated start & end date"); return false; }
     } else {
@@ -280,7 +289,6 @@ const BudgetBuilder = () => {
       for (const p of phases) {
         if (!p.name || !p.start || !p.end) { toast.error(`Complete ${p.name || "phase"} details`); return false; }
         if (!p.tasks || Number(p.tasks) <= 0) { toast.error(`Enter tasks for ${p.name}`); return false; }
-        if (!p.trajectories || Number(p.trajectories) <= 0) { toast.error(`Enter trajectories for ${p.name}`); return false; }
       }
     }
     return true;
@@ -345,7 +353,7 @@ const BudgetBuilder = () => {
             {project?.name || "New budget"}
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Running total <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.total, { compact: false })}</span> · {deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} · {isDirectCostBudget ? <span className="text-zinc-300">{budgetType} direct-cost estimate</span> : <span className="text-zinc-300 tabular">{totalTrajectories.toLocaleString()}</span>} {!isDirectCostBudget && "trajectories"}
+            Running total <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.total, { compact: false })}</span> · {deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} · {isDirectCostBudget ? <span className="text-zinc-300">{budgetType} direct-cost estimate</span> : totalTrajectories > 0 ? <><span className="text-zinc-300 tabular">{totalTrajectories.toLocaleString()}</span> trajectories</> : <><span className="text-zinc-300 tabular">{totalTasks.toLocaleString()}</span> task-based estimate</>}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -391,7 +399,7 @@ const BudgetBuilder = () => {
                 {["Low", "Medium", "High", "Critical"].map((p) => <option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Budget type *" hint={isRnd ? "Testing first, then R&D delivery. Rework appears only after changes are asked." : null}>
+            <Field label="Budget type *" hint={usesRndWorkflow ? "Testing first, then R&D delivery. Rework appears only after changes are asked." : null}>
               <select
                 value={budgetType}
                 onChange={(e) => setBudgetType(e.target.value)}
@@ -403,7 +411,7 @@ const BudgetBuilder = () => {
             </Field>
           </div>
 
-          {!isRnd && (
+          {!usesRndWorkflow && (
             <div className="mt-5">
               <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project delivery</div>
               <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
@@ -433,13 +441,18 @@ const BudgetBuilder = () => {
                     <Field label="Number of tasks *">
                       <input type="number" min="1" value={singlePhase.tasks} onChange={(e) => setSinglePhase((s) => ({ ...s, tasks: e.target.value }))} data-testid="bb-single-tasks" className={ipStyle + " tabular"} />
                     </Field>
-                    <Field label="Est. trajectories / task *">
-                      <input type="number" min="1" value={singlePhase.trajectories} onChange={(e) => setSinglePhase((s) => ({ ...s, trajectories: e.target.value }))} data-testid="bb-single-trajectories" className={ipStyle + " tabular"} />
+                    <Field label="Est. trajectories / task (optional)">
+                      <input type="number" min="0" value={singlePhase.trajectories} onChange={(e) => setSinglePhase((s) => ({ ...s, trajectories: e.target.value }))} data-testid="bb-single-trajectories" className={ipStyle + " tabular"} />
                     </Field>
                   </div>
                   <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 text-[11px] text-zinc-400" data-testid="bb-single-total-trajectories">
                     Total trajectories · <span className="text-fuchsia-300 font-semibold tabular">{(Number(singlePhase.tasks || 0) * Number(singlePhase.trajectories || 0)).toLocaleString()}</span>
                   </div>
+                  {Number(singlePhase.trajectories || 0) === 0 && (
+                    <div className="text-[11px] text-zinc-500">
+                      No trajectories entered. Model-cost math will use task count only for this budget.
+                    </div>
+                  )}
                 </>
               )}
               {isDirectCostBudget && (
@@ -493,7 +506,7 @@ const BudgetBuilder = () => {
             </div>
           )}
 
-          {deliveryMode === "multiple" && !isRnd && (
+          {deliveryMode === "multiple" && !usesRndWorkflow && (
             <div className="mt-4 space-y-3" data-testid="bb-multi-phases">
               <div className="text-[11px] text-zinc-500">Multiple phases deliver the project batch-by-batch. Each phase drives its own trajectory count → total updates automatically.</div>
               {phases.map((ph, i) => (
@@ -517,7 +530,7 @@ const BudgetBuilder = () => {
                     <Field label="Tasks">
                       <input type="number" min="0" value={ph.tasks} onChange={(e) => updateRow(setPhases)(ph.id, "tasks", e.target.value)} data-testid={`bb-phase-tasks-${ph.id}`} className={ipStyle + " tabular"} />
                     </Field>
-                    <Field label="Trajectories / task">
+                    <Field label="Trajectories / task (optional)">
                       <input type="number" min="0" value={ph.trajectories} onChange={(e) => updateRow(setPhases)(ph.id, "trajectories", e.target.value)} data-testid={`bb-phase-traj-${ph.id}`} className={ipStyle + " tabular"} />
                     </Field>
                     <Field label="Sub-total trajectories">
@@ -547,7 +560,9 @@ const BudgetBuilder = () => {
             <div className="text-xs text-zinc-400">
               {isDirectCostBudget
                 ? `${budgetType} estimate · direct cost only`
-                : <>Total trajectories: <span className="text-fuchsia-300 font-semibold tabular">{totalTrajectories.toLocaleString()}</span> · {totalTasks.toLocaleString()} tasks</>}
+                : totalTrajectories > 0
+                  ? <>Total trajectories: <span className="text-fuchsia-300 font-semibold tabular">{totalTrajectories.toLocaleString()}</span> · {totalTasks.toLocaleString()} tasks</>
+                  : <>{totalTasks.toLocaleString()} tasks · trajectories optional for this budget</>}
             </div>
             <Button
               onClick={() => canProceedDetails() && setStep(2)}
@@ -562,7 +577,7 @@ const BudgetBuilder = () => {
 
       {/* Step 2 — Budget Items */}
       {step === 2 && (
-        <Card title="2. Budget Items" subtitle={isDirectCostBudget ? `${budgetType} estimate · direct model, infra, and subscription costing` : `Trajectories: ${totalTrajectories.toLocaleString()} · costs auto-update from step 1`} testid="bb-step-items">
+        <Card title="2. Budget Items" subtitle={isDirectCostBudget ? `${budgetType} estimate · direct model, infra, and subscription costing` : `${modelPricingUnits.toLocaleString()} pricing units · costs auto-update from step 1`} testid="bb-step-items">
           <div>
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Budget types</div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -621,7 +636,7 @@ const BudgetBuilder = () => {
                     {isDirectCostBudget ? "· enter the model-cost estimate directly" : "· est. cost = tasks × trajectories × cost/task"}
                   </span>
                 </div>
-                <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem(isDirectCostBudget ? 0 : totalTrajectories)])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
+                <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem(isDirectCostBudget ? 0 : modelPricingUnits)])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add model
                 </Button>
               </div>
@@ -673,7 +688,9 @@ const BudgetBuilder = () => {
               <div className="mt-2 text-[11px] text-zinc-500">
                 {isDirectCostBudget
                   ? <>Direct model-cost total: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span></>
-                  : <>Formula: <span className="text-fuchsia-300 font-semibold tabular">{totalTasks.toLocaleString()}</span> tasks × <span className="text-fuchsia-300 font-semibold tabular">{deliveryMode === "single" ? singlePhase.trajectories : "avg"}</span> trajectories/task × cost/task · Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span></>}
+                  : totalTrajectories > 0
+                    ? <>Formula: <span className="text-fuchsia-300 font-semibold tabular">{totalTasks.toLocaleString()}</span> tasks × <span className="text-fuchsia-300 font-semibold tabular">{deliveryMode === "single" ? singlePhase.trajectories : "avg"}</span> trajectories/task × cost/task · Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span></>
+                    : <>Formula: <span className="text-fuchsia-300 font-semibold tabular">{totalTasks.toLocaleString()}</span> tasks × cost/task · Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span></>}
               </div>
             </div>
           )}

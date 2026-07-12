@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
-import { PackageCheck, DollarSign, MessageSquare, Send, X, ListChecks, Cpu, ThumbsUp, ThumbsDown, RefreshCw } from "lucide-react";
+import { PackageCheck, DollarSign, MessageSquare, Send, X, ListChecks, Cpu, ThumbsUp, ThumbsDown, RefreshCw, Receipt, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
@@ -12,12 +12,16 @@ import { fmtCurrency } from "../lib/format";
 //              comments, plus Reject / Accept / Changes-requested mark. Once R&D marks
 //              "Accept", the TPM is notified that this is the correct estimate.
 const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
-  const { deliverBatch, role, user } = useApp();
+  const { deliverBatch, role, user, getPhaseLogs } = useApp();
   const isRnd = role === "R&D";
-  const suggested = phase?.actual ? Math.round(phase.actual * 1.1) : 0;
+  const phaseLoggedAmount = useMemo(
+    () => (project?.id && phase?.id ? getPhaseLogs(project.id, phase.id).reduce((sum, log) => sum + Number(log.cost || 0), 0) : 0),
+    [getPhaseLogs, phase?.id, project?.id]
+  );
 
   // TPM state
-  const [amount, setAmount] = useState(suggested);
+  const [recoveryType, setRecoveryType] = useState("recoverable");
+  const [amount, setAmount] = useState(phaseLoggedAmount);
   const [comment, setComment] = useState("");
 
   // R&D state
@@ -32,21 +36,39 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
 
   const rndTotal = Number(taskCount || 0) * Number(estPerTask || 0);
 
+  useEffect(() => {
+    if (!open) return;
+    setRecoveryType("recoverable");
+    setAmount(phaseLoggedAmount);
+    setComment("");
+    setTaskCount(phase?.totalTasks || 0);
+    setEstPerTask(
+      phase?.totalTasks && phase?.estimated ? Math.round((phase.estimated / phase.totalTasks) * 100) / 100 : 0
+    );
+    setTrajectories(phase?.trajectoriesPerTask ? phase.totalTasks * phase.trajectoriesPerTask : 0);
+    setModels("Opus 4.8, Sonnet 4.6");
+    setRndClientComment("");
+    setRndDecision("accept");
+  }, [open, phase?.estimated, phase?.totalTasks, phase?.trajectoriesPerTask, phaseLoggedAmount]);
+
   const submitTpm = () => {
     if (!project || !phase) { toast.error("Missing phase context"); return; }
-    if (!amount || Number(amount) <= 0) { toast.error("Enter a valid recoverable amount"); return; }
+    const isRecoverable = recoveryType === "recoverable";
+    if (isRecoverable && (!amount || Number(amount) <= 0)) { toast.error("Enter a valid recoverable amount"); return; }
     if (!comment.trim()) { toast.error("Add the client's comment / reason"); return; }
     deliverBatch({
       projectId: project.id,
       phaseId: phase.id,
       phaseName: phase.name,
-      proposedAmount: amount,
+      proposedAmount: isRecoverable ? amount : 0,
       clientComment: comment,
+      isRecoverable,
     });
-    toast.success("Batch delivered to CFO", {
-      description: `${project.name} · ${phase.name} · proposed ${fmtCurrency(amount, { compact: false })}`,
+    toast.success(isRecoverable ? "Batch delivered to CFO" : "Batch marked non-recoverable", {
+      description: isRecoverable
+        ? `${project.name} · ${phase.name} · proposed ${fmtCurrency(amount, { compact: false })}`
+        : `${project.name} · ${phase.name} · closed as non-recoverable`,
     });
-    setAmount(suggested); setComment("");
     onOpenChange(false);
   };
 
@@ -105,27 +127,52 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
 
         {!isRnd && (
           <div className="space-y-3 py-2" data-testid="deliver-tpm-form">
-            <div className="grid grid-cols-2 gap-3">
-              <MiniField label="Phase actual" value={fmtCurrency(phase?.actual || 0, { compact: false })} />
-              <MiniField label="Suggested recovery" value={fmtCurrency(suggested, { compact: false })} tone="magenta" />
-            </div>
+            <MiniField label="Phase logged amount" value={fmtCurrency(phaseLoggedAmount, { compact: false })} />
 
-            <Field label="Proposed recoverable amount (USD)">
-              <div className="relative">
-                <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="number" min="0" step="50" value={amount}
-                  onChange={(e) => setAmount(Number(e.target.value) || 0)}
-                  data-testid="deliver-amount"
-                  className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                />
+            <Field label="Recovery type">
+              <div className="grid grid-cols-2 gap-2" data-testid="deliver-recovery-type">
+                {[
+                  { key: "recoverable", label: "Recoverable", icon: Receipt },
+                  { key: "non-recoverable", label: "Non-recoverable", icon: Ban },
+                ].map((option) => (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setRecoveryType(option.key)}
+                    data-testid={`deliver-recovery-${option.key}`}
+                    className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                      recoveryType === option.key
+                        ? option.key === "recoverable"
+                          ? "border-emerald-500/35 bg-emerald-500/15 text-emerald-300"
+                          : "border-amber-500/35 bg-amber-500/15 text-amber-300"
+                        : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
+                    }`}
+                  >
+                    <option.icon className="w-3.5 h-3.5" />
+                    {option.label}
+                  </button>
+                ))}
               </div>
             </Field>
+
+            {recoveryType === "recoverable" && (
+              <Field label="Recoverable amount (USD)">
+                <div className="relative">
+                  <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="number" min="0" step="50" value={amount}
+                    onChange={(e) => setAmount(Number(e.target.value) || 0)}
+                    data-testid="deliver-amount"
+                    className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                  />
+                </div>
+              </Field>
+            )}
 
             <Field label="Client comment / reason received">
               <textarea
                 value={comment} onChange={(e) => setComment(e.target.value)} rows={3}
-                placeholder="What did the client say about this batch? Any negotiation or scope note?"
+                placeholder={recoveryType === "recoverable" ? "What did the client say about this batch? Any negotiation or scope note?" : "Why is this batch non-recoverable? Capture the client note or internal reason."}
                 data-testid="deliver-comment"
                 className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
               />
@@ -134,7 +181,9 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
             <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-3 flex items-start gap-2">
               <MessageSquare className="w-3.5 h-3.5 text-fuchsia-300 flex-shrink-0 mt-0.5" />
               <div className="text-xs text-zinc-300 leading-relaxed">
-                CFO will be notified and can enter the <span className="text-emerald-300 font-semibold">actual amount recovered</span>. Both proposed and recovered are surfaced under the CFO Projects section.
+                {recoveryType === "recoverable"
+                  ? <>CFO will be notified and can enter the <span className="text-emerald-300 font-semibold">actual amount recovered</span>. Both proposed and recovered are surfaced under the CFO Projects section.</>
+                  : <>This delivery is closed as <span className="text-amber-300 font-semibold">non-recoverable</span>. It stays in the delivery log, but no recovery amount is expected from Finance.</>}
               </div>
             </div>
           </div>
@@ -249,7 +298,7 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
             className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
             data-testid="deliver-submit"
           >
-            <Send className="w-3.5 h-3.5" /> {isRnd ? "Submit review" : "Deliver & notify CFO"}
+            <Send className="w-3.5 h-3.5" /> {isRnd ? "Submit review" : recoveryType === "recoverable" ? "Deliver & notify CFO" : "Submit non-recoverable delivery"}
           </Button>
         </DialogFooter>
       </DialogContent>

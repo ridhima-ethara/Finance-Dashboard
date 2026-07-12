@@ -1,13 +1,12 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { BUDGET_REVIEWS } from "../../data/mockTpm";
+import { BUDGET_REVIEWS, CHANGE_REQUESTS } from "../../data/mockTpm";
 import { useApp } from "../../context/AppContext";
 import {
   ChevronRight,
   FileText,
   ArrowUpRightSquare,
-  Cpu,
-  HardDrive,
+  GitPullRequest,
   Circle,
 } from "lucide-react";
 
@@ -64,59 +63,32 @@ const buildQueue = (topupRequests) => {
       raw: r,
     });
   });
-  // New Model
-  seq += 1;
-  items.push({
-    id: "nm-1",
-    requestId: `BBR/2026/00${seq}`,
-    type: "New Model",
-    title: "New model onboarding",
-    project: "Add Grok-3 to model catalog",
-    subLabel: "AI · Provider",
-    raisedBy: "Arjun Mehta",
-    raisedRole: "TPM",
-    raisedDate: "Jul 6, 2026",
-    status: "Pending",
-    amount: 1200,
-  });
-  seq += 1;
-  items.push({
-    id: "nm-2",
-    requestId: `BBR/2026/00${seq}`,
-    type: "New Model",
-    title: "New model onboarding",
-    project: "Add Claude Opus 4.9 to catalog",
-    subLabel: "AI · Provider",
-    raisedBy: "Vikram Kumar",
-    raisedRole: "CTO",
-    raisedDate: "Jul 5, 2026",
-    status: "Approved",
-    amount: 800,
-  });
-  // Device
-  seq += 1;
-  items.push({
-    id: "dv-1",
-    requestId: `BBR/2026/00${seq}`,
-    type: "Device",
-    title: "Hardware provisioning",
-    project: "MacBook Pro M4 · 4 units",
-    subLabel: "IT",
-    raisedBy: "Priya Kapoor",
-    raisedRole: "Finance",
-    raisedDate: "Jul 5, 2026",
-    status: "Approved",
-    amount: 9600,
+  CHANGE_REQUESTS.forEach((request) => {
+    seq += 1;
+    items.push({
+      id: request.id,
+      href: "/change-requests",
+      requestId: `CRQ/2026/00${seq}`,
+      type: "Change Request",
+      title: request.type,
+      project: request.projectName,
+      subLabel: request.affectedPhase,
+      raisedBy: request.requester,
+      raisedRole: "TPM",
+      raisedDate: new Date(request.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      status: request.stage === "approved" ? "Approved" : request.stage === "rejected" ? "Rejected" : "Pending",
+      amount: request.amount,
+      raw: request,
+    });
   });
   return items;
 };
 
-const typeIcons = { Budget: FileText, "Top-up": ArrowUpRightSquare, "New Model": Cpu, Device: HardDrive };
+const typeIcons = { Budget: FileText, "Top-up": ArrowUpRightSquare, "Change Request": GitPullRequest };
 const typeChip = {
   Budget: "bg-indigo-100 text-indigo-800 dark:bg-fuchsia-500/15 dark:text-fuchsia-200",
   "Top-up": "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-200",
-  "New Model": "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-200",
-  Device: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200",
+  "Change Request": "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200",
 };
 const statusChip = {
   Pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
@@ -144,8 +116,7 @@ const ApprovalQueue = () => {
       All: queue.length,
       Budget: queue.filter((q) => q.type === "Budget").length,
       "Top-up": queue.filter((q) => q.type === "Top-up").length,
-      "New Model": queue.filter((q) => q.type === "New Model").length,
-      Device: queue.filter((q) => q.type === "Device").length,
+      "Change Request": queue.filter((q) => q.type === "Change Request").length,
     };
   }, [queue]);
 
@@ -170,7 +141,7 @@ const ApprovalQueue = () => {
 
       {/* Type tabs */}
       <div className="flex items-center gap-6 border-b border-white/5">
-        {["All", "Budget", "Top-up", "New Model", "Device"].map((t) => (
+        {["All", "Budget", "Top-up", "Change Request"].map((t) => (
           <button
             key={t}
             onClick={() => setTypeFilter(t)}
