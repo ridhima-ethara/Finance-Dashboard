@@ -19,13 +19,16 @@ import {
   XCircle,
   Calendar,
   Sparkles,
+  Cpu,
+  Server,
+  CreditCard,
 } from "lucide-react";
 
-const STAGES = ["CTO Review", "COO Approval", "Approved", "Rejected"];
+const STAGES = ["CTO Review", "CFO Review", "Approved", "Rejected"];
 
 const stageColor = {
   "CTO Review": { bg: "bg-fuchsia-500/10", text: "text-fuchsia-300", border: "border-fuchsia-500/30" },
-  "COO Approval": { bg: "bg-sky-500/10", text: "text-sky-300", border: "border-sky-500/30" },
+  "CFO Review": { bg: "bg-sky-500/10", text: "text-sky-300", border: "border-sky-500/30" },
   Approved: { bg: "bg-emerald-500/10", text: "text-emerald-300", border: "border-emerald-500/30" },
   Rejected: { bg: "bg-red-500/10", text: "text-red-300", border: "border-red-500/30" },
 };
@@ -54,9 +57,9 @@ const ChangeRequests = () => {
   };
 
   const approveAndForward = (cr) => {
-    setStage(cr.id, "COO Approval");
+    setStage(cr.id, "CFO Review");
     toast.success("Change request approved", {
-      description: `${cr.projectName} · ${fmtCurrency(cr.amount)} · Forwarded to CFO/COO`,
+      description: `${cr.projectName} · ${fmtCurrency(cr.amount)} · Forwarded to CFO`,
     });
   };
   const rejectCR = (cr) => {
@@ -83,7 +86,7 @@ const ChangeRequests = () => {
           </div>
           <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Change requests</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Review, modify, approve, reject or forward to CFO
+            Review, modify, approve, reject, or forward to CFO with the full requested breakdown
           </p>
         </div>
       </div>
@@ -126,6 +129,7 @@ const ChangeRequests = () => {
           const sc = stageColor[cr.stage] || stageColor["CTO Review"];
           const isOpen = expanded === cr.id;
           const isPending = cr.stage === "CTO Review";
+          const breakdownSections = getBreakdownSections(cr);
           return (
             <div
               key={cr.id}
@@ -178,6 +182,12 @@ const ChangeRequests = () => {
                   <span className="text-fuchsia-200 font-semibold">Reason: </span>{cr.reason}
                 </div>
 
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  {breakdownSections.map((section) => (
+                    <BreakdownPill key={section.key} label={section.label} amount={section.amount} />
+                  ))}
+                </div>
+
                 <div className="mt-3 flex items-center gap-1 text-[11px] text-zinc-500">
                   {isOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                   {isOpen ? "Collapse" : "Expand for details & actions"}
@@ -193,6 +203,20 @@ const ChangeRequests = () => {
                     <ImpactBox label="Expected tasks" value={cr.expectedTasks || "Not specified"} tone="neutral" />
                   </div>
 
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+                    {breakdownSections.map((section) => (
+                      <BreakdownCard
+                        key={section.key}
+                        title={section.label}
+                        value={section.amount}
+                        detail={section.detail}
+                        note={section.note}
+                        icon={section.icon}
+                        tone={section.tone}
+                      />
+                    ))}
+                  </div>
+
                   {/* Full reason */}
                   <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
                     <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Full reason</div>
@@ -204,7 +228,7 @@ const ChangeRequests = () => {
                     <Sparkles className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
                     <div className="text-xs text-zinc-300 leading-relaxed">
                       <span className="text-fuchsia-200 font-semibold">AI analysis: </span>
-                      This CR increases the budget by <span className="text-fuchsia-300 font-semibold tabular">{Math.round((cr.amount / cr.currentBudget) * 100)}%</span>. Consider approving at <span className="text-white font-semibold tabular">{fmtCurrency(Math.round(cr.amount * 0.75), { compact: false })}</span> and requiring re-eval after phase 3.
+                      This CR increases the budget by <span className="text-fuchsia-300 font-semibold tabular">{Math.round((cr.amount / (cr.currentBudget || 1)) * 100)}%</span>. Consider approving at <span className="text-white font-semibold tabular">{fmtCurrency(Math.round(cr.amount * 0.75), { compact: false })}</span> and requiring re-eval after phase 3.
                     </div>
                   </div>
 
@@ -256,6 +280,65 @@ const ChangeRequests = () => {
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+const getBreakdownSections = (cr) => [
+  {
+    key: "models",
+    label: "Models",
+    amount: Number(cr.breakdown?.models?.amount || 0),
+    detail: cr.breakdown?.models?.optionLabel || "No model change captured.",
+    note: cr.breakdown?.models?.note || "No model note added.",
+    icon: Cpu,
+    tone: "fuchsia",
+  },
+  {
+    key: "infra",
+    label: "Infrastructure",
+    amount: Number(cr.breakdown?.infra?.amount || 0),
+    detail: cr.breakdown?.infra?.optionLabel || "No infra change captured.",
+    note: cr.breakdown?.infra?.note || "No infra note added.",
+    icon: Server,
+    tone: "sky",
+  },
+  {
+    key: "subs",
+    label: "Subscriptions",
+    amount: Number(cr.breakdown?.subs?.amount || 0),
+    detail: cr.breakdown?.subs?.optionLabel || "No subscription change captured.",
+    note: cr.breakdown?.subs?.note || "No subscription note added.",
+    icon: CreditCard,
+    tone: "amber",
+  },
+];
+
+const BreakdownPill = ({ label, amount }) => (
+  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
+    {label} {fmtCurrency(amount, { compact: false })}
+  </span>
+);
+
+const BreakdownCard = ({ title, value, detail, note, icon: Icon, tone }) => {
+  const tones = {
+    fuchsia: "border-fuchsia-500/20 bg-fuchsia-500/[0.05] text-fuchsia-300",
+    sky: "border-sky-500/20 bg-sky-500/[0.05] text-sky-300",
+    amber: "border-amber-500/20 bg-amber-500/[0.05] text-amber-300",
+  };
+  const toneClass = tones[tone] || tones.fuchsia;
+
+  return (
+    <div className={`rounded-xl border p-4 ${toneClass}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-2">
+          <Icon className="w-4 h-4" />
+          <span className="text-[10px] uppercase tracking-widest font-semibold">{title}</span>
+        </div>
+        <span className="text-sm font-semibold text-white tabular">{fmtCurrency(value, { compact: false })}</span>
+      </div>
+      <div className="mt-3 text-sm text-white font-medium">{detail}</div>
+      <div className="mt-1 text-[11px] text-zinc-300 leading-relaxed">{note}</div>
     </div>
   );
 };

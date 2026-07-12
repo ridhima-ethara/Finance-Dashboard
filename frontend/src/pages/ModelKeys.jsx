@@ -73,8 +73,8 @@ const ModelKeys = () => {
   const [typeFilter, setTypeFilter] = useState("all");
   const [providerFilter, setProviderFilter] = useState("all");
   const [activeProvisionRequest, setActiveProvisionRequest] = useState(null);
-  const canReveal = role === "CTO" || role === "CFO" || role === "IT";
-  const isPrivileged = role === "CTO" || role === "CFO" || role === "IT";
+  const canReveal = role === "CFO" || role === "IT";
+  const isPrivileged = role === "CFO" || role === "IT";
 
   const allowedProjects = useMemo(() => {
     if (isPrivileged) return null;
@@ -114,7 +114,7 @@ const ModelKeys = () => {
 
   const toggleReveal = (id) => {
     if (!canReveal) {
-      toast.error("Access denied", { description: `Only CTO, CFO, or IT can reveal keys. You are signed in as ${role}.` });
+      toast.error("Access denied", { description: `Only CFO or IT can reveal keys. You are signed in as ${role}.` });
       return;
     }
     setRevealed((current) => {
@@ -148,6 +148,35 @@ const ModelKeys = () => {
     rd: keyRows.filter((entry) => entry.type === "R&D" && entry.status === "active").length,
     pendingProvisioning: provisioningRows.filter((entry) => entry.status === "pending-it").length,
   };
+
+  if (role === "CTO") {
+    return (
+      <div className="space-y-6" data-testid="page-model-keys-cto-blocked">
+        <div>
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
+            <ShieldCheck className="w-3 h-3" />
+            Governance handoff
+          </div>
+          <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">Model Keys</h1>
+          <p className="text-sm text-zinc-400 mt-1">
+            CTO review no longer exposes project keys directly. IT provisions them after CFO sign-off, and TPM / R&amp;D members see the allocations once they are assigned.
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-white/5 bg-[#12121A] p-6">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <div className="text-sm font-semibold text-white">Access is routed through IT</div>
+              <div className="text-xs text-zinc-400 mt-1 leading-relaxed">
+                CFO-approved budgets create IT provisioning requests. Once IT adds the model keys and assigns members, the mapped TPM / R&amp;D users can view their project allocations in the shared model-keys section.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="page-model-keys">
@@ -378,7 +407,7 @@ const ModelKeys = () => {
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 flex items-start gap-3 text-xs text-amber-200">
           <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
           <div>
-            Keys are masked. Only <span className="font-semibold">CTO</span>, <span className="font-semibold">CFO</span>, and <span className="font-semibold">IT</span> can reveal or copy full keys. Members still see which project allocations belong to them.
+            Keys are masked. Only <span className="font-semibold">CFO</span> and <span className="font-semibold">IT</span> can reveal or copy full keys. Members still see which project allocations belong to them.
           </div>
         </div>
       )}

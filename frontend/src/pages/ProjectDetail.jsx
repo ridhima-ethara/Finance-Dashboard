@@ -560,6 +560,7 @@ const ProjectDetail = () => {
                                 const phaseModelNames = collectResourceNames([
                                   ...phaseLogs.flatMap((log) => getLogModelNames(log)),
                                   ...phaseTopups.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
+                                  ...phaseChanges.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
                                   ...getPhaseTasks(p.id, ph.id).map((task) => task.model).filter(Boolean),
                                 ]);
                                 const requestSummary = `${phaseTopups.length} top-up${phaseTopups.length === 1 ? "" : "s"} · ${phaseChanges.length} change${phaseChanges.length === 1 ? "" : "s"}`;
@@ -686,12 +687,16 @@ const ProjectDetail = () => {
                               >
                                 {selectedPhaseChanges.map((request) => {
                                   const status = getChangeRequestMeta(request);
+                                  const breakdownSelections = getChangeBreakdownSelections(request);
                                   return (
                                     <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
                                       <div className="flex items-start justify-between gap-2">
                                         <div>
                                           <div className="text-[11px] text-white font-medium">{request.type}</div>
                                           <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-2">{request.reason}</div>
+                                          {breakdownSelections.length > 0 && (
+                                            <div className="text-[10px] text-zinc-400 mt-1 line-clamp-3">{breakdownSelections.join(" · ")}</div>
+                                          )}
                                         </div>
                                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
                                           <status.Icon className="w-2.5 h-2.5" />
@@ -988,15 +993,17 @@ const ProjectDetail = () => {
               const loggedTrajectories = logs.reduce((sum, log) => sum + (Number(log.trajectories) || 0), 0);
               const plannedTasks = Number(ph.totalTasks || ph.tasks || 0);
               const costPerTask = loggedTasks > 0 ? Math.round((phaseSpend / loggedTasks) * 100) / 100 : null;
-              const phaseBreakdown = estimatePhaseCostBreakdown(p, ph, topupsForPhase);
+              const phaseBreakdown = estimatePhaseCostBreakdown(p, ph, topupsForPhase, changesForPhase);
               const modelNames = collectResourceNames([
                 ...(delivery?.rnd?.models ? String(delivery.rnd.models).split(",") : []),
                 ...seededTasks.map((task) => task.model).filter(Boolean),
                 ...topupsForPhase.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
+                ...changesForPhase.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
               ]);
               const infraNames = collectResourceNames([
                 ...seededTasks.map((task) => task.infra).filter(Boolean),
                 ...topupsForPhase.map((request) => request.breakdown?.infra?.optionLabel).filter(Boolean),
+                ...changesForPhase.map((request) => request.breakdown?.infra?.optionLabel).filter(Boolean),
               ]);
               const approvalMeta = delivery ? (statusMap[delivery.status] || statusMap["pending-cfo"]) : null;
               const phaseRecoverableTotal = delivery?.isRecoverable === false ? 0 : Number(delivery?.proposedAmount || 0);
@@ -1096,7 +1103,7 @@ const ProjectDetail = () => {
                     <ResourceSummaryCard
                       title="Subs"
                       value={fmtCurrency(phaseBreakdown.subs, { compact: false })}
-                      detail={getSubscriptionSummary(topupsForPhase)}
+                      detail={getSubscriptionSummary(topupsForPhase, changesForPhase)}
                       testid={`batch-subs-${ph.id}`}
                     />
                   </div>
@@ -1121,12 +1128,16 @@ const ProjectDetail = () => {
                     >
                       {changesForPhase.map((request) => {
                         const status = getChangeRequestMeta(request);
+                        const breakdownSelections = getChangeBreakdownSelections(request);
                         return (
                           <div key={request.id} className="p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
                             <div className="flex items-start justify-between gap-2">
                               <div>
                                 <div className="text-[11px] text-white font-medium">{request.type}</div>
                                 <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-2">{request.reason}</div>
+                                {breakdownSelections.length > 0 && (
+                                  <div className="text-[10px] text-zinc-400 mt-1 line-clamp-3">{breakdownSelections.join(" · ")}</div>
+                                )}
                               </div>
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
                                 <status.Icon className="w-2.5 h-2.5" />
@@ -1639,6 +1650,12 @@ const getTopupBreakdownAmounts = (request) => ({
   subs: Number(request.breakdown?.subs?.amount || 0),
 });
 
+const getChangeBreakdownAmounts = (request) => ({
+  models: Number(request.breakdown?.models?.amount || 0),
+  infra: Number(request.breakdown?.infra?.amount || 0),
+  subs: Number(request.breakdown?.subs?.amount || 0),
+});
+
 const getResolvedTopupAmount = (request) => Number((request.cfoDecision?.amount ?? request.ctoDecision?.amount ?? request.amount) || 0);
 
 const summarizePhaseBudget = (phase, topups = [], changes = []) => {
@@ -1668,7 +1685,16 @@ const getTopupBreakdownSelections = (request) => (
   ].filter(Boolean)
 );
 
-const estimatePhaseCostBreakdown = (project, phase, topups) => {
+const getChangeBreakdownSelections = (request) => {
+  const amounts = getChangeBreakdownAmounts(request);
+  return [
+    request.breakdown?.models ? `Models ${fmtCurrency(amounts.models, { compact: false })}: ${formatBreakdownEntry(request.breakdown.models)}` : null,
+    request.breakdown?.infra ? `Infra ${fmtCurrency(amounts.infra, { compact: false })}: ${formatBreakdownEntry(request.breakdown.infra)}` : null,
+    request.breakdown?.subs ? `Subs ${fmtCurrency(amounts.subs, { compact: false })}: ${formatBreakdownEntry(request.breakdown.subs)}` : null,
+  ].filter(Boolean);
+};
+
+const estimatePhaseCostBreakdown = (project, phase, topups, changes = []) => {
   const totalEstimated = (project.phases || []).reduce((sum, item) => sum + Number(item.estimated || 0), 0) || 1;
   const share = Number(phase?.estimated || 0) / totalEstimated;
   const licenseSpend = (project.expenses || [])
@@ -1677,11 +1703,14 @@ const estimatePhaseCostBreakdown = (project, phase, topups) => {
   const topupModels = topups.reduce((sum, request) => sum + Number(request.breakdown?.models?.amount || 0), 0);
   const topupInfra = topups.reduce((sum, request) => sum + Number(request.breakdown?.infra?.amount || 0), 0);
   const topupSubs = topups.reduce((sum, request) => sum + Number(request.breakdown?.subs?.amount || 0), 0);
+  const changeModels = changes.reduce((sum, request) => sum + Number(request.breakdown?.models?.amount || 0), 0);
+  const changeInfra = changes.reduce((sum, request) => sum + Number(request.breakdown?.infra?.amount || 0), 0);
+  const changeSubs = changes.reduce((sum, request) => sum + Number(request.breakdown?.subs?.amount || 0), 0);
 
   return {
-    models: Math.round(((project.aiModelCost || 0) * share) + topupModels),
-    infra: Math.round(((project.infrastructureCost || 0) * share) + topupInfra),
-    subs: Math.round((licenseSpend * share) + topupSubs),
+    models: Math.round(((project.aiModelCost || 0) * share) + topupModels + changeModels),
+    infra: Math.round(((project.infrastructureCost || 0) * share) + topupInfra + changeInfra),
+    subs: Math.round((licenseSpend * share) + topupSubs + changeSubs),
   };
 };
 
@@ -1691,8 +1720,8 @@ const formatBreakdownEntry = (entry) => (
   [entry.optionLabel, entry.note].map((value) => String(value || "").trim()).filter(Boolean).join(" · ")
 );
 
-const getSubscriptionSummary = (topups) => {
-  const requested = topups
+const getSubscriptionSummary = (topups = [], changes = []) => {
+  const requested = [...topups, ...changes]
     .filter((request) => Number(request.breakdown?.subs?.amount || 0) > 0)
     .map((request) => `${fmtCurrency(request.breakdown.subs.amount, { compact: false })}${formatBreakdownEntry(request.breakdown.subs) ? ` · ${formatBreakdownEntry(request.breakdown.subs)}` : ""}`);
   return requested.length ? requested.join(" | ") : "No subscription ask raised for this phase.";

@@ -142,6 +142,52 @@ const BudgetReviewWorkspace = () => {
   };
 
   const saveDraft = () => toast("Draft saved", { description: "Your modifications will be preserved" });
+  const coreOverviewPanels = (
+    <>
+      <Panel testid="overview-project" title="Project overview">
+        <div className="grid grid-cols-2 gap-3">
+          <InfoField label="Client" value={review.client} />
+          <InfoField label="Recovery type" value={review.recoveryType} />
+          <InfoField label="Requester" value={`${isRndReview ? "R&D" : "TPM"} · ${review.tpm}`} />
+          <InfoField label="Timeline" value={review.timeline} />
+          <InfoField label="Tasks" value={String(review.tasks)} />
+          <InfoField label="Phases" value={String(review.phases)} />
+        </div>
+      </Panel>
+      <Panel testid="overview-justification" title={`Justification from ${isRndReview ? "R&D" : "TPM"}`}>
+        <div className="text-sm text-zinc-200 leading-relaxed">{review.justification}</div>
+      </Panel>
+      <Panel testid="overview-breakdown" title="Budget breakdown">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <BreakdownCell icon={Cpu} label="AI Models" value={review.aiCost} color="#E619B8" />
+          <BreakdownCell icon={Server} label="Infrastructure" value={review.infraCost} color="#3B82F6" />
+          <BreakdownCell icon={Layers} label="Subscriptions" value={review.subsCost} color="#10B981" />
+          <BreakdownCell icon={FileText} label="Miscellaneous" value={review.miscCost} color="#F59E0B" />
+        </div>
+      </Panel>
+      <Panel testid="overview-comparison" title="Estimated vs business requirement" subtitle="Prior baseline vs current ask">
+        <div className="grid grid-cols-3 gap-3 mb-4">
+          <CompareBox label="Previous approved" value={currentBudget} />
+          <CompareBox label={`${isRndReview ? "R&D" : "TPM"} requested`} value={requestedBudget} highlight="warning" />
+          <CompareBox label="AI recommended" value={recommended} highlight="magenta" />
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-300 leading-relaxed">
+          <span className="text-fuchsia-200 font-semibold">Difference: </span>
+          Requested budget is <span className="text-white font-semibold tabular">{fmtCurrency(requestedBudget - currentBudget, { compact: false })}</span>{" "}
+          above the previously approved amount ({fmtPct(Math.round(((requestedBudget - currentBudget) / (currentBudget || 1)) * 100))} increase).
+          AI recommends <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(recommended, { compact: false })}</span> — saving <span className="text-emerald-300 font-semibold tabular">{fmtCurrency(requestedBudget - recommended, { compact: false })}</span> via optimized model routing.
+        </div>
+      </Panel>
+      {priorModification && (
+        <Panel testid="overview-prior-mod" title="Your previous action" subtitle={`Status: ${priorModification.status?.replace(/-/g, " ")} · Total ${fmtCurrency(priorModification.modifiedTotal, { compact: false })}`}>
+          <div className="text-xs text-zinc-300 leading-relaxed">
+            Last updated <span className="text-white font-semibold tabular">{new Date(priorModification.ctoAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</span>.
+            {priorModification.ctoComment && <div className="mt-1 text-zinc-400"><span className="text-fuchsia-300 font-semibold">Comment:</span> {priorModification.ctoComment}</div>}
+          </div>
+        </Panel>
+      )}
+    </>
+  );
 
   return (
     <div className="space-y-6" data-testid="page-budget-review-workspace">
@@ -204,52 +250,7 @@ const BudgetReviewWorkspace = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
-          {tab === "overview" && (
-            <>
-              <Panel testid="overview-project" title="Project overview">
-                <div className="grid grid-cols-2 gap-3">
-                  <InfoField label="Client" value={review.client} />
-                  <InfoField label="Recovery type" value={review.recoveryType} />
-                  <InfoField label="Requester" value={`${isRndReview ? "R&D" : "TPM"} · ${review.tpm}`} />
-                  <InfoField label="Timeline" value={review.timeline} />
-                  <InfoField label="Tasks" value={String(review.tasks)} />
-                  <InfoField label="Phases" value={String(review.phases)} />
-                </div>
-              </Panel>
-              <Panel testid="overview-justification" title={`Justification from ${isRndReview ? "R&D" : "TPM"}`}>
-                <div className="text-sm text-zinc-200 leading-relaxed">{review.justification}</div>
-              </Panel>
-              <Panel testid="overview-breakdown" title="Budget breakdown">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <BreakdownCell icon={Cpu} label="AI Models" value={review.aiCost} color="#E619B8" />
-                  <BreakdownCell icon={Server} label="Infrastructure" value={review.infraCost} color="#3B82F6" />
-                  <BreakdownCell icon={Layers} label="Subscriptions" value={review.subsCost} color="#10B981" />
-                  <BreakdownCell icon={FileText} label="Miscellaneous" value={review.miscCost} color="#F59E0B" />
-                </div>
-              </Panel>
-              <Panel testid="overview-comparison" title="Estimated vs business requirement" subtitle="Prior baseline vs current ask">
-                <div className="grid grid-cols-3 gap-3 mb-4">
-                  <CompareBox label="Previous approved" value={currentBudget} />
-                  <CompareBox label={`${isRndReview ? "R&D" : "TPM"} requested`} value={requestedBudget} highlight="warning" />
-                  <CompareBox label="AI recommended" value={recommended} highlight="magenta" />
-                </div>
-                <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-300 leading-relaxed">
-                  <span className="text-fuchsia-200 font-semibold">Difference: </span>
-                  Requested budget is <span className="text-white font-semibold tabular">{fmtCurrency(requestedBudget - currentBudget, { compact: false })}</span>{" "}
-                  above the previously approved amount ({fmtPct(Math.round(((requestedBudget - currentBudget) / (currentBudget || 1)) * 100))} increase).
-                  AI recommends <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(recommended, { compact: false })}</span> — saving <span className="text-emerald-300 font-semibold tabular">{fmtCurrency(requestedBudget - recommended, { compact: false })}</span> via optimized model routing.
-                </div>
-              </Panel>
-              {priorModification && (
-                <Panel testid="overview-prior-mod" title="Your previous action" subtitle={`Status: ${priorModification.status?.replace(/-/g, " ")} · Total ${fmtCurrency(priorModification.modifiedTotal, { compact: false })}`}>
-                  <div className="text-xs text-zinc-300 leading-relaxed">
-                    Last updated <span className="text-white font-semibold tabular">{new Date(priorModification.ctoAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</span>.
-                    {priorModification.ctoComment && <div className="mt-1 text-zinc-400"><span className="text-fuchsia-300 font-semibold">Comment:</span> {priorModification.ctoComment}</div>}
-                  </div>
-                </Panel>
-              )}
-            </>
-          )}
+          {coreOverviewPanels}
 
           {tab === "modify" && (
             <>

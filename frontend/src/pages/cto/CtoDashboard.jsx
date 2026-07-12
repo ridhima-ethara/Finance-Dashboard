@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import { BUDGET_REVIEWS, CHANGE_REQUESTS } from "../../data/mockTpm";
@@ -27,7 +27,6 @@ import {
   Plus,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import { useState } from "react";
 import NewProjectDialog from "../../components/NewProjectDialog";
 import { summarizeLoggedProject } from "../../lib/projectMetrics";
 
@@ -83,6 +82,15 @@ const CtoDashboard = () => {
         })),
     [visibleProjects]
   );
+  const watchlistProjects = useMemo(
+    () => projectUsage
+      .filter(({ project, usage }) => project.health !== "healthy" || usage.utilization >= 85)
+      .sort((left, right) => right.usage.utilization - left.usage.utilization),
+    [projectUsage]
+  );
+  const scrollToMonitoring = () => {
+    document.getElementById("cto-project-monitoring")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="space-y-6" data-testid="page-cto-dashboard">
@@ -134,7 +142,12 @@ const CtoDashboard = () => {
           </div>
           <ChevronRight className="w-4 h-4 text-amber-300" />
         </Link>
-        <Link to="/monitoring" data-testid="cto-tile-highrisk" className="rounded-2xl border border-red-500/25 bg-red-500/[0.06] hover:bg-red-500/[0.10] transition-colors p-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={scrollToMonitoring}
+          data-testid="cto-tile-highrisk"
+          className="rounded-2xl border border-red-500/25 bg-red-500/[0.06] hover:bg-red-500/[0.10] transition-colors p-4 flex items-center gap-3 text-left"
+        >
           <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center flex-shrink-0">
             <AlertTriangle className="w-4 h-4 text-red-300" />
           </div>
@@ -143,7 +156,7 @@ const CtoDashboard = () => {
             <div className="text-white font-display font-semibold text-xl tabular">{highRisk}</div>
           </div>
           <ChevronRight className="w-4 h-4 text-red-300" />
-        </Link>
+        </button>
         <Link to="/projects" data-testid="cto-tile-overbudget" className="rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-colors p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
             <AlertTriangle className="w-4 h-4 text-zinc-300" />
@@ -166,8 +179,12 @@ const CtoDashboard = () => {
         <Stat label="Phases in flight" value={String(visibleProjects.reduce((s, p) => s + (p.phases?.filter((ph) => ph.health !== "healthy").length || 0), 0))} icon={Layers} testid="cto-kpi-phases" />
       </div>
 
-      {/* Project-wise utilization */}
-      <Panel testid="cto-util-bars" title="Project-wise utilization" subtitle="Logged spend as % of approved budget · click to drill in">
+      {/* Project monitoring */}
+      <Panel
+        testid="cto-util-bars"
+        title="Project monitoring snapshot"
+        subtitle="Logged spend as % of approved budget · click to drill into the live project"
+      >
         <div className="space-y-2.5">
           {projectUsage.map(({ project, usage }) => {
             const pct = project.approvedBudget ? Math.round((usage.loggedSpend / project.approvedBudget) * 100) : 0;
@@ -209,6 +226,64 @@ const CtoDashboard = () => {
         </div>
       </Panel>
 
+      <Panel
+        testid="cto-watchlist"
+        title="Projects needing attention"
+        subtitle="Project monitoring is consolidated here so CTO can track risk, logged burn, and delivery progress without a separate tab."
+      >
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {watchlistProjects.slice(0, 6).map(({ project, usage }) => {
+            const remainingBudget = Number(project.approvedBudget || 0) - usage.loggedSpend;
+            return (
+              <Link
+                key={project.id}
+                to={`/projects/${project.id}`}
+                className="rounded-xl border border-white/5 bg-white/[0.02] hover:border-fuchsia-500/25 p-4 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white truncate">{project.name}</div>
+                    <div className="text-[11px] text-zinc-500 mt-0.5">{project.client} · TPM {project.tpm}</div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                    usage.utilization >= 100
+                      ? "bg-red-500/15 text-red-300"
+                      : usage.utilization >= 90
+                        ? "bg-amber-500/15 text-amber-300"
+                        : "bg-fuchsia-500/15 text-fuchsia-300"
+                  }`}>
+                    {fmtPct(usage.utilization)}
+                  </span>
+                </div>
+                <div className="mt-3 grid grid-cols-3 gap-3 text-[11px]">
+                  <MonitorMetric label="Logged" value={fmtCurrency(usage.loggedSpend, { compact: false })} />
+                  <MonitorMetric label="Run rate" value={`${fmtCurrency(usage.runRate, { compact: false })}/day`} />
+                  <MonitorMetric
+                    label="Remaining"
+                    value={fmtCurrency(remainingBudget, { compact: false })}
+                    valueClass={remainingBudget >= 0 ? "text-emerald-300" : "text-red-300"}
+                  />
+                </div>
+                <div className="mt-3 h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+                  <div
+                    className={`h-full rounded-full ${usage.taskCompletion >= 100 ? "bg-emerald-500" : "bg-fuchsia-500"}`}
+                    style={{ width: `${Math.min(usage.taskCompletion, 100)}%` }}
+                  />
+                </div>
+                <div className="mt-1.5 text-[11px] text-zinc-500">
+                  {usage.loggedTasks.toLocaleString()} of {usage.targetTasks.toLocaleString()} target tasks logged
+                </div>
+              </Link>
+            );
+          })}
+          {watchlistProjects.length === 0 && (
+            <div className="lg:col-span-2 rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center text-xs text-zinc-500">
+              No projects are on watch right now.
+            </div>
+          )}
+        </div>
+      </Panel>
+
       {/* Comparison charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Panel testid="cto-cmp-est-actual" title="Budget vs Logged" subtitle="Per project · submitted budget vs logged usage">
@@ -245,7 +320,12 @@ const CtoDashboard = () => {
       </div>
 
       {/* Projects list */}
-      <Panel testid="cto-projects-list" title="Your projects" subtitle="TPM · client · logged usage · task completion">
+      <Panel
+        id="cto-project-monitoring"
+        testid="cto-projects-list"
+        title="Project monitoring"
+        subtitle="Logged usage, run rate, remaining budget, and delivery target for each active project."
+      >
         <div className="overflow-x-auto -mx-1">
           <table className="w-full text-sm">
             <thead>
@@ -256,6 +336,8 @@ const CtoDashboard = () => {
                 <th className="text-left py-2 px-3">Status</th>
                 <th className="text-right py-2 px-3">Approved</th>
                 <th className="text-right py-2 px-3">Logged</th>
+                <th className="text-right py-2 px-3">Run rate</th>
+                <th className="text-right py-2 px-3">Remaining</th>
                 <th className="text-right py-2 px-3">Task target</th>
                 <th className="text-right py-2 px-3">Done</th>
                 <th className="text-left py-2 px-3">Health</th>
@@ -276,6 +358,10 @@ const CtoDashboard = () => {
                     <td className="py-3 px-3 text-xs text-zinc-400">{project.status}</td>
                     <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(project.approvedBudget)}</td>
                     <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(usage.loggedSpend, { compact: false })}</td>
+                    <td className="py-3 px-3 text-right text-zinc-200 tabular">{fmtCurrency(usage.runRate, { compact: false })}/d</td>
+                    <td className={`py-3 px-3 text-right font-semibold tabular ${usage.remainingBudget >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+                      {fmtCurrency(usage.remainingBudget, { compact: false })}
+                    </td>
                     <td className="py-3 px-3 text-right text-zinc-200 tabular">{usage.targetTasks.toLocaleString()}</td>
                     <td className="py-3 px-3 text-right text-fuchsia-300 font-semibold tabular">{usage.loggedTasks.toLocaleString()}</td>
                     <td className="py-3 px-3">
@@ -303,8 +389,8 @@ const CtoDashboard = () => {
   );
 };
 
-const Panel = ({ title, subtitle, children, testid }) => (
-  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid={testid}>
+const Panel = ({ title, subtitle, children, testid, id }) => (
+  <div id={id} className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid={testid}>
     <div className="mb-3">
       <div className="font-display font-semibold text-[15px] text-white">{title}</div>
       {subtitle && <div className="text-xs text-zinc-500 mt-0.5">{subtitle}</div>}
@@ -329,5 +415,12 @@ const Stat = ({ label, value, icon: Icon, tone = "neutral", testid }) => {
     </div>
   );
 };
+
+const MonitorMetric = ({ label, value, valueClass = "text-white" }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className={`mt-1 text-sm font-semibold tabular ${valueClass}`}>{value}</div>
+  </div>
+);
 
 export default CtoDashboard;

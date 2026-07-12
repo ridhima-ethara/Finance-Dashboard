@@ -110,9 +110,108 @@ export const getPhaseTasks = (projectId, phaseId) => {
 
 // CHANGE REQUESTS — for CTO Review
 export const CHANGE_REQUESTS = [
-  { id: "cr1", projectId: "crowley-gen", projectName: "Crowley Generation", type: "Budget increase", amount: 6000, currentBudget: 48000, requestedBudget: 54000, requester: "Aanya Sharma", urgency: "High", stage: "CTO Review", createdAt: "2026-06-22T11:03:00Z", reason: "Opus 4.8 inference volumes 18% above plan for Phase 2. Extra sweep needed before rollout.", affectedPhase: "Phase 2 · Model tuning", expectedTasks: "240 expected tasks", timelineDelta: "+5 days" },
-  { id: "cr2", projectId: "atlas", projectName: "Atlas Ingest", type: "Timeline extension", amount: 3500, currentBudget: 11000, requestedBudget: 14500, requester: "Arjun Mehta", urgency: "Normal", stage: "CTO Review", createdAt: "2026-06-21T09:44:00Z", reason: "EC2 spike from Ironclad ingest workload up 34% week-over-week; extend sprint by 3 days.", affectedPhase: "Phase 3 · Integration", expectedTasks: "160 expected tasks", timelineDelta: "+3 days" },
-  { id: "cr3", projectId: "vesper", projectName: "Vesper Docker", type: "Budget increase", amount: 5000, currentBudget: 13000, requestedBudget: 18000, requester: "Aanya Sharma", urgency: "High", stage: "COO Approval", createdAt: "2026-06-20T15:11:00Z", reason: "Already 20% over budget. Client contract locked in; needs immediate top-up.", affectedPhase: "Phase 2 · Model tuning", expectedTasks: "90 expected tasks", timelineDelta: "0 days" },
+  {
+    id: "cr1",
+    projectId: "crowley-gen",
+    projectName: "Crowley Generation",
+    type: "Budget increase",
+    amount: 6000,
+    currentBudget: 48000,
+    requestedBudget: 54000,
+    requester: "Aanya Sharma",
+    urgency: "High",
+    stage: "CTO Review",
+    createdAt: "2026-06-22T11:03:00Z",
+    reason: "Opus 4.8 inference volumes 18% above plan for Phase 2. Extra sweep needed before rollout.",
+    affectedPhase: "Phase 2 · Model tuning",
+    expectedTasks: "240 expected tasks",
+    timelineDelta: "+5 days",
+    breakdown: {
+      models: {
+        amount: 3200,
+        optionLabel: "Claude Opus 4.8 · Anthropic",
+        note: "Extra inference sweep and fallback eval coverage before rollout.",
+      },
+      infra: {
+        amount: 1800,
+        optionLabel: "g5.2xlarge · GPU · 8 vCPU · 32 GiB",
+        note: "Short-lived GPU uplift for model tuning and testing.",
+      },
+      subs: {
+        amount: 1000,
+        optionLabel: "Scale QA Seats · $500/month",
+        note: "Two temporary monthly seats for evaluation and QA sign-off.",
+      },
+    },
+  },
+  {
+    id: "cr2",
+    projectId: "atlas",
+    projectName: "Atlas Ingest",
+    type: "Timeline extension",
+    amount: 3500,
+    currentBudget: 11000,
+    requestedBudget: 14500,
+    requester: "Arjun Mehta",
+    urgency: "Normal",
+    stage: "CTO Review",
+    createdAt: "2026-06-21T09:44:00Z",
+    reason: "EC2 spike from Ironclad ingest workload up 34% week-over-week; extend sprint by 3 days.",
+    affectedPhase: "Phase 3 · Integration",
+    expectedTasks: "160 expected tasks",
+    timelineDelta: "+3 days",
+    breakdown: {
+      models: {
+        amount: 1200,
+        optionLabel: "Claude Sonnet 4.6 · Anthropic",
+        note: "Reprocessing ingest validations after schema updates.",
+      },
+      infra: {
+        amount: 1700,
+        optionLabel: "m6i.2xlarge · General purpose · 8 vCPU · 32 GiB",
+        note: "Temporary compute scale-up while the backlog is cleared.",
+      },
+      subs: {
+        amount: 600,
+        optionLabel: "Datadog APM · $600/month",
+        note: "One-month observability uplift during the extended window.",
+      },
+    },
+  },
+  {
+    id: "cr3",
+    projectId: "vesper",
+    projectName: "Vesper Docker",
+    type: "Budget increase",
+    amount: 5000,
+    currentBudget: 13000,
+    requestedBudget: 18000,
+    requester: "Aanya Sharma",
+    urgency: "High",
+    stage: "CFO Review",
+    createdAt: "2026-06-20T15:11:00Z",
+    reason: "Already 20% over budget. Client contract locked in; needs immediate top-up.",
+    affectedPhase: "Phase 2 · Model tuning",
+    expectedTasks: "90 expected tasks",
+    timelineDelta: "0 days",
+    breakdown: {
+      models: {
+        amount: 2500,
+        optionLabel: "Claude Opus 4.8 · Anthropic",
+        note: "Additional production-volume prompt iterations requested by client.",
+      },
+      infra: {
+        amount: 2000,
+        optionLabel: "c7i.2xlarge · Compute optimized · 8 vCPU · 16 GiB",
+        note: "API and container throughput uplift for the locked delivery window.",
+      },
+      subs: {
+        amount: 500,
+        optionLabel: "GitHub Copilot Business · $25/month",
+        note: "Temporary team seats for the rework window.",
+      },
+    },
+  },
 ];
 
 // RETURNED_BUDGETS removed — per product decision, CTO can only Approve, Reject, or Edit-and-forward to CFO.

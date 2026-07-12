@@ -29,11 +29,8 @@ const NAV_CTO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/budget-reviews", label: "Budget Reviews", icon: ClipboardCheck, testid: "nav-budget-reviews" },
-  { to: "/monitoring", label: "Project Monitoring", icon: Activity, testid: "nav-monitoring" },
   { to: "/ai-cost", label: "AI Cost Analytics", icon: Zap, testid: "nav-ai-cost" },
   { to: "/change-requests", label: "Change Requests", icon: GitPullRequest, testid: "nav-change-requests" },
-  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
-  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/audit", label: "Audit Log", icon: ScrollText, testid: "nav-audit" },
 ];
 
