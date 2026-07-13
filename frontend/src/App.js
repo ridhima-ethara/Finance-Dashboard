@@ -19,7 +19,6 @@ import ModelKeys from "./pages/ModelKeys";
 import Daily from "./pages/Daily";
 import BudgetBuilder from "./pages/tpm/BudgetBuilder";
 import PhaseWorkspace from "./pages/tpm/PhaseWorkspace";
-import AiCost from "./pages/tpm/AiCost";
 import Consumption from "./pages/tpm/Consumption";
 import BudgetReviews from "./pages/cto/BudgetReviews";
 import BudgetReviewWorkspace from "./pages/cto/BudgetReviewWorkspace";
@@ -77,7 +76,6 @@ function App() {
               <Route path="/daily" element={<Daily />} />
               <Route path="/budget-builder" element={<BudgetBuilder />} />
               <Route path="/projects/:id/phase/:phaseId" element={<PhaseWorkspace />} />
-              <Route path="/ai-cost" element={<AiCost />} />
               <Route path="/consumption" element={<Consumption />} />
               <Route path="/budget-reviews" element={<BudgetReviews />} />
               <Route path="/budget-reviews/:id" element={<BudgetReviewWorkspace />} />
