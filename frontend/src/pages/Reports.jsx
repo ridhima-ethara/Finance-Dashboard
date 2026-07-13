@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { REPORTS_CATALOG } from "../data/mockTpm";
-import { fmtCurrency } from "../lib/format";
-import { downloadReportAs, getReportRows } from "../lib/reportGenerators";
+import { downloadReportAs } from "../lib/reportGenerators";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
 import { useApp } from "../context/AppContext";
@@ -47,11 +46,19 @@ const typeColors = {
 };
 
 const Reports = () => {
-  const { role } = useApp();
+  const { role, projects, taskLogs, batchDeliveries, itMonthlyActuals, modelKeyRecords } = useApp();
   const [typeFilter, setTypeFilter] = useState("all");
   const [freqFilter, setFreqFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+
+  const reportContext = useMemo(() => ({
+    projects,
+    taskLogs,
+    batchDeliveries,
+    itMonthlyActuals,
+    modelKeyRecords,
+  }), [projects, taskLogs, batchDeliveries, itMonthlyActuals, modelKeyRecords]);
 
   const types = ["all", ...Array.from(new Set(REPORTS_CATALOG.map((r) => r.type)))];
   const freqs = ["all", ...Array.from(new Set(REPORTS_CATALOG.map((r) => r.frequency)))];
@@ -67,21 +74,21 @@ const Reports = () => {
 
   const runReport = (r) => {
     const primary = r.format.split(" · ")[0];
-    const res = downloadReportAs(r, primary);
+    const res = downloadReportAs(r, primary, reportContext);
     toast.success(`${r.name} generated`, {
       description: `${res.rows} records · ${primary} · ${res.filename} downloaded`,
     });
   };
 
   const downloadReport = (r, format) => {
-    const res = downloadReportAs(r, format);
+    const res = downloadReportAs(r, format, reportContext);
     toast.success(`Downloading ${r.name}`, {
       description: `Format: ${format} · ${res.rows} rows · ${res.filename}`,
     });
   };
 
   const runAll = () => {
-    filtered.forEach((r) => downloadReportAs(r, r.format.split(" · ")[0]));
+    filtered.forEach((r) => downloadReportAs(r, r.format.split(" · ")[0], reportContext));
     toast.success("All reports generated", { description: `${filtered.length} files downloaded` });
   };
 

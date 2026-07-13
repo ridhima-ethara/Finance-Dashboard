@@ -341,7 +341,7 @@ const ProjectsTable = () => {
 };
 
 const PhaseDrawerContent = ({ project, phase }) => {
-  const { role, getPhaseLogs, deletePhaseTask, isTaskEditable, batchDeliveries } = useApp();
+  const { role, getPhaseLogs, deletePhaseTask, isTaskEditable, batchDeliveries, budgets, topupRequests, changeRequests } = useApp();
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
   const canEdit = isTPM; // Only TPM can edit/log
@@ -350,10 +350,29 @@ const PhaseDrawerContent = ({ project, phase }) => {
   const tpmLogs = getPhaseLogs(project.id, phase.id);
   const loggedCost = tpmLogs.reduce((sum, log) => sum + Number(log.cost || 0), 0);
   const loggedTasks = tpmLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0);
+  const loggedTrajectories = tpmLogs.reduce((sum, log) => sum + Number(log.trajectories || 0), 0);
   const loggedInputTokens = tpmLogs.reduce((sum, log) => sum + Number(log.inputTokens || 0), 0);
   const loggedOutputTokens = tpmLogs.reduce((sum, log) => sum + Number(log.outputTokens || 0), 0);
   const displaySpend = isCFO ? Number(phase.actual || 0) : loggedCost;
   const utilization = phase.estimated ? Math.round((displaySpend / phase.estimated) * 100) : 0;
+  const targetTasks = Number(phase.totalTasks || phase.tasks || tasks.length || 0);
+  const targetTrajectories = targetTasks * Number(phase.trajectoriesPerTask || 0);
+  const activeBudgetTrack = buildBudgetTracks(project, budgets).ordered[0]?.latest || null;
+  const trackPhase = activeBudgetTrack?.phases?.find((entry) => entry.id === phase.id || entry.name === phase.name) || null;
+  const submittedPhaseBudget = Number(trackPhase?.budget || phase.estimated || 0);
+  const plannedCostPerTask = targetTasks > 0 ? submittedPhaseBudget / targetTasks : 0;
+  const plannedCostPerTrajectory = targetTrajectories > 0 ? submittedPhaseBudget / targetTrajectories : 0;
+  const claimedPerTask = loggedTasks > 0 ? loggedCost / loggedTasks : 0;
+  const actualPerTask = (loggedTasks || targetTasks) > 0 ? displaySpend / (loggedTasks || targetTasks) : 0;
+  const actualPerTrajectory = (loggedTrajectories || targetTrajectories) > 0 ? displaySpend / (loggedTrajectories || targetTrajectories) : 0;
+  const phaseTopups = topupRequests.filter((request) => request.projectId === project.id && request.phaseId === phase.id);
+  const phaseChangeRequests = changeRequests.filter((request) => (
+    request.projectId === project.id
+      && (
+        request.phaseId === phase.id
+        || (request.affectedPhase || "").toLowerCase().includes(phase.name.toLowerCase())
+      )
+  ));
 
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
@@ -452,9 +471,36 @@ const PhaseDrawerContent = ({ project, phase }) => {
         <DrawerStat label="Budget" value={fmtCurrency(phase.estimated)} />
         <DrawerStat label={isCFO ? "Actual" : "Logged"} value={fmtCurrency(displaySpend)} tone="magenta" />
         <DrawerStat label="Utilization" value={fmtPct(utilization)} tone={utilization >= 100 ? "negative" : utilization >= 85 ? "warning" : "positive"} />
-        <DrawerStat label="Tasks done" value={`${loggedTasks}/${Number(phase.totalTasks || phase.tasks || tasks.length || 0)}`} />
+        <DrawerStat label="Tasks done" value={`${loggedTasks}/${targetTasks}`} />
         <DrawerStat label="Input tokens" value={loggedInputTokens.toLocaleString()} />
         <DrawerStat label="Output tokens" value={loggedOutputTokens.toLocaleString()} />
+      </div>
+
+      <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4" data-testid="drawer-submitted-budget-view">
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Submitted task budget view</div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <DrawerStat label="Target tasks" value={targetTasks.toLocaleString()} />
+            <DrawerStat label="Target trajectories" value={targetTrajectories.toLocaleString()} />
+            <DrawerStat label="Cost / task" value={targetTasks > 0 ? fmtCurrency(plannedCostPerTask, { compact: false }) : "—"} tone="magenta" />
+            <DrawerStat label="Cost / trajectory" value={targetTrajectories > 0 ? fmtCurrency(plannedCostPerTrajectory, { compact: false }) : "—"} tone="magenta" />
+            <DrawerStat label="Claimed / task" value={loggedTasks > 0 ? fmtCurrency(claimedPerTask, { compact: false }) : "—"} />
+            <DrawerStat label="Actual / task" value={(loggedTasks || targetTasks) > 0 ? fmtCurrency(actualPerTask, { compact: false }) : "—"} tone={isCFO ? "warning" : "neutral"} />
+          </div>
+          <div className="mt-3 text-[11px] text-zinc-500">
+            Submitted budget {activeBudgetTrack?.budgetType ? `· ${activeBudgetTrack.budgetType}` : ""} {activeBudgetTrack?.submittedAt ? `· ${new Date(activeBudgetTrack.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4" data-testid="drawer-budget-related-detail">
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Budget-related detail</div>
+          <div className="mt-3 space-y-2 text-sm">
+            <BudgetActivityRow label="Phase budget" value={fmtCurrency(submittedPhaseBudget, { compact: false })} />
+            <BudgetActivityRow label="Actual / trajectory" value={(loggedTrajectories || targetTrajectories) > 0 ? fmtCurrency(actualPerTrajectory, { compact: false }) : "—"} />
+            <BudgetActivityRow label="Top-up requests" value={`${phaseTopups.length} · ${fmtCurrency(phaseTopups.reduce((sum, request) => sum + Number(request.cfoDecision?.amount || request.amount || 0), 0), { compact: false })}`} />
+            <BudgetActivityRow label="Change requests" value={`${phaseChangeRequests.length} · ${fmtCurrency(phaseChangeRequests.reduce((sum, request) => sum + Number(request.finalDecision?.amount || request.amount || 0), 0), { compact: false })}`} />
+            <BudgetActivityRow label="Delivery status" value={delivery ? delivery.status.replace(/-/g, " ") : "Not delivered"} />
+          </div>
+        </div>
       </div>
 
       {/* TPM logged tasks & Planned tasks sections removed per product spec — surfaced via Daily consumption below */}
@@ -474,14 +520,16 @@ const PhaseDrawerContent = ({ project, phase }) => {
                   <th className="text-left py-2 px-2">Task</th>
                   <th className="text-left py-2 px-2">Model</th>
                   <th className="text-right py-2 px-2">Tasks done</th>
+                  <th className="text-right py-2 px-2">Traj.</th>
                   <th className="text-right py-2 px-2">Est. cost</th>
+                  <th className="text-right py-2 px-2">Cost / task</th>
                   <th className="text-right py-2 px-2">Tokens</th>
                   <th className="w-6"></th>
                 </tr>
               </thead>
               <tbody>
                 {tpmLogs.length === 0 ? (
-                  <tr><td colSpan="7" className="py-4 text-center text-zinc-500">
+                  <tr><td colSpan="9" className="py-4 text-center text-zinc-500">
                     {isTPM ? "No tasks logged yet — use Log daily task above." : "No TPM logs for this phase yet."}
                   </td></tr>
                 ) : tpmLogs.map((log) => {
@@ -489,6 +537,7 @@ const PhaseDrawerContent = ({ project, phase }) => {
                   const modelLabel = Array.isArray(log.modelUsage) && log.modelUsage.length
                     ? log.modelUsage.map((usage) => usage.modelName).join(", ")
                     : log.modelName || "—";
+                  const logCostPerTask = Number(log.tasksDone || 0) > 0 ? Number(log.cost || 0) / Number(log.tasksDone || 0) : 0;
                   return (
                     <tr key={log.id} data-testid={`daily-log-${log.id}`} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.03]">
                       <td className="py-2 px-2 text-white tabular whitespace-nowrap">
@@ -500,7 +549,9 @@ const PhaseDrawerContent = ({ project, phase }) => {
                       </td>
                       <td className="py-2 px-2 text-[11px] text-zinc-300">{modelLabel}</td>
                       <td className="py-2 px-2 text-right tabular text-white font-semibold">{Number(log.tasksDone || 0).toLocaleString()}</td>
+                      <td className="py-2 px-2 text-right tabular text-zinc-300">{Number(log.trajectories || 0).toLocaleString()}</td>
                       <td className="py-2 px-2 text-right tabular text-fuchsia-300 font-semibold">{fmtCurrency(log.cost, { compact: false })}</td>
+                      <td className="py-2 px-2 text-right tabular text-zinc-200">{log.tasksDone ? fmtCurrency(logCostPerTask, { compact: false }) : "—"}</td>
                       <td className="py-2 px-2 text-right tabular text-zinc-300">
                         {(Number(log.inputTokens || 0) + Number(log.outputTokens || 0)).toLocaleString()}
                       </td>
@@ -572,5 +623,12 @@ const DrawerStat = ({ label, value, tone = "neutral" }) => {
     </div>
   );
 };
+
+const BudgetActivityRow = ({ label, value }) => (
+  <div className="flex items-center justify-between gap-3">
+    <span className="text-zinc-400">{label}</span>
+    <span className="text-white font-semibold tabular text-right">{value}</span>
+  </div>
+);
 
 export default ProjectsTable;

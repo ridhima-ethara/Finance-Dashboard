@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import { Button } from "../../components/ui/button";
@@ -17,6 +18,7 @@ const statusMap = {
 
 const CfoBatchDeliveries = () => {
   const { batchDeliveries, recordActualRecovery, role } = useApp();
+  const [searchParams] = useSearchParams();
   const [drafts, setDrafts] = useState({}); // { [id]: { amount, note } }
   const [filter, setFilter] = useState("all");
   const financeDeliveries = useMemo(
@@ -39,6 +41,12 @@ const CfoBatchDeliveries = () => {
   }, [filter, financeDeliveries]);
 
   const setDraft = (id, key, val) => setDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), [key]: val } }));
+  useEffect(() => {
+    const requestedFilter = searchParams.get("filter");
+    if (requestedFilter && ["all", "pending", "recovered"].includes(requestedFilter)) {
+      setFilter(requestedFilter);
+    }
+  }, [searchParams]);
   const save = (d) => {
     const draft = drafts[d.id] || {};
     const amt = draft.amount != null ? Number(draft.amount) : d.actualRecovered ?? d.proposedAmount;

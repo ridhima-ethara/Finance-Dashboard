@@ -20,15 +20,22 @@ import { Link } from "react-router-dom";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 import TpmDashboard from "./tpm/TpmDashboard";
 import CtoDashboard from "./cto/CtoDashboard";
-import { BUDGET_REVIEWS, CHANGE_REQUESTS } from "../data/mockTpm";
-import { PROJECTS } from "../data/mockProjects";
-import { BUFFER, RECOVERY } from "../data/mockCfo";
 import { fmtCurrency, fmtPct } from "../lib/format";
 import { summarizeLoggedProject } from "../lib/projectMetrics";
 import ItDashboard from "./it/ItDashboard";
 
 const Dashboard = () => {
-  const { role, scope, visibleProjects, batchDeliveries } = useApp();
+  const {
+    role,
+    scope,
+    visibleProjects,
+    batchDeliveries,
+    topupRequests,
+    budgetReviews,
+    changeRequests,
+    bufferOverview,
+    projects,
+  } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
   const isPL = role === "PL";
   const isCTO = role === "CTO";
@@ -46,12 +53,16 @@ const Dashboard = () => {
   if (role === "IT") return <ItDashboard />;
   if (!isCFO) return <LeadDashboardView />;
 
-  const pendingReviews = BUDGET_REVIEWS.filter((r) => r.stage === "CTO Review").length;
-  const pendingCRs = CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length;
-  const highRisk = PROJECTS.filter((p) => p.utilization >= 90).length;
-  const overBudget = PROJECTS.filter((p) => p.utilization >= 100).length;
-  const bufferUtil = Math.round((BUFFER.consumed / BUFFER.total) * 100);
-  const pendingTopups = 3;
+  const pendingBudgetApprovals = budgetReviews.filter((review) => review.status === "forwarded-cfo").length;
+  const pendingCRs = changeRequests.filter((request) => request.stage === "CFO Review").length;
+  const highRisk = projects.filter((project) => project.utilization >= 90).length;
+  const overBudget = projects.filter((project) => project.utilization >= 100).length;
+  const bufferUtil = bufferOverview.total > 0 ? Math.round((bufferOverview.consumed / bufferOverview.total) * 100) : 0;
+  const pendingTopups = topupRequests.filter((request) => request.status === "pending-cfo").length;
+  const pendingReviews = pendingBudgetApprovals + pendingTopups + pendingCRs;
+  const outstandingRecovery = projects
+    .filter((project) => project.recoverableFromClient)
+    .reduce((sum, project) => sum + Math.max(0, Number(project.actualSpend || 0) - Number(project.recoveredAmount || 0)), 0);
 
 
   return (
@@ -172,7 +183,7 @@ const Dashboard = () => {
       {/* CFO alert strip — approval queue, top-ups, recovery, buffer, batch deliveries */}
       {isCFO && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3" data-testid="cfo-alert-strip">
-          <Link to="/approval-queue" data-testid="cfo-tile-queue" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.10] transition-colors p-4 flex items-center gap-3">
+          <Link to="/approval-queue?status=Pending" data-testid="cfo-tile-queue" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.10] transition-colors p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
               <ClipboardCheck className="w-4 h-4 text-emerald-300" />
             </div>
@@ -182,7 +193,7 @@ const Dashboard = () => {
             </div>
             <ChevronRight className="w-4 h-4 text-emerald-300" />
           </Link>
-          <Link to="/approval-queue" data-testid="cfo-tile-topups" className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] hover:bg-amber-500/[0.10] transition-colors p-4 flex items-center gap-3">
+          <Link to="/approval-queue?type=Top-up&status=Pending" data-testid="cfo-tile-topups" className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] hover:bg-amber-500/[0.10] transition-colors p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
               <ArrowUpRightSquare className="w-4 h-4 text-amber-300" />
             </div>
@@ -198,7 +209,7 @@ const Dashboard = () => {
             </div>
             <div className="flex-1 min-w-0">
               <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Outstanding recovery</div>
-              <div className="text-white font-display font-semibold text-xl tabular">{fmtCurrency(RECOVERY.outstanding)}</div>
+              <div className="text-white font-display font-semibold text-xl tabular">{fmtCurrency(outstandingRecovery)}</div>
             </div>
             <ChevronRight className="w-4 h-4 text-fuchsia-300" />
           </Link>
@@ -212,7 +223,7 @@ const Dashboard = () => {
             </div>
             <ChevronRight className="w-4 h-4 text-zinc-400" />
           </Link>
-          <Link to="/batch-deliveries" data-testid="cfo-tile-batches" className="rounded-2xl border border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.10] transition-colors p-4 flex items-center gap-3 relative">
+          <Link to="/batch-deliveries?filter=pending" data-testid="cfo-tile-batches" className="rounded-2xl border border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.10] transition-colors p-4 flex items-center gap-3 relative">
             <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center flex-shrink-0">
               <PackageCheck className="w-4 h-4 text-sky-300" />
             </div>

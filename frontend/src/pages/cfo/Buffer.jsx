@@ -1,8 +1,8 @@
 import { useState, useMemo, Fragment } from "react";
-import { BUFFER } from "../../data/mockCfo";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
+import { useApp } from "../../context/AppContext";
 import {
   ShieldCheck,
   Lock,
@@ -19,10 +19,10 @@ import {
 } from "lucide-react";
 
 // Build lifecycle rows for each buffer-using project (initial → requested → approved → consumed → remaining).
-const buildLifecycle = () =>
-  BUFFER.perProject.map((p) => {
+const buildLifecycle = (perProject, policyPct) =>
+  perProject.map((p) => {
     const projectBudget = p.approved; // project's approved budget
-    const initial = Math.round(projectBudget * 0.05); // Initial approved buffer (5% policy baseline)
+    const initial = Math.round(projectBudget * ((policyPct || 0) / 100));
     const additionalRequested = Math.max(0, p.allocated - initial + (p.status === "critical" ? Math.round(projectBudget * 0.03) : p.status === "using" ? Math.round(projectBudget * 0.02) : 0));
     const bufferApproved = p.allocated; // total buffer approved for the project
     const consumed = p.consumed;
@@ -31,41 +31,40 @@ const buildLifecycle = () =>
   });
 
 const Buffer = () => {
-  const [total, setTotal] = useState(BUFFER.total);
-  const [available, setAvailable] = useState(BUFFER.available);
+  const { bufferOverview, applyBufferAction } = useApp();
   const [pct, setPct] = useState(5); // percentage input
-  const [selectedProject, setSelectedProject] = useState(BUFFER.perProject[0]?.id || "");
+  const [selectedProject, setSelectedProject] = useState(bufferOverview.perProject[0]?.id || "");
   const [expanded, setExpanded] = useState({});
 
+  const total = bufferOverview.total;
+  const available = bufferOverview.available;
   const consumed = total - available;
   const utilizationPct = total ? Math.round((consumed / total) * 100) : 0;
-  const proj = BUFFER.perProject.find((p) => p.id === selectedProject);
+  const proj = bufferOverview.perProject.find((p) => p.id === selectedProject);
   // Amount computed from % of pool for pool-level actions, and of project approved budget for project-level actions
   const amountFromPct = Math.round((total * pct) / 100);
   const amountFromPctProject = proj ? Math.round((proj.approved * pct) / 100) : 0;
 
-  const lifecycle = useMemo(buildLifecycle, []);
+  const lifecycle = useMemo(() => buildLifecycle(bufferOverview.perProject, bufferOverview.policyPct), [bufferOverview]);
 
   const validPct = (v) => v > 0 && v <= 100;
 
   const increase = () => {
     if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
-    setTotal((t) => t + amountFromPct);
-    setAvailable((a) => a + amountFromPct);
+    applyBufferAction({ pct, action: "increase-pool" });
     toast.success("Buffer pool increased", { description: `+${pct}% of pool · ${fmtCurrency(amountFromPct, { compact: false })} · new total ${fmtCurrency(total + amountFromPct)}` });
   };
   const reduce = () => {
     if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
     if (amountFromPct > available) { toast.error("Cannot reduce beyond available buffer"); return; }
-    setTotal((t) => t - amountFromPct);
-    setAvailable((a) => a - amountFromPct);
+    applyBufferAction({ pct, action: "reduce-pool" });
     toast.success("Buffer pool reduced", { description: `−${pct}% · ${fmtCurrency(amountFromPct, { compact: false })}` });
   };
   const allocate = () => {
     if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
     if (!proj) { toast.error("Select a project"); return; }
     if (amountFromPctProject > available) { toast.error("Amount exceeds available pool"); return; }
-    setAvailable((a) => a - amountFromPctProject);
+    applyBufferAction({ projectId: proj.id, pct, action: "allocate-project" });
     toast.success("Buffer allocated (hidden)", {
       description: `${proj.name} · +${pct}% of approved (${fmtCurrency(amountFromPctProject, { compact: false })}) · not visible to TPM/CTO`,
     });
@@ -73,7 +72,7 @@ const Buffer = () => {
   const release = () => {
     if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
     if (!proj) { toast.error("Select a project"); return; }
-    setAvailable((a) => a + amountFromPctProject);
+    applyBufferAction({ projectId: proj.id, pct, action: "release-project" });
     toast.success("Buffer released back to pool", { description: `${proj.name} · +${fmtCurrency(amountFromPctProject, { compact: false })} freed` });
   };
 
@@ -112,13 +111,13 @@ const Buffer = () => {
         </div>
 
         <Stat label="Utilization" value={fmtPct(utilizationPct)} sub={`${fmtCurrency(consumed)} used`} icon={TrendingUp} tone={utilizationPct > 75 ? "warning" : "positive"} testid="buffer-util" />
-        <Stat label="Policy" value={`${BUFFER.policyPct}%`} sub="Auto-reserved per project" icon={ShieldCheck} testid="buffer-policy" />
+        <Stat label="Policy" value={`${bufferOverview.policyPct}%`} sub="Auto-reserved per project" icon={ShieldCheck} testid="buffer-policy" />
       </div>
 
       {/* Alerts */}
-      {BUFFER.alerts.length > 0 && (
+      {bufferOverview.alerts.length > 0 && (
         <div className="space-y-2" data-testid="buffer-alerts">
-          {BUFFER.alerts.map((a) => (
+          {bufferOverview.alerts.map((a) => (
             <div
               key={a.id}
               data-testid={`alert-${a.id}`}
@@ -145,6 +144,24 @@ const Buffer = () => {
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project (for allocate/release)</div>
+            <select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              data-testid="buffer-project"
+              className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+            >
+              {bufferOverview.perProject.map((p) => (
+                <option key={p.id} value={p.id}>{p.name} · approved {fmtCurrency(p.approved)}</option>
+              ))}
+            </select>
+            {proj && (
+              <div className="mt-2 text-[11px] text-zinc-500">
+                Current buffer allocated: <span className="text-white tabular">{fmtCurrency(proj.allocated, { compact: false })}</span> ({Math.round((proj.allocated / proj.approved) * 100)}% of approved)
+              </div>
+            )}
+          </div>
           <div>
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Allocation percentage</div>
             <div className="relative">
@@ -176,24 +193,6 @@ const Buffer = () => {
               <span>Pool amount: <span className="text-fuchsia-300 font-semibold">{fmtCurrency(amountFromPct, { compact: false })}</span></span>
               <span>Project amount: <span className="text-fuchsia-300 font-semibold">{fmtCurrency(amountFromPctProject, { compact: false })}</span></span>
             </div>
-          </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project (for allocate/release)</div>
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              data-testid="buffer-project"
-              className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-            >
-              {BUFFER.perProject.map((p) => (
-                <option key={p.id} value={p.id}>{p.name} · approved {fmtCurrency(p.approved)}</option>
-              ))}
-            </select>
-            {proj && (
-              <div className="mt-2 text-[11px] text-zinc-500">
-                Current buffer allocated: <span className="text-white tabular">{fmtCurrency(proj.allocated, { compact: false })}</span> ({Math.round((proj.allocated / proj.approved) * 100)}% of approved)
-              </div>
-            )}
           </div>
         </div>
 

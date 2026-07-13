@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { useState, useMemo, useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { BUDGET_REVIEWS, CHANGE_REQUESTS } from "../../data/mockTpm";
 import { useApp } from "../../context/AppContext";
 import {
@@ -21,12 +21,36 @@ const topupStatusLabel = (status) => {
   }
 };
 
-// Merge budget reviews + top-up requests into one unified queue
-const buildQueue = (topupRequests) => {
+const budgetStatusLabel = (review) => {
+  if (review.status === "approved") return "Approved";
+  if (review.status === "partial") return "Partially Approved";
+  if (review.status === "rejected" || review.status === "rejected-by-cto") return "Rejected";
+  if (review.status === "returned" || review.status === "returned-to-tpm") return "Changes Required";
+  if (review.status === "forwarded-cfo" || review.stage === "CFO Review" || review.stage === "COO Approval") return "Pending";
+  return "CTO Review";
+};
+
+const changeRequestStatusLabel = (request) => {
+  if (request.status === "approved" || request.stage === "Approved") return "Approved";
+  if (request.status === "partial") return "Partially Approved";
+  if (request.status === "rejected" || request.stage === "Rejected") return "Rejected";
+  if (request.status === "returned") return "Changes Required";
+  return request.stage === "CTO Review" ? "CTO Review" : "Pending";
+};
+
+// Merge budget reviews + top-up requests + change requests into one unified queue
+const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
   const items = [];
   let seq = 100;
-  // Budget requests
-  BUDGET_REVIEWS.forEach((r) => {
+  const mergedBudgetReviews = BUDGET_REVIEWS.map((seed) => {
+    const live = budgetReviews.find((review) => review.id === seed.id);
+    return live ? { ...seed, ...live } : seed;
+  });
+  budgetReviews
+    .filter((review) => !mergedBudgetReviews.some((entry) => entry.id === review.id))
+    .forEach((review) => mergedBudgetReviews.push(review));
+
+  mergedBudgetReviews.forEach((r) => {
     seq += 1;
     items.push({
       id: r.id,
@@ -39,7 +63,7 @@ const buildQueue = (topupRequests) => {
       raisedBy: r.tpm,
       raisedRole: "CTO",
       raisedDate: new Date(r.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      status: r.stage === "CTO Review" ? "Pending" : r.stage === "COO Approval" ? "CTO Review" : r.stage,
+      status: budgetStatusLabel(r),
       amount: r.requestedBudget,
       raw: r,
     });
@@ -63,20 +87,28 @@ const buildQueue = (topupRequests) => {
       raw: r,
     });
   });
-  CHANGE_REQUESTS.forEach((request) => {
+  const mergedChangeRequests = CHANGE_REQUESTS.map((seed) => {
+    const live = changeRequests.find((request) => request.id === seed.id);
+    return live ? { ...seed, ...live } : seed;
+  });
+  changeRequests
+    .filter((request) => !mergedChangeRequests.some((entry) => entry.id === request.id))
+    .forEach((request) => mergedChangeRequests.push(request));
+
+  mergedChangeRequests.forEach((request) => {
     seq += 1;
     items.push({
       id: request.id,
-      href: "/change-requests",
+      href: `/approval-queue/change-request/${request.id}`,
       requestId: `CRQ/2026/00${seq}`,
       type: "Change Request",
       title: request.type,
       project: request.projectName,
-      subLabel: request.affectedPhase,
+      subLabel: request.affectedPhase || request.expectedTasks,
       raisedBy: request.requester,
       raisedRole: "TPM",
       raisedDate: new Date(request.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-      status: request.stage === "approved" ? "Approved" : request.stage === "rejected" ? "Rejected" : "Pending",
+      status: changeRequestStatusLabel(request),
       amount: request.amount,
       raw: request,
     });
@@ -85,11 +117,6 @@ const buildQueue = (topupRequests) => {
 };
 
 const typeIcons = { Budget: FileText, "Top-up": ArrowUpRightSquare, "Change Request": GitPullRequest };
-const typeChip = {
-  Budget: "bg-indigo-100 text-indigo-800 dark:bg-fuchsia-500/15 dark:text-fuchsia-200",
-  "Top-up": "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-200",
-  "Change Request": "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-200",
-};
 const statusChip = {
   Pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   "CTO Review": "bg-amber-500/15 text-amber-300 border-amber-500/30",
@@ -106,10 +133,18 @@ const rowTint = {
 };
 
 const ApprovalQueue = () => {
-  const { topupRequests } = useApp();
-  const queue = useMemo(() => buildQueue(topupRequests), [topupRequests]);
+  const { topupRequests, budgetReviews, changeRequests } = useApp();
+  const [searchParams] = useSearchParams();
+  const queue = useMemo(() => buildQueue(budgetReviews, topupRequests, changeRequests), [budgetReviews, topupRequests, changeRequests]);
   const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
+
+  useEffect(() => {
+    const type = searchParams.get("type");
+    const status = searchParams.get("status");
+    setTypeFilter(type && ["Budget", "Top-up", "Change Request"].includes(type) ? type : "All");
+    setStatusFilter(status && ["Pending", "Approved", "Rejected"].includes(status) ? status : "All");
+  }, [searchParams]);
 
   const typeCounts = useMemo(() => {
     return {
@@ -123,7 +158,7 @@ const ApprovalQueue = () => {
   const filtered = queue.filter((q) => {
     if (typeFilter !== "All" && q.type !== typeFilter) return false;
     if (statusFilter !== "All") {
-      if (statusFilter === "Pending" && !["Pending", "CTO Review"].includes(q.status)) return false;
+      if (statusFilter === "Pending" && q.status !== "Pending") return false;
       if (statusFilter === "Approved" && !["Approved", "Partially Approved"].includes(q.status)) return false;
       if (statusFilter === "Rejected" && !["Rejected", "Changes Required"].includes(q.status)) return false;
     }

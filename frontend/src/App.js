@@ -27,6 +27,7 @@ import ChangeRequests from "./pages/cto/ChangeRequests";
 import ProjectMonitoring from "./pages/cto/ProjectMonitoring";
 import ApprovalQueue from "./pages/cfo/ApprovalQueue";
 import ApprovalDetail from "./pages/cfo/ApprovalDetail";
+import ChangeRequestDetail from "./pages/cfo/ChangeRequestDetail";
 import TopupRequestDetail from "./pages/TopupRequestDetail";
 import CfoBatchDeliveries from "./pages/cfo/BatchDeliveries";
 import FinancialMonitoring from "./pages/cfo/FinancialMonitoring";
@@ -84,6 +85,7 @@ function App() {
               <Route path="/monitoring" element={<ProjectMonitoring />} />
               <Route path="/approval-queue" element={<ApprovalQueue />} />
               <Route path="/approval-queue/:id" element={<ApprovalDetail />} />
+              <Route path="/approval-queue/change-request/:id" element={<ChangeRequestDetail />} />
               <Route path="/topup-requests/:id" element={<TopupRequestDetail />} />
               <Route path="/batch-deliveries" element={<CfoBatchDeliveries />} />
               <Route path="/financial-monitoring" element={<FinancialMonitoring />} />

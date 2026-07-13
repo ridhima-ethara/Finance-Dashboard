@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { USERS, ROLES, PROJECTS } from "../data/mockData";
-import { BUDGET_REVIEWS } from "../data/mockTpm";
+import { BUDGET_REVIEWS, CHANGE_REQUESTS } from "../data/mockTpm";
 import { TEAM } from "../data/mockUsers";
 import { BEDROCK_MODELS } from "../data/mockCatalog";
 import { MODEL_KEYS } from "../data/mockAi";
+import { BUFFER } from "../data/mockCfo";
 import { formatBudgetTypeLabel, normalizeBudgetType } from "../lib/projectMetrics";
 
 const AppContext = createContext(null);
@@ -16,9 +17,12 @@ const TOPUP_REQ_KEY = "ethara.topupRequests.v1";
 const BUDGETS_KEY = "ethara.budgets.v1";
 const BATCH_DELIVERIES_KEY = "ethara.batchDeliveries.v1";
 const BUDGET_REVIEWS_KEY = "ethara.budgetReviews.v1";
+const CHANGE_REQUESTS_KEY = "ethara.changeRequests.v1";
 const TEAM_REMOVALS_KEY = "ethara.teamRemovals.v1";
 const MODEL_KEYS_KEY = "ethara.modelKeys.v1";
 const IT_PROVISIONING_KEY = "ethara.itProvisioning.v1";
+const BUFFER_POOL_KEY = "ethara.bufferPool.v1";
+const IT_MONTHLY_ACTUALS_KEY = "ethara.itMonthlyActuals.v1";
 
 const readJSON = (key, fallback) => {
   try {
@@ -115,6 +119,26 @@ const summarizeRequestedLines = (items = {}, fallbackProject) => {
   };
 };
 
+const normalizeChangeRequestStatus = (request) => {
+  if (request?.status) return request.status;
+  if (request?.stage === "Approved") return "approved";
+  if (request?.stage === "Rejected") return "rejected";
+  return "pending";
+};
+
+const normalizeChangeRequest = (request) => ({
+  ...request,
+  status: normalizeChangeRequestStatus(request),
+  history: Array.isArray(request?.history) && request.history.length
+    ? request.history
+    : [{
+        at: request?.createdAt || new Date().toISOString(),
+        actor: `${request?.requester || "TPM"} · TPM`,
+        action: "Submitted change request",
+        detail: `${request?.type || "Change request"} · $${Number(request?.amount || 0).toLocaleString()}`,
+      }],
+});
+
 // Seed a couple of demo top-up requests so CTO/CFO have items to act on
 const seedTopupRequests = () => {
   const now = Date.now();
@@ -175,6 +199,14 @@ export const AppProvider = ({ children }) => {
   const [scope, setScope] = useState("all");
 
   const [buffers, setBuffers] = useState(() => readJSON(BUFFERS_KEY, {}));
+  const [bufferPool, setBufferPool] = useState(() => readJSON(BUFFER_POOL_KEY, {
+    total: BUFFER.total,
+    available: BUFFER.available,
+    policyPct: BUFFER.policyPct,
+    history: BUFFER.history,
+    alerts: BUFFER.alerts,
+    projectConsumed: Object.fromEntries(BUFFER.perProject.map((entry) => [entry.id, entry.consumed])),
+  }));
   const [recoveries, setRecoveries] = useState(() => readJSON(RECOVERY_KEY, {}));
   const [customProjects, setCustomProjects] = useState(() => readJSON(CUSTOM_PROJECTS_KEY, []));
   const [taskLogs, setTaskLogs] = useState(() => readJSON(TASK_LOGS_KEY, {}));
@@ -185,6 +217,11 @@ export const AppProvider = ({ children }) => {
   const [budgets, setBudgets] = useState(() => readJSON(BUDGETS_KEY, []));
   const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, []));
   const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, []));
+  const [changeRequests, setChangeRequests] = useState(() => {
+    const stored = readJSON(CHANGE_REQUESTS_KEY, null);
+    const source = stored && Array.isArray(stored) ? stored : CHANGE_REQUESTS;
+    return source.map(normalizeChangeRequest);
+  });
   const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, {}));
   const [modelKeyRecords, setModelKeyRecords] = useState(() =>
     readJSON(MODEL_KEYS_KEY, MODEL_KEYS.map((entry) => ({
@@ -194,12 +231,14 @@ export const AppProvider = ({ children }) => {
     })))
   );
   const [itProvisioningRequests, setItProvisioningRequests] = useState(() => readJSON(IT_PROVISIONING_KEY, []));
+  const [itMonthlyActuals, setItMonthlyActuals] = useState(() => readJSON(IT_MONTHLY_ACTUALS_KEY, {}));
 
   useEffect(() => {
     if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     else localStorage.removeItem(SESSION_KEY);
   }, [user]);
   useEffect(() => localStorage.setItem(BUFFERS_KEY, JSON.stringify(buffers)), [buffers]);
+  useEffect(() => localStorage.setItem(BUFFER_POOL_KEY, JSON.stringify(bufferPool)), [bufferPool]);
   useEffect(() => localStorage.setItem(RECOVERY_KEY, JSON.stringify(recoveries)), [recoveries]);
   useEffect(() => localStorage.setItem(CUSTOM_PROJECTS_KEY, JSON.stringify(customProjects)), [customProjects]);
   useEffect(() => localStorage.setItem(TASK_LOGS_KEY, JSON.stringify(taskLogs)), [taskLogs]);
@@ -207,9 +246,11 @@ export const AppProvider = ({ children }) => {
   useEffect(() => localStorage.setItem(BUDGETS_KEY, JSON.stringify(budgets)), [budgets]);
   useEffect(() => localStorage.setItem(BATCH_DELIVERIES_KEY, JSON.stringify(batchDeliveries)), [batchDeliveries]);
   useEffect(() => localStorage.setItem(BUDGET_REVIEWS_KEY, JSON.stringify(budgetReviews)), [budgetReviews]);
+  useEffect(() => localStorage.setItem(CHANGE_REQUESTS_KEY, JSON.stringify(changeRequests)), [changeRequests]);
   useEffect(() => localStorage.setItem(TEAM_REMOVALS_KEY, JSON.stringify(teamRemovals)), [teamRemovals]);
   useEffect(() => localStorage.setItem(MODEL_KEYS_KEY, JSON.stringify(modelKeyRecords)), [modelKeyRecords]);
   useEffect(() => localStorage.setItem(IT_PROVISIONING_KEY, JSON.stringify(itProvisioningRequests)), [itProvisioningRequests]);
+  useEffect(() => localStorage.setItem(IT_MONTHLY_ACTUALS_KEY, JSON.stringify(itMonthlyActuals)), [itMonthlyActuals]);
 
   const login = ({ email, password, role }) => {
     if (role) {
@@ -229,7 +270,7 @@ export const AppProvider = ({ children }) => {
   };
   const logout = () => setUser(null);
 
-  // Merge overrides + apply approved top-ups (partial or full) into project budgets
+  // Merge overrides + apply approved top-ups / change requests into project budgets
   const projects = useMemo(() => {
     const baseIds = new Set(PROJECTS.map((project) => project.id));
     const overrides = new Map(customProjects.map((project) => [project.id, project]));
@@ -248,18 +289,58 @@ export const AppProvider = ({ children }) => {
         finalizedByProject[r.projectId] = (finalizedByProject[r.projectId] || 0) + r.cfoDecision.amount;
       }
     });
+    const finalizedChangesByProject = {};
+    changeRequests.forEach((request) => {
+      const finalAmount = Number(
+        request.finalDecision?.amount
+        ?? request.cfoDecision?.amount
+        ?? request.ctoDecision?.amount
+        ?? request.amount
+        ?? 0
+      );
+      if ((request.stage === "Approved" || request.status === "approved" || request.status === "partial") && finalAmount) {
+        finalizedChangesByProject[request.projectId] = (finalizedChangesByProject[request.projectId] || 0) + finalAmount;
+      }
+    });
+    const recoveryByProject = {};
+    const recoveryWindows = {};
+    batchDeliveries
+      .filter((delivery) => delivery.stage !== "rnd-review")
+      .forEach((delivery) => {
+        const actual = Number(delivery.actualRecovered || 0);
+        const proposed = Number(delivery.proposedAmount || 0);
+        recoveryByProject[delivery.projectId] = (recoveryByProject[delivery.projectId] || 0) + actual;
+        if (!proposed) return;
+        const current = recoveryWindows[delivery.projectId] || { proposed: 0, actual: 0 };
+        recoveryWindows[delivery.projectId] = {
+          proposed: current.proposed + proposed,
+          actual: current.actual + actual,
+        };
+      });
     return merged.map((p) => {
-      const bonus = finalizedByProject[p.id] || 0;
-      if (!bonus) return p;
+      const topupBonus = finalizedByProject[p.id] || 0;
+      const changeBonus = finalizedChangesByProject[p.id] || 0;
+      const approvedBudget = p.approvedBudget + topupBonus + changeBonus;
+      const recoveredAmount = recoveries[p.id] ?? recoveryByProject[p.id] ?? p.recoveredAmount;
+      let nextHealth = p.health;
+      const recoveryWindow = recoveryWindows[p.id];
+      if (recoveryWindow?.proposed > 0) {
+        const recoveryRatio = recoveryWindow.actual / recoveryWindow.proposed;
+        if (recoveryRatio < 0.6) nextHealth = "over";
+        else if (recoveryRatio < 0.9 && nextHealth === "healthy") nextHealth = "watch";
+      }
       return {
         ...p,
-        approvedBudget: p.approvedBudget + bonus,
-        topupsTotal: (p.topupsTotal || 0) + bonus,
-        remaining: p.approvedBudget + bonus - p.actualSpend,
-        utilization: Math.round((p.actualSpend / (p.approvedBudget + bonus)) * 100),
+        approvedBudget,
+        recoveredAmount,
+        health: nextHealth,
+        topupsTotal: (p.topupsTotal || 0) + topupBonus,
+        changeRequestsTotal: (p.changeRequestsTotal || 0) + changeBonus,
+        remaining: approvedBudget - p.actualSpend,
+        utilization: approvedBudget > 0 ? Math.round((p.actualSpend / approvedBudget) * 100) : 0,
       };
     });
-  }, [buffers, recoveries, customProjects, topupRequests]);
+  }, [buffers, recoveries, customProjects, topupRequests, changeRequests, batchDeliveries]);
 
   const visibleProjects = useMemo(() => {
     if (!user) return [];
@@ -274,6 +355,67 @@ export const AppProvider = ({ children }) => {
 
   const setBuffer = (projectId, pct) => setBuffers((b) => ({ ...b, [projectId]: Number(pct) }));
   const setRecovery = (projectId, amount) => setRecoveries((r) => ({ ...r, [projectId]: Number(amount) }));
+  const applyBufferAction = ({ projectId, pct, action }) => {
+    const numericPct = Number(pct || 0);
+    const at = new Date().toISOString();
+    const project = projects.find((entry) => entry.id === projectId);
+
+    if (!numericPct || Number.isNaN(numericPct)) return null;
+
+    if (action === "increase-pool" || action === "reduce-pool") {
+      const poolAmount = Math.round(((bufferPool.total || 0) * numericPct) / 100);
+      setBufferPool((current) => ({
+        ...current,
+        total: action === "increase-pool" ? current.total + poolAmount : Math.max(poolAmount, current.total - poolAmount),
+        available: action === "increase-pool"
+          ? current.available + poolAmount
+          : Math.max(0, current.available - poolAmount),
+        history: [
+          {
+            id: `bh-${Date.now().toString(36)}`,
+            date: at,
+            project: "Pool",
+            action: action === "increase-pool" ? "Pool increased" : "Pool reduced",
+            amount: poolAmount,
+            by: user?.name || "CFO",
+            reason: `${numericPct}% action`,
+          },
+          ...(current.history || []),
+        ],
+      }));
+      return poolAmount;
+    }
+
+    if (!project) return null;
+
+    const projectAmount = Math.round((project.approvedBudget * numericPct) / 100);
+    const currentPct = Number(buffers[projectId] ?? project.buffer ?? 0);
+    const nextPct = action === "allocate-project"
+      ? currentPct + numericPct
+      : Math.max(0, currentPct - numericPct);
+
+    setBuffers((current) => ({ ...current, [projectId]: nextPct }));
+    setBufferPool((current) => ({
+      ...current,
+      available: action === "allocate-project"
+        ? Math.max(0, current.available - projectAmount)
+        : current.available + projectAmount,
+      history: [
+        {
+          id: `bh-${Date.now().toString(36)}`,
+          date: at,
+          project: project.name,
+          action: action === "allocate-project" ? "Allocated" : "Released",
+          amount: projectAmount,
+          by: user?.name || "CFO",
+          reason: `${numericPct}% of approved budget`,
+        },
+        ...(current.history || []),
+      ],
+    }));
+
+    return { projectAmount, nextPct };
+  };
   const removeProjectTeamMember = (projectId, memberId) =>
     setTeamRemovals((prev) => ({
       ...prev,
@@ -894,6 +1036,13 @@ export const AppProvider = ({ children }) => {
         target.phaseId,
         amount === 0 ? "rejected" : amount >= target.proposedAmount ? "approved" : "partial"
       );
+      const nextDeliveries = batchDeliveries.map((delivery) => (
+        delivery.id === id ? { ...delivery, actualRecovered: amount } : delivery
+      ));
+      const recoveredTotal = nextDeliveries
+        .filter((delivery) => delivery.projectId === target.projectId && delivery.stage !== "rnd-review")
+        .reduce((sum, delivery) => sum + Number(delivery.actualRecovered || 0), 0);
+      setRecoveries((current) => ({ ...current, [target.projectId]: recoveredTotal }));
     }
   };
 
@@ -1065,6 +1214,176 @@ export const AppProvider = ({ children }) => {
     return nextReview;
   };
 
+  const ctoDecideChangeRequest = (id, { decision, amount, comment }) => {
+    const at = new Date().toISOString();
+    setChangeRequests((requests) => requests.map((request) => {
+      if (request.id !== id) return request;
+
+      if (decision === "reject") {
+        return {
+          ...request,
+          stage: "Rejected",
+          status: "rejected",
+          ctoDecision: { decision, amount: 0, comment: comment || "", at, by: user?.name || "CTO" },
+          history: [
+            ...(request.history || []),
+            { at, actor: `${user?.name || "CTO"} · CTO`, action: "CTO rejected", detail: comment || "Rejected" },
+          ],
+        };
+      }
+
+      if (decision === "approve") {
+        const finalAmount = Number(amount || request.amount || 0);
+        return {
+          ...request,
+          stage: "Approved",
+          status: "approved",
+          ctoDecision: { decision, amount: finalAmount, comment: comment || "", at, by: user?.name || "CTO" },
+          finalDecision: { actor: "CTO", amount: finalAmount, at, comment: comment || "" },
+          history: [
+            ...(request.history || []),
+            { at, actor: `${user?.name || "CTO"} · CTO`, action: "CTO approved", detail: `Approved at $${finalAmount.toLocaleString()}` },
+          ],
+        };
+      }
+
+      const forwardedAmount = Number(amount || request.amount || 0);
+      return {
+        ...request,
+        stage: "CFO Review",
+        status: "pending",
+        ctoDecision: { decision: "forward", amount: forwardedAmount, comment: comment || "", at, by: user?.name || "CTO" },
+        history: [
+          ...(request.history || []),
+          { at, actor: `${user?.name || "CTO"} · CTO`, action: "Forwarded to CFO", detail: `Forwarded at $${forwardedAmount.toLocaleString()}${comment ? ` · ${comment}` : ""}` },
+        ],
+      };
+    }));
+  };
+
+  const cfoDecideChangeRequest = (id, { decision, amount, comment }) => {
+    const at = new Date().toISOString();
+    const currentRequest = changeRequests.find((entry) => entry.id === id);
+    if (!currentRequest) return null;
+
+    const finalAmount = Number(amount || currentRequest.ctoDecision?.amount || currentRequest.amount || 0);
+    const nextStatus = decision === "reject"
+      ? "rejected"
+      : decision === "partial"
+        ? "partial"
+        : decision === "return"
+          ? "returned"
+          : "approved";
+    const nextStage = decision === "return"
+      ? "CTO Review"
+      : nextStatus === "approved" || nextStatus === "partial"
+        ? "Approved"
+        : "Rejected";
+    const nextRequest = {
+      ...currentRequest,
+      stage: nextStage,
+      status: nextStatus,
+      cfoDecision: {
+        decision,
+        amount: decision === "reject" ? 0 : finalAmount,
+        comment: comment || "",
+        at,
+        by: user?.name || "CFO",
+      },
+      finalDecision: decision === "reject" ? null : { actor: "CFO", amount: finalAmount, at, comment: comment || "" },
+      history: [
+        ...(currentRequest.history || []),
+        {
+          at,
+          actor: `${user?.name || "CFO"} · CFO`,
+          action:
+            decision === "partial"
+              ? "CFO partial approval"
+              : decision === "return"
+                ? "Returned to CTO"
+                : decision === "reject"
+                  ? "CFO rejected"
+                  : "CFO approved",
+          detail: decision === "reject" ? (comment || "Rejected") : `$${finalAmount.toLocaleString()}${comment ? ` · ${comment}` : ""}`,
+        },
+      ],
+    };
+
+    setChangeRequests((requests) => requests.map((entry) => (
+      entry.id === id ? nextRequest : entry
+    )));
+
+    if (decision === "approve" || decision === "partial") {
+      const project = projects.find((entry) => entry.id === currentRequest.projectId);
+      const members = mergeTeamMembers(project?.teamMembers || [], project?.kickoffMail?.recipients || []);
+      const requestedModels = currentRequest.breakdown?.models?.amount ? [{
+        id: `${currentRequest.id}-model`,
+        label: currentRequest.breakdown.models.optionLabel || "Model change",
+        provider: "Anthropic",
+        amount: Number(currentRequest.breakdown.models.amount || 0),
+      }] : [];
+      const requestedInfra = currentRequest.breakdown?.infra?.amount ? [{
+        id: `${currentRequest.id}-infra`,
+        label: currentRequest.breakdown.infra.optionLabel || "Infrastructure change",
+        amount: Number(currentRequest.breakdown.infra.amount || 0),
+      }] : [];
+      const requestedSubs = currentRequest.breakdown?.subs?.amount ? [{
+        id: `${currentRequest.id}-subs`,
+        label: currentRequest.breakdown.subs.optionLabel || "Subscription change",
+        amount: Number(currentRequest.breakdown.subs.amount || 0),
+      }] : [];
+      const itEntry = {
+        id: `it-cr-${currentRequest.id}`,
+        sourceReviewId: currentRequest.id,
+        sourceType: "change-request",
+        projectId: currentRequest.projectId,
+        projectName: currentRequest.projectName,
+        approvedAmount: finalAmount,
+        status: "pending-it",
+        approvedAt: at,
+        approvedBy: user?.name || "CFO",
+        approvedRole: user?.role || "CFO",
+        budgetType: normalizeBudgetType(project?.lastBudgetSubmission?.budgetType || project?.type || "Production"),
+        requestedModels,
+        requestedInfra,
+        requestedSubs,
+        members,
+        note: comment || "",
+      };
+      setItProvisioningRequests((entries) => [itEntry, ...entries.filter((entry) => entry.id !== itEntry.id)]);
+      upsertProjectOverride(currentRequest.projectId, (projectEntry) => ({
+        ...projectEntry,
+        itProvisioningStatus: "pending-it",
+        auditLog: [
+          {
+            id: `a-${currentRequest.projectId}-${Date.now().toString(36)}-cr`,
+            ts: at,
+            actor: `${user?.name || "CFO"} · CFO`,
+            action: "Change request approved and routed to IT",
+            detail: `${currentRequest.type} · $${finalAmount.toLocaleString()}${comment ? ` · ${comment}` : ""}`,
+          },
+          ...(projectEntry.auditLog || []),
+        ],
+      }));
+    }
+
+    return nextRequest;
+  };
+
+  const saveItMonthlyActual = (projectId, payload) => {
+    const updatedAt = new Date().toISOString();
+    setItMonthlyActuals((entries) => ({
+      ...entries,
+      [projectId]: {
+        ...(entries[projectId] || {}),
+        ...payload,
+        updatedAt,
+        updatedBy: user?.name || "IT",
+      },
+    }));
+    return updatedAt;
+  };
+
   const provisionModelKeys = (requestId, { lines = [], note = "" }) => {
     const request = itProvisioningRequests.find((entry) => entry.id === requestId);
     if (!request) return null;
@@ -1137,6 +1456,31 @@ export const AppProvider = ({ children }) => {
     return createdKeys;
   };
 
+  const bufferOverview = useMemo(() => {
+    const perProject = projects.map((project) => {
+      const allocated = Math.round(Number(project.approvedBudget || 0) * (Number(project.buffer || 0) / 100));
+      const seedConsumed = Number(BUFFER.perProject.find((entry) => entry.id === project.id)?.consumed || 0);
+      const consumed = Math.min(allocated, Number(bufferPool.projectConsumed?.[project.id] || seedConsumed));
+      return {
+        id: project.id,
+        name: project.name,
+        approved: project.approvedBudget,
+        allocated,
+        consumed,
+        status: consumed >= allocated && allocated > 0 ? "critical" : consumed >= allocated * 0.7 ? "using" : "reserved",
+      };
+    });
+    return {
+      total: Number(bufferPool.total || 0),
+      available: Number(bufferPool.available || 0),
+      consumed: Math.max(0, Number(bufferPool.total || 0) - Number(bufferPool.available || 0)),
+      policyPct: Number(bufferPool.policyPct || BUFFER.policyPct || 0),
+      history: bufferPool.history || [],
+      alerts: bufferPool.alerts || [],
+      perProject,
+    };
+  }, [bufferPool, projects]);
+
   const role = user?.role || null;
   const value = {
     user,
@@ -1153,10 +1497,12 @@ export const AppProvider = ({ children }) => {
     setScope,
     projects,
     visibleProjects,
+    bufferOverview,
     teamRemovals,
     removeProjectTeamMember,
     addProjectTeamMembers,
     setBuffer,
+    applyBufferAction,
     setRecovery,
     addProject,
     // task logs
@@ -1180,13 +1526,18 @@ export const AppProvider = ({ children }) => {
     recordActualRecovery,
     // CTO budget review modifications
     budgetReviews,
+    changeRequests,
     ctoModifyBudgetReview,
     ctoRejectBudgetReview,
     ctoReturnBudgetReview,
     cfoDecideBudgetReview,
+    ctoDecideChangeRequest,
+    cfoDecideChangeRequest,
     modelKeyRecords,
     itProvisioningRequests,
     provisionModelKeys,
+    itMonthlyActuals,
+    saveItMonthlyActual,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

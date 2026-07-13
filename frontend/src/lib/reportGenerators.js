@@ -9,6 +9,7 @@ import {
   PHASE_TASKS,
 } from "../data/mockTpm";
 import { RECOVERY } from "../data/mockCfo";
+import { buildLoggedDailyRows } from "./projectMetrics";
 
 const escapeCsv = (v) => {
   if (v === null || v === undefined) return "";
@@ -27,9 +28,15 @@ const toCsv = (rows) => {
   return lines.join("\n");
 };
 
+const getProjects = (appData) => appData?.projects || PROJECTS;
+const getTaskLogs = (appData) => appData?.taskLogs || {};
+const getBatchDeliveries = (appData) => appData?.batchDeliveries || [];
+const getItMonthlyActuals = (appData) => appData?.itMonthlyActuals || {};
+const getModelKeyRecords = (appData) => appData?.modelKeyRecords || [];
+
 // ---- Per-report data builders ----
-const buildBudget = () =>
-  PROJECTS.map((p) => ({
+const buildBudget = (appData) =>
+  getProjects(appData).map((p) => ({
     project: p.name,
     client: p.client,
     type: p.type,
@@ -41,12 +48,23 @@ const buildBudget = () =>
     utilizationPct: p.utilization,
     health: p.health,
     tpm: p.tpm,
+    recoveredAmount: p.recoveredAmount || 0,
+    bufferPct: p.buffer || 0,
+    changeRequestsTotal: p.changeRequestsTotal || 0,
+    modelActual: Number(getItMonthlyActuals(appData)[p.id]?.modelActual || 0),
+    infraActual: Number(getItMonthlyActuals(appData)[p.id]?.infraActual || 0),
+    subsActual: Number(getItMonthlyActuals(appData)[p.id]?.subsActual || 0),
   }));
 
-const buildPhase = () => {
+const buildPhase = (appData) => {
   const rows = [];
-  PROJECTS.forEach((p) => {
+  const taskLogs = getTaskLogs(appData);
+  getProjects(appData).forEach((p) => {
     (p.phases || []).forEach((ph) => {
+      const logs = taskLogs[`${p.id}::${ph.id}`] || [];
+      const loggedTasks = logs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0);
+      const loggedTrajectories = logs.reduce((sum, log) => sum + Number(log.trajectories || 0), 0);
+      const actualPerTask = loggedTasks > 0 ? Number(ph.actual || 0) / loggedTasks : 0;
       rows.push({
         project: p.name,
         phase: ph.name,
@@ -56,15 +74,19 @@ const buildPhase = () => {
         variance: ph.estimated - ph.actual,
         utilizationPct: ph.estimated ? Math.round((ph.actual / ph.estimated) * 100) : 0,
         health: ph.health,
+        targetTasks: Number(ph.totalTasks || ph.tasks || 0),
+        loggedTasks,
+        loggedTrajectories,
+        actualPerTask: actualPerTask ? Math.round(actualPerTask * 100) / 100 : 0,
       });
     });
   });
   return rows;
 };
 
-const buildExpense = () => {
+const buildExpense = (appData) => {
   const rows = [];
-  PROJECTS.forEach((p) => {
+  getProjects(appData).forEach((p) => {
     (p.expenses || []).forEach((e) => {
       rows.push({
         project: p.name,
@@ -81,8 +103,8 @@ const buildExpense = () => {
   return rows;
 };
 
-const buildVariance = () =>
-  PROJECTS.map((p) => ({
+const buildVariance = (appData) =>
+  getProjects(appData).map((p) => ({
     project: p.name,
     approvedBudget: p.approvedBudget,
     estimatedBudget: p.estimatedBudget,
@@ -93,10 +115,39 @@ const buildVariance = () =>
     health: p.health,
   }));
 
-const buildTask = () => {
+const buildTask = (appData) => {
+  const taskLogs = getTaskLogs(appData);
+  const projects = getProjects(appData);
   const rows = [];
+  const liveKeys = Object.keys(taskLogs || {});
+  if (liveKeys.length) {
+    liveKeys.forEach((key) => {
+      const [projectId, phaseId] = key.split("::");
+      const project = projects.find((entry) => entry.id === projectId);
+      (taskLogs[key] || []).forEach((log) => {
+        rows.push({
+          project: project?.name || projectId,
+          phase: phaseId,
+          taskId: log.id,
+          task: log.name,
+          owner: log.assignee || log.createdBy,
+          model: Array.isArray(log.modelUsage) && log.modelUsage.length ? log.modelUsage.map((usage) => usage.modelName).join(", ") : (log.modelName || "—"),
+          infra: project?.client || "—",
+          estCost: Number(log.cost || 0),
+          actualCost: Number(log.cost || 0),
+          variance: 0,
+          status: log.approvalStatus || "logged",
+          tasksDone: Number(log.tasksDone || 0),
+          trajectories: Number(log.trajectories || 0),
+          inputTokens: Number(log.inputTokens || 0),
+          outputTokens: Number(log.outputTokens || 0),
+        });
+      });
+    });
+    return rows;
+  }
   Object.entries(PHASE_TASKS).forEach(([projectId, phases]) => {
-    const project = PROJECTS.find((p) => p.id === projectId);
+    const project = projects.find((p) => p.id === projectId);
     Object.entries(phases).forEach(([phaseId, tasks]) => {
       tasks.forEach((t) => {
         rows.push({
@@ -118,8 +169,14 @@ const buildTask = () => {
   return rows;
 };
 
-const buildModel = () => [
-  ...AI_COST_BY_MODEL.map((m) => ({
+const buildModel = (appData) => {
+  const keyCounts = getModelKeyRecords(appData).reduce((acc, entry) => {
+    const key = entry.model;
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  return [
+    ...AI_COST_BY_MODEL.map((m) => ({
     scope: "Model",
     name: m.model,
     provider: m.provider,
@@ -130,6 +187,7 @@ const buildModel = () => [
     avgCostPer1kIn: m.avgCostPer1kIn,
     avgCostPer1kOut: m.avgCostPer1kOut,
     requests: m.requests,
+    activeKeys: keyCounts[m.model] || 0,
   })),
   ...AI_COST_BY_PROVIDER.map((p) => ({
     scope: "Provider",
@@ -142,10 +200,12 @@ const buildModel = () => [
     avgCostPer1kIn: "",
     avgCostPer1kOut: "",
     requests: p.requests,
+    activeKeys: "",
   })),
-];
+  ];
+};
 
-const buildRecovery = () => [
+const buildRecovery = (appData) => [
   ...RECOVERY.byClient.map((c) => ({
     scope: "Client",
     entity: c.client,
@@ -155,7 +215,7 @@ const buildRecovery = () => [
     outstanding: c.outstanding,
     profitabilityPct: c.profitability,
   })),
-  ...PROJECTS.filter((p) => p.recoverableFromClient).map((p) => ({
+  ...getProjects(appData).filter((p) => p.recoverableFromClient).map((p) => ({
     scope: "Project",
     entity: p.name,
     recoverable: p.actualSpend,
@@ -164,9 +224,24 @@ const buildRecovery = () => [
     outstanding: p.actualSpend - (p.recoveredAmount || 0),
     profitabilityPct: "",
   })),
+  ...getBatchDeliveries(appData).filter((delivery) => delivery.stage !== "rnd-review").map((delivery) => ({
+    scope: "Batch",
+    entity: `${delivery.projectName} · ${delivery.phaseName}`,
+    recoverable: delivery.proposedAmount,
+    invoiced: "",
+    received: delivery.actualRecovered || 0,
+    outstanding: Math.max(0, Number(delivery.proposedAmount || 0) - Number(delivery.actualRecovered || 0)),
+    profitabilityPct: "",
+  })),
 ];
 
-const buildDaily = () => DAILY_CONSUMPTION_LOG.map((r) => ({ ...r }));
+const buildDaily = (appData) => {
+  const logs = getTaskLogs(appData);
+  if (Object.keys(logs || {}).length) {
+    return buildLoggedDailyRows(getProjects(appData), logs).map((row) => ({ ...row }));
+  }
+  return DAILY_CONSUMPTION_LOG.map((row) => ({ ...row }));
+};
 
 const REPORT_BUILDERS = {
   "rpt-budget": buildBudget,
@@ -179,9 +254,9 @@ const REPORT_BUILDERS = {
   "rpt-daily": buildDaily,
 };
 
-export const getReportRows = (reportId) => {
+export const getReportRows = (reportId, appData) => {
   const b = REPORT_BUILDERS[reportId];
-  return b ? b() : [];
+  return b ? b(appData) : [];
 };
 
 // Trigger a client-side download of a Blob
@@ -196,8 +271,8 @@ const downloadBlob = (filename, blob) => {
   URL.revokeObjectURL(url);
 };
 
-export const downloadReportAs = (report, format) => {
-  const rows = getReportRows(report.id);
+export const downloadReportAs = (report, format, appData) => {
+  const rows = getReportRows(report.id, appData);
   const stamp = new Date().toISOString().slice(0, 10);
   const safeName = report.name.toLowerCase().replace(/[^a-z0-9]+/g, "_");
   const fmt = (format || "CSV").toUpperCase();

@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { PROJECTS } from "../../data/mockProjects";
-import { BUFFER } from "../../data/mockCfo";
 import { fmtCurrency } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
@@ -28,7 +27,7 @@ import {
 const ApprovalDetail = () => {
   const { id } = useParams();
   const nav = useNavigate();
-  const { projects, budgetReviews, cfoDecideBudgetReview, itProvisioningRequests } = useApp();
+  const { projects, budgetReviews, cfoDecideBudgetReview, itProvisioningRequests, applyBufferAction, bufferOverview } = useApp();
   const review = useMemo(() => budgetReviews.find((r) => r.id === id) || BUDGET_REVIEWS.find((r) => r.id === id) || BUDGET_REVIEWS[0], [budgetReviews, id]);
   const project = useMemo(() => projects.find((p) => p.id === review?.projectId) || PROJECTS.find((p) => p.id === review?.projectId) || PROJECTS[0], [projects, review]);
 
@@ -95,13 +94,38 @@ const ApprovalDetail = () => {
   };
   const doBuffer = () => {
     if (!bufferPct || bufferPct <= 0 || bufferPct > 50) { toast.error("Buffer between 0% and 50%"); return; }
-    toast.success("Hidden buffer allocated", { description: `${bufferPct}% reserved · not visible to TPM/CTO` });
+    applyBufferAction({ projectId: review.projectId, pct: bufferPct, action: "allocate-project" });
+    toast.success("Hidden buffer allocated", { description: `${bufferPct}% reserved for ${review.projectName} · not visible to TPM/CTO` });
   };
 
   // Cost breakdown lines
-  const models = [{ name: "Claude Opus 4.7 (Amazon Bedrock Edition)", vendor: "AWS", detail: "Trajectory · $10.00 × 150", subtotal: 1500 }];
-  const infra = [{ name: "Amazon EC2 Container Registry (ECR)", tag: "Infrastructure", detail: "$8.89/day", subtotal: 267 }];
-  const subs = [{ name: "Claude", tag: "1 seat", detail: "1 × $200.00 / mo", subtotal: 200 }];
+  const models = (project?.budgetItems?.models || []).map((line) => ({
+    name: line.meta?.name || line.modelName || line.optionLabel || "Model line",
+    vendor: line.meta?.provider || line.provider || "AI",
+    detail: line.note || "Submitted budget model allocation",
+    subtotal: Number(line.estCost || line.amount || 0),
+  }));
+  const infra = (project?.budgetItems?.infra || []).map((line) => ({
+    name: line.meta?.code || line.instance || line.optionLabel || "Infrastructure line",
+    tag: "Infrastructure",
+    detail: line.note || "Submitted infra allocation",
+    subtotal: Number(line.estCost || line.amount || 0),
+  }));
+  const subs = (project?.budgetItems?.subs || []).map((line) => ({
+    name: line.subscription || line.optionLabel || "Subscription line",
+    tag: `${Number(line.quantity || 1)} seat`,
+    detail: line.note || "Submitted subscription allocation",
+    subtotal: Number(line.estCost || line.amount || 0),
+  }));
+  if (!models.length && review.aiCost) {
+    models.push({ name: "AI models", vendor: "Budget summary", detail: "Submitted AI allocation", subtotal: Number(review.aiCost || 0) });
+  }
+  if (!infra.length && review.infraCost) {
+    infra.push({ name: "Infrastructure", tag: "Budget summary", detail: "Submitted infra allocation", subtotal: Number(review.infraCost || 0) });
+  }
+  if (!subs.length && review.subsCost) {
+    subs.push({ name: "Subscriptions", tag: "Budget summary", detail: "Submitted subscription allocation", subtotal: Number(review.subsCost || 0) });
+  }
   const total = models.reduce((s, x) => s + x.subtotal, 0) + infra.reduce((s, x) => s + x.subtotal, 0) + subs.reduce((s, x) => s + x.subtotal, 0);
 
   // Journey stages
@@ -231,7 +255,7 @@ const ApprovalDetail = () => {
                 <Lock className="w-3.5 h-3.5 text-fuchsia-300" />
                 <div className="text-sm font-semibold text-white">Hidden buffer allocation (CFO only)</div>
               </div>
-              <div className="text-xs text-zinc-400 mb-3">Reserve % from confidential buffer pool ({fmtCurrency(BUFFER.available)} available). Not visible to TPM/CTO.</div>
+              <div className="text-xs text-zinc-400 mb-3">Reserve % from confidential buffer pool ({fmtCurrency(bufferOverview.available)} available). Not visible to TPM/CTO.</div>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1 max-w-[200px]">
                   <input

@@ -1,8 +1,8 @@
 import { useState, useMemo } from "react";
-import { CHANGE_REQUESTS } from "../../data/mockTpm";
 import { fmtCurrency } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
+import { useApp } from "../../context/AppContext";
 import {
   GitPullRequest,
   Clock3,
@@ -34,42 +34,38 @@ const stageColor = {
 };
 
 const ChangeRequests = () => {
+  const { changeRequests, ctoDecideChangeRequest } = useApp();
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
-  const [localCRs, setLocalCRs] = useState(CHANGE_REQUESTS);
 
   const filtered = useMemo(() => {
-    if (filter === "all") return localCRs;
-    return localCRs.filter((c) => c.stage === filter);
-  }, [filter, localCRs]);
+    if (filter === "all") return changeRequests;
+    return changeRequests.filter((c) => c.stage === filter);
+  }, [filter, changeRequests]);
 
   const stats = useMemo(() => {
     return {
-      pending: localCRs.filter((c) => c.stage === "CTO Review").length,
-      approved: localCRs.filter((c) => c.stage === "Approved").length,
-      rejected: localCRs.filter((c) => c.stage === "Rejected").length,
-      budgetImpact: localCRs.filter((c) => c.stage === "CTO Review").reduce((s, c) => s + c.amount, 0),
+      pending: changeRequests.filter((c) => c.stage === "CTO Review").length,
+      approved: changeRequests.filter((c) => c.stage === "Approved").length,
+      rejected: changeRequests.filter((c) => c.stage === "Rejected").length,
+      budgetImpact: changeRequests.filter((c) => c.stage === "CTO Review").reduce((s, c) => s + c.amount, 0),
     };
-  }, [localCRs]);
-
-  const setStage = (id, newStage) => {
-    setLocalCRs((crs) => crs.map((c) => (c.id === id ? { ...c, stage: newStage } : c)));
-  };
+  }, [changeRequests]);
 
   const approveAndForward = (cr) => {
-    setStage(cr.id, "CFO Review");
+    ctoDecideChangeRequest(cr.id, { decision: "forward", amount: cr.amount });
     toast.success("Change request approved", {
       description: `${cr.projectName} · ${fmtCurrency(cr.amount)} · Forwarded to CFO`,
     });
   };
   const rejectCR = (cr) => {
-    setStage(cr.id, "Rejected");
+    ctoDecideChangeRequest(cr.id, { decision: "reject", comment: "Rejected by CTO during change review." });
     toast.error("Change request rejected", {
       description: `${cr.projectName} · TPM notified`,
     });
   };
   const approveDirect = (cr) => {
-    setStage(cr.id, "Approved");
+    ctoDecideChangeRequest(cr.id, { decision: "approve", amount: cr.amount });
     toast.success("Change request approved", {
       description: `${cr.projectName} · No financial escalation needed`,
     });
@@ -105,7 +101,7 @@ const ChangeRequests = () => {
           <Filter className="w-3 h-3 inline mr-1" /> Stage
         </span>
         {["all", ...STAGES].map((s) => {
-          const count = s === "all" ? localCRs.length : localCRs.filter((c) => c.stage === s).length;
+          const count = s === "all" ? changeRequests.length : changeRequests.filter((c) => c.stage === s).length;
           return (
             <button
               key={s}
@@ -161,7 +157,7 @@ const ChangeRequests = () => {
                       <span>·</span>
                       <span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(cr.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                       <span>·</span>
-                      <span>{cr.expectedTasks || "Expected tasks not specified"}</span>
+                    <span>{cr.expectedTasks || "Expected tasks not specified"}</span>
                       <span>·</span>
                       <span>Timeline delta {cr.timelineDelta}</span>
                     </div>
