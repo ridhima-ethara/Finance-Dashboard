@@ -1,0 +1,61 @@
+{
+  "summary": "Full E2E gap-audit of Ethara.AI budget management flow (CTO create → R&D budget → TPM budget → CTO approve → CFO approve → TPM task log → IT actuals → CFO charts). Successfully completed STEP 1 (CTO create). BLOCKED at STEP 2 and STEP 3 by two wiring gaps that break the entire downstream chain (STEPS 3-9). No code changes made — this was a discovery run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "STEP 2 — R&D visibility of newly-created CTO project (Blocker #1)",
+        "issue": "The quick-login R&D user's session name is 'R&D Lead' (from USERS array in /app/frontend/src/data/mockUsers.js). NewProjectDialog's rndOptions filter (TEAM.filter(t => t.role === 'R&D' || t.role === 'Engineer')) returns ONLY: 'Engineer 1', 'Engineer 2', 'R&D Lead 1', 'R&D Lead 2'. The exact name 'R&D Lead' is not in TEAM at all. Therefore CTO cannot assign 'R&D Lead' as an rndMember. When the R&D user logs in, visibleProjects filter (rndMembers.includes(user.name)) drops the project. Confirmed: R&D dashboard shows '0 projects assigned to you'. Budget Builder shows '— No projects assigned to you yet —' preventing any budget being built.",
+        "affected_selectors": ["rnd-multi-picker", "bb-project"],
+        "files": ["/app/frontend/src/components/NewProjectDialog.jsx (rndOptions filter, line ~129)", "/app/frontend/src/data/mockUsers.js (USERS 'R&D Lead' vs TEAM 'R&D Lead 1/2' mismatch)", "/app/frontend/src/context/AppContext.jsx (visibleProjects R&D filter, lines 597-604)"]
+      },
+      {
+        "flow": "STEP 3 — TPM cannot submit Production budget on freshly-created project (Blocker #2)",
+        "issue": "After CTO creates a project via addProject(), the project's workflowStage is set to 'awaiting-testing-budget' (AppContext.jsx line 803-807). The Budget Builder shows a locked banner: 'TPM BUDGET IS WAITING ON R&D — R&D sample acceptance has not completed yet. TPM production budgeting unlocks only after the accepted R&D cycle is finished.' The Submit button appears enabled, but on click a toast fires: 'Production budget is locked — R&D must finish the accepted sample cycle before TPM can raise the production budget' and no budget review is created. Result: CTO Budget Reviews queue remains empty (0 pending) and steps 4–9 are unreachable via UI. Combined with Blocker #1, there is NO path for a newly-created project to reach the CFO dashboard through the UI unless the CTO seeds the state or R&D Lead 1/2 (not the quick-login user) manually toggles into the flow.",
+        "affected_selectors": ["bb-production-locked-banner", "bb-submit"],
+        "files": ["/app/frontend/src/pages/tpm/BudgetBuilder.jsx (production lock/gate logic)", "/app/frontend/src/context/AppContext.jsx (addProject sets workflowStage='awaiting-testing-budget'; only R&D Testing→Accepted delivery unlocks Production budget)"]
+      }
+    ],
+    "design_issues": [
+      {"screen": "TPM Budget Builder", "issues": ["The Submit button is not disabled even when the production-locked banner is showing. User can complete all 3 steps of the wizard and only find out on submit that the budget is rejected. Consider disabling bb-submit while workflowStage != 'tpm-budget-ready' or gating navigation earlier."]},
+      {"screen": "Recharts warnings (cosmetic)", "issues": ["Repeated 'The width(-1) and height(-1) of chart should be greater than 0' warnings on dashboard mount — pre-existing issue also noted in iteration_9."]},
+      {"screen": "Hydration warning (dev-only)", "issues": ["'<span> cannot be a child of <option>' — caused by visual-editor overlay wrapping select options, same as iteration_9."]}
+    ]
+  },
+  "steps_completed": [
+    "STEP 1 (CTO): PASS — 'Acme Vision Recovery / Vision Recover' created; kickoff mail sent; project visible on CTO project list and detail page.",
+    "STEP 2 (R&D): FAIL — R&D Lead cannot see the project (see Blocker #1).",
+    "STEP 3 (TPM): PARTIAL — TPM sees the project, budget wizard usable, but Submit blocked by workflow lock (see Blocker #2). Note: TPM does see the project because CTO set them as p.tpm.",
+    "STEP 4 (CTO approval): UNREACHABLE — Budget Reviews queue empty (0 pending).",
+    "STEP 5 (CFO approval): UNREACHABLE — CFO Approval Queue empty.",
+    "STEP 6 (TPM task logging): NOT TESTED — depends on STEP 5.",
+    "STEP 7 (IT actuals): NOT TESTED — depends on STEP 5.",
+    "STEP 8 (Estimate vs Actual analysis): NOT TESTED — depends on STEP 7.",
+    "STEP 9 (Gap audit): See integration_issues above.",
+    "STEP 10 (Regression sweep of Change Requests + Batch Delivery): NOT TESTED — required a project with an approved budget which cannot be created via UI without seeded state."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "PRIMARY FIX (Blocker #1): Align the R&D quick-login user with TEAM roster. Either (a) rename USERS 'R&D Lead' to 'R&D Lead 1' so it matches TEAM u9, or (b) add TEAM entry 'R&D Lead' with role 'R&D', or (c) auto-add the CTO's creator + all quick-login users to TEAM & to any rndOptions. Same mismatch also affects CFO/IT users if they need to see custom projects (CFO/IT views are org-wide so it doesn't bite them, but IT Dashboard filtering by tpm/rnd names is worth re-checking).",
+    "PRIMARY FIX (Blocker #2): For a demo/gap-audit path, either (a) allow CTO to promote a new project directly to 'Production' at creation time (skip the testing sample cycle), or (b) surface the R&D → Testing → Accept → TPM promotion path more clearly and default the CTO-created project to type='Production' with readyForTpmBudget=true when the CTO explicitly chooses. Right now the seed intent is 'clean-slate, all-earned', which is fine, but the whole R&D testing loop is invisible on the UI for the quick-login R&D user (Blocker #1) so users cannot complete it.",
+    "SECONDARY: Disable bb-submit while production-locked-banner is showing, or hide the wizard step-3 Submit CTA when workflowStage != tpm-budget-ready.",
+    "SECONDARY: In NewProjectDialog, rndOptions should include ALL current session-eligible R&D names, or provide a free-text add so CTO can assign any R&D user.",
+    "SECONDARY: Consider a one-click 'Seed demo data' button (CTO or CFO) that creates a project already at 'ready-for-tpm-budget' so gap audits and reviewers can exercise steps 3-9 without playing the full R&D loop."
+  ],
+  "critical_code_review_comments": [
+    "AppContext.jsx still ~1500+ lines and mixes 15+ concerns. Continues to grow — the earlier recommendation to split into slices remains valid.",
+    "NewProjectDialog.jsx: rndOptions/tpmOptions/plQlOptions are hard-coded string filters over TEAM. This tightly couples the CTO project-creation dialog to the mock TEAM roster, which does not include the session-user names. Any new session persona (e.g. IT quick-login) will hit the same gap.",
+    "BudgetBuilder.jsx: 'Submit' button is not gated by workflow state. Users can traverse the entire wizard on a locked project. UX: gate earlier.",
+    "AppContext.visibleProjects R&D branch: relies solely on name-match against rndMembers/rnd/createdBy. A tolerant match (by user.id, or session.email) would be more robust and avoid this class of bug.",
+    "BUDGET_REVIEWS_KEY, BUDGETS_KEY, etc. use ...v2 suffix indicating a recent seed reset; the iteration_9 tests used ...v1 keys. All localStorage keys upgraded cleanly, no data-migration issues observed."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only)", "frontend": "STEP 1 pass; STEPs 2-3 blocked (2 blockers); STEPs 4-10 unreachable via UI"},
+  "test_credentials": "Quick-login cards on /login. Session usernames: CTO Admin, CFO Admin, TPM Lead, R&D Lead, IT Admin (NOT the Arjun/Neha/Ishaan/Vikram names referenced in the review-request — please update the review request or the seed to align).",
+  "seed_data_creation": "Created one custom project 'Vision Recover' (id p-mrj14vj1 etc.) in localStorage (ethara.customProjects.v2). Recommend localStorage.clear() before rerun.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Two blockers stop the full E2E chain: (1) R&D quick-login user name 'R&D Lead' is not selectable in NewProjectDialog rndOptions — fix TEAM/USERS naming or rndOptions filter. (2) Newly-created projects are locked to workflowStage='awaiting-testing-budget' — TPM Production budget submit is rejected. Once these are addressed, re-run the full flow: CTO create → R&D testing budget → CTO approve → CFO approve → R&D delivers sample → R&D accepts → TPM builds Production budget → CTO approve → CFO approve → TPM task log → IT actuals → CFO charts. All data-testids referenced in the review-request are present and correctly wired at each stage — the blockers are pure data/workflow gating issues, not UI selector gaps.",
+  "rca of the issue": "Blocker #1 RCA: USERS array (mockUsers.js line 16) has R&D quick-login user with name 'R&D Lead' but TEAM array (mockUsers.js lines 31-32) only has 'R&D Lead 1' (u9) and 'R&D Lead 2' (u10). NewProjectDialog rndOptions (line 129) filters TEAM by role, so 'R&D Lead' is not selectable. AppContext.visibleProjects (line 597) filters projects by rndMembers.includes(user.name), so the session-user 'R&D Lead' will never match. Reproduction: quick-login-cto → create project → open rnd-multi-picker → observe 'R&D Lead' not present → login as R&D → project not visible. Mitigation: rename mockUsers.js line 16 name from 'R&D Lead' to 'R&D Lead 1' (matches TEAM u9). Blocker #2 RCA: AppContext.addProject (lines 803-807) hard-codes workflowStage='awaiting-testing-budget' and readyForTpmBudget=false. TPM BudgetBuilder guards submit on that. Only R&D->Testing->deliverBatch(accept) transition sets readyForTpmBudget=true. Since Blocker #1 prevents R&D from doing that, TPM Production submit is unreachable. Mitigation: allow CTO to create with type='Production' & readyForTpmBudget=true directly, OR provide a seed/promote button, OR fix Blocker #1 so the R&D loop can actually run."
+}
