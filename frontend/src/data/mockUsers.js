@@ -13,7 +13,7 @@ export const USERS = [
   { id: "u2", name: "CFO Admin", role: "CFO", title: "Chief Financial Officer", email: "cfo@ethara.ai", password: "ethara123", avatarUrl: "" },
   { id: "u3", name: "TPM Lead", role: "TPM", title: "Technical Program Manager", email: "tpm@ethara.ai", password: "ethara123", avatarUrl: "" },
   { id: "u4", name: "Project Lead", role: "PL", title: "Project Lead", email: "pl@ethara.ai", password: "ethara123", avatarUrl: "" },
-  { id: "u5", name: "R&D Lead", role: "R&D", title: "R&D Lead", email: "rd@ethara.ai", password: "ethara123", avatarUrl: "" },
+  { id: "u5", name: "R&D Lead 1", role: "R&D", title: "R&D Lead", email: "rd@ethara.ai", password: "ethara123", avatarUrl: "" },
   { id: "u6", name: "IT Admin", role: "IT", title: "IT Access Administrator", email: "it@ethara.ai", password: "ethara123", avatarUrl: "" },
 ];
 
