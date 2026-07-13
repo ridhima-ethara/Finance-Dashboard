@@ -855,6 +855,46 @@ export const AppProvider = ({ children }) => {
     return proj;
   };
 
+  // Demo helper — seed a fully-assembled project already at "Ready for TPM production budget".
+  // Skips the R&D testing → RnD budget → deliver-accept loop for stakeholder demos.
+  const seedDemoProject = () => {
+    const stamp = new Date();
+    const seq = customProjects.filter((p) => p.__demoSeed).length + 1;
+    const startDate = stamp.toISOString().slice(0, 10);
+    const payload = {
+      clientProjectName: `Demo Client Engagement ${seq}`,
+      internalName: `Demo Project ${seq}`,
+      tpm: "TPM Lead",
+      rndMembers: ["R&D Lead 1"],
+      plMembers: ["Project Lead 1"],
+      qlMembers: ["Quality Lead 1"],
+      docUrl: "",
+      docs: [],
+      attachments: [],
+      startDate,
+      priority: "medium",
+      createdBy: user?.name || "CTO Admin",
+      createdByRole: user?.role || "CTO",
+    };
+    const proj = addProject(payload);
+    const at = stamp.toISOString();
+    setCustomProjects((arr) => arr.map((p) => (p.id !== proj.id ? p : {
+      ...p,
+      __demoSeed: true,
+      type: "R&D",
+      status: "Ready for TPM production budget",
+      workflowStage: "tpm-budget-ready",
+      readyForTpmBudget: true,
+      auditLog: [
+        ...(p.auditLog || []),
+        { id: `a-${p.id}-seed-1`, ts: at, actor: "System · Demo Seed", action: "Testing budget approved", detail: "Simulated — R&D testing budget auto-approved via demo seed" },
+        { id: `a-${p.id}-seed-2`, ts: at, actor: "System · Demo Seed", action: "R&D sample budget approved", detail: "Simulated — RnD budget auto-approved via demo seed" },
+        { id: `a-${p.id}-seed-3`, ts: at, actor: "System · Demo Seed", action: "R&D delivery accepted", detail: "Simulated — R&D marked delivery as Accept; project promoted to production-ready" },
+      ],
+    })));
+    return proj;
+  };
+
   // ---- Phase Task Logs (TPM) ----
   const TASK_EDIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h
   const taskKey = (pid, phId) => `${pid}::${phId}`;
@@ -2016,6 +2056,7 @@ export const AppProvider = ({ children }) => {
     applyBufferAction,
     setRecovery,
     addProject,
+    seedDemoProject,
     // task logs
     taskLogs,
     getPhaseLogs,

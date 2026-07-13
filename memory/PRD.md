@@ -392,3 +392,15 @@ User requested a full E2E flow test spanning CTO → R&D → TPM → CTO approve
 ### Files touched this iteration
 - Modified: `frontend/src/data/mockUsers.js` (1 line)
 - Added: `/app/test_reports/iteration_10.json`, `/app/test_reports/iteration_11.json`
+
+
+### 2026-02-13 · Seed Demo Project Helper (CTO)
+Implemented the "Potential improvement" from the previous audit — a one-click CTO helper that creates a fully-assembled project already at `readyForTpmBudget=true`, skipping the R&D testing → RnD budget → deliver-accept loop. Useful for stakeholder demos of the TPM Production → CFO approve → IT actuals → CFO charts flow.
+
+**Changes:**
+- `context/AppContext.jsx`: new `seedDemoProject()` function reusing `addProject` shape with auto-assigned TPM Lead / R&D Lead 1 / Project Lead 1 / Quality Lead 1 from the TEAM roster, then patches `workflowStage='tpm-budget-ready'`, `readyForTpmBudget=true`, `status='Ready for TPM production budget'`, adds 3 simulated audit-log entries marking the skipped stages.
+- `pages/cto/CtoDashboard.jsx`: new `btn-cto-seed-demo` (outlined fuchsia, `Sparkles` icon) next to `btn-cto-new-project`. Handler seeds, toasts, navigates to `/projects/:id`.
+
+**Verified via screenshot smoke test:** button renders, click creates "Demo Project 1" with correct state, toast + navigation work. Downstream TPM can build a Production budget directly against the seeded project (Production tab unlocked because `readyForTpmBudget=true`).
+
+**Files touched:** `frontend/src/context/AppContext.jsx` (+40 lines), `frontend/src/pages/cto/CtoDashboard.jsx` (+14 lines).
