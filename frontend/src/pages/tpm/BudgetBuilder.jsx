@@ -126,6 +126,7 @@ const BudgetBuilder = () => {
   }, [returnedReview, visibleProjects]);
 
   const project = visibleProjects.find((p) => p.id === projectId);
+  const productionBudgetLocked = !isRnd && project?.type === "R&D" && !project?.readyForTpmBudget && budgetType === "Production";
   const additionalMemberOptions = useMemo(() => {
     const taken = new Set((project?.teamMembers || []).map((member) => member.name));
     return TEAM.filter((member) => !taken.has(member.name) && !["Finance", "COO", "IT"].includes(member.role));
@@ -302,6 +303,12 @@ const BudgetBuilder = () => {
   const saveDraft = () => toast.success("Draft saved", { description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · auto-saved` });
 
   const doSubmit = () => {
+    if (productionBudgetLocked) {
+      toast.error("Production budget is locked", {
+        description: "R&D must finish the accepted sample cycle before TPM can raise the production budget.",
+      });
+      return;
+    }
     const items = {
       models: selectedTypes.models ? models.map((m) => ({ ...m, meta: BEDROCK_MODELS.find((x) => x.id === m.modelId) })) : [],
       infra: selectedTypes.infra ? infra.map((i) => ({ ...i, meta: EC2_INSTANCES.find((x) => x.code === i.instance) })) : [],
@@ -371,6 +378,16 @@ const BudgetBuilder = () => {
             <div className="text-amber-200 font-semibold uppercase tracking-widest text-[10px] mb-0.5">Returned by CTO — please revise</div>
             <div><span className="text-white font-semibold">Comment:</span> {returnedReview.ctoComment || "—"}</div>
             <div className="text-[11px] text-zinc-400 mt-1">Original ask: <span className="text-white tabular">{fmtCurrency(returnedReview.requestedBudget, { compact: false })}</span> · Returned {new Date(returnedReview.ctoAt || Date.now()).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</div>
+          </div>
+        </div>
+      )}
+
+      {productionBudgetLocked && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4 flex items-start gap-3" data-testid="bb-production-locked-banner">
+          <MessageSquareWarning className="w-4 h-4 text-amber-300 mt-0.5 flex-shrink-0" />
+          <div className="text-xs text-zinc-200 leading-relaxed">
+            <div className="text-amber-200 font-semibold uppercase tracking-widest text-[10px] mb-0.5">TPM budget is waiting on R&amp;D</div>
+            <div>R&amp;D sample acceptance has not completed yet. TPM production budgeting unlocks only after the accepted R&amp;D cycle is finished.</div>
           </div>
         </div>
       )}

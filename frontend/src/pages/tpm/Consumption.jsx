@@ -11,7 +11,7 @@ import {
   Sparkles,
   CheckCircle2,
 } from "lucide-react";
-import { buildLoggedDailyRows } from "../../lib/projectMetrics";
+import { buildExecutionProjectView, buildLoggedDailyRows, isProjectInRndLane, isProjectInTpmLane } from "../../lib/projectMetrics";
 
 const buildTrailingDates = (anchorDate, days) => {
   const anchor = new Date(anchorDate);
@@ -35,9 +35,21 @@ const heatColor = (pct) => {
 };
 
 const Consumption = () => {
-  const { user, visibleProjects, taskLogs } = useApp();
+  const { user, visibleProjects, taskLogs, budgets } = useApp();
+  const isRnd = user?.role === "R&D";
+  const executionLane = isRnd ? "rnd" : "production";
+  const usageOptions = useMemo(() => ({ lane: executionLane }), [executionLane]);
   const today = new Date().toISOString().slice(0, 10);
-  const dailyRows = useMemo(() => buildLoggedDailyRows(visibleProjects, taskLogs), [visibleProjects, taskLogs]);
+  const dashboardProjects = useMemo(
+    () => visibleProjects
+      .filter((project) => (isRnd ? isProjectInRndLane(project) : isProjectInTpmLane(project)))
+      .map((project) => buildExecutionProjectView(project, budgets, executionLane)),
+    [visibleProjects, budgets, executionLane, isRnd]
+  );
+  const dailyRows = useMemo(
+    () => buildLoggedDailyRows(dashboardProjects, taskLogs, usageOptions),
+    [dashboardProjects, taskLogs, usageOptions]
+  );
   const latestDate = dailyRows[dailyRows.length - 1]?.date || today;
   const todayRows = dailyRows.filter((row) => row.date === latestDate);
 
@@ -53,7 +65,7 @@ const Consumption = () => {
   ), [todayRows]);
 
   const heatDates = useMemo(() => buildTrailingDates(latestDate, 14), [latestDate]);
-  const projectIds = visibleProjects.map((project) => project.id);
+  const projectIds = dashboardProjects.map((project) => project.id);
   const heatmap = useMemo(() => ({ dates: heatDates, rows: projectIds }), [heatDates, projectIds]);
 
   const cellFor = (projectId, date) => {
@@ -63,7 +75,7 @@ const Consumption = () => {
     return { ...entry, pct };
   };
 
-  const perProject = visibleProjects.map((project) => {
+  const perProject = dashboardProjects.map((project) => {
     const entries = dailyRows.filter((row) => row.projectId === project.id);
     const logged = entries.reduce((sum, row) => sum + Number(row.spent || 0), 0);
     const allocated = entries.reduce((sum, row) => sum + Number(row.approvedDaily || 0), 0);
@@ -89,7 +101,7 @@ const Consumption = () => {
             Logged daily consumption
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            {new Date(latestDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · task logs roll up here automatically for {user?.role === "TPM" || user?.role === "R&D" ? "your projects" : "all projects"}
+            {new Date(latestDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · task logs roll up here automatically for {isRnd ? "your R&D projects" : "your production projects"}
           </p>
         </div>
       </div>
@@ -135,7 +147,7 @@ const Consumption = () => {
             </thead>
             <tbody>
               {heatmap.rows.map((projectId) => {
-                const project = visibleProjects.find((entry) => entry.id === projectId);
+                const project = dashboardProjects.find((entry) => entry.id === projectId);
                 if (!project) return null;
                 return (
                   <tr key={projectId} data-testid={`heat-row-${projectId}`}>

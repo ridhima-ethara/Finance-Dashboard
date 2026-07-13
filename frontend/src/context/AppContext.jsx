@@ -3,7 +3,7 @@ import { USERS, ROLES, PROJECTS } from "../data/mockData";
 import { TEAM } from "../data/mockUsers";
 import { BEDROCK_MODELS } from "../data/mockCatalog";
 import { BUFFER } from "../data/mockCfo";
-import { formatBudgetTypeLabel, normalizeBudgetType } from "../lib/projectMetrics";
+import { formatBudgetTypeLabel, normalizeBudgetType, summarizeItProjectActuals } from "../lib/projectMetrics";
 
 const AppContext = createContext(null);
 const SESSION_KEY = "ethara.session.v1";
@@ -164,6 +164,40 @@ const sumBudgetItems = (items = {}) =>
 
 const clonePhases = (phases = []) => phases.map((phase) => ({ ...phase }));
 
+const getPendingWorkflowMeta = (budgetType = "") => {
+  const normalized = normalizeBudgetType(budgetType);
+  if (normalized === "Testing") {
+    return { stage: "testing-budget-pending", status: "Testing budget pending approval" };
+  }
+  if (normalized === "RnD") {
+    return { stage: "rnd-budget-pending", status: "R&D budget pending approval" };
+  }
+  if (normalized === "Rework") {
+    return { stage: "rework-budget-pending", status: "Rework budget pending approval" };
+  }
+  if (normalized === "Production") {
+    return { stage: "production-budget-pending", status: "Production budget pending approval" };
+  }
+  return { stage: "budget-pending", status: "Budget pending approval" };
+};
+
+const getApprovedWorkflowMeta = (budgetType = "") => {
+  const normalized = normalizeBudgetType(budgetType);
+  if (normalized === "Testing") {
+    return { stage: "testing-active", status: "Testing budget approved", type: "R&D", readyForTpmBudget: false };
+  }
+  if (normalized === "RnD") {
+    return { stage: "sample-active", status: "R&D budget approved", type: "R&D", readyForTpmBudget: false };
+  }
+  if (normalized === "Rework") {
+    return { stage: "sample-active", status: "Rework budget approved", type: "R&D", readyForTpmBudget: false };
+  }
+  if (normalized === "Production") {
+    return { stage: "production-active", status: "Approved", type: "Production", readyForTpmBudget: false };
+  }
+  return { stage: "budget-approved", status: "Approved", type: "R&D", readyForTpmBudget: false };
+};
+
 const snapshotProjectBudget = (project) => ({
   approvedBudget: Number(project?.approvedBudget || 0),
   estimatedBudget: Number(project?.estimatedBudget || project?.approvedBudget || 0),
@@ -172,6 +206,13 @@ const snapshotProjectBudget = (project) => ({
   phases: clonePhases(project?.phases || []),
   budgetItems: cloneBudgetItems(project?.budgetItems || {}),
   lastBudgetSubmission: project?.lastBudgetSubmission ? { ...project.lastBudgetSubmission } : null,
+  status: project?.status || "Discovery",
+  type: project?.type || "R&D",
+  workflowStage: project?.workflowStage || null,
+  readyForTpmBudget: Boolean(project?.readyForTpmBudget),
+  pendingBudgetSubmission: project?.pendingBudgetSubmission ? { ...project.pendingBudgetSubmission } : null,
+  promotedToProductionAt: project?.promotedToProductionAt || null,
+  itProvisioningStatus: project?.itProvisioningStatus || null,
 });
 
 const buildTimelineLabel = (phases = []) => {
@@ -327,6 +368,7 @@ const buildProjectBudgetStateFromReview = ({ projectEntry, review, approvedAmoun
   const phaseSource = toPhaseBudgetSource(review, projectEntry);
   const scaledPhases = scalePhasesToAmount(phaseSource, baselineSnapshot.phases || projectEntry.phases || [], approvedAmount);
   const scaledItems = scaleBudgetItemsToAmount(review?.items || projectEntry.budgetItems || {}, approvedAmount);
+  const workflowMeta = getApprovedWorkflowMeta(review?.budgetType || projectEntry.lastBudgetSubmission?.budgetType || projectEntry.type || "Production");
   return {
     approvedBudget: approvedAmount,
     estimatedBudget: approvedAmount,
@@ -341,6 +383,14 @@ const buildProjectBudgetStateFromReview = ({ projectEntry, review, approvedAmoun
       sampleIteration: Number(review?.sampleIteration || projectEntry.lastBudgetSubmission?.sampleIteration || 1),
       sourceDeliveryId: review?.sourceDeliveryId || projectEntry.lastBudgetSubmission?.sourceDeliveryId || null,
     },
+    status: workflowMeta.status,
+    type: workflowMeta.type,
+    workflowStage: workflowMeta.stage,
+    readyForTpmBudget: workflowMeta.readyForTpmBudget,
+    pendingBudgetSubmission: null,
+    promotedToProductionAt: workflowMeta.type === "Production"
+      ? (review?.cfoDecision?.at || review?.submittedAt || new Date().toISOString())
+      : projectEntry.promotedToProductionAt || null,
   };
 };
 
@@ -358,6 +408,13 @@ const buildProjectBaselineFromSnapshot = (projectEntry, snapshot = null) => {
     budgetItems: cloneBudgetItems(snapshot.budgetItems || {}),
     totalTasks: Number(snapshot.totalTasks || projectEntry.totalTasks || 0),
     lastBudgetSubmission: snapshot.lastBudgetSubmission ? { ...snapshot.lastBudgetSubmission } : projectEntry.lastBudgetSubmission,
+    status: snapshot.status || projectEntry.status,
+    type: snapshot.type || projectEntry.type,
+    workflowStage: snapshot.workflowStage || null,
+    readyForTpmBudget: Boolean(snapshot.readyForTpmBudget),
+    pendingBudgetSubmission: snapshot.pendingBudgetSubmission ? { ...snapshot.pendingBudgetSubmission } : null,
+    promotedToProductionAt: snapshot.promotedToProductionAt || null,
+    itProvisioningStatus: snapshot.itProvisioningStatus || null,
   };
 };
 
@@ -485,6 +542,13 @@ export const AppProvider = ({ children }) => {
       const changeBonus = finalizedChangesByProject[p.id] || 0;
       const approvedBudget = p.approvedBudget + topupBonus + changeBonus;
       const recoveredAmount = recoveries[p.id] ?? recoveryByProject[p.id] ?? p.recoveredAmount;
+      const itActuals = summarizeItProjectActuals(itMonthlyActuals[p.id] || {});
+      const hasItActuals = itActuals.totalActual > 0 || itActuals.dailyActuals.length > 0 || itActuals.modelUsage.length > 0;
+      const cfoActualSpend = hasItActuals ? itActuals.totalActual : Number(p.actualSpend || 0);
+      const cfoRemaining = approvedBudget - cfoActualSpend;
+      const cfoUtilization = approvedBudget > 0 ? Math.round((cfoActualSpend / approvedBudget) * 100) : 0;
+      const cfoVariance = approvedBudget - cfoActualSpend;
+      const cfoBurnRate = itActuals.runRate > 0 ? itActuals.runRate : Number(p.burnRate || 0) * 1000;
       let nextHealth = p.health;
       const recoveryWindow = recoveryWindows[p.id];
       if (recoveryWindow?.proposed > 0) {
@@ -501,16 +565,41 @@ export const AppProvider = ({ children }) => {
         changeRequestsTotal: (p.changeRequestsTotal || 0) + changeBonus,
         remaining: approvedBudget - p.actualSpend,
         utilization: approvedBudget > 0 ? Math.round((p.actualSpend / approvedBudget) * 100) : 0,
+        itActuals,
+        cfoActualSpend,
+        cfoRemaining,
+        cfoUtilization,
+        cfoVariance,
+        cfoBurnRate,
+        cfoTopModel: itActuals.modelUsage[0]?.modelName || p.topModel || "—",
       };
     });
-  }, [buffers, recoveries, customProjects, topupRequests, changeRequests, batchDeliveries]);
+  }, [buffers, recoveries, customProjects, topupRequests, changeRequests, batchDeliveries, itMonthlyActuals]);
 
   const visibleProjects = useMemo(() => {
     if (!user) return [];
     let list = projects;
-    if (user.role === "TPM") list = list.filter((p) => p.tpm === user.name);
-    else if (user.role === "PL") list = list.filter((p) => p.pl === user.name);
-    else if (user.role === "R&D") list = list.filter((p) => (p.rndMembers || []).includes(user.name) || p.rnd === user.name || p.tpm === user.name);
+    if (user.role === "TPM") {
+      list = list.filter((p) =>
+        p.tpm === user.name
+        || p.createdBy === user.name
+        || (p.teamMembers || []).some((member) => member.name === user.name && member.role === "TPM")
+      );
+    } else if (user.role === "PL") {
+      list = list.filter((p) =>
+        p.pl === user.name
+        || (p.plMembers || []).includes(user.name)
+        || (p.qlMembers || []).includes(user.name)
+        || (p.teamMembers || []).some((member) => member.name === user.name && (member.role === "PL / QL" || member.role === "Project Lead" || member.role === "QL" || member.role === "Quality Lead"))
+      );
+    } else if (user.role === "R&D") {
+      list = list.filter((p) =>
+        p.createdBy === user.name
+        || (p.rndMembers || []).includes(user.name)
+        || p.rnd === user.name
+        || (p.teamMembers || []).some((member) => member.name === user.name)
+      );
+    }
     if (scope === "R&D") list = list.filter((p) => p.type === "R&D");
     else if (scope === "Production") list = list.filter((p) => p.type === "Production");
     return list;
@@ -695,6 +784,8 @@ export const AppProvider = ({ children }) => {
       name: payload.internalName,
       clientProjectName: payload.clientProjectName,
       client: payload.clientProjectName || "New Engagement",
+      createdBy: payload.createdBy || "CTO",
+      createdByRole: payload.createdByRole || "CTO",
       pl: plMembers[0] || payload.tpm,
       tpm: payload.tpm,
       rnd: rndMembers[0] || null,
@@ -707,8 +798,11 @@ export const AppProvider = ({ children }) => {
       kickoffMail,
       startDate: payload.startDate,
       estimatedEndDate: "",
-      status: "Discovery",
+      status: "Awaiting testing budget",
       type: "R&D",
+      workflowStage: "awaiting-testing-budget",
+      readyForTpmBudget: false,
+      pendingBudgetSubmission: null,
       buffer: 10,
       recoverableFromClient: false,
       recoveredAmount: 0,
@@ -731,9 +825,11 @@ export const AppProvider = ({ children }) => {
       health: "healthy",
       topModel: "—",
       phases: [],
+      budgetItems: { models: [], infra: [], subs: [] },
       expenses: [],
       budgetHistory: [],
       topupHistory: [],
+      budgetTrackHistory: [],
       auditLog: [
         {
           id: `a-${id}-1`,
@@ -996,6 +1092,7 @@ export const AppProvider = ({ children }) => {
     };
     setBudgets((arr) => [entry, ...arr]);
     upsertProjectOverride(payload.projectId, (project) => {
+      const pendingMeta = getPendingWorkflowMeta(normalizedBudgetType);
       const requestedTotal = (payload.phases || []).reduce((sum, phase) => sum + Number(phase.budget || 0), 0) || payload.totals?.total || 0;
       const additionalMembers = (payload.additionalMembers || []).map((member, index) => buildTeamMember({
         projectId: payload.projectId,
@@ -1057,6 +1154,20 @@ export const AppProvider = ({ children }) => {
         rndMembers,
         plMembers,
         qlMembers,
+        status: pendingMeta.status,
+        workflowStage: pendingMeta.stage,
+        readyForTpmBudget: false,
+        pendingBudgetSubmission: {
+          reviewId,
+          budgetType: normalizedBudgetType,
+          submittedAt,
+          submittedBy: user?.name || "TPM",
+          submittedRole: user?.role || "TPM",
+          sampleIteration: Number(payload.sampleIteration || 1),
+          sourceDeliveryId: payload.sourceDeliveryId || null,
+          total: Number(payload.totals?.total || 0),
+          stage: "pending-cto",
+        },
         kickoffMail: project.kickoffMail
           ? { ...project.kickoffMail, recipients: mergeTeamMembers(project.kickoffMail.recipients || [], additionalMembers) }
           : project.kickoffMail,
@@ -1093,13 +1204,16 @@ export const AppProvider = ({ children }) => {
     const rndDecision = details.rnd?.decision || null;
     const isRecoverable = details.isRecoverable !== false;
     const budgetType = normalizeBudgetType(proj?.lastBudgetSubmission?.budgetType || proj?.type || (details.rnd ? "RnD" : "Production"));
+    const isTestingDelivery = stage === "rnd-review" && budgetType === "Testing";
     const status =
       stage === "rnd-review"
-        ? rndDecision === "accept"
-          ? "sample-approved"
-          : rndDecision === "reject"
-            ? "sample-rejected"
-            : "changes-requested"
+        ? isTestingDelivery
+          ? "testing-submitted"
+          : rndDecision === "accept"
+            ? "sample-approved"
+            : rndDecision === "reject"
+              ? "sample-rejected"
+              : "changes-requested"
         : isRecoverable ? "pending-cfo" : "non-recoverable";
     const deliveredAt = new Date().toISOString();
     const entry = {
@@ -1120,6 +1234,7 @@ export const AppProvider = ({ children }) => {
       sampleIteration: Number(details.sampleIteration || 1),
       status,
       actualRecovered: stage === "cfo-recovery" && !isRecoverable ? 0 : null,
+      recoveryVariance: stage === "cfo-recovery" && !isRecoverable ? -Number(proposedAmount || 0) : null,
       cfoNote: stage === "cfo-recovery" && !isRecoverable ? "Marked non-recoverable by TPM" : "",
       cfoAt: stage === "cfo-recovery" && !isRecoverable ? deliveredAt : null,
       cfoBy: stage === "cfo-recovery" && !isRecoverable ? user?.name || "TPM" : null,
@@ -1128,8 +1243,9 @@ export const AppProvider = ({ children }) => {
           ? {
               at: deliveredAt,
               actor: `${user?.name || "R&D"} · ${user?.role || "R&D"}`,
-              action:
-                rndDecision === "accept"
+              action: isTestingDelivery
+                ? "Submitted testing sample"
+                : rndDecision === "accept"
                   ? "Accepted sample delivery"
                   : rndDecision === "reject"
                     ? "Rejected sample delivery"
@@ -1150,18 +1266,54 @@ export const AppProvider = ({ children }) => {
       projectId,
       phaseId,
       stage === "rnd-review"
-        ? rndDecision === "accept"
-          ? "approved"
-          : rndDecision === "reject"
-            ? "rejected"
-            : "changes-requested"
+        ? isTestingDelivery
+          ? "pending-cfo"
+          : rndDecision === "accept"
+            ? "approved"
+            : rndDecision === "reject"
+              ? "rejected"
+              : "changes-requested"
         : isRecoverable ? "pending-cfo" : "approved"
     );
-    if (stage === "rnd-review" && rndDecision === "accept") {
+    if (stage === "rnd-review") {
       upsertProjectOverride(projectId, (project) => ({
         ...project,
-        type: "Production",
-        promotedToProductionAt: deliveredAt,
+        type: !isTestingDelivery && rndDecision === "accept" ? "Production" : "R&D",
+        readyForTpmBudget: !isTestingDelivery && rndDecision === "accept",
+        pendingBudgetSubmission: null,
+        workflowStage: isTestingDelivery
+          ? "awaiting-rnd-budget"
+          : rndDecision === "accept"
+            ? "tpm-budget-ready"
+            : rndDecision === "reject"
+              ? "sample-rejected"
+              : "awaiting-rework-budget",
+        status: isTestingDelivery
+          ? "Awaiting R&D budget"
+          : rndDecision === "accept"
+            ? "Ready for TPM budget"
+            : rndDecision === "reject"
+              ? "Sample rejected"
+              : "Awaiting rework budget",
+        promotedToProductionAt: !isTestingDelivery && rndDecision === "accept"
+          ? deliveredAt
+          : project.promotedToProductionAt || null,
+        auditLog: [
+          {
+            id: `a-${projectId}-${Date.now().toString(36)}-delivery`,
+            ts: deliveredAt,
+            actor: `${user?.name || "R&D"} · ${user?.role || "R&D"}`,
+            action: isTestingDelivery
+              ? "Testing sample submitted"
+              : rndDecision === "accept"
+                ? "Sample accepted"
+                : rndDecision === "reject"
+                  ? "Sample rejected"
+                  : "Sample marked for rework",
+            detail: `${phaseName || phaseId} · ${Number(proposedAmount || 0).toLocaleString()}`,
+          },
+          ...(project.auditLog || []),
+        ],
       }));
     }
     return entry;
@@ -1175,10 +1327,20 @@ export const AppProvider = ({ children }) => {
         ? {
             ...d,
             actualRecovered: amount,
+            recoveryVariance: amount - Number(d.proposedAmount || 0),
             cfoNote: cfoNote || "",
             cfoAt: new Date().toISOString(),
             cfoBy: user?.name || "CFO",
             status: amount >= d.proposedAmount ? "recovered" : "partial-recovered",
+            history: [
+              {
+                at: new Date().toISOString(),
+                actor: `${user?.name || "CFO"} · CFO`,
+                action: "Recorded actual recovery",
+                detail: `$${amount.toLocaleString()} vs proposed $${Number(d.proposedAmount || 0).toLocaleString()}`,
+              },
+              ...(d.history || []),
+            ],
           }
         : d
     )));
@@ -1199,8 +1361,17 @@ export const AppProvider = ({ children }) => {
   };
 
   // ---- Budget Reviews (CTO edits original TPM ask, forwards to CFO for final decision) ----
-  const ctoModifyBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, modifiedPhases, ctoComment }) => {
-    const total = (modifiedPhases || []).reduce((s, ph) => s + Number(ph.infra || 0) + Number(ph.model || 0) + Number(ph.subs || 0), 0);
+  const ctoModifyBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, modifiedPhases, modifiedItems, ctoComment }) => {
+    const phaseTotal = (modifiedPhases || []).reduce((sum, phase) => (
+      sum + Number(phase.infra || 0) + Number(phase.model || 0) + Number(phase.subs || 0)
+    ), 0);
+    const itemSummary = cloneBudgetItems(modifiedItems || {});
+    const itemTotals = {
+      models: sumBudgetLines(itemSummary.models),
+      infra: sumBudgetLines(itemSummary.infra),
+      subs: sumBudgetLines(itemSummary.subs),
+    };
+    const total = modifiedItems ? (itemTotals.models + itemTotals.infra + itemTotals.subs) : phaseTotal;
     const now = new Date().toISOString();
     setBudgetReviews((arr) => {
       const existingIdx = arr.findIndex((r) => r.id === reviewId);
@@ -1213,7 +1384,12 @@ export const AppProvider = ({ children }) => {
         tpm,
         requestedBudget,
         modifiedPhases,
+        modifiedItems: modifiedItems ? itemSummary : previous?.modifiedItems,
         modifiedTotal: total,
+        aiCost: modifiedItems ? itemTotals.models : Number(previous?.aiCost || 0),
+        infraCost: modifiedItems ? itemTotals.infra : Number(previous?.infraCost || 0),
+        subsCost: modifiedItems ? itemTotals.subs : Number(previous?.subsCost || 0),
+        items: modifiedItems ? itemSummary : cloneBudgetItems(previous?.items || {}),
         ctoComment,
         ctoBy: user?.name || "CTO",
         ctoAt: now,
@@ -1225,7 +1401,9 @@ export const AppProvider = ({ children }) => {
         at: now,
         actor: `${user?.name || "CTO"} · CTO`,
         action: "Modified & forwarded to CFO",
-        detail: `Total ${total} · ${modifiedPhases.length} phase${modifiedPhases.length === 1 ? "" : "s"}`,
+        detail: modifiedItems
+          ? `Total ${total} · ${itemSummary.models.length + itemSummary.infra.length + itemSummary.subs.length} line item${itemSummary.models.length + itemSummary.infra.length + itemSummary.subs.length === 1 ? "" : "s"}`
+          : `Total ${total} · ${modifiedPhases.length} phase${modifiedPhases.length === 1 ? "" : "s"}`,
       };
       if (existingIdx >= 0) {
         return arr.map((r, i) => (i === existingIdx ? { ...base, history: [...(previous.history || []), historyEntry] } : r));
@@ -1237,6 +1415,17 @@ export const AppProvider = ({ children }) => {
         ? { ...budget, status: "forwarded-cfo", ctoAt: now, ctoComment }
         : budget
     )));
+    upsertProjectOverride(projectId, (projectEntry) => ({
+      ...projectEntry,
+      status: "Awaiting CFO approval",
+      pendingBudgetSubmission: projectEntry.pendingBudgetSubmission
+        ? {
+            ...projectEntry.pendingBudgetSubmission,
+            stage: "pending-cfo",
+            ctoAt: now,
+          }
+        : projectEntry.pendingBudgetSubmission,
+    }));
     return total;
   };
 
@@ -1674,11 +1863,26 @@ export const AppProvider = ({ children }) => {
 
   const saveItMonthlyActual = (projectId, payload) => {
     const updatedAt = new Date().toISOString();
+    const dailyActuals = Array.isArray(payload?.dailyActuals) ? payload.dailyActuals : [];
+    const dailyTotals = dailyActuals.reduce((sum, row) => ({
+      modelActual: sum.modelActual + Number(row?.modelActual || 0),
+      infraActual: sum.infraActual + Number(row?.infraActual || 0),
+      subsActual: sum.subsActual + Number(row?.subsActual || 0),
+    }), { modelActual: 0, infraActual: 0, subsActual: 0 });
+    const modelActual = dailyActuals.length ? dailyTotals.modelActual : Number(payload?.modelActual || 0);
+    const infraActual = dailyActuals.length ? dailyTotals.infraActual : Number(payload?.infraActual || 0);
+    const subsActual = dailyActuals.length ? dailyTotals.subsActual : Number(payload?.subsActual || 0);
+    const totalActual = modelActual + infraActual + subsActual;
     setItMonthlyActuals((entries) => ({
       ...entries,
       [projectId]: {
         ...(entries[projectId] || {}),
         ...payload,
+        dailyActuals,
+        modelActual,
+        infraActual,
+        subsActual,
+        totalActual,
         updatedAt,
         updatedBy: user?.name || "IT",
       },

@@ -106,6 +106,7 @@ const BudgetReviews = () => {
         {filtered.map((r) => {
           const uc = urgencyColor[r.urgency] || urgencyColor.Normal;
           const delta = r.recommendedBudget - r.requestedBudget;
+          const requesterLabel = r.requesterRole === "R&D" || ["Testing", "RnD", "Rework"].includes(r.budgetType) ? "R&D" : "TPM";
           return (
             <Link
               to={`/budget-reviews/${r.id}`}
@@ -131,7 +132,7 @@ const BudgetReviews = () => {
                   <div className="mt-2 font-display font-semibold text-lg text-white">{r.projectName}</div>
                   <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-3 flex-wrap">
                     <span className="inline-flex items-center gap-1">
-                      <User className="w-3 h-3" /> {r.tpm}
+                      <User className="w-3 h-3" /> {requesterLabel}: {r.tpm}
                     </span>
                     <span>·</span>
                     <span>{r.client}</span>

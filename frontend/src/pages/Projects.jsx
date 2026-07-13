@@ -120,12 +120,16 @@ const Projects = () => {
           const c = healthColor(p.health);
           const latestReview = latestBudgetReviewByProject.get(p.id);
           const budgetState = getProjectBudgetCardState(p, latestReview);
+          const isLocked = Boolean(p.pendingBudgetSubmission);
+          const displayActual = isCFO ? Number(p.cfoActualSpend || p.actualSpend || 0) : Number(p.actualSpend || 0);
+          const displayVariance = isCFO ? Number(p.cfoVariance || p.variance || 0) : Number(p.variance || 0);
+          const displayUtilization = isCFO ? Number(p.cfoUtilization || p.utilization || 0) : Number(p.utilization || 0);
           return (
             <Link
               to={`/projects/${p.id}`}
               key={p.id}
               data-testid={`project-card-${p.id}`}
-              className="group bg-[#12121A] rounded-2xl border border-white/10 p-5 card-hover"
+              className={`group bg-[#12121A] rounded-2xl border border-white/10 p-5 card-hover ${isLocked ? "opacity-70" : ""}`}
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
@@ -136,6 +140,11 @@ const Projects = () => {
                     }`}>
                       {p.type}
                     </span>
+                    {isLocked && (
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-500/30 text-amber-300">
+                        Pending approval
+                      </span>
+                    )}
                   </div>
                   <div className="mt-0.5 font-display font-semibold text-lg text-white truncate">
                     {p.name}
@@ -153,13 +162,13 @@ const Projects = () => {
                 </div>
                 <div>
                   <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">Actual</div>
-                  <div className="text-sm font-semibold text-white tabular">{fmtCurrency(p.actualSpend)}</div>
+                  <div className="text-sm font-semibold text-white tabular">{fmtCurrency(displayActual)}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">Variance</div>
-                  <div className={`text-sm font-semibold tabular ${varianceColor(p.variance)}`}>
-                    {p.variance > 0 ? "+" : ""}
-                    {fmtCurrency(p.variance)}
+                  <div className={`text-sm font-semibold tabular ${varianceColor(displayVariance)}`}>
+                    {displayVariance > 0 ? "+" : ""}
+                    {fmtCurrency(displayVariance)}
                   </div>
                 </div>
               </div>
@@ -167,14 +176,14 @@ const Projects = () => {
               <div className="mt-4">
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span className="text-zinc-400">Utilization</span>
-                  <span className={`font-semibold ${utilColor(p.utilization)}`}>{fmtPct(p.utilization)}</span>
+                  <span className={`font-semibold ${utilColor(displayUtilization)}`}>{fmtPct(displayUtilization)}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-white/10">
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: `${Math.min(p.utilization, 100)}%`,
-                      background: p.utilization >= 100 ? "#EF4444" : p.utilization >= 85 ? "#F59E0B" : "#10B981",
+                      width: `${Math.min(displayUtilization, 100)}%`,
+                      background: displayUtilization >= 100 ? "#EF4444" : displayUtilization >= 85 ? "#F59E0B" : "#10B981",
                     }}
                   />
                 </div>

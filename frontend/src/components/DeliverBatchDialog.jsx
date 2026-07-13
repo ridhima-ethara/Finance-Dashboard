@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { PackageCheck, DollarSign, MessageSquare, Send, X, ListChecks, Cpu, ThumbsUp, ThumbsDown, RefreshCw, Receipt, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
+import { normalizeBudgetType } from "../lib/projectMetrics";
 
 // Deliver batch dialog.
 //   TPM view : proposed recoverable amount + client comment (no Client representative field).
@@ -12,8 +14,12 @@ import { fmtCurrency } from "../lib/format";
 //              comments, plus Reject / Accept / Changes-requested mark. Once R&D marks
 //              "Accept", the TPM is notified that this is the correct estimate.
 const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
+  const nav = useNavigate();
   const { deliverBatch, role, user, getPhaseLogs } = useApp();
   const isRnd = role === "R&D";
+  const activeBudgetType = normalizeBudgetType(project?.lastBudgetSubmission?.budgetType || project?.type || "");
+  const isTestingBudget = isRnd && activeBudgetType === "Testing";
+  const nextSampleIteration = Math.max(Number(project?.lastBudgetSubmission?.sampleIteration || 1), 1);
   const phaseLoggedAmount = useMemo(
     () => (project?.id && phase?.id ? getPhaseLogs(project.id, phase.id).reduce((sum, log) => sum + Number(log.cost || 0), 0) : 0),
     [getPhaseLogs, phase?.id, project?.id]
@@ -34,7 +40,9 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
   const [rndClientComment, setRndClientComment] = useState("");
   const [rndDecision, setRndDecision] = useState("accept"); // accept | reject | changes
 
-  const rndTotal = Number(taskCount || 0) * Number(estPerTask || 0);
+  const rndTotal = isTestingBudget
+    ? (phaseLoggedAmount || Number(phase?.estimated || 0))
+    : Number(taskCount || 0) * Number(estPerTask || 0);
 
   useEffect(() => {
     if (!open) return;
@@ -74,16 +82,16 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
 
   const submitRnd = () => {
     if (!project || !phase) { toast.error("Missing phase context"); return; }
-    if (Number(taskCount) <= 0) { toast.error("Enter task count submitted"); return; }
-    if (Number(estPerTask) <= 0) { toast.error("Enter estimated cost per task"); return; }
+    if (!isTestingBudget && Number(taskCount) <= 0) { toast.error("Enter task count submitted"); return; }
+    if (!isTestingBudget && Number(estPerTask) <= 0) { toast.error("Enter estimated cost per task"); return; }
 
-    deliverBatch({
+    const delivery = deliverBatch({
       projectId: project.id,
       phaseId: phase.id,
       phaseName: phase.name,
       proposedAmount: rndTotal,
       clientComment: rndClientComment,
-      sampleIteration: Number(project?.lastBudgetSubmission?.sampleIteration || 1),
+      sampleIteration: nextSampleIteration,
       rnd: {
         taskCount: Number(taskCount),
         estPerTask: Number(estPerTask),
@@ -94,10 +102,19 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
       },
     });
 
+    if (isTestingBudget) {
+      toast.success("Testing sample submitted", {
+        description: `${project.name} · ${phase.name} · raise the R&D budget for the next sample`,
+      });
+      onOpenChange(false);
+      nav(`/budget-builder?projectId=${project.id}&budgetType=RnD&phaseId=${phase.id}&sampleIteration=1&sourceDeliveryId=${delivery.id}`);
+      return;
+    }
+
     const decisionLabel = rndDecision === "accept" ? "Accepted" : rndDecision === "reject" ? "Rejected" : "Changes requested";
     if (rndDecision === "accept") {
       toast.success(`Batch ${decisionLabel} · TPM notified`, {
-        description: `${project.name} · ${phase.name} · confirmed as the correct estimate`,
+        description: `${project.name} · ${phase.name} · sample is ready for TPM budget planning`,
       });
     } else if (rndDecision === "reject") {
       toast.error(`Batch ${decisionLabel} · TPM notified`, { description: `${project.name} · ${phase.name}` });
@@ -105,6 +122,9 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
       toast.warning(`Batch · ${decisionLabel} · TPM notified`, { description: `${project.name} · ${phase.name}` });
     }
     onOpenChange(false);
+    if (rndDecision === "changes") {
+      nav(`/budget-builder?projectId=${project.id}&budgetType=Rework&phaseId=${phase.id}&sampleIteration=${nextSampleIteration + 1}&sourceDeliveryId=${delivery.id}`);
+    }
   };
 
   return (
@@ -117,10 +137,12 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
             </div>
             <div>
               <DialogTitle className="font-display text-lg text-white">
-                {isRnd ? "R&D · Review batch" : "Deliver batch"}
+                {isRnd ? (isTestingBudget ? "R&D · Submit testing sample" : "R&D · Review batch") : "Deliver batch"}
               </DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
-                {project?.name} · {phase?.name} · {isRnd ? "confirm the estimate before it goes forward" : "notifies CFO to record actual recovery"}
+                {project?.name} · {phase?.name} · {isRnd
+                  ? (isTestingBudget ? "testing is complete; submit it and continue to the next R&D budget ask" : "confirm the estimate before it goes forward")
+                  : "notifies CFO to record actual recovery"}
               </DialogDescription>
             </div>
           </div>
@@ -193,38 +215,46 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
         {isRnd && (
           <div className="space-y-3 py-2" data-testid="deliver-rnd-form">
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Task count submitted *">
-                <div className="relative">
-                  <ListChecks className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="number" min="0" value={taskCount}
-                    onChange={(e) => setTaskCount(Number(e.target.value) || 0)}
-                    data-testid="deliver-rnd-task-count"
-                    className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                  />
-                </div>
-              </Field>
+              {!isTestingBudget && (
+                <>
+                  <Field label="Task count submitted *">
+                    <div className="relative">
+                      <ListChecks className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="number" min="0" value={taskCount}
+                        onChange={(e) => setTaskCount(Number(e.target.value) || 0)}
+                        data-testid="deliver-rnd-task-count"
+                        className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                      />
+                    </div>
+                  </Field>
 
-              <Field label="Estimated $ / task *">
-                <div className="relative">
-                  <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="number" min="0" step="0.01" value={estPerTask}
-                    onChange={(e) => setEstPerTask(Number(e.target.value) || 0)}
-                    data-testid="deliver-rnd-est-per-task"
-                    className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                  />
-                </div>
-              </Field>
+                  <Field label="Estimated $ / task *">
+                    <div className="relative">
+                      <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="number" min="0" step="0.01" value={estPerTask}
+                        onChange={(e) => setEstPerTask(Number(e.target.value) || 0)}
+                        data-testid="deliver-rnd-est-per-task"
+                        className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                      />
+                    </div>
+                  </Field>
 
-              <Field label="Trajectories">
-                <input
-                  type="number" min="0" value={trajectories}
-                  onChange={(e) => setTrajectories(Number(e.target.value) || 0)}
-                  data-testid="deliver-rnd-trajectories"
-                  className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                />
-              </Field>
+                  <Field label="Trajectories">
+                    <input
+                      type="number" min="0" value={trajectories}
+                      onChange={(e) => setTrajectories(Number(e.target.value) || 0)}
+                      data-testid="deliver-rnd-trajectories"
+                      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                    />
+                  </Field>
+                </>
+              )}
+
+              {isTestingBudget && (
+                <MiniField label="Testing spend" value={fmtCurrency(rndTotal, { compact: false })} tone="magenta" />
+              )}
 
               <Field label="Models used">
                 <div className="relative">
@@ -254,33 +284,41 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
               />
             </Field>
 
-            <div>
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Mark this batch as</div>
-              <div className="grid grid-cols-3 gap-2" data-testid="deliver-rnd-decision">
-                {[
-                  { k: "accept", label: "Accept", icon: ThumbsUp, on: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-                  { k: "changes", label: "Changes requested", icon: RefreshCw, on: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
-                  { k: "reject", label: "Reject", icon: ThumbsDown, on: "bg-red-500/15 text-red-300 border-red-500/30" },
-                ].map((d) => (
-                  <button
-                    key={d.k}
-                    onClick={() => setRndDecision(d.k)}
-                    data-testid={`deliver-rnd-decision-${d.k}`}
-                    className={`inline-flex items-center gap-1.5 justify-center px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
-                      rndDecision === d.k ? d.on : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
-                    }`}
-                  >
-                    <d.icon className="w-3.5 h-3.5" />
-                    {d.label}
-                  </button>
-                ))}
+            {!isTestingBudget && (
+              <div>
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Mark this batch as</div>
+                <div className="grid grid-cols-3 gap-2" data-testid="deliver-rnd-decision">
+                  {[
+                    { k: "accept", label: "Accept", icon: ThumbsUp, on: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
+                    { k: "changes", label: "Changes requested", icon: RefreshCw, on: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+                    { k: "reject", label: "Reject", icon: ThumbsDown, on: "bg-red-500/15 text-red-300 border-red-500/30" },
+                  ].map((d) => (
+                    <button
+                      key={d.k}
+                      onClick={() => setRndDecision(d.k)}
+                      data-testid={`deliver-rnd-decision-${d.k}`}
+                      className={`inline-flex items-center gap-1.5 justify-center px-3 py-2 rounded-lg border text-xs font-medium transition-colors ${
+                        rndDecision === d.k ? d.on : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
+                      }`}
+                    >
+                      <d.icon className="w-3.5 h-3.5" />
+                      {d.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-3 flex items-start gap-2">
               <MessageSquare className="w-3.5 h-3.5 text-fuchsia-300 flex-shrink-0 mt-0.5" />
               <div className="text-xs text-zinc-300 leading-relaxed">
-                When you mark this as <span className="text-emerald-300 font-semibold">Accept</span>, the TPM is notified that this is the correct estimate and the batch moves forward.
+                {isTestingBudget
+                  ? <>Submitting this testing batch closes the testing cycle and opens the next <span className="text-fuchsia-200 font-semibold">R&amp;D budget request</span> for the sample build.</>
+                  : rndDecision === "accept"
+                    ? <>If the sample is accepted, the <span className="text-emerald-300 font-semibold">TPM can start the next production budget step</span>.</>
+                    : rndDecision === "reject"
+                      ? <>If the sample is rejected, the batch is closed and stays in the delivery log for audit.</>
+                      : <>If changes are requested, R&amp;D is routed back to the <span className="text-amber-300 font-semibold">budget builder for the next sample iteration</span>.</>}
               </div>
             </div>
           </div>
@@ -299,7 +337,9 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
             className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
             data-testid="deliver-submit"
           >
-            <Send className="w-3.5 h-3.5" /> {isRnd ? "Submit review" : recoveryType === "recoverable" ? "Deliver & notify CFO" : "Submit non-recoverable delivery"}
+            <Send className="w-3.5 h-3.5" /> {isRnd
+              ? (isTestingBudget ? "Submit testing sample" : "Submit review")
+              : recoveryType === "recoverable" ? "Deliver & notify CFO" : "Submit non-recoverable delivery"}
           </Button>
         </DialogFooter>
       </DialogContent>

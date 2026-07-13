@@ -60,12 +60,12 @@ const KpiGrid = () => {
   const { role, projects, budgetReviews, topupRequests, changeRequests, taskLogs } = useApp();
   const summary = projects.reduce((acc, project) => {
     const usage = summarizeLoggedProject(project, taskLogs);
-    const spend = Math.max(Number(project.actualSpend || 0), Number(usage.loggedSpend || 0));
+    const spend = Number(project.cfoActualSpend || project.actualSpend || usage.loggedSpend || 0);
     acc.approvedBudget += Number(project.approvedBudget || 0);
     acc.actualSpend += spend;
     acc.remaining += Math.max(0, Number(project.approvedBudget || 0) - spend);
     acc.activeProjects += 1;
-    acc.burnRate += usage.runRate || 0;
+    acc.burnRate += Number(project.cfoBurnRate || usage.runRate || 0);
     return acc;
   }, {
     approvedBudget: 0,

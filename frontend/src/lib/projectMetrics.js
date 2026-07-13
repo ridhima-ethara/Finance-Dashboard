@@ -5,6 +5,24 @@ const TRACK_LABELS = {
   Production: "Production",
 };
 
+const RND_WORKFLOW_STAGES = new Set([
+  "awaiting-testing-budget",
+  "testing-budget-pending",
+  "testing-active",
+  "awaiting-rnd-budget",
+  "rnd-budget-pending",
+  "sample-active",
+  "awaiting-rework-budget",
+  "rework-budget-pending",
+  "sample-rejected",
+]);
+
+const TPM_WORKFLOW_STAGES = new Set([
+  "tpm-budget-ready",
+  "production-budget-pending",
+  "production-active",
+]);
+
 export const normalizeBudgetType = (budgetType = "") => {
   const value = String(budgetType || "").trim().toLowerCase();
   if (value === "testing") return "Testing";
@@ -19,8 +37,68 @@ export const formatBudgetTypeLabel = (budgetType = "") =>
 
 export const getProjectPhaseIds = (project) => (project?.phases || []).map((phase) => phase.id);
 
-export const getProjectLogs = (taskLogs = {}, project) =>
-  getProjectPhaseIds(project).flatMap((phaseId) => taskLogs[`${project.id}::${phaseId}`] || []);
+export const getTaskLogRecordedCost = (log) => {
+  if (Array.isArray(log?.modelUsage) && log.modelUsage.length) {
+    return log.modelUsage.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+  }
+  return Number(log?.cost || 0);
+};
+
+const getLogTimestamp = (log) => {
+  const raw = log?.createdAt || (log?.date ? `${log.date}T00:00:00.000Z` : "");
+  const ts = raw ? new Date(raw).getTime() : 0;
+  return Number.isNaN(ts) ? 0 : ts;
+};
+
+const getPromotionTimestamp = (project) => {
+  const ts = project?.promotedToProductionAt ? new Date(project.promotedToProductionAt).getTime() : 0;
+  return Number.isNaN(ts) ? 0 : ts;
+};
+
+export const getProjectWorkflowStage = (project = {}) => {
+  if (project?.pendingBudgetSubmission?.stage) return project.pendingBudgetSubmission.stage;
+  if (project?.workflowStage) return project.workflowStage;
+  if (project?.readyForTpmBudget) return "tpm-budget-ready";
+  if (project?.type === "Production") {
+    return Number(project?.approvedBudget || 0) > 0 ? "production-active" : "production-budget-pending";
+  }
+  return Number(project?.approvedBudget || 0) > 0 ? "sample-active" : "awaiting-testing-budget";
+};
+
+export const isProjectInTpmLane = (project = {}) => {
+  const stage = getProjectWorkflowStage(project);
+  return Boolean(project?.readyForTpmBudget) || Boolean(project?.type === "Production") || TPM_WORKFLOW_STAGES.has(stage);
+};
+
+export const isProjectInRndLane = (project = {}) => {
+  const stage = getProjectWorkflowStage(project);
+  return !isProjectInTpmLane(project) && (Boolean(project?.type === "R&D") || RND_WORKFLOW_STAGES.has(stage));
+};
+
+export const filterLogsByLane = (project, logs = [], lane = "all") => {
+  const entries = Array.isArray(logs) ? logs : [];
+  if (lane === "all") return entries;
+
+  const promotionTs = getPromotionTimestamp(project);
+  if (!promotionTs) {
+    if (lane === "production") return isProjectInTpmLane(project) ? entries : [];
+    if (lane === "rnd") return isProjectInRndLane(project) ? entries : [];
+    return entries;
+  }
+
+  return entries.filter((log) => (
+    lane === "production"
+      ? getLogTimestamp(log) >= promotionTs
+      : getLogTimestamp(log) < promotionTs
+  ));
+};
+
+export const getProjectLogs = (taskLogs = {}, project, options = {}) =>
+  filterLogsByLane(
+    project,
+    getProjectPhaseIds(project).flatMap((phaseId) => taskLogs[`${project.id}::${phaseId}`] || []),
+    options.lane || "all"
+  );
 
 const normalizeUsageRows = (log) => {
   if (Array.isArray(log?.modelUsage) && log.modelUsage.length) {
@@ -48,8 +126,8 @@ const normalizeUsageRows = (log) => {
   return [];
 };
 
-export const summarizeLoggedProject = (project, taskLogs = {}) => {
-  const logs = getProjectLogs(taskLogs, project);
+export const summarizeLoggedProject = (project, taskLogs = {}, options = {}) => {
+  const logs = getProjectLogs(taskLogs, project, options);
   const byModel = {};
 
   let loggedSpend = 0;
@@ -59,7 +137,7 @@ export const summarizeLoggedProject = (project, taskLogs = {}) => {
   let outputTokens = 0;
 
   logs.forEach((log) => {
-    loggedSpend += Number(log.cost || 0);
+    loggedSpend += getTaskLogRecordedCost(log);
     loggedTasks += Number(log.tasksDone || 0);
     loggedTrajectories += Number(log.trajectories || 0);
 
@@ -118,14 +196,126 @@ export const summarizeLoggedProject = (project, taskLogs = {}) => {
   };
 };
 
-export const buildLoggedDailyRows = (projects = [], taskLogs = {}) => {
+export const normalizeItModelUsageRows = (rows = []) =>
+  (Array.isArray(rows) ? rows : [])
+    .map((entry, index) => ({
+      id: entry?.id || `it-model-${index + 1}`,
+      modelId: entry?.modelId || "",
+      modelName: entry?.modelName || entry?.label || "",
+      cost: Number(entry?.cost || 0),
+      inputTokens: Number(entry?.inputTokens || 0),
+      outputTokens: Number(entry?.outputTokens || 0),
+    }))
+    .filter((entry) => entry.modelId || entry.modelName || entry.cost || entry.inputTokens || entry.outputTokens);
+
+export const summarizeItProjectActuals = (entry = {}) => {
+  const dailyActuals = (Array.isArray(entry?.dailyActuals) ? entry.dailyActuals : [])
+    .map((row) => ({
+      date: row?.date || "",
+      modelActual: Number(row?.modelActual || 0),
+      infraActual: Number(row?.infraActual || 0),
+      subsActual: Number(row?.subsActual || 0),
+      total: Number(row?.modelActual || 0) + Number(row?.infraActual || 0) + Number(row?.subsActual || 0),
+    }))
+    .filter((row) => row.date || row.total > 0)
+    .sort((left, right) => new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime());
+
+  const modelUsage = normalizeItModelUsageRows(entry?.modelUsage || []);
+  const modelUsageActual = modelUsage.reduce((sum, row) => sum + Number(row.cost || 0), 0);
+  const dailyTotals = dailyActuals.reduce((sum, row) => ({
+    modelActual: sum.modelActual + row.modelActual,
+    infraActual: sum.infraActual + row.infraActual,
+    subsActual: sum.subsActual + row.subsActual,
+  }), { modelActual: 0, infraActual: 0, subsActual: 0 });
+
+  const modelActual = dailyActuals.length
+    ? dailyTotals.modelActual
+    : Math.max(Number(entry?.modelActual || 0), modelUsageActual);
+  const infraActual = dailyActuals.length
+    ? dailyTotals.infraActual
+    : Number(entry?.infraActual || 0);
+  const subsActual = dailyActuals.length
+    ? dailyTotals.subsActual
+    : Number(entry?.subsActual || 0);
+  const totalActual = Number(entry?.totalActual || 0) || (modelActual + infraActual + subsActual);
+  const latestDailyActual = dailyActuals[dailyActuals.length - 1]?.total || Number(entry?.dailyApiCost || 0);
+  const runRate = dailyActuals.length ? totalActual / dailyActuals.length : latestDailyActual;
+
+  return {
+    modelActual,
+    infraActual,
+    subsActual,
+    totalActual,
+    dailyActuals,
+    latestDailyActual,
+    runRate,
+    modelUsage,
+    activeKeys: Number(entry?.activeKeys || 0),
+    note: entry?.note || "",
+    updatedAt: entry?.updatedAt || null,
+    updatedBy: entry?.updatedBy || "",
+  };
+};
+
+export const summarizeProjectModelUsage = (project, taskLogs = {}, actualEntry = {}) => {
+  const actuals = summarizeItProjectActuals(actualEntry);
+  if (actuals.modelUsage.length) {
+    return [...actuals.modelUsage].sort((left, right) => right.cost - left.cost || right.inputTokens - left.inputTokens);
+  }
+  return summarizeLoggedProject(project, taskLogs).models;
+};
+
+export const buildItActualDailyRows = (projects = [], itMonthlyActuals = {}) => {
+  const rows = [];
+
+  (projects || []).forEach((project) => {
+    const actuals = summarizeItProjectActuals(itMonthlyActuals[project?.id] || {});
+    const approvedDaily = Math.round(Number(project?.approvedBudget || 0) / 30);
+
+    if (actuals.dailyActuals.length) {
+      actuals.dailyActuals.forEach((row) => {
+        rows.push({
+          date: row.date,
+          projectId: project.id,
+          projectName: project.name,
+          actual: row.total,
+          budget: approvedDaily,
+          modelActual: row.modelActual,
+          infraActual: row.infraActual,
+          subsActual: row.subsActual,
+        });
+      });
+      return;
+    }
+
+    if (actuals.latestDailyActual > 0 && actuals.updatedAt) {
+      rows.push({
+        date: actuals.updatedAt.slice(0, 10),
+        projectId: project.id,
+        projectName: project.name,
+        actual: actuals.latestDailyActual,
+        budget: approvedDaily,
+        modelActual: actuals.modelActual,
+        infraActual: actuals.infraActual,
+        subsActual: actuals.subsActual,
+      });
+    }
+  });
+
+  return rows.sort((left, right) => (
+    new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime()
+      || left.projectName.localeCompare(right.projectName)
+  ));
+};
+
+export const buildLoggedDailyRows = (projects = [], taskLogs = {}, options = {}) => {
   const rows = [];
 
   (projects || []).forEach((project) => {
     const approvedDaily = Math.round(Number(project?.approvedBudget || 0) / 30);
     const daily = {};
 
-    getProjectLogs(taskLogs, project).forEach((log) => {
+    getProjectLogs(taskLogs, project, options).forEach((log) => {
       const date = log.date || log.createdAt?.slice(0, 10);
       if (!date) return;
       daily[date] = daily[date] || {
@@ -139,7 +329,7 @@ export const buildLoggedDailyRows = (projects = [], taskLogs = {}) => {
         inputTokens: 0,
         outputTokens: 0,
       };
-      daily[date].spent += Number(log.cost || 0);
+      daily[date].spent += getTaskLogRecordedCost(log);
       daily[date].tasks += Number(log.tasksDone || 0);
       daily[date].trajectories += Number(log.trajectories || 0);
 
@@ -185,6 +375,26 @@ const normalizeTrackEntry = (entry) => {
   };
 };
 
+const formatTrackPhaseDates = (phase = {}) => {
+  if (phase?.dates) return phase.dates;
+  if (phase?.start || phase?.end) return `${phase.start || "—"} → ${phase.end || "—"}`;
+  return "Not scheduled";
+};
+
+const mapTrackPhaseToProjectPhase = (phase = {}, index = 0) => ({
+  id: phase.id || `phase-${index + 1}`,
+  name: phase.name || `Phase ${index + 1}`,
+  dates: formatTrackPhaseDates(phase),
+  start: phase.start || "",
+  end: phase.end || "",
+  estimated: Number(phase.budget || phase.estimated || phase.total || 0),
+  actual: Number(phase.actual || 0),
+  totalTasks: Number(phase.tasks || phase.totalTasks || 0),
+  tasks: Number(phase.tasks || phase.totalTasks || 0),
+  trajectoriesPerTask: Number(phase.trajectories || phase.trajectoriesPerTask || 0),
+  health: phase.health || "healthy",
+});
+
 export const buildBudgetTracks = (project, budgets = []) => {
   const seen = new Set();
   const projectHistory = Array.isArray(project?.budgetTrackHistory) ? project.budgetTrackHistory : [];
@@ -219,5 +429,67 @@ export const buildBudgetTracks = (project, budgets = []) => {
         latest: grouped[key][0],
         history: grouped[key],
       })),
+  };
+};
+
+export const getLaneBudgetTrack = (project, budgets = [], lane = "all") => {
+  const tracks = buildBudgetTracks(project, budgets);
+  if (lane === "production") return tracks.grouped?.Production?.[0] || null;
+  if (lane === "rnd") return tracks.entries.find((entry) => entry.budgetType !== "Production") || null;
+  return tracks.entries[0] || null;
+};
+
+export const buildExecutionProjectView = (project, budgets = [], lane = "all") => {
+  if (!project || lane === "all") return project;
+
+  const stage = getProjectWorkflowStage(project);
+  const track = getLaneBudgetTrack(project, budgets, lane);
+
+  if (lane === "production") {
+    const hasApprovedProductionBudget =
+      normalizeBudgetType(project?.lastBudgetSubmission?.budgetType || "") === "Production"
+      || stage === "production-active";
+    const canFallbackToCurrentState =
+      project?.type === "Production"
+      && !project?.readyForTpmBudget
+      && stage !== "tpm-budget-ready";
+
+    if (!track && !canFallbackToCurrentState) {
+      return {
+        ...project,
+        approvedBudget: 0,
+        estimatedBudget: 0,
+        remaining: 0,
+        utilization: 0,
+        burnRate: 0,
+        totalTasks: 0,
+        phases: [],
+      };
+    }
+
+    return {
+      ...project,
+      approvedBudget: track
+        ? (hasApprovedProductionBudget ? Number(project?.approvedBudget || track.total || 0) : Number(track.total || 0))
+        : Number(project?.approvedBudget || 0),
+      estimatedBudget: track
+        ? (hasApprovedProductionBudget ? Number(project?.estimatedBudget || project?.approvedBudget || track.total || 0) : Number(track.total || 0))
+        : Number(project?.estimatedBudget || project?.approvedBudget || 0),
+      totalTasks: track
+        ? Number(track.totalTasks || 0)
+        : Number(project?.totalTasks || 0),
+      phases: track?.phases?.length
+        ? track.phases.map(mapTrackPhaseToProjectPhase)
+        : (canFallbackToCurrentState ? (project?.phases || []) : []),
+      type: "Production",
+    };
+  }
+
+  return {
+    ...project,
+    approvedBudget: Number(project?.approvedBudget || track?.total || 0),
+    estimatedBudget: Number(project?.estimatedBudget || project?.approvedBudget || track?.total || 0),
+    totalTasks: Number(project?.totalTasks || track?.totalTasks || 0),
+    phases: track?.phases?.length ? track.phases.map(mapTrackPhaseToProjectPhase) : (project?.phases || []),
   };
 };

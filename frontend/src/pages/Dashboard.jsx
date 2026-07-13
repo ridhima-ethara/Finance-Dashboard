@@ -62,7 +62,7 @@ const Dashboard = () => {
   const pendingReviews = pendingBudgetApprovals + pendingTopups + pendingCRs;
   const outstandingRecovery = projects
     .filter((project) => project.recoverableFromClient)
-    .reduce((sum, project) => sum + Math.max(0, Number(project.actualSpend || 0) - Number(project.recoveredAmount || 0)), 0);
+    .reduce((sum, project) => sum + Math.max(0, Number(project.cfoActualSpend || project.actualSpend || 0) - Number(project.recoveredAmount || 0)), 0);
 
 
   return (

@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -15,18 +16,25 @@ import {
   PieChart,
   Pie,
 } from "recharts";
-import { PROJECTS, MONTHLY_SPEND, CATEGORY_BREAKDOWN, MODELS_USAGE, INFRA_BY_PROJECT, THRESHOLDS } from "../../data/mockData";
+import { CreditCard, CheckCircle2, Circle } from "lucide-react";
 import { fmtCurrency, fmtPct } from "../../lib/format";
+import { useApp } from "../../context/AppContext";
+import {
+  buildItActualDailyRows,
+  summarizeProjectModelUsage,
+} from "../../lib/projectMetrics";
 
-// Palette
 const COLORS = {
   budget: "#E619B8",
   estimated: "#F59E0B",
-  actual: "#EF4444",
-  under: "#10B981",
+  actual: "#10B981",
+  actualSoft: "#22D3EE",
   info: "#3B82F6",
   slate: "#94A3B8",
+  amber: "#F59E0B",
 };
+
+const PIE_COLORS = ["#E619B8", "#3B82F6", "#10B981", "#F59E0B", "#F97316", "#94A3B8"];
 
 const CardShell = ({ title, subtitle, right, children, testid }) => (
   <div
@@ -44,19 +52,19 @@ const CardShell = ({ title, subtitle, right, children, testid }) => (
   </div>
 );
 
-const CustomTooltip = ({ active, payload, label }) => {
+const CustomTooltip = ({ active, payload, label, valueFormatter = fmtCurrency }) => {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-[#12121A] border border-white/10 rounded-xl shadow-lg px-3 py-2 tabular">
       <div className="text-xs font-semibold text-white">{label}</div>
       <div className="mt-1 space-y-0.5">
-        {payload.map((p, i) => (
-          <div key={i} className="flex items-center justify-between gap-4 text-xs">
+        {payload.map((entry, index) => (
+          <div key={index} className="flex items-center justify-between gap-4 text-xs">
             <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-sm" style={{ background: p.color }} />
-              <span className="text-zinc-400 capitalize">{p.name}</span>
+              <span className="w-2 h-2 rounded-sm" style={{ background: entry.color }} />
+              <span className="text-zinc-400 capitalize">{entry.name}</span>
             </div>
-            <span className="font-semibold text-white">{fmtCurrency(p.value)}</span>
+            <span className="font-semibold text-white">{valueFormatter(entry.value)}</span>
           </div>
         ))}
       </div>
@@ -64,19 +72,28 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-// ---------- Actual · Budget · Estimated (Grouped Bar) ----------
+const getProjectLabel = (name = "") => {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).join(" ") || "Project";
+};
+
 export const BudgetActualChart = () => {
-  const data = PROJECTS.slice(0, 6).map((p) => ({
-    name: p.name.split(" ")[0],
-    Budget: p.approvedBudget,
-    Estimated: p.estimatedBudget,
-    Actual: p.actualSpend,
-  }));
+  const { projects } = useApp();
+  const data = useMemo(
+    () => projects.slice(0, 6).map((project) => ({
+      name: getProjectLabel(project.name),
+      Budget: Number(project.approvedBudget || 0),
+      Estimated: Number(project.estimatedBudget || project.approvedBudget || 0),
+      Actual: Number(project.cfoActualSpend || project.actualSpend || 0),
+    })),
+    [projects]
+  );
+
   return (
     <CardShell
       testid="chart-budget-actual"
       title="Actual · Budget · Estimated"
-      subtitle="per project · last 30 days · $ thousands"
+      subtitle="Per project · CFO actuals from IT filing"
     >
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -87,16 +104,16 @@ export const BudgetActualChart = () => {
               tick={{ fontSize: 11, fill: "#71717A" }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+              tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Legend
               iconType="square"
               wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
-              formatter={(v) => <span className="text-zinc-400 text-xs">{v}</span>}
+              formatter={(value) => <span className="text-zinc-400 text-xs">{value}</span>}
             />
             <Bar dataKey="Budget" fill={COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="Estimated" fill={COLORS.estimated} radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="Estimated" fill={COLORS.amber} radius={[4, 4, 0, 0]} maxBarSize={18} />
             <Bar dataKey="Actual" fill={COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={18} />
           </BarChart>
         </ResponsiveContainer>
@@ -105,19 +122,38 @@ export const BudgetActualChart = () => {
   );
 };
 
-// ---------- Model-wise expenses (Grouped Bar) ----------
 export const ModelExpensesChart = () => {
-  const data = MODELS_USAGE.map((m) => ({
-    name: m.name,
-    Budget: m.budget,
-    Estimated: m.estimated,
-    Actual: m.actual,
-  }));
+  const { projects, taskLogs, itMonthlyActuals } = useApp();
+  const data = useMemo(() => {
+    const byModel = {};
+
+    projects.forEach((project) => {
+      (project.budgetItems?.models || []).forEach((line) => {
+        const key = line.modelId || line.meta?.id || line.meta?.name || line.modelName || line.label || "Model";
+        const label = line.meta?.name || line.modelName || line.label || key;
+        byModel[key] = byModel[key] || { name: label, Budget: 0, Estimated: 0, Actual: 0 };
+        const amount = Number(line.estCost || line.amount || 0);
+        byModel[key].Budget += amount;
+        byModel[key].Estimated += amount;
+      });
+
+      summarizeProjectModelUsage(project, taskLogs, itMonthlyActuals[project.id] || {}).forEach((row) => {
+        const key = row.modelId || row.modelName || "Model";
+        byModel[key] = byModel[key] || { name: row.modelName || key, Budget: 0, Estimated: 0, Actual: 0 };
+        byModel[key].Actual += Number(row.cost || 0);
+      });
+    });
+
+    return Object.values(byModel)
+      .sort((left, right) => right.Actual - left.Actual || right.Budget - left.Budget)
+      .slice(0, 8);
+  }, [projects, taskLogs, itMonthlyActuals]);
+
   return (
     <CardShell
       testid="chart-model-expenses"
       title="Model-wise expenses"
-      subtitle="hue = model · shade = Budget → Estimated → Actual"
+      subtitle="Budgeted model lines vs IT-filed actual usage"
     >
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -128,13 +164,13 @@ export const ModelExpensesChart = () => {
               tick={{ fontSize: 11, fill: "#71717A" }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+              tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Legend iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
             <Bar dataKey="Budget" fill="#E619B8" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="Estimated" fill="#F472B6" radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="Actual" fill="#FBCFE8" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="Estimated" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="Actual" fill="#10B981" radius={[4, 4, 0, 0]} maxBarSize={18} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -142,31 +178,38 @@ export const ModelExpensesChart = () => {
   );
 };
 
-// ---------- Infrastructure stacked by project ----------
 export const InfraStackedChart = () => {
+  const { projects } = useApp();
+  const data = useMemo(
+    () => projects.slice(0, 6).map((project) => ({
+      name: getProjectLabel(project.name),
+      Budget: Number((project.budgetItems?.infra || []).reduce((sum, line) => sum + Number(line.estCost || line.amount || 0), 0)),
+      Actual: Number(project.itActuals?.infraActual || 0),
+    })),
+    [projects]
+  );
+
   return (
     <CardShell
       testid="chart-infra"
-      title="Infrastructure by project"
-      subtitle="infra $ per project · monthly"
+      title="Infrastructure actuals by project"
+      subtitle="Budgeted infra lines vs IT-filed infra actuals"
     >
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={INFRA_BY_PROJECT}>
+          <BarChart data={data} barGap={8}>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
             <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} />
             <YAxis
               tick={{ fontSize: 11, fill: "#71717A" }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`}
+              tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`}
             />
             <Tooltip content={<CustomTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
             <Legend iconType="square" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-            <Bar dataKey="EC2" stackId="a" fill="#E619B8" maxBarSize={30} />
-            <Bar dataKey="S3" stackId="a" fill="#10B981" maxBarSize={30} />
-            <Bar dataKey="RDS" stackId="a" fill="#3B82F6" maxBarSize={30} />
-            <Bar dataKey="SES" stackId="a" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={30} />
+            <Bar dataKey="Budget" fill="#3B82F6" radius={[4, 4, 0, 0]} maxBarSize={24} />
+            <Bar dataKey="Actual" fill="#22D3EE" radius={[4, 4, 0, 0]} maxBarSize={24} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -174,40 +217,50 @@ export const InfraStackedChart = () => {
   );
 };
 
-// ---------- Monthly spend trend ----------
 export const MonthlySpendChart = () => {
+  const { projects, itMonthlyActuals } = useApp();
+  const data = useMemo(() => {
+    const rows = buildItActualDailyRows(projects, itMonthlyActuals);
+    return Array.from(rows.reduce((map, row) => {
+      const current = map.get(row.date) || { date: row.date, budget: 0, actual: 0 };
+      current.budget += Number(row.budget || 0);
+      current.actual += Number(row.actual || 0);
+      map.set(row.date, current);
+      return map;
+    }, new Map()).values()).slice(-14);
+  }, [projects, itMonthlyActuals]);
+
   return (
     <CardShell
       testid="chart-monthly-spend"
-      title="Monthly spend trend"
-      subtitle="portfolio-wide · budget vs actual"
+      title="Daily actual spend trend"
+      subtitle="Portfolio-wide · IT-filed actuals vs approved daily budget"
     >
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={MONTHLY_SPEND}>
+          <AreaChart data={data}>
             <defs>
               <linearGradient id="gActual" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#E619B8" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="#E619B8" stopOpacity={0} />
+                <stop offset="0%" stopColor="#10B981" stopOpacity={0.35} />
+                <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
               </linearGradient>
               <linearGradient id="gBudget" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10B981" stopOpacity={0.25} />
-                <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                <stop offset="0%" stopColor="#E619B8" stopOpacity={0.25} />
+                <stop offset="100%" stopColor="#E619B8" stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
-            <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="date" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(value) => value.slice(5)} />
             <YAxis
               tick={{ fontSize: 11, fill: "#71717A" }}
               axisLine={false}
               tickLine={false}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+              tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 8 }} />
-            <Area type="monotone" dataKey="budget" name="Budget" stroke="#10B981" fill="url(#gBudget)" strokeWidth={2} />
-            <Area type="monotone" dataKey="actual" name="Actual" stroke="#E619B8" fill="url(#gActual)" strokeWidth={2} />
-            <Line type="monotone" dataKey="estimated" name="Estimated" stroke="#F59E0B" strokeWidth={2} dot={false} />
+            <Area type="monotone" dataKey="budget" name="Budget" stroke="#E619B8" fill="url(#gBudget)" strokeWidth={2} />
+            <Area type="monotone" dataKey="actual" name="Actual" stroke="#10B981" fill="url(#gActual)" strokeWidth={2} />
           </AreaChart>
         </ResponsiveContainer>
       </div>
@@ -215,53 +268,78 @@ export const MonthlySpendChart = () => {
   );
 };
 
-// ---------- Category donut ----------
 export const CategoryDonut = () => {
+  const { projects } = useApp();
+  const breakdown = useMemo(() => {
+    const totals = projects.reduce((sum, project) => ({
+      models: sum.models + Number(project.itActuals?.modelActual || 0),
+      infra: sum.infra + Number(project.itActuals?.infraActual || 0),
+      subs: sum.subs + Number(project.itActuals?.subsActual || 0),
+    }), { models: 0, infra: 0, subs: 0 });
+    const total = totals.models + totals.infra + totals.subs;
+    const rows = [
+      { name: "Models", actual: totals.models, color: "#E619B8" },
+      { name: "Infrastructure", actual: totals.infra, color: "#3B82F6" },
+      { name: "Subscriptions", actual: totals.subs, color: "#10B981" },
+    ];
+    return rows.map((row) => ({
+      ...row,
+      value: total > 0 ? Math.round((row.actual / total) * 100) : 0,
+    })).filter((row) => row.actual > 0 || total === 0);
+  }, [projects]);
+
+  const totalPct = breakdown.reduce((sum, row) => sum + row.value, 0);
+
   return (
     <CardShell
       testid="chart-category-donut"
       title="Expense breakdown"
-      subtitle="portfolio · this month"
+      subtitle="Portfolio actuals by category"
     >
       <div className="flex items-center gap-4">
         <div className="w-[180px] h-[180px] relative">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
-                data={CATEGORY_BREAKDOWN}
+                data={breakdown}
                 dataKey="value"
                 innerRadius={55}
                 outerRadius={80}
                 paddingAngle={2}
                 stroke="none"
               >
-                {CATEGORY_BREAKDOWN.map((c, i) => (
-                  <Cell key={i} fill={c.color} />
+                {breakdown.map((row, index) => (
+                  <Cell key={index} fill={row.color} />
                 ))}
               </Pie>
               <Tooltip
-                formatter={(v) => `${v}%`}
-                contentStyle={{
-                  borderRadius: 12,
-                  border: "1px solid #e2e8f0",
-                  fontSize: 12,
+                content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0].payload;
+                  return (
+                    <div className="bg-[#12121A] border border-white/10 rounded-xl shadow-lg px-3 py-2 tabular">
+                      <div className="text-xs font-semibold text-white">{row.name}</div>
+                      <div className="mt-1 text-xs text-zinc-400">{fmtCurrency(row.actual, { compact: false })}</div>
+                      <div className="text-xs text-zinc-400">{row.value}% of actuals</div>
+                    </div>
+                  );
                 }}
               />
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Total</div>
-            <div className="font-display text-xl font-semibold text-white">100%</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Actual mix</div>
+            <div className="font-display text-xl font-semibold text-white">{totalPct}%</div>
           </div>
         </div>
         <div className="flex-1 grid grid-cols-1 gap-1.5">
-          {CATEGORY_BREAKDOWN.map((c) => (
-            <div key={c.name} className="flex items-center justify-between text-xs">
+          {breakdown.map((row) => (
+            <div key={row.name} className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: c.color }} />
-                <span className="text-zinc-200">{c.name}</span>
+                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: row.color }} />
+                <span className="text-zinc-200">{row.name}</span>
               </div>
-              <span className="font-semibold text-white tabular">{c.value}%</span>
+              <span className="font-semibold text-white tabular">{fmtCurrency(row.actual, { compact: false })}</span>
             </div>
           ))}
         </div>
@@ -270,35 +348,41 @@ export const CategoryDonut = () => {
   );
 };
 
-// ---------- Utilization gauge/bar with buffer range ----------
 export const UtilizationBars = () => {
-  const data = PROJECTS.map((p) => ({ name: p.name, util: p.utilization, buffer: p.buffer || 10 }));
+  const { projects } = useApp();
+  const data = useMemo(
+    () => projects.map((project) => ({
+      name: project.name,
+      util: Number(project.cfoUtilization || project.utilization || 0),
+      buffer: Number(project.buffer || 10),
+    })),
+    [projects]
+  );
+
   return (
     <CardShell
       testid="chart-utilization"
       title="Budget utilization"
-      subtitle="per project · % of approved · dashed marker = 100 + buffer"
+      subtitle="Per project · CFO actuals with project buffer guardrails"
     >
       <div className="space-y-3">
-        {data.map((d) => {
-          const color = d.util >= 100 ? "#EF4444" : d.util >= 85 ? "#F59E0B" : "#10B981";
-          const bg = d.util >= 100 ? "#FEE2E2" : d.util >= 85 ? "#FEF3C7" : "#D1FAE5";
-          // Bar scale: 0 → 100 + buffer% (so buffer range is always visible)
-          const scaleMax = 100 + Number(d.buffer || 0);
-          const utilLeft = Math.min((Math.min(d.util, scaleMax) / scaleMax) * 100, 100);
-          const bufferStartPct = (100 / scaleMax) * 100;      // where 100% sits on the bar
-          const bufferWidthPct = 100 - bufferStartPct;         // remaining right portion = buffer range
+        {data.map((row) => {
+          const color = row.util >= 100 ? "#EF4444" : row.util >= 85 ? "#F59E0B" : "#10B981";
+          const bg = row.util >= 100 ? "#FEE2E2" : row.util >= 85 ? "#FEF3C7" : "#D1FAE5";
+          const scaleMax = 100 + Number(row.buffer || 0);
+          const utilLeft = Math.min((Math.min(row.util, scaleMax) / scaleMax) * 100, 100);
+          const bufferStartPct = (100 / scaleMax) * 100;
+          const bufferWidthPct = 100 - bufferStartPct;
           return (
-            <div key={d.name} data-testid={`util-bar-${d.name}`}>
+            <div key={row.name} data-testid={`util-bar-${row.name}`}>
               <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-zinc-200 font-medium">{d.name}</span>
+                <span className="text-zinc-200 font-medium">{row.name}</span>
                 <span className="font-semibold tabular flex items-center gap-2">
-                  <span style={{ color }}>{fmtPct(d.util)}</span>
-                  <span className="text-[9px] text-zinc-500 font-medium">buffer +{d.buffer}%</span>
+                  <span style={{ color }}>{fmtPct(row.util)}</span>
+                  <span className="text-[9px] text-zinc-500 font-medium">buffer +{row.buffer}%</span>
                 </span>
               </div>
               <div className="relative h-2.5 rounded-full" style={{ background: bg }}>
-                {/* Buffer range zone (100% → 100+buffer%) rendered as diagonal fill */}
                 <div
                   className="absolute inset-y-0 rounded-r-full"
                   style={{
@@ -306,18 +390,12 @@ export const UtilizationBars = () => {
                     width: `${bufferWidthPct}%`,
                     backgroundImage: "repeating-linear-gradient(45deg, rgba(0,0,0,0.14) 0 3px, transparent 3px 6px)",
                   }}
-                  data-testid={`util-buffer-${d.name}`}
                 />
-                {/* Actual utilization fill */}
                 <div
                   className="absolute inset-y-0 left-0 rounded-full transition-all"
                   style={{ width: `${utilLeft}%`, background: color }}
                 />
-                {/* 100% marker line */}
-                <div
-                  className="absolute inset-y-0 w-px bg-zinc-800"
-                  style={{ left: `${bufferStartPct}%` }}
-                />
+                <div className="absolute inset-y-0 w-px bg-zinc-800" style={{ left: `${bufferStartPct}%` }} />
               </div>
             </div>
           );
@@ -327,109 +405,150 @@ export const UtilizationBars = () => {
   );
 };
 
-// ---------- Subscription usage panel ----------
-import { SUBSCRIPTIONS } from "../../data/mockData";
-import { CreditCard } from "lucide-react";
 export const SubscriptionsPanel = () => {
-  const totalSeats = SUBSCRIPTIONS.reduce((s, x) => s + x.seats, 0);
+  const { projects } = useApp();
+  const subscriptions = useMemo(() => {
+    const map = new Map();
+    projects.forEach((project) => {
+      (project.budgetItems?.subs || []).forEach((line, index) => {
+        const label = line.subscription || line.optionLabel || line.label || `Subscription ${index + 1}`;
+        const existing = map.get(label) || {
+          id: label,
+          name: label,
+          budget: 0,
+          actual: 0,
+          projects: new Set(),
+        };
+        existing.budget += Number(line.estCost || line.amount || 0);
+        existing.projects.add(project.name);
+        map.set(label, existing);
+      });
+
+      if ((project.budgetItems?.subs || []).length === 0 && Number(project.itActuals?.subsActual || 0) > 0) {
+        const label = "Unmapped subscriptions";
+        const existing = map.get(label) || {
+          id: label,
+          name: label,
+          budget: 0,
+          actual: 0,
+          projects: new Set(),
+        };
+        existing.projects.add(project.name);
+        map.set(label, existing);
+      }
+    });
+
+    const rows = Array.from(map.values()).map((row) => ({
+      ...row,
+      projects: Array.from(row.projects),
+    }));
+
+    const totalActual = projects.reduce((sum, project) => sum + Number(project.itActuals?.subsActual || 0), 0);
+    if (rows.length) {
+      const baseTotal = rows.reduce((sum, row) => sum + row.budget, 0);
+      rows.forEach((row) => {
+        row.actual = baseTotal > 0 ? (row.budget / baseTotal) * totalActual : 0;
+      });
+    }
+
+    return rows.sort((left, right) => right.actual - left.actual || right.budget - left.budget);
+  }, [projects]);
+
+  const totalBudget = subscriptions.reduce((sum, row) => sum + row.budget, 0);
+  const totalActual = subscriptions.reduce((sum, row) => sum + row.actual, 0);
+
   return (
     <CardShell
       testid="panel-subscriptions"
       title={
         <span className="inline-flex items-center gap-2">
           <CreditCard className="w-4 h-4 text-zinc-500" />
-          Subscription usage · seat utilization
+          Subscription actuals
         </span>
       }
-      subtitle="hover for people using each tool"
+      subtitle="Budgeted subscription asks vs IT-filed actuals"
       right={
         <div className="text-xs text-zinc-500 tabular">
-          <span className="font-semibold text-white">{SUBSCRIPTIONS.length}</span> subscriptions ·{" "}
-          <span className="font-semibold text-white">{totalSeats}</span> people
+          <span className="font-semibold text-white">{subscriptions.length}</span> lines ·{" "}
+          <span className="font-semibold text-white">{fmtCurrency(totalActual, { compact: false })}</span> actual
         </div>
       }
     >
       <div className="space-y-2">
-        {SUBSCRIPTIONS.map((s) => (
+        {subscriptions.length === 0 && (
+          <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-6 text-center text-xs text-zinc-500">
+            No subscription budget or actual data has been filed yet.
+          </div>
+        )}
+        {subscriptions.map((subscription, index) => (
           <div
-            key={s.id}
-            data-testid={`sub-${s.id}`}
+            key={subscription.id}
+            data-testid={`sub-${subscription.id}`}
             className="flex items-center gap-3 p-3 rounded-xl border border-white/5 hover:border-white/10 hover:bg-white/5 transition-all group"
           >
             <div
               className="w-10 h-10 rounded-lg text-white text-xs font-semibold flex items-center justify-center flex-shrink-0"
-              style={{ background: s.color }}
+              style={{ background: PIE_COLORS[index % PIE_COLORS.length] }}
             >
-              {s.initials}
+              {subscription.name.slice(0, 2).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-white">{s.name}</div>
-              <div className="text-xs text-zinc-500 tabular">
-                ${s.price}
-                {s.cadence} · {s.seats} seats
+              <div className="text-sm font-semibold text-white">{subscription.name}</div>
+              <div className="text-xs text-zinc-500">
+                Budget {fmtCurrency(subscription.budget, { compact: false })} · Actual {fmtCurrency(subscription.actual, { compact: false })}
               </div>
             </div>
-            <div className="flex -space-x-2">
-              {s.users.slice(0, 4).map((u, i) => (
-                <div
-                  key={i}
-                  className="w-7 h-7 rounded-full border-2 border-[#12121A] bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-[10px] font-semibold text-zinc-200"
-                  title={u}
-                >
-                  {u.split(" ").map((x) => x[0]).slice(0, 2).join("")}
-                </div>
-              ))}
-              {s.users.length > 4 && (
-                <div className="w-7 h-7 rounded-full border-2 border-[#12121A] bg-white/10 flex items-center justify-center text-[10px] font-semibold text-zinc-400">
-                  +{s.users.length - 4}
-                </div>
-              )}
+            <div className="text-right">
+              <div className="text-xs text-zinc-400">{subscription.projects.length} project{subscription.projects.length === 1 ? "" : "s"}</div>
+              <div className="text-[11px] text-zinc-500">{subscription.projects.slice(0, 2).join(", ") || "—"}</div>
             </div>
           </div>
         ))}
+        {subscriptions.length > 0 && (
+          <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-400">
+            Subscription budget {fmtCurrency(totalBudget, { compact: false })} · actual {fmtCurrency(totalActual, { compact: false })}
+          </div>
+        )}
       </div>
     </CardShell>
   );
 };
 
-// ---------- Approval workflow visualizer ----------
-import { CheckCircle2, Circle } from "lucide-react";
 const STAGES = [
   { key: "req", label: "Budget Request", done: true },
   { key: "cto", label: "CTO Review", done: true },
-  { key: "coo", label: "COO Approval", done: true, current: true },
-  { key: "lock", label: "Budget Locked", done: false },
+  { key: "cfo", label: "CFO Approval", done: true, current: true },
+  { key: "it", label: "IT Provisioning", done: false },
   { key: "exec", label: "Execution", done: false },
-  { key: "mon", label: "Monitoring", done: false },
-  { key: "top", label: "Top-up (if any)", done: false },
-  { key: "close", label: "Closure", done: false },
+  { key: "rec", label: "Recovery", done: false },
 ];
+
 export const WorkflowStrip = () => (
   <CardShell
     testid="workflow-strip"
     title="Budget approval workflow"
-    subtitle="Project → CTO → COO → Locked → Execution → Monitoring → Top-up → Closure"
+    subtitle="Project → CTO → CFO → IT → Execution → Recovery"
   >
     <div className="flex items-center gap-2 overflow-x-auto pb-1">
-      {STAGES.map((s, i) => (
-        <div key={s.key} className="flex items-center gap-2 flex-shrink-0">
+      {STAGES.map((stage, index) => (
+        <div key={stage.key} className="flex items-center gap-2 flex-shrink-0">
           <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-medium ${
-              s.current
+              stage.current
                 ? "bg-fuchsia-500/10 border-fuchsia-500/30 text-fuchsia-400"
-                : s.done
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                : "bg-white/5 border-white/10 text-zinc-500"
+                : stage.done
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                  : "bg-white/5 border-white/10 text-zinc-500"
             }`}
           >
-            {s.done ? (
+            {stage.done ? (
               <CheckCircle2 className="w-3.5 h-3.5" />
             ) : (
               <Circle className="w-3.5 h-3.5" />
             )}
-            {s.label}
+            {stage.label}
           </div>
-          {i < STAGES.length - 1 && <div className="w-4 h-px bg-white/10" />}
+          {index < STAGES.length - 1 && <div className="w-4 h-px bg-white/10" />}
         </div>
       ))}
     </div>

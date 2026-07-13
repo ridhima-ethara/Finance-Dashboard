@@ -7,7 +7,7 @@ const AmountAtRisk = () => {
   const { projects, taskLogs } = useApp();
   const portfolio = projects.reduce((acc, project) => {
     const usage = summarizeLoggedProject(project, taskLogs);
-    const spend = Math.max(Number(project.actualSpend || 0), Number(usage.loggedSpend || 0));
+    const spend = Number(project.cfoActualSpend || project.actualSpend || usage.loggedSpend || 0);
     const approved = Number(project.approvedBudget || 0);
     acc.approvedBudget += approved;
     acc.amountAtRisk += Math.max(0, spend - approved);

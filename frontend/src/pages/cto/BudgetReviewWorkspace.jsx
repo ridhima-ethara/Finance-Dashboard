@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { toast } from "sonner";
@@ -23,6 +23,23 @@ import {
   CreditCard,
   Undo2,
 } from "lucide-react";
+
+const cloneLines = (lines = []) => lines.map((line) => ({
+  ...line,
+  meta: line?.meta ? { ...line.meta } : line?.meta,
+  members: Array.isArray(line?.members) ? [...line.members] : line?.members,
+}));
+
+const cloneReviewItems = (items = {}) => ({
+  models: cloneLines(items.models || []),
+  infra: cloneLines(items.infra || []),
+  subs: cloneLines(items.subs || []),
+});
+
+const sumLineItems = (lines = []) => (Array.isArray(lines) ? lines : []).reduce(
+  (sum, line) => sum + Number(line?.estCost || line?.amount || 0),
+  0
+);
 
 const BudgetReviewWorkspace = () => {
   const { id } = useParams();
@@ -55,10 +72,31 @@ const BudgetReviewWorkspace = () => {
       };
     });
   };
+  const buildInitialItems = useCallback(() => {
+    if (!review) return { models: [], infra: [], subs: [] };
+    if (priorModification?.modifiedItems) return cloneReviewItems(priorModification.modifiedItems);
+    const submittedItems = cloneReviewItems(review.items || {});
+    if (submittedItems.models.length || submittedItems.infra.length || submittedItems.subs.length) return submittedItems;
+    return {
+      models: Number(review.aiCost || 0) > 0
+        ? [{ id: "models-summary", label: "Models", estCost: Number(review.aiCost || 0), amount: Number(review.aiCost || 0), meta: { name: "Models" } }]
+        : [],
+      infra: Number(review.infraCost || 0) > 0
+        ? [{ id: "infra-summary", label: "Infrastructure", estCost: Number(review.infraCost || 0), amount: Number(review.infraCost || 0), meta: { code: "Infrastructure" } }]
+        : [],
+      subs: Number(review.subsCost || 0) > 0
+        ? [{ id: "subs-summary", label: "Subscriptions", estCost: Number(review.subsCost || 0), amount: Number(review.subsCost || 0), subscription: "Subscriptions" }]
+        : [],
+    };
+  }, [priorModification?.modifiedItems, review]);
   const [modifiedPhases, setModifiedPhases] = useState(buildInitialPhases);
+  const [modifiedItems, setModifiedItems] = useState(buildInitialItems);
   useEffect(() => {
     if (priorModification?.modifiedPhases?.length) setModifiedPhases(priorModification.modifiedPhases);
   }, [priorModification?.id, priorModification?.modifiedPhases]);
+  useEffect(() => {
+    setModifiedItems(buildInitialItems());
+  }, [buildInitialItems]);
 
   if (!review || !project) {
     return (
@@ -72,27 +110,98 @@ const BudgetReviewWorkspace = () => {
   const requestedBudget = review.requestedBudget;
   const currentBudget = review.currentBudget;
   const recommended = review.recommendedBudget;
-  const isRndReview = (review.recoveryType || "").toLowerCase().includes("r&d") || (review.type || "").toLowerCase().includes("r&d");
+  const isRndReview =
+    review.requesterRole === "R&D"
+    || ["Testing", "RnD", "Rework"].includes(review.budgetType)
+    || (review.recoveryType || "").toLowerCase().includes("r&d")
+    || (review.type || "").toLowerCase().includes("r&d");
   const returnTarget = isRndReview ? "R&D" : "TPM";
 
   const phaseTotals = modifiedPhases.map((p) => ({
     ...p,
     total: Number(p.infra || 0) + Number(p.model || 0) + Number(p.subs || 0),
   }));
-  const modifiedTotal = phaseTotals.reduce((s, p) => s + p.total, 0);
-  const modifiedInfra = phaseTotals.reduce((s, p) => s + Number(p.infra || 0), 0);
-  const modifiedModel = phaseTotals.reduce((s, p) => s + Number(p.model || 0), 0);
-  const modifiedSubs = phaseTotals.reduce((s, p) => s + Number(p.subs || 0), 0);
+  const phaseBasedTotals = {
+    total: phaseTotals.reduce((s, p) => s + p.total, 0),
+    infra: phaseTotals.reduce((s, p) => s + Number(p.infra || 0), 0),
+    model: phaseTotals.reduce((s, p) => s + Number(p.model || 0), 0),
+    subs: phaseTotals.reduce((s, p) => s + Number(p.subs || 0), 0),
+  };
+  const itemBasedTotals = {
+    total: sumLineItems(modifiedItems.models) + sumLineItems(modifiedItems.infra) + sumLineItems(modifiedItems.subs),
+    model: sumLineItems(modifiedItems.models),
+    infra: sumLineItems(modifiedItems.infra),
+    subs: sumLineItems(modifiedItems.subs),
+  };
+  const modifiedTotal = isRndReview ? itemBasedTotals.total : phaseBasedTotals.total;
+  const modifiedInfra = isRndReview ? itemBasedTotals.infra : phaseBasedTotals.infra;
+  const modifiedModel = isRndReview ? itemBasedTotals.model : phaseBasedTotals.model;
+  const modifiedSubs = isRndReview ? itemBasedTotals.subs : phaseBasedTotals.subs;
   const modifiedDeltaVsRequested = modifiedTotal - requestedBudget;
 
   const updateCell = (phaseId, key, val) => {
     setModifiedPhases((rows) => rows.map((r) => (r.id === phaseId ? { ...r, [key]: Number(val) || 0 } : r)));
   };
-  const resetToOriginal = () => setModifiedPhases(buildInitialPhases());
+  const updateItemCost = (bucket, itemId, val) => {
+    setModifiedItems((items) => ({
+      ...items,
+      [bucket]: (items[bucket] || []).map((line) => (
+        line.id === itemId
+          ? {
+              ...line,
+              estCost: Number(val) || 0,
+              amount: Number(val) || 0,
+            }
+          : line
+      )),
+    }));
+  };
+  const resetToOriginal = () => {
+    setModifiedPhases(buildInitialPhases());
+    setModifiedItems(buildInitialItems());
+  };
 
   const effectiveAmount = tab === "modify" ? modifiedTotal : amount;
   const delta = effectiveAmount - currentBudget;
   const savings = requestedBudget - effectiveAmount;
+  const modifiedPhasePayload = isRndReview
+    ? [{
+        id: review.requestedPhases?.[0]?.id || phases[0]?.id || "p1",
+        name: review.requestedPhases?.[0]?.name || phases[0]?.name || `${review.budgetType || "Budget"} estimate`,
+        infra: modifiedInfra,
+        model: modifiedModel,
+        subs: modifiedSubs,
+      }]
+    : phaseTotals.map((p) => ({ id: p.id, name: p.name, infra: p.infra, model: p.model, subs: p.subs }));
+  const itemSections = [
+    {
+      key: "models",
+      label: "Models",
+      color: "text-fuchsia-300",
+      lines: modifiedItems.models,
+      fallback: "No model line submitted.",
+      getTitle: (line) => line.meta?.name || line.modelName || line.label || "Model allocation",
+      getDetail: (line) => line.meta?.provider || line.provider || "Submitted model line",
+    },
+    {
+      key: "infra",
+      label: "Infrastructure",
+      color: "text-sky-300",
+      lines: modifiedItems.infra,
+      fallback: "No infrastructure line submitted.",
+      getTitle: (line) => line.meta?.code || line.instance || line.optionLabel || line.label || "Infrastructure allocation",
+      getDetail: (line) => line.meta?.family || "Submitted infrastructure line",
+    },
+    {
+      key: "subs",
+      label: "Subscriptions",
+      color: "text-emerald-300",
+      lines: modifiedItems.subs,
+      fallback: "No subscription line submitted.",
+      getTitle: (line) => line.subscription || line.optionLabel || line.label || "Subscription allocation",
+      getDetail: (line) => Array.isArray(line.members) && line.members.length ? line.members.join(", ") : "Submitted subscription line",
+    },
+  ];
 
   const approveAndForward = () => {
     ctoModifyBudgetReview({
@@ -101,7 +210,8 @@ const BudgetReviewWorkspace = () => {
       projectName: review.projectName,
       tpm: review.tpm,
       requestedBudget,
-      modifiedPhases: phaseTotals.map((p) => ({ id: p.id, name: p.name, infra: p.infra, model: p.model, subs: p.subs })),
+      modifiedPhases: modifiedPhasePayload,
+      modifiedItems: isRndReview ? cloneReviewItems(modifiedItems) : null,
       ctoComment: comment,
     });
     toast.success("Approved & forwarded to CFO", {
@@ -258,8 +368,8 @@ const BudgetReviewWorkspace = () => {
             <>
               <Panel
                 testid="modify-summary"
-                title="Modify budget · phase-wise breakdown"
-                subtitle="Edit Infra, Model &amp; Subscription per phase — overall budget recalculates automatically"
+                title={isRndReview ? "Modify budget · line-item pricing" : "Modify budget · phase-wise breakdown"}
+                subtitle={isRndReview ? "Edit model, infrastructure, and subscription pricing — overall budget recalculates automatically" : "Edit Infra, Model &amp; Subscription per phase — overall budget recalculates automatically"}
               >
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                   <BreakdownCell icon={Server} label="Infra (new)" value={modifiedInfra} color="#3B82F6" />
@@ -267,45 +377,94 @@ const BudgetReviewWorkspace = () => {
                   <BreakdownCell icon={CreditCard} label="Subs (new)" value={modifiedSubs} color="#10B981" />
                   <BreakdownCell icon={Wallet} label="Modified total" value={modifiedTotal} color="#F59E0B" />
                 </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                        <th className="text-left py-2 px-3">Phase</th>
-                        <th className="text-right py-2 px-3">Infra ($)</th>
-                        <th className="text-right py-2 px-3">Model ($)</th>
-                        <th className="text-right py-2 px-3">Subs ($)</th>
-                        <th className="text-right py-2 px-3">Phase total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {phaseTotals.map((p) => (
-                        <tr key={p.id} data-testid={`modify-phase-${p.id}`} className="border-b border-white/5">
-                          <td className="py-2 px-3 text-white font-medium">{p.name}</td>
-                          <td className="py-2 px-3">
-                            <input type="number" min="0" step="100" value={p.infra} onChange={(e) => updateCell(p.id, "infra", e.target.value)} data-testid={`modify-infra-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input type="number" min="0" step="100" value={p.model} onChange={(e) => updateCell(p.id, "model", e.target.value)} data-testid={`modify-model-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input type="number" min="0" step="100" value={p.subs} onChange={(e) => updateCell(p.id, "subs", e.target.value)} data-testid={`modify-subs-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                          </td>
-                          <td className="py-2 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.total, { compact: false })}</td>
+                {isRndReview ? (
+                  <div className="space-y-4">
+                    {itemSections.map((section) => (
+                      <div key={section.key} className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden">
+                        <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+                          <div className={`text-[10px] uppercase tracking-widest font-semibold ${section.color}`}>{section.label}</div>
+                          <div className="text-[11px] text-zinc-500">
+                            Subtotal <span className="text-white font-semibold tabular">{fmtCurrency(sumLineItems(section.lines), { compact: false })}</span>
+                          </div>
+                        </div>
+                        {section.lines.length ? (
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                                  <th className="text-left py-2 px-3">{section.label.slice(0, -1) || section.label} line</th>
+                                  <th className="text-left py-2 px-3">Detail</th>
+                                  <th className="text-right py-2 px-3">Cost ($)</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {section.lines.map((line, index) => (
+                                  <tr key={line.id || `${section.key}-${index + 1}`} className="border-b border-white/5 last:border-b-0">
+                                    <td className="py-2 px-3 text-white font-medium">{section.getTitle(line)}</td>
+                                    <td className="py-2 px-3 text-xs text-zinc-500">{section.getDetail(line)}</td>
+                                    <td className="py-2 px-3">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="10"
+                                        value={Number(line.estCost || line.amount || 0)}
+                                        onChange={(e) => updateItemCost(section.key, line.id, e.target.value)}
+                                        data-testid={`modify-${section.key}-${line.id || index}`}
+                                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                                      />
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="px-3 py-4 text-xs text-zinc-500">{section.fallback}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                          <th className="text-left py-2 px-3">Phase</th>
+                          <th className="text-right py-2 px-3">Infra ($)</th>
+                          <th className="text-right py-2 px-3">Model ($)</th>
+                          <th className="text-right py-2 px-3">Subs ($)</th>
+                          <th className="text-right py-2 px-3">Phase total</th>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 border-fuchsia-500/30">
-                        <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Modified total</td>
-                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedInfra, { compact: false })}</td>
-                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedModel, { compact: false })}</td>
-                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedSubs, { compact: false })}</td>
-                        <td className="py-3 px-3 text-right text-fuchsia-300 font-bold text-lg tabular">{fmtCurrency(modifiedTotal, { compact: false })}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {phaseTotals.map((p) => (
+                          <tr key={p.id} data-testid={`modify-phase-${p.id}`} className="border-b border-white/5">
+                            <td className="py-2 px-3 text-white font-medium">{p.name}</td>
+                            <td className="py-2 px-3">
+                              <input type="number" min="0" step="100" value={p.infra} onChange={(e) => updateCell(p.id, "infra", e.target.value)} data-testid={`modify-infra-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
+                            </td>
+                            <td className="py-2 px-3">
+                              <input type="number" min="0" step="100" value={p.model} onChange={(e) => updateCell(p.id, "model", e.target.value)} data-testid={`modify-model-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
+                            </td>
+                            <td className="py-2 px-3">
+                              <input type="number" min="0" step="100" value={p.subs} onChange={(e) => updateCell(p.id, "subs", e.target.value)} data-testid={`modify-subs-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
+                            </td>
+                            <td className="py-2 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.total, { compact: false })}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-fuchsia-500/30">
+                          <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Modified total</td>
+                          <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedInfra, { compact: false })}</td>
+                          <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedModel, { compact: false })}</td>
+                          <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedSubs, { compact: false })}</td>
+                          <td className="py-3 px-3 text-right text-fuchsia-300 font-bold text-lg tabular">{fmtCurrency(modifiedTotal, { compact: false })}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                )}
                 <div className="mt-3 flex items-center justify-between text-[11px] flex-wrap gap-2">
                   <div className="text-zinc-500 tabular">
                     {isRndReview ? "R&D" : "TPM"} requested <span className="text-white">{fmtCurrency(requestedBudget, { compact: false })}</span> · your modified ask is
@@ -353,7 +512,7 @@ const BudgetReviewWorkspace = () => {
                 className="w-full mt-3 h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
                 data-testid="btn-modify-budget"
               >
-                <Edit3 className="w-3.5 h-3.5" /> Modify phase-wise breakdown
+                <Edit3 className="w-3.5 h-3.5" /> {isRndReview ? "Modify line-item pricing" : "Modify phase-wise breakdown"}
               </Button>
             )}
 

@@ -13,7 +13,15 @@ import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tool
 import RequestBudgetDialog from "../../components/RequestBudgetDialog";
 import ChangeRequestDialog from "./ChangeRequestDialog";
 import ProjectsTable from "../../components/dashboard/ProjectsTable";
-import { buildLoggedDailyRows, summarizeLoggedProject } from "../../lib/projectMetrics";
+import {
+  buildExecutionProjectView,
+  buildLoggedDailyRows,
+  filterLogsByLane,
+  getTaskLogRecordedCost,
+  isProjectInRndLane,
+  isProjectInTpmLane,
+  summarizeLoggedProject,
+} from "../../lib/projectMetrics";
 
 const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid, to }) => {
   const toneMap = {
@@ -65,10 +73,12 @@ const Panel = ({ title, subtitle, right, children, testid }) => (
 );
 
 const TpmDashboard = () => {
-  const { user, visibleProjects, budgetReviews, role, taskLogs } = useApp();
+  const { user, visibleProjects, budgetReviews, role, taskLogs, budgets } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
   const [crOpen, setCrOpen] = useState(false);
   const isRnd = role === "R&D";
+  const executionLane = isRnd ? "rnd" : "production";
+  const usageOptions = useMemo(() => ({ lane: executionLane }), [executionLane]);
 
   // Returned budgets addressed to me (or my role)
   const myReturnedBudgets = (budgetReviews || []).filter((r) => (
@@ -76,14 +86,23 @@ const TpmDashboard = () => {
     (r.tpm === user?.name || (user?.role === "R&D" && r.returnedTo === "R&D"))
   ));
 
-  const projectUsage = useMemo(
-    () => visibleProjects.map((project) => ({ project, usage: summarizeLoggedProject(project, taskLogs) })),
-    [visibleProjects, taskLogs]
+  const dashboardProjects = useMemo(
+    () => visibleProjects
+      .filter((project) => (isRnd ? isProjectInRndLane(project) : isProjectInTpmLane(project)))
+      .map((project) => buildExecutionProjectView(project, budgets, executionLane)),
+    [visibleProjects, budgets, executionLane, isRnd]
   );
-  const dailyRows = useMemo(() => buildLoggedDailyRows(visibleProjects, taskLogs), [visibleProjects, taskLogs]);
+  const projectUsage = useMemo(
+    () => dashboardProjects.map((project) => ({ project, usage: summarizeLoggedProject(project, taskLogs, usageOptions) })),
+    [dashboardProjects, taskLogs, usageOptions]
+  );
+  const dailyRows = useMemo(
+    () => buildLoggedDailyRows(dashboardProjects, taskLogs, usageOptions),
+    [dashboardProjects, taskLogs, usageOptions]
+  );
 
   // Compute TPM-scoped KPIs
-  const approved = visibleProjects.reduce((s, p) => s + p.approvedBudget, 0);
+  const approved = dashboardProjects.reduce((s, p) => s + Number(p.approvedBudget || 0), 0);
   const logged = projectUsage.reduce((sum, entry) => sum + entry.usage.loggedSpend, 0);
   const remaining = approved - logged;
   const util = approved ? Math.round((logged / approved) * 100) : 0;
@@ -143,7 +162,8 @@ const TpmDashboard = () => {
   }));
   const modelSnapshot = modelPie.slice(0, 4);
 
-  const upcomingPhase = visibleProjects[0]?.phases?.find((ph) => ph.health !== "healthy") || visibleProjects[0]?.phases?.[0];
+  const upcomingProject = dashboardProjects[0] || null;
+  const upcomingPhase = upcomingProject?.phases?.find((ph) => ph.health !== "healthy") || upcomingProject?.phases?.[0];
   const pendingActions = APPROVALS.filter((a) => a.requester === user?.name).slice(0, 3);
   const recentNotifs = NOTIFICATIONS.slice(0, 4);
 
@@ -160,7 +180,7 @@ const TpmDashboard = () => {
             Welcome back, {user?.name?.split(" ")[0]}
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            {visibleProjects.length} project{visibleProjects.length === 1 ? "" : "s"} assigned to you · June 2026
+            {dashboardProjects.length} project{dashboardProjects.length === 1 ? "" : "s"} assigned to you · June 2026
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -182,7 +202,7 @@ const TpmDashboard = () => {
 
       {/* KPI Grid */}
       <div className={`grid grid-cols-2 md:grid-cols-4 ${isRnd ? "lg:grid-cols-5" : "lg:grid-cols-6"} gap-3`}>
-        <KpiCard testid="kpi-active-projects" label="Active projects" value={String(visibleProjects.length)} icon={FolderKanban} tone="magenta" />
+        <KpiCard testid="kpi-active-projects" label="Active projects" value={String(dashboardProjects.length)} icon={FolderKanban} tone="magenta" />
         <KpiCard testid="kpi-pending-approvals" label="Pending approvals" value={String(pendingActions.length)} icon={ShieldCheck} tone="warning" />
         <KpiCard testid="kpi-util" label="Budget utilization" value={fmtPct(util)} icon={Gauge} tone={util >= 90 ? "negative" : util >= 75 ? "warning" : "positive"} />
         <KpiCard testid="kpi-today-consumption" label="Log today's consumption" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Calendar} tone="magenta" sublabel="Tap to submit" to="/consumption" />
@@ -351,14 +371,14 @@ const TpmDashboard = () => {
       )}
 
       {/* Projects table with expandable phase drawer (log daily task / raise top-up per phase) */}
-      <ProjectsTable />
+      <ProjectsTable projectsOverride={dashboardProjects} usageOptions={usageOptions} />
 
       {/* Widgets: notifications / upcoming phase (TPM only) */}
       {!isRnd && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Panel testid="widget-upcoming-phase" title="Upcoming phase" subtitle={visibleProjects[0]?.name || "No project"}>
+          <Panel testid="widget-upcoming-phase" title="Upcoming phase" subtitle={upcomingProject?.name || "No project"}>
             {upcomingPhase ? (
-              <Link to={`/projects/${visibleProjects[0].id}/phase/${upcomingPhase.id}`} className="block hover:opacity-90 transition-opacity" data-testid="link-upcoming-phase">
+              <Link to={`/projects/${upcomingProject.id}/phase/${upcomingPhase.id}`} className="block hover:opacity-90 transition-opacity" data-testid="link-upcoming-phase">
                 <div className="text-sm font-semibold text-white">{upcomingPhase.name}</div>
                 <div className="text-xs text-zinc-500 mt-1">{upcomingPhase.dates}</div>
                 <div className="mt-3 grid grid-cols-3 gap-2">
@@ -369,7 +389,14 @@ const TpmDashboard = () => {
                   <div className="rounded-lg bg-white/[0.03] p-2">
                     <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Logged</div>
                     <div className="text-sm font-semibold text-white tabular">
-                      {fmtCurrency((taskLogs[`${visibleProjects[0].id}::${upcomingPhase.id}`] || []).reduce((sum, log) => sum + Number(log.cost || 0), 0), { compact: false })}
+                      {fmtCurrency(
+                        filterLogsByLane(
+                          upcomingProject,
+                          taskLogs[`${upcomingProject.id}::${upcomingPhase.id}`] || [],
+                          executionLane
+                        ).reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0),
+                        { compact: false }
+                      )}
                     </div>
                   </div>
                   <div className="rounded-lg bg-white/[0.03] p-2">

@@ -11,7 +11,13 @@ import TpmTaskLogDialog from "../TpmTaskLogDialog";
 import TopupRequestDialog from "../TopupRequestDialog";
 import DeliverBatchDialog from "../DeliverBatchDialog";
 import { toast } from "sonner";
-import { buildBudgetTracks, summarizeLoggedProject } from "../../lib/projectMetrics";
+import {
+  buildBudgetTracks,
+  filterLogsByLane,
+  getLaneBudgetTrack,
+  getTaskLogRecordedCost,
+  summarizeLoggedProject,
+} from "../../lib/projectMetrics";
 
 const HealthBadge = ({ h }) => {
   const c = healthColor(h);
@@ -23,7 +29,7 @@ const HealthBadge = ({ h }) => {
   );
 };
 
-const ProjectsTable = () => {
+const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
   const [expanded, setExpanded] = useState({ "crowley-gen": true });
   const [drawer, setDrawer] = useState(null); // { project, phase }
   const nav = useNavigate();
@@ -31,13 +37,14 @@ const ProjectsTable = () => {
   const isRnd = role === "R&D";
   const isCfo = role === "CFO";
   const ownerLabel = role === "CFO" ? "TPM" : "PL";
+  const logLane = usageOptions?.lane || "all";
 
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
-  const projects = visibleProjects.filter((p) => scope === "all" || p.type === scope);
+  const projects = (projectsOverride || visibleProjects).filter((p) => scope === "all" || p.type === scope);
   const projectMetrics = useMemo(
-    () => Object.fromEntries(projects.map((project) => [project.id, summarizeLoggedProject(project, taskLogs)])),
-    [projects, taskLogs]
+    () => Object.fromEntries(projects.map((project) => [project.id, summarizeLoggedProject(project, taskLogs, usageOptions)])),
+    [projects, taskLogs, usageOptions]
   );
   const projectTracks = useMemo(
     () => Object.fromEntries(projects.map((project) => [project.id, buildBudgetTracks(project, budgets)])),
@@ -47,13 +54,14 @@ const ProjectsTable = () => {
     (a, p) => ({
       approved: a.approved + p.approvedBudget,
       est: a.est + p.estimatedBudget,
-      actual: a.actual + (isCfo ? p.actualSpend : (projectMetrics[p.id]?.loggedSpend || 0)),
-      variance: a.variance + (isCfo ? p.variance : ((p.approvedBudget || 0) - (projectMetrics[p.id]?.loggedSpend || 0))),
-      remaining: a.remaining + (isCfo ? p.remaining : (projectMetrics[p.id]?.remainingBudget || 0)),
+      actual: a.actual + (isCfo ? Number(p.cfoActualSpend || p.actualSpend || 0) : (projectMetrics[p.id]?.loggedSpend || 0)),
+      variance: a.variance + (isCfo ? Number(p.cfoVariance || p.variance || 0) : ((p.approvedBudget || 0) - (projectMetrics[p.id]?.loggedSpend || 0))),
+      remaining: a.remaining + (isCfo ? Number(p.cfoRemaining || p.remaining || 0) : (projectMetrics[p.id]?.remainingBudget || 0)),
+      burnRate: a.burnRate + (isCfo ? Number(p.cfoBurnRate || 0) : Number(projectMetrics[p.id]?.runRate || 0)),
       targetTasks: a.targetTasks + (projectMetrics[p.id]?.targetTasks || 0),
       doneTasks: a.doneTasks + (projectMetrics[p.id]?.loggedTasks || 0),
     }),
-    { approved: 0, est: 0, actual: 0, variance: 0, remaining: 0, targetTasks: 0, doneTasks: 0 }
+    { approved: 0, est: 0, actual: 0, variance: 0, remaining: 0, burnRate: 0, targetTasks: 0, doneTasks: 0 }
   );
   const totalUtil = totals.approved > 0 ? Math.round((totals.actual / totals.approved) * 100) : 0;
 
@@ -103,10 +111,10 @@ const ProjectsTable = () => {
           <tbody>
             {projects.map((p) => {
               const logged = projectMetrics[p.id];
-              const displayActual = isCfo ? p.actualSpend : logged.loggedSpend;
-              const displayRemaining = isCfo ? p.remaining : logged.remainingBudget;
-              const displayUtil = isCfo ? p.utilization : logged.utilization;
-              const displayRunRate = isCfo ? p.burnRate * 1000 : logged.runRate;
+              const displayActual = isCfo ? Number(p.cfoActualSpend || p.actualSpend || 0) : logged.loggedSpend;
+              const displayRemaining = isCfo ? Number(p.cfoRemaining || p.remaining || 0) : logged.remainingBudget;
+              const displayUtil = isCfo ? Number(p.cfoUtilization || p.utilization || 0) : logged.utilization;
+              const displayRunRate = isCfo ? Number(p.cfoBurnRate || 0) : logged.runRate;
               const isOpen = !!expanded[p.id];
               return (
                 <Fragment key={p.id}>
@@ -142,9 +150,9 @@ const ProjectsTable = () => {
                     {isCfo ? (
                       <>
                         <td className="py-3 px-2 text-right tabular text-sm text-zinc-400">{fmtCurrency(p.estimatedBudget)}</td>
-                        <td className="py-3 px-2 text-right tabular text-sm font-medium text-white">{fmtCurrency(p.actualSpend)}</td>
-                        <td className={`py-3 px-2 text-right tabular text-sm font-semibold ${varianceColor(p.variance)}`}>
-                          {p.variance > 0 ? "+" : ""}{fmtCurrency(p.variance)}
+                        <td className="py-3 px-2 text-right tabular text-sm font-medium text-white">{fmtCurrency(displayActual)}</td>
+                        <td className={`py-3 px-2 text-right tabular text-sm font-semibold ${varianceColor(Number(p.cfoVariance || p.variance || 0))}`}>
+                          {Number(p.cfoVariance || p.variance || 0) > 0 ? "+" : ""}{fmtCurrency(Number(p.cfoVariance || p.variance || 0))}
                         </td>
                       </>
                     ) : (
@@ -169,7 +177,7 @@ const ProjectsTable = () => {
                         data-testid={`project-open-${p.id}`}
                         className="inline-flex items-center gap-1 text-xs text-fuchsia-400 hover:text-fuchsia-300 font-medium"
                       >
-                        {(isCfo ? p.topModel : logged.topModel)} <ChevronRight className="w-3 h-3" />
+                        {(isCfo ? p.cfoTopModel || p.topModel : logged.topModel)} <ChevronRight className="w-3 h-3" />
                       </button>
                     </td>
                   </tr>
@@ -253,8 +261,8 @@ const ProjectsTable = () => {
                                 </thead>
                                 <tbody>
                                   {p.phases.map((ph) => {
-                                    const phaseLogs = (taskLogs[`${p.id}::${ph.id}`] || []);
-                                    const phaseLogged = phaseLogs.reduce((sum, log) => sum + Number(log.cost || 0), 0);
+                                    const phaseLogs = filterLogsByLane(p, taskLogs[`${p.id}::${ph.id}`] || [], logLane);
+                                    const phaseLogged = phaseLogs.reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0);
                                     const phaseTasksDone = phaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0);
                                     const variance = ph.estimated - ph.actual;
                                     return (
@@ -278,7 +286,7 @@ const ProjectsTable = () => {
                                         <td className="py-2.5 px-4"><HealthBadge h={ph.health} /></td>
                                         <td className="py-2.5 px-4 text-right">
                                           <button
-                                            onClick={() => setDrawer({ project: p, phase: ph })}
+                                            onClick={() => setDrawer({ project: p, phase: ph, logLane })}
                                             className="text-xs text-fuchsia-400 hover:text-fuchsia-300 font-medium"
                                             data-testid={`phase-view-${p.id}-${ph.id}`}
                                           >
@@ -321,7 +329,11 @@ const ProjectsTable = () => {
               )}
               <td className="py-3 px-2 text-right tabular text-sm font-semibold text-white">{fmtCurrency(totals.remaining)}</td>
               <td className={`py-3 px-2 text-right tabular text-sm font-semibold ${utilColor(totalUtil)}`}>{fmtPct(totalUtil)}</td>
-              <td className="py-3 px-2 text-right tabular text-sm text-zinc-400">{isCfo ? "$5.4k/day" : "logged avg"}</td>
+              <td className="py-3 px-2 text-right tabular text-sm text-zinc-400">
+                {isCfo
+                  ? (totals.burnRate >= 1000 ? `$${(totals.burnRate / 1000).toFixed(1)}k/day` : fmtCurrency(totals.burnRate, { compact: false }))
+                  : "logged avg"}
+              </td>
               <td className="py-3 px-2" />
               <td className="py-3 px-2" />
               <td className="py-3 pr-6 pl-2" />
@@ -333,22 +345,22 @@ const ProjectsTable = () => {
       {/* Phase detail drawer */}
       <Sheet open={!!drawer} onOpenChange={(o) => !o && setDrawer(null)}>
         <SheetContent className="bg-[#0F0F16] border-white/10 text-zinc-100 w-full sm:max-w-lg overflow-y-auto" data-testid="phase-drawer">
-          {drawer && <PhaseDrawerContent project={drawer.project} phase={drawer.phase} />}
+          {drawer && <PhaseDrawerContent project={drawer.project} phase={drawer.phase} logLane={drawer.logLane || "all"} />}
         </SheetContent>
       </Sheet>
     </div>
   );
 };
 
-const PhaseDrawerContent = ({ project, phase }) => {
+const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
   const { role, getPhaseLogs, deletePhaseTask, isTaskEditable, batchDeliveries, budgets, topupRequests, changeRequests } = useApp();
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
   const canEdit = isTPM; // Only TPM can edit/log
 
   const tasks = getPhaseTasks(project.id, phase.id);
-  const tpmLogs = getPhaseLogs(project.id, phase.id);
-  const loggedCost = tpmLogs.reduce((sum, log) => sum + Number(log.cost || 0), 0);
+  const tpmLogs = filterLogsByLane(project, getPhaseLogs(project.id, phase.id), logLane);
+  const loggedCost = tpmLogs.reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0);
   const loggedTasks = tpmLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0);
   const loggedTrajectories = tpmLogs.reduce((sum, log) => sum + Number(log.trajectories || 0), 0);
   const loggedInputTokens = tpmLogs.reduce((sum, log) => sum + Number(log.inputTokens || 0), 0);
@@ -357,7 +369,7 @@ const PhaseDrawerContent = ({ project, phase }) => {
   const utilization = phase.estimated ? Math.round((displaySpend / phase.estimated) * 100) : 0;
   const targetTasks = Number(phase.totalTasks || phase.tasks || tasks.length || 0);
   const targetTrajectories = targetTasks * Number(phase.trajectoriesPerTask || 0);
-  const activeBudgetTrack = buildBudgetTracks(project, budgets).ordered[0]?.latest || null;
+  const activeBudgetTrack = getLaneBudgetTrack(project, budgets, logLane) || buildBudgetTracks(project, budgets).ordered[0]?.latest || null;
   const trackPhase = activeBudgetTrack?.phases?.find((entry) => entry.id === phase.id || entry.name === phase.name) || null;
   const submittedPhaseBudget = Number(trackPhase?.budget || phase.estimated || 0);
   const plannedCostPerTask = targetTasks > 0 ? submittedPhaseBudget / targetTasks : 0;
@@ -537,7 +549,8 @@ const PhaseDrawerContent = ({ project, phase }) => {
                   const modelLabel = Array.isArray(log.modelUsage) && log.modelUsage.length
                     ? log.modelUsage.map((usage) => usage.modelName).join(", ")
                     : log.modelName || "—";
-                  const logCostPerTask = Number(log.tasksDone || 0) > 0 ? Number(log.cost || 0) / Number(log.tasksDone || 0) : 0;
+                  const logCost = getTaskLogRecordedCost(log);
+                  const logCostPerTask = Number(log.tasksDone || 0) > 0 ? logCost / Number(log.tasksDone || 0) : 0;
                   return (
                     <tr key={log.id} data-testid={`daily-log-${log.id}`} className="border-b border-white/5 last:border-b-0 hover:bg-white/[0.03]">
                       <td className="py-2 px-2 text-white tabular whitespace-nowrap">
@@ -550,7 +563,7 @@ const PhaseDrawerContent = ({ project, phase }) => {
                       <td className="py-2 px-2 text-[11px] text-zinc-300">{modelLabel}</td>
                       <td className="py-2 px-2 text-right tabular text-white font-semibold">{Number(log.tasksDone || 0).toLocaleString()}</td>
                       <td className="py-2 px-2 text-right tabular text-zinc-300">{Number(log.trajectories || 0).toLocaleString()}</td>
-                      <td className="py-2 px-2 text-right tabular text-fuchsia-300 font-semibold">{fmtCurrency(log.cost, { compact: false })}</td>
+                      <td className="py-2 px-2 text-right tabular text-fuchsia-300 font-semibold">{fmtCurrency(logCost, { compact: false })}</td>
                       <td className="py-2 px-2 text-right tabular text-zinc-200">{log.tasksDone ? fmtCurrency(logCostPerTask, { compact: false }) : "—"}</td>
                       <td className="py-2 px-2 text-right tabular text-zinc-300">
                         {(Number(log.inputTokens || 0) + Number(log.outputTokens || 0)).toLocaleString()}
