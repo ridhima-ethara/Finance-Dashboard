@@ -5,7 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { Button } from "../components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
 import {
-  ArrowLeft, Sparkles, Lock, ArrowUpRightSquare, Users, Wallet, ListChecks, PackageCheck, ScrollText,
+  ArrowLeft, Lock, ArrowUpRightSquare, Users, Wallet, ListChecks, PackageCheck, ScrollText,
   Search, Plus, ChevronRight, User as UserIcon, Circle, CheckCircle2, Clock3, XCircle, Percent,
   Trash2, Pencil, FileText, Layers, MessageSquare, Shield, Mail,
 } from "lucide-react";
@@ -77,7 +77,7 @@ const ProjectDetail = () => {
   const { id } = useParams();
   const nav = useNavigate();
   const {
-    setAiOpen, projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
+    projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
     removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask, taskLogs, changeRequests,
   } = useApp();
   const p = projects.find((x) => x.id === id);
@@ -222,16 +222,6 @@ const ProjectDetail = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setAiOpen(true)}
-              className="h-9 rounded-lg border-white/10 gap-2"
-              data-testid="btn-ask-ai"
-            >
-              <Sparkles className="w-3.5 h-3.5 text-fuchsia-400" />
-              Ask AI
-            </Button>
             {canRequestTopup && (
               <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-request-topup">
                 <ArrowUpRightSquare className="w-3.5 h-3.5" /> Request top-up
@@ -1046,8 +1036,8 @@ const ProjectDetail = () => {
               const variance = Number(ph.estimated || 0) - phaseSpend;
               const util = ph.estimated ? Math.round((phaseSpend / ph.estimated) * 100) : 0;
               const hc = healthColor(ph.health);
-              const loggedTasks = logs.reduce((sum, log) => sum + (Number(log.tasksDone) || 0), 0);
-              const loggedTrajectories = logs.reduce((sum, log) => sum + (Number(log.trajectories) || 0), 0);
+              const loggedTasks = logs.reduce((sum, log) => sum + (Number(log.successfulTasks ?? log.tasksDone) || 0), 0);
+              const loggedTrajectories = logs.reduce((sum, log) => sum + (Number(log.successTrajectories ?? log.trajectories) || 0), 0);
               const plannedTasks = Number(ph.totalTasks || ph.tasks || 0);
               const costPerTask = loggedTasks > 0 ? Math.round((phaseSpend / loggedTasks) * 100) / 100 : null;
               const modelNames = collectResourceNames([
@@ -1734,8 +1724,8 @@ const getWorkflowLockMessage = ({ project, workflowStage, latestBudgetReviewMeta
   }
   if (workflowStage === "tpm-budget-ready") {
     return role === "TPM"
-      ? "R&D sample is accepted. Raise the production budget to activate TPM execution."
-      : "R&D sample is accepted and the project is waiting for TPM's production budget.";
+      ? "Project is ready for the production budget. Raise it to activate TPM execution."
+      : "Project is waiting for TPM's production budget before execution can start.";
   }
   if (workflowStage === "sample-rejected") {
     return "This sample was rejected. Raise a fresh budget only if the project is continuing.";
@@ -1758,10 +1748,18 @@ const getTaskApprovalState = (log, delivery) => {
   return taskApprovalStatusMap["pending-cfo"];
 };
 
+const sumBreakdownEntryAmount = (entry) => {
+  if (!entry) return 0;
+  if (Array.isArray(entry.entries) && entry.entries.length) {
+    return entry.entries.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  }
+  return Number(entry.amount || 0);
+};
+
 const getTopupBreakdownAmounts = (request) => ({
-  models: Number(request.breakdown?.models?.amount || 0),
-  infra: Number(request.breakdown?.infra?.amount || 0),
-  subs: Number(request.breakdown?.subs?.amount || 0),
+  models: sumBreakdownEntryAmount(request.breakdown?.models),
+  infra: sumBreakdownEntryAmount(request.breakdown?.infra),
+  subs: sumBreakdownEntryAmount(request.breakdown?.subs),
 });
 
 const getChangeBreakdownAmounts = (request) => ({
@@ -1785,6 +1783,12 @@ const summarizePhaseBudget = (phase, topups = [], changes = []) => {
 };
 
 const getTaskLogRecordedCost = (log) => {
+  if (Array.isArray(log?.successfulRows) || Array.isArray(log?.failedRows)) {
+    return [
+      ...(Array.isArray(log?.successfulRows) ? log.successfulRows : []),
+      ...(Array.isArray(log?.failedRows) ? log.failedRows : []),
+    ].reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+  }
   if (Array.isArray(log?.modelUsage) && log.modelUsage.length) {
     return log.modelUsage.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
   }
@@ -1798,13 +1802,14 @@ const getLogModelNames = (log) => {
   return [log?.modelName || log?.modelId].filter(Boolean);
 };
 
-const getTopupBreakdownSelections = (request) => (
-  [
-    request.breakdown?.models ? `Model: ${formatBreakdownEntry(request.breakdown.models)}` : null,
-    request.breakdown?.infra ? `Infra: ${formatBreakdownEntry(request.breakdown.infra)}` : null,
-    request.breakdown?.subs ? `Subs: ${formatBreakdownEntry(request.breakdown.subs)}` : null,
-  ].filter(Boolean)
-);
+const getTopupBreakdownSelections = (request) => {
+  const amounts = getTopupBreakdownAmounts(request);
+  return [
+    request.breakdown?.models ? `Models ${fmtCurrency(amounts.models, { compact: false })}: ${formatBreakdownEntry(request.breakdown.models)}` : null,
+    request.breakdown?.infra ? `Infra ${fmtCurrency(amounts.infra, { compact: false })}: ${formatBreakdownEntry(request.breakdown.infra)}` : null,
+    request.breakdown?.subs ? `Subs ${fmtCurrency(amounts.subs, { compact: false })}: ${formatBreakdownEntry(request.breakdown.subs)}` : null,
+  ].filter(Boolean);
+};
 
 const getChangeBreakdownSelections = (request) => {
   const amounts = getChangeBreakdownAmounts(request);
@@ -1821,9 +1826,9 @@ const estimatePhaseCostBreakdown = (project, phase, topups, changes = []) => {
   const licenseSpend = (project.expenses || [])
     .filter((expense) => expense.category === "Licenses")
     .reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
-  const topupModels = topups.reduce((sum, request) => sum + Number(request.breakdown?.models?.amount || 0), 0);
-  const topupInfra = topups.reduce((sum, request) => sum + Number(request.breakdown?.infra?.amount || 0), 0);
-  const topupSubs = topups.reduce((sum, request) => sum + Number(request.breakdown?.subs?.amount || 0), 0);
+  const topupModels = topups.reduce((sum, request) => sum + sumBreakdownEntryAmount(request.breakdown?.models), 0);
+  const topupInfra = topups.reduce((sum, request) => sum + sumBreakdownEntryAmount(request.breakdown?.infra), 0);
+  const topupSubs = topups.reduce((sum, request) => sum + sumBreakdownEntryAmount(request.breakdown?.subs), 0);
   const changeModels = changes.reduce((sum, request) => sum + Number(request.breakdown?.models?.amount || 0), 0);
   const changeInfra = changes.reduce((sum, request) => sum + Number(request.breakdown?.infra?.amount || 0), 0);
   const changeSubs = changes.reduce((sum, request) => sum + Number(request.breakdown?.subs?.amount || 0), 0);
@@ -1837,14 +1842,21 @@ const estimatePhaseCostBreakdown = (project, phase, topups, changes = []) => {
 
 const collectResourceNames = (values) => Array.from(new Set(values.map((value) => String(value || "").trim()).filter((value) => value && value !== "—")));
 
-const formatBreakdownEntry = (entry) => (
-  [entry.optionLabel, entry.note].map((value) => String(value || "").trim()).filter(Boolean).join(" · ")
-);
+const formatBreakdownEntry = (entry) => {
+  if (!entry) return "";
+  if (Array.isArray(entry.entries) && entry.entries.length) {
+    return entry.entries
+      .map((line) => [line.optionLabel, line.note].map((value) => String(value || "").trim()).filter(Boolean).join(" · "))
+      .filter(Boolean)
+      .join(" | ");
+  }
+  return [entry.optionLabel, entry.note].map((value) => String(value || "").trim()).filter(Boolean).join(" · ");
+};
 
 const getSubscriptionSummary = (topups = [], changes = []) => {
   const requested = [...topups, ...changes]
-    .filter((request) => Number(request.breakdown?.subs?.amount || 0) > 0)
-    .map((request) => `${fmtCurrency(request.breakdown.subs.amount, { compact: false })}${formatBreakdownEntry(request.breakdown.subs) ? ` · ${formatBreakdownEntry(request.breakdown.subs)}` : ""}`);
+    .filter((request) => sumBreakdownEntryAmount(request.breakdown?.subs) > 0)
+    .map((request) => `${fmtCurrency(sumBreakdownEntryAmount(request.breakdown?.subs), { compact: false })}${formatBreakdownEntry(request.breakdown?.subs) ? ` · ${formatBreakdownEntry(request.breakdown.subs)}` : ""}`);
   return requested.length ? requested.join(" | ") : "No subscription ask raised for this phase.";
 };
 

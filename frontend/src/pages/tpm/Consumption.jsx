@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
@@ -8,10 +8,9 @@ import {
   ListChecks,
   GitBranch,
   DollarSign,
-  Sparkles,
   CheckCircle2,
 } from "lucide-react";
-import { buildExecutionProjectView, buildLoggedDailyRows, isProjectInRndLane, isProjectInTpmLane } from "../../lib/projectMetrics";
+import { buildExecutionProjectView, buildItActualDailyRows, buildLoggedDailyRows, isProjectInRndLane, isProjectInTpmLane } from "../../lib/projectMetrics";
 
 const buildTrailingDates = (anchorDate, days) => {
   const anchor = new Date(anchorDate);
@@ -35,20 +34,32 @@ const heatColor = (pct) => {
 };
 
 const Consumption = () => {
-  const { user, visibleProjects, taskLogs, budgets } = useApp();
+  const { user, visibleProjects, taskLogs, budgets, itMonthlyActuals } = useApp();
   const isRnd = user?.role === "R&D";
   const executionLane = isRnd ? "rnd" : "production";
   const usageOptions = useMemo(() => ({ lane: executionLane }), [executionLane]);
   const today = new Date().toISOString().slice(0, 10);
-  const dashboardProjects = useMemo(
+  const [selectedProjectId, setSelectedProjectId] = useState("all");
+  const [windowDays, setWindowDays] = useState(14);
+  const allDashboardProjects = useMemo(
     () => visibleProjects
       .filter((project) => (isRnd ? isProjectInRndLane(project) : isProjectInTpmLane(project)))
       .map((project) => buildExecutionProjectView(project, budgets, executionLane)),
     [visibleProjects, budgets, executionLane, isRnd]
   );
+  const dashboardProjects = useMemo(
+    () => (selectedProjectId === "all"
+      ? allDashboardProjects
+      : allDashboardProjects.filter((project) => project.id === selectedProjectId)),
+    [allDashboardProjects, selectedProjectId]
+  );
   const dailyRows = useMemo(
     () => buildLoggedDailyRows(dashboardProjects, taskLogs, usageOptions),
     [dashboardProjects, taskLogs, usageOptions]
+  );
+  const itActualRows = useMemo(
+    () => buildItActualDailyRows(dashboardProjects, itMonthlyActuals),
+    [dashboardProjects, itMonthlyActuals]
   );
   const latestDate = dailyRows[dailyRows.length - 1]?.date || today;
   const todayRows = dailyRows.filter((row) => row.date === latestDate);
@@ -64,19 +75,32 @@ const Consumption = () => {
     )
   ), [todayRows]);
 
-  const heatDates = useMemo(() => buildTrailingDates(latestDate, 14), [latestDate]);
+  const heatDates = useMemo(() => buildTrailingDates(latestDate, windowDays), [latestDate, windowDays]);
+  const firstHeatDate = heatDates[0] || latestDate;
   const projectIds = dashboardProjects.map((project) => project.id);
   const heatmap = useMemo(() => ({ dates: heatDates, rows: projectIds }), [heatDates, projectIds]);
+  const actualMap = useMemo(() => (
+    new Map(itActualRows.map((row) => [`${row.projectId}::${row.date}`, row]))
+  ), [itActualRows]);
+  const scopedDailyRows = useMemo(
+    () => dailyRows.filter((row) => row.date >= firstHeatDate),
+    [dailyRows, firstHeatDate]
+  );
 
   const cellFor = (projectId, date) => {
-    const entry = dailyRows.find((row) => row.projectId === projectId && row.date === date);
+    const entry = scopedDailyRows.find((row) => row.projectId === projectId && row.date === date);
     if (!entry) return null;
     const pct = entry.approvedDaily ? Math.round((entry.spent / entry.approvedDaily) * 100) : 0;
-    return { ...entry, pct };
+    const actualEntry = actualMap.get(`${projectId}::${date}`);
+    return {
+      ...entry,
+      pct,
+      actualAlert: Boolean(actualEntry && (Number(actualEntry.actual || 0) > Number(entry.spent || 0) || Number(actualEntry.actual || 0) > Number(entry.approvedDaily || 0))),
+    };
   };
 
   const perProject = dashboardProjects.map((project) => {
-    const entries = dailyRows.filter((row) => row.projectId === project.id);
+    const entries = scopedDailyRows.filter((row) => row.projectId === project.id);
     const logged = entries.reduce((sum, row) => sum + Number(row.spent || 0), 0);
     const allocated = entries.reduce((sum, row) => sum + Number(row.approvedDaily || 0), 0);
     return {
@@ -87,7 +111,19 @@ const Consumption = () => {
     };
   });
 
-  const recentRows = [...dailyRows].slice(-10).reverse();
+  const recentRows = [...scopedDailyRows]
+    .map((row) => ({
+      ...row,
+      actualAlert: Boolean(
+        actualMap.get(`${row.projectId}::${row.date}`)
+        && (
+          Number(actualMap.get(`${row.projectId}::${row.date}`)?.actual || 0) > Number(row.spent || 0)
+          || Number(actualMap.get(`${row.projectId}::${row.date}`)?.actual || 0) > Number(row.approvedDaily || 0)
+        )
+      ),
+    }))
+    .slice(-10)
+    .reverse();
 
   return (
     <div className="space-y-6" data-testid="page-consumption">
@@ -103,6 +139,33 @@ const Consumption = () => {
           <p className="text-sm text-zinc-400 mt-1">
             {new Date(latestDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · task logs roll up here automatically for {isRnd ? "your R&D projects" : "your production projects"}
           </p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <select
+            value={selectedProjectId}
+            onChange={(event) => setSelectedProjectId(event.target.value)}
+            data-testid="consumption-project-filter"
+            className="h-10 px-3 rounded-lg bg-[#12121A] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+          >
+            <option value="all">All projects</option>
+            {allDashboardProjects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+          <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1" data-testid="consumption-date-filter">
+            {[7, 14, 30].map((days) => (
+              <button
+                key={days}
+                type="button"
+                onClick={() => setWindowDays(days)}
+                className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${windowDays === days ? "bg-fuchsia-500/15 text-fuchsia-300" : "text-zinc-400 hover:text-zinc-100"}`}
+              >
+                Last {days}d
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -120,7 +183,7 @@ const Consumption = () => {
               Consumption heatmap
             </div>
             <div className="text-xs text-zinc-500 mt-0.5">
-              % of daily budget consumed from logged tasks · last 14 days · project × day
+              % of daily budget consumed from logged tasks · project × day · flags appear when IT-filed actuals exceed the claimed day burn
             </div>
           </div>
           <div className="flex items-center gap-3 text-[10px] text-zinc-400">
@@ -162,10 +225,12 @@ const Consumption = () => {
                           <div
                             className="w-7 h-7 rounded-md border cursor-default relative group"
                             style={{ background: bg, borderColor: border }}
-                            title={cell ? `${date} · ${cell.pct}% (${fmtCurrency(cell.spent, { compact: false })} of ${fmtCurrency(cell.approvedDaily, { compact: false })}) · ${cell.tasks} tasks / ${cell.trajectories} trajectories` : date}
+                            title={cell ? `${date} · ${cell.pct}% (${fmtCurrency(cell.spent, { compact: false })} of ${fmtCurrency(cell.approvedDaily, { compact: false })}) · ${cell.tasks} tasks / ${cell.trajectories} trajectories${cell.actualAlert ? " · IT actuals are higher than the claimed day burn" : ""}` : date}
                           >
-                            {cell && cell.pct >= 100 && (
-                              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/90">!</span>
+                            {cell && (cell.pct >= 100 || cell.actualAlert) && (
+                              <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-white/90">
+                                {cell.actualAlert ? "!" : "!"}
+                              </span>
                             )}
                           </div>
                         </td>
@@ -234,9 +299,15 @@ const Consumption = () => {
                     <td className="py-3 px-3 text-right text-zinc-400 tabular">{fmtCurrency(row.approvedDaily, { compact: false })}</td>
                     <td className="py-3 px-3 text-right">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                        pct >= 100 ? "bg-red-500/15 text-red-300" : pct >= 80 ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300"
+                        row.actualAlert
+                          ? "bg-red-500/15 text-red-300"
+                          : pct >= 100
+                            ? "bg-red-500/15 text-red-300"
+                            : pct >= 80
+                              ? "bg-amber-500/15 text-amber-300"
+                              : "bg-emerald-500/15 text-emerald-300"
                       }`}>
-                        {pct >= 100 ? <span>Over</span> : pct >= 80 ? <span>Watch</span> : <><CheckCircle2 className="w-3 h-3" /> OK</>} · {pct}%
+                        {row.actualAlert ? <span>Flag</span> : pct >= 100 ? <span>Over</span> : pct >= 80 ? <span>Watch</span> : <><CheckCircle2 className="w-3 h-3" /> OK</>} · {pct}%
                       </span>
                     </td>
                   </tr>
@@ -251,14 +322,6 @@ const Consumption = () => {
               )}
             </tbody>
           </table>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3">
-        <Sparkles className="w-4 h-4 text-fuchsia-300 mt-0.5 flex-shrink-0" />
-        <div className="text-xs text-zinc-300">
-          <span className="text-fuchsia-200 font-semibold">Consumption insight: </span>
-          Every task log now updates this view automatically. Days turn red when logged spend crosses the daily allocation, so teams can raise top-ups or change requests before delivery gets blocked.
         </div>
       </div>
     </div>

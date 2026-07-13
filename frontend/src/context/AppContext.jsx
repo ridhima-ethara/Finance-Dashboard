@@ -89,6 +89,7 @@ const summarizeRequestedLines = (items = {}, fallbackProject) => {
       label: meta?.name || line.modelName || "Model access",
       provider: meta?.provider || line.provider || fallbackProject?.topModel || "Anthropic",
       amount: Number(line.estCost || line.amount || 0),
+      usageTag: line.usageTag || "",
     };
   });
 
@@ -115,6 +116,87 @@ const summarizeRequestedLines = (items = {}, fallbackProject) => {
       amount: Number(line.estCost || line.amount || 0),
     })),
   };
+};
+
+const normalizeTaskSheetRow = (row = {}, index = 0, status = "success") => {
+  const modelMeta = BEDROCK_MODELS.find((model) => model.id === row.modelId || model.name === row.modelName);
+  const inputTokens = Number(row.inputTokens || 0);
+  const outputTokens = Number(row.outputTokens || 0);
+  return {
+    id: row.id || `${status}-${index + 1}`,
+    status,
+    modelId: row.modelId || modelMeta?.id || "",
+    modelName: row.modelName || modelMeta?.name || "",
+    task: row.task || row.name || "",
+    stage: row.stage || "",
+    inputTokens,
+    inputTokensM: Number(row.inputTokensM || 0) || (inputTokens / 1000000),
+    outputTokens,
+    outputTokensM: Number(row.outputTokensM || 0) || (outputTokens / 1000000),
+    llmCalls: Number(row.llmCalls || 0),
+    cost: Number(row.cost || 0),
+  };
+};
+
+const normalizeTaskSheetRows = (rows = [], status = "success") =>
+  (Array.isArray(rows) ? rows : [])
+    .map((row, index) => normalizeTaskSheetRow(row, index, status))
+    .filter((row) => (
+      row.modelId
+      || row.modelName
+      || row.task
+      || row.stage
+      || row.cost
+      || row.llmCalls
+      || row.inputTokens
+      || row.outputTokens
+    ));
+
+const aggregateTaskRowsToModelUsage = ({ successfulRows = [], failedRows = [], fallbackUsage = [], fallbackModel = {} }) => {
+  const rows = [...successfulRows, ...failedRows];
+  if (rows.length) {
+    const grouped = rows.reduce((acc, row) => {
+      const key = row.modelId || row.modelName || "unmapped";
+      acc[key] = acc[key] || {
+        modelId: row.modelId || "",
+        modelName: row.modelName || "Unspecified model",
+        tasksDone: 0,
+        cost: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      acc[key].tasksDone += 1;
+      acc[key].cost += Number(row.cost || 0);
+      acc[key].inputTokens += Number(row.inputTokens || 0);
+      acc[key].outputTokens += Number(row.outputTokens || 0);
+      return acc;
+    }, {});
+    return Object.values(grouped);
+  }
+
+  if (Array.isArray(fallbackUsage) && fallbackUsage.length) {
+    return fallbackUsage.map((usage) => ({
+      modelId: usage.modelId || "",
+      modelName: usage.modelName || "",
+      tasksDone: Number(usage.tasksDone || 0),
+      cost: Number(usage.cost || 0),
+      inputTokens: Number(usage.inputTokens || 0),
+      outputTokens: Number(usage.outputTokens || 0),
+    }));
+  }
+
+  if (fallbackModel.modelId || fallbackModel.modelName || fallbackModel.cost) {
+    return [{
+      modelId: fallbackModel.modelId || "",
+      modelName: fallbackModel.modelName || "",
+      tasksDone: Number(fallbackModel.tasksDone || 0),
+      cost: Number(fallbackModel.cost || 0),
+      inputTokens: Number(fallbackModel.inputTokens || 0),
+      outputTokens: Number(fallbackModel.outputTokens || 0),
+    }];
+  }
+
+  return [];
 };
 
 const normalizeChangeRequestStatus = (request) => {
@@ -731,6 +813,7 @@ export const AppProvider = ({ children }) => {
 
   const addProject = (payload) => {
     const id = `p-${Date.now().toString(36)}`;
+    const isTpmCreatedProject = String(payload.createdByRole || "").trim().toUpperCase() === "TPM";
     const rndMembers = payload.rndMembers || [];
     const plMembers = payload.plMembers || [];
     const qlMembers = payload.qlMembers || [];
@@ -781,6 +864,19 @@ export const AppProvider = ({ children }) => {
       })),
       attachmentCount: docs.length,
     };
+    const initialWorkflow = isTpmCreatedProject
+      ? {
+          status: "Ready for production budget",
+          type: "Production",
+          workflowStage: "tpm-budget-ready",
+          readyForTpmBudget: true,
+        }
+      : {
+          status: "Awaiting testing budget",
+          type: "R&D",
+          workflowStage: "awaiting-testing-budget",
+          readyForTpmBudget: false,
+        };
     const proj = {
       id,
       name: payload.internalName,
@@ -800,10 +896,10 @@ export const AppProvider = ({ children }) => {
       kickoffMail,
       startDate: payload.startDate,
       estimatedEndDate: "",
-      status: "Awaiting testing budget",
-      type: "R&D",
-      workflowStage: "awaiting-testing-budget",
-      readyForTpmBudget: false,
+      status: initialWorkflow.status,
+      type: initialWorkflow.type,
+      workflowStage: initialWorkflow.workflowStage,
+      readyForTpmBudget: initialWorkflow.readyForTpmBudget,
       pendingBudgetSubmission: null,
       buffer: 10,
       recoverableFromClient: false,
@@ -879,8 +975,38 @@ export const AppProvider = ({ children }) => {
     inputTokens,
     outputTokens,
     modelUsage,
+    successfulTasks,
+    failedTasks,
+    successTrajectories,
+    failedTrajectories,
+    successfulRows,
+    failedRows,
   }) => {
     const id = `tl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const normalizedSuccessfulRows = normalizeTaskSheetRows(successfulRows, "success");
+    const normalizedFailedRows = normalizeTaskSheetRows(failedRows, "failed");
+    const normalizedModelUsage = aggregateTaskRowsToModelUsage({
+      successfulRows: normalizedSuccessfulRows,
+      failedRows: normalizedFailedRows,
+      fallbackUsage: modelUsage,
+      fallbackModel: {
+        modelId,
+        modelName,
+        cost,
+        tasksDone,
+        inputTokens,
+        outputTokens,
+      },
+    });
+    const totalCost = normalizedModelUsage.length
+      ? normalizedModelUsage.reduce((sum, usage) => sum + Number(usage.cost || 0), 0)
+      : Number(cost) || 0;
+    const totalInputTokens = normalizedModelUsage.length
+      ? normalizedModelUsage.reduce((sum, usage) => sum + Number(usage.inputTokens || 0), 0)
+      : Number(inputTokens || 0);
+    const totalOutputTokens = normalizedModelUsage.length
+      ? normalizedModelUsage.reduce((sum, usage) => sum + Number(usage.outputTokens || 0), 0)
+      : Number(outputTokens || 0);
     const entry = {
       id,
       projectId,
@@ -888,25 +1014,24 @@ export const AppProvider = ({ children }) => {
       name,
       assignee,
       hours: Number(hours) || 0,
-      cost: Number(cost) || 0,
-      tasksDone: Number(tasksDone) || 0,
-      trajectories: Number(trajectories) || 0,
+      cost: totalCost,
+      tasksDone: Number(successfulTasks ?? tasksDone) || 0,
+      successfulTasks: Number(successfulTasks ?? tasksDone) || 0,
+      failedTasks: Number(failedTasks || 0),
+      trajectories: Number(successTrajectories ?? trajectories) || 0,
+      successTrajectories: Number(successTrajectories ?? trajectories) || 0,
+      failedTrajectories: Number(failedTrajectories || 0),
       approvalStatus: approvalStatus || "logged",
       date,
       notes: notes || "",
       evidence: evidence || "",
       modelId: modelId || "",
       modelName: modelName || "",
-      inputTokens: Number(inputTokens || 0),
-      outputTokens: Number(outputTokens || 0),
-      modelUsage: Array.isArray(modelUsage) ? modelUsage.map((usage) => ({
-        modelId: usage.modelId || "",
-        modelName: usage.modelName || "",
-        tasksDone: Number(usage.tasksDone || 0),
-        cost: Number(usage.cost || 0),
-        inputTokens: Number(usage.inputTokens || 0),
-        outputTokens: Number(usage.outputTokens || 0),
-      })) : [],
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      successfulRows: normalizedSuccessfulRows,
+      failedRows: normalizedFailedRows,
+      modelUsage: normalizedModelUsage,
       createdAt: new Date().toISOString(),
       createdBy: user?.name || "TPM",
     };
@@ -927,28 +1052,53 @@ export const AppProvider = ({ children }) => {
         [key]: list.map((t) => {
           if (t.id !== logId) return t;
           if (!isTaskEditable(t)) return t;
+          const normalizedSuccessfulRows = Array.isArray(patch.successfulRows)
+            ? normalizeTaskSheetRows(patch.successfulRows, "success")
+            : (t.successfulRows || []);
+          const normalizedFailedRows = Array.isArray(patch.failedRows)
+            ? normalizeTaskSheetRows(patch.failedRows, "failed")
+            : (t.failedRows || []);
+          const normalizedModelUsage = aggregateTaskRowsToModelUsage({
+            successfulRows: normalizedSuccessfulRows,
+            failedRows: normalizedFailedRows,
+            fallbackUsage: Array.isArray(patch.modelUsage) ? patch.modelUsage : t.modelUsage,
+            fallbackModel: {
+              modelId: patch.modelId ?? t.modelId,
+              modelName: patch.modelName ?? t.modelName,
+              cost: patch.cost ?? t.cost,
+              tasksDone: patch.tasksDone ?? t.tasksDone,
+              inputTokens: patch.inputTokens ?? t.inputTokens,
+              outputTokens: patch.outputTokens ?? t.outputTokens,
+            },
+          });
+          const totalCost = normalizedModelUsage.length
+            ? normalizedModelUsage.reduce((sum, usage) => sum + Number(usage.cost || 0), 0)
+            : Number(patch.cost ?? t.cost ?? 0);
+          const totalInputTokens = normalizedModelUsage.length
+            ? normalizedModelUsage.reduce((sum, usage) => sum + Number(usage.inputTokens || 0), 0)
+            : Number(patch.inputTokens ?? t.inputTokens ?? 0);
+          const totalOutputTokens = normalizedModelUsage.length
+            ? normalizedModelUsage.reduce((sum, usage) => sum + Number(usage.outputTokens || 0), 0)
+            : Number(patch.outputTokens ?? t.outputTokens ?? 0);
           return {
             ...t,
             ...patch,
             hours: Number(patch.hours ?? t.hours),
-            cost: Number(patch.cost ?? t.cost),
-            tasksDone: Number(patch.tasksDone ?? t.tasksDone ?? 0),
-            trajectories: Number(patch.trajectories ?? t.trajectories ?? 0),
+            cost: totalCost,
+            tasksDone: Number(patch.successfulTasks ?? patch.tasksDone ?? t.successfulTasks ?? t.tasksDone ?? 0),
+            successfulTasks: Number(patch.successfulTasks ?? patch.tasksDone ?? t.successfulTasks ?? t.tasksDone ?? 0),
+            failedTasks: Number(patch.failedTasks ?? t.failedTasks ?? 0),
+            trajectories: Number(patch.successTrajectories ?? patch.trajectories ?? t.successTrajectories ?? t.trajectories ?? 0),
+            successTrajectories: Number(patch.successTrajectories ?? patch.trajectories ?? t.successTrajectories ?? t.trajectories ?? 0),
+            failedTrajectories: Number(patch.failedTrajectories ?? t.failedTrajectories ?? 0),
             approvalStatus: patch.approvalStatus ?? t.approvalStatus ?? "logged",
             modelId: patch.modelId ?? t.modelId ?? "",
             modelName: patch.modelName ?? t.modelName ?? "",
-            inputTokens: Number(patch.inputTokens ?? t.inputTokens ?? 0),
-            outputTokens: Number(patch.outputTokens ?? t.outputTokens ?? 0),
-            modelUsage: Array.isArray(patch.modelUsage)
-              ? patch.modelUsage.map((usage) => ({
-                  modelId: usage.modelId || "",
-                  modelName: usage.modelName || "",
-                  tasksDone: Number(usage.tasksDone || 0),
-                  cost: Number(usage.cost || 0),
-                  inputTokens: Number(usage.inputTokens || 0),
-                  outputTokens: Number(usage.outputTokens || 0),
-                }))
-              : t.modelUsage ?? [],
+            inputTokens: totalInputTokens,
+            outputTokens: totalOutputTokens,
+            successfulRows: normalizedSuccessfulRows,
+            failedRows: normalizedFailedRows,
+            modelUsage: normalizedModelUsage,
           };
         }),
       };
@@ -981,16 +1131,35 @@ export const AppProvider = ({ children }) => {
   };
 
   // ---- Top-up Requests (2-stage: CTO → CFO) ----
-  const createTopupRequest = ({ projectId, phaseId, phaseName, amount, reason, urgency, breakdown, sampleIteration }) => {
+  const createTopupRequest = ({
+    projectId,
+    phaseId,
+    phaseName,
+    amount,
+    baseAmount,
+    bufferPct,
+    bufferAmount,
+    reason,
+    urgency,
+    breakdown,
+    sampleIteration,
+  }) => {
     const proj = projects.find((p) => p.id === projectId);
     const id = `tur-${Date.now().toString(36)}`;
+    const totalAmount = Number(amount || 0);
+    const requestedBaseAmount = Number(baseAmount || breakdown?.total || totalAmount || 0);
+    const requestedBufferPct = Number(bufferPct || 0);
+    const requestedBufferAmount = Number(bufferAmount || 0);
     const entry = {
       id,
       projectId,
       projectName: proj?.name || projectId,
       phaseId,
       phaseName: phaseName || phaseId,
-      amount: Number(amount),
+      amount: totalAmount,
+      baseAmount: requestedBaseAmount,
+      bufferPct: requestedBufferPct,
+      bufferAmount: requestedBufferAmount,
       reason,
       urgency: urgency || "Normal",
       requester: user?.name || "TPM",
@@ -1002,7 +1171,12 @@ export const AppProvider = ({ children }) => {
       cfoDecision: null,
       breakdown: breakdown || null,
       history: [
-        { at: new Date().toISOString(), actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`, action: "Submitted top-up request", detail: `${phaseName || phaseId} · $${Number(amount).toLocaleString()}` },
+        {
+          at: new Date().toISOString(),
+          actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
+          action: "Submitted top-up request",
+          detail: `${phaseName || phaseId} · $${totalAmount.toLocaleString()}${requestedBufferPct > 0 ? ` · ${requestedBufferPct}% buffer` : ""}`,
+        },
       ],
     };
     setTopupRequests((arr) => [entry, ...arr]);

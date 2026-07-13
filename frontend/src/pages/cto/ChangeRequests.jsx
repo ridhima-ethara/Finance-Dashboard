@@ -18,7 +18,6 @@ import {
   CheckCircle2,
   XCircle,
   Calendar,
-  Sparkles,
   Cpu,
   Server,
   CreditCard,
@@ -217,15 +216,6 @@ const ChangeRequests = () => {
                   <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
                     <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Full reason</div>
                     <div className="text-sm text-zinc-100 leading-relaxed">{cr.reason}</div>
-                  </div>
-
-                  {/* AI insight */}
-                  <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-3 flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
-                    <div className="text-xs text-zinc-300 leading-relaxed">
-                      <span className="text-fuchsia-200 font-semibold">AI analysis: </span>
-                      This CR increases the budget by <span className="text-fuchsia-300 font-semibold tabular">{Math.round((cr.amount / (cr.currentBudget || 1)) * 100)}%</span>. Consider approving at <span className="text-white font-semibold tabular">{fmtCurrency(Math.round(cr.amount * 0.75), { compact: false })}</span> and requiring re-eval after phase 3.
-                    </div>
                   </div>
 
                   {/* Actions */}

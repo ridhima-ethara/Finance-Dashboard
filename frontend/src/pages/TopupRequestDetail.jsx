@@ -11,7 +11,6 @@ import {
   Percent,
   CheckCircle2,
   XCircle,
-  Sparkles,
   AlertTriangle,
   ShieldCheck,
   Cpu,
@@ -79,7 +78,7 @@ const TopupRequestDetail = () => {
   const currentPhase = project?.phases.find((phase) => phase.id === req.phaseId) || null;
   const phaseLogs = project && currentPhase ? getPhaseLogs(project.id, currentPhase.id) : [];
   const plannedTasks = Number(currentPhase?.totalTasks || currentPhase?.tasks || 0);
-  const completedTasks = phaseLogs.reduce((sum, log) => sum + (Number(log.tasksDone) || 0), 0);
+  const completedTasks = phaseLogs.reduce((sum, log) => sum + (Number(log.successfulTasks ?? log.tasksDone) || 0), 0);
   const remainingTasks = plannedTasks > 0 ? Math.max(plannedTasks - completedTasks, 0) : 0;
   const completionPct = plannedTasks > 0 ? Math.min(100, Math.round((completedTasks / plannedTasks) * 100)) : 0;
   const stage = stageChip[req.status] || stageChip["pending-cto"];
@@ -283,17 +282,25 @@ const TopupRequestDetail = () => {
                 This request predates line-item capture, so only the total top-up amount is available.
               </div>
             )}
+            {(Number(req.baseAmount || 0) > 0 || Number(req.bufferAmount || 0) > 0) && (
+              <div className="mt-4 space-y-1 text-xs text-zinc-400">
+                {Number(req.baseAmount || 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span>Base request</span>
+                    <span className="text-zinc-200 font-semibold tabular">{fmtCurrency(req.baseAmount, { compact: false })}</span>
+                  </div>
+                )}
+                {Number(req.bufferAmount || 0) > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span>Buffer ({Number(req.bufferPct || 0)}%)</span>
+                    <span className="text-zinc-200 font-semibold tabular">{fmtCurrency(req.bufferAmount, { compact: false })}</span>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
               <span className="text-sm font-semibold text-white">Total requested</span>
               <span className="text-fuchsia-300 font-display font-semibold text-2xl tabular">{fmtCurrency(req.amount, { compact: false })}</span>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3">
-            <Sparkles className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-zinc-200 leading-relaxed">
-              <span className="text-fuchsia-200 font-semibold">AI recommendation: </span>
-              Approve at <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(Math.round(req.amount * 0.85), { compact: false })}</span> based on the current cost mix and phase task progression.
             </div>
           </div>
         </div>
@@ -394,6 +401,8 @@ const TopupRequestDetail = () => {
             <div className="font-display font-semibold text-[15px] text-white mb-3">Financial overview</div>
             <div className="space-y-2 text-sm">
               <Row label="Requested" value={fmtCurrency(req.amount, { compact: false })} />
+              {Number(req.baseAmount || 0) > 0 && <Row label="Base ask" value={fmtCurrency(req.baseAmount, { compact: false })} />}
+              {Number(req.bufferAmount || 0) > 0 && <Row label={`Buffer (${Number(req.bufferPct || 0)}%)`} value={fmtCurrency(req.bufferAmount, { compact: false })} />}
               {breakdownSections.map((section) => (
                 <Row
                   key={section.key}
@@ -405,7 +414,9 @@ const TopupRequestDetail = () => {
               <Row label="CTO forwarded" value={req.ctoDecision ? fmtCurrency(req.ctoDecision.amount, { compact: false }) : "—"} color={req.ctoDecision?.decision === "reject" ? "text-red-300" : "text-zinc-100"} />
               <div className="border-t border-white/5 my-2" />
               <Row label="Project approved budget" value={fmtCurrency(project?.approvedBudget || 0, { compact: false })} />
-              <Row label="Actual spend" value={fmtCurrency(project?.actualSpend || 0, { compact: false })} />
+              {role === "CFO" && (
+                <Row label="Actual spend" value={fmtCurrency(project?.cfoActualSpend || project?.actualSpend || 0, { compact: false })} />
+              )}
               <Row label="Current remaining" value={fmtCurrency(project?.remaining || 0, { compact: false })} color={Number(project?.remaining || 0) >= 0 ? "text-emerald-300" : "text-red-300"} />
               <Row label={finalized ? "Final baseline addition" : canCfoAct ? "After selected approval" : "Forward amount to CFO"} value={finalized ? fmtCurrency(req.cfoDecision?.amount || 0, { compact: false }) : fmtCurrency(stageAmount || 0, { compact: false })} color="text-white" />
               <Row label={finalized ? "Updated project budget" : "Projected budget"} value={fmtCurrency(projectedBudget, { compact: false })} />
@@ -429,6 +440,7 @@ const Field = ({ label, value, icon: Icon }) => (
 
 const BreakdownSection = ({ title, icon: Icon, color, entry, helper }) => {
   const palette = breakdownPalette[color] || breakdownPalette.fuchsia;
+  const lines = getBreakdownLines(entry);
 
   return (
     <div className={`mt-3 first:mt-0 rounded-xl border overflow-hidden ${palette.section}`}>
@@ -444,12 +456,17 @@ const BreakdownSection = ({ title, icon: Icon, color, entry, helper }) => {
       </div>
       <div className="px-4 py-4 bg-white/[0.02]">
         {entry ? (
-          <LineItem
-            name={entry.optionLabel || title}
-            sub={entry.billingUnit === "per month" ? "Recurring line item" : "Top-up line item"}
-            detail={String(entry.note || "").trim() || helper}
-            value={formatEntryAmount(entry)}
-          />
+          <div className="space-y-3">
+            {lines.map((line, index) => (
+              <LineItem
+                key={line.id || `${title}-${index + 1}`}
+                name={line.optionLabel || title}
+                sub={line.billingUnit === "per month" ? "Recurring line item" : "Top-up line item"}
+                detail={String(line.note || "").trim() || helper}
+                value={formatEntryAmount(line)}
+              />
+            ))}
+          </div>
         ) : (
           <div className="text-[11px] text-zinc-500">{helper}</div>
         )}
@@ -479,6 +496,20 @@ const Row = ({ label, value, color = "text-white" }) => (
   </div>
 );
 
-const formatEntryAmount = (entry) => `${fmtCurrency(entry.amount, { compact: false })}${entry?.billingUnit === "per month" ? "/mo" : ""}`;
+const sumBreakdownEntryAmount = (entry) => {
+  if (!entry) return 0;
+  if (Array.isArray(entry.entries) && entry.entries.length) {
+    return entry.entries.reduce((sum, line) => sum + Number(line.amount || 0), 0);
+  }
+  return Number(entry.amount || 0);
+};
+
+const getBreakdownLines = (entry) => {
+  if (!entry) return [];
+  if (Array.isArray(entry.entries) && entry.entries.length) return entry.entries;
+  return [entry];
+};
+
+const formatEntryAmount = (entry) => `${fmtCurrency(sumBreakdownEntryAmount(entry), { compact: false })}${entry?.billingUnit === "per month" ? "/mo" : ""}`;
 
 export default TopupRequestDetail;

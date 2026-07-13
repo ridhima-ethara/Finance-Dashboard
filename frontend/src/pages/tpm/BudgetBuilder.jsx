@@ -33,6 +33,7 @@ const emptyModelItem = (totalTrajectories = 0) => {
     id: uid(),
     modelId: m.id,
     provider: m.provider,
+    usageTag: "Trajectory building",
     costPerTask,
     estCost: Math.round(costPerTask * totalTrajectories * 100) / 100,
   };
@@ -658,9 +659,10 @@ const BudgetBuilder = () => {
                 </Button>
               </div>
               <div className="space-y-1.5">
-                <div className={`grid ${isDirectCostBudget ? "grid-cols-[1.8fr_1fr_1fr_28px]" : "grid-cols-[1.5fr_1fr_1fr_1fr_28px]"} gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5`}>
+                <div className={`grid ${isDirectCostBudget ? "grid-cols-[1.35fr_1fr_1fr_1fr_28px]" : "grid-cols-[1.2fr_1fr_1fr_1fr_1fr_28px]"} gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5`}>
                   <span>Model</span>
                   <span>Provider</span>
+                  <span>Usage tag</span>
                   {!isDirectCostBudget && <span className="text-right">Cost / task ($)</span>}
                   <span className="text-right">Est. cost</span>
                   <span />
@@ -668,11 +670,20 @@ const BudgetBuilder = () => {
                 {models.map((r) => {
                   const meta = BEDROCK_MODELS.find((m) => m.id === r.modelId);
                   return (
-                    <div key={r.id} data-testid={`bb-row-model-${r.id}`} className={`grid ${isDirectCostBudget ? "grid-cols-[1.8fr_1fr_1fr_28px]" : "grid-cols-[1.5fr_1fr_1fr_1fr_28px]"} gap-2 items-center py-1`}>
+                    <div key={r.id} data-testid={`bb-row-model-${r.id}`} className={`grid ${isDirectCostBudget ? "grid-cols-[1.35fr_1fr_1fr_1fr_28px]" : "grid-cols-[1.2fr_1fr_1fr_1fr_1fr_28px]"} gap-2 items-center py-1`}>
                       <select value={r.modelId} onChange={(e) => updateModelRow(r.id, "modelId", e.target.value)} data-testid={`bb-model-select-${r.id}`} className={rowInp}>
                         {BEDROCK_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 leading-8 truncate">{meta?.provider}</div>
+                      <select
+                        value={r.usageTag || "Trajectory building"}
+                        onChange={(e) => updateModelRow(r.id, "usageTag", e.target.value)}
+                        data-testid={`bb-model-usage-tag-${r.id}`}
+                        className={rowInp}
+                      >
+                        <option value="Trajectory building">Trajectory building</option>
+                        <option value="QC checks">QC checks</option>
+                      </select>
                       {!isDirectCostBudget && (
                         <input
                           type="number"
@@ -708,6 +719,9 @@ const BudgetBuilder = () => {
                   : totalTrajectories > 0
                     ? <>Formula: <span className="text-fuchsia-300 font-semibold tabular">{totalTasks.toLocaleString()}</span> tasks × <span className="text-fuchsia-300 font-semibold tabular">{deliveryMode === "single" ? singlePhase.trajectories : "avg"}</span> trajectories/task × cost/task · Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span></>
                     : <>Formula: <span className="text-fuchsia-300 font-semibold tabular">{totalTasks.toLocaleString()}</span> tasks × cost/task · Total models: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.models, { compact: false })}</span></>}
+              </div>
+              <div className="mt-1 text-[11px] text-zinc-500">
+                Tag each model as <span className="text-zinc-300 font-medium">Trajectory building</span> or <span className="text-zinc-300 font-medium">QC checks</span> so review and delivery screens can track what the model budget is meant for.
               </div>
             </div>
           )}

@@ -37,7 +37,42 @@ export const formatBudgetTypeLabel = (budgetType = "") =>
 
 export const getProjectPhaseIds = (project) => (project?.phases || []).map((phase) => phase.id);
 
+const getSheetRows = (log = {}, key) =>
+  (Array.isArray(log?.[key]) ? log[key] : [])
+    .map((entry) => ({
+      id: entry?.id || "",
+      modelId: entry?.modelId || "",
+      modelName: entry?.modelName || entry?.modelLabel || "Unspecified model",
+      task: entry?.task || entry?.name || "",
+      stage: entry?.stage || "",
+      cost: Number(entry?.cost || 0),
+      llmCalls: Number(entry?.llmCalls || 0),
+      inputTokens: Number(entry?.inputTokens || 0),
+      inputTokensM: Number(entry?.inputTokensM || 0) || (Number(entry?.inputTokens || 0) / 1000000),
+      outputTokens: Number(entry?.outputTokens || 0),
+      outputTokensM: Number(entry?.outputTokensM || 0) || (Number(entry?.outputTokens || 0) / 1000000),
+    }))
+    .filter((entry) => (
+      entry.modelId
+      || entry.modelName
+      || entry.task
+      || entry.stage
+      || entry.cost
+      || entry.llmCalls
+      || entry.inputTokens
+      || entry.outputTokens
+    ));
+
+const getDetailedTaskRows = (log = {}) => [
+  ...getSheetRows(log, "successfulRows").map((entry) => ({ ...entry, status: "success" })),
+  ...getSheetRows(log, "failedRows").map((entry) => ({ ...entry, status: "failed" })),
+];
+
 export const getTaskLogRecordedCost = (log) => {
+  const detailedRows = getDetailedTaskRows(log);
+  if (detailedRows.length) {
+    return detailedRows.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+  }
   if (Array.isArray(log?.modelUsage) && log.modelUsage.length) {
     return log.modelUsage.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
   }
@@ -101,6 +136,27 @@ export const getProjectLogs = (taskLogs = {}, project, options = {}) =>
   );
 
 const normalizeUsageRows = (log) => {
+  const detailedRows = getDetailedTaskRows(log);
+  if (detailedRows.length) {
+    const grouped = detailedRows.reduce((acc, entry) => {
+      const key = entry.modelId || entry.modelName;
+      acc[key] = acc[key] || {
+        modelId: entry.modelId || "",
+        modelName: entry.modelName || "Unspecified model",
+        tasksDone: 0,
+        cost: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      acc[key].tasksDone += 1;
+      acc[key].cost += Number(entry.cost || 0);
+      acc[key].inputTokens += Number(entry.inputTokens || 0);
+      acc[key].outputTokens += Number(entry.outputTokens || 0);
+      return acc;
+    }, {});
+    return Object.values(grouped);
+  }
+
   if (Array.isArray(log?.modelUsage) && log.modelUsage.length) {
     return log.modelUsage.map((entry) => ({
       modelId: entry.modelId || "",
@@ -132,14 +188,32 @@ export const summarizeLoggedProject = (project, taskLogs = {}, options = {}) => 
 
   let loggedSpend = 0;
   let loggedTasks = 0;
+  let failedTasks = 0;
   let loggedTrajectories = 0;
+  let failedTrajectories = 0;
   let inputTokens = 0;
   let outputTokens = 0;
+  let successfulCost = 0;
+  let failedCost = 0;
 
   logs.forEach((log) => {
     loggedSpend += getTaskLogRecordedCost(log);
-    loggedTasks += Number(log.tasksDone || 0);
-    loggedTrajectories += Number(log.trajectories || 0);
+    loggedTasks += Number(log.successfulTasks ?? log.tasksDone ?? 0);
+    failedTasks += Number(log.failedTasks || 0);
+    loggedTrajectories += Number(log.successTrajectories ?? log.trajectories ?? 0);
+    failedTrajectories += Number(log.failedTrajectories || 0);
+
+    const detailedRows = getDetailedTaskRows(log);
+    if (detailedRows.length) {
+      successfulCost += detailedRows
+        .filter((entry) => entry.status === "success")
+        .reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+      failedCost += detailedRows
+        .filter((entry) => entry.status === "failed")
+        .reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+    } else {
+      successfulCost += Number(log.cost || 0);
+    }
 
     const usageRows = normalizeUsageRows(log);
     if (!usageRows.length) {
@@ -183,9 +257,13 @@ export const summarizeLoggedProject = (project, taskLogs = {}, options = {}) => 
     logs,
     loggedSpend,
     loggedTasks,
+    failedTasks,
     loggedTrajectories,
+    failedTrajectories,
     inputTokens,
     outputTokens,
+    successfulCost,
+    failedCost,
     targetTasks,
     remainingBudget,
     utilization,
@@ -369,15 +447,33 @@ export const buildLoggedDailyRows = (projects = [], taskLogs = {}, options = {})
         projectId: project.id,
         projectName: project.name,
         spent: 0,
+        successfulCost: 0,
+        failedCost: 0,
         approvedDaily,
         tasks: 0,
+        failedTasks: 0,
         trajectories: 0,
+        failedTrajectories: 0,
         inputTokens: 0,
         outputTokens: 0,
       };
       daily[date].spent += getTaskLogRecordedCost(log);
-      daily[date].tasks += Number(log.tasksDone || 0);
-      daily[date].trajectories += Number(log.trajectories || 0);
+      daily[date].tasks += Number(log.successfulTasks ?? log.tasksDone ?? 0);
+      daily[date].failedTasks += Number(log.failedTasks || 0);
+      daily[date].trajectories += Number(log.successTrajectories ?? log.trajectories ?? 0);
+      daily[date].failedTrajectories += Number(log.failedTrajectories || 0);
+
+      const detailedRows = getDetailedTaskRows(log);
+      if (detailedRows.length) {
+        daily[date].successfulCost += detailedRows
+          .filter((entry) => entry.status === "success")
+          .reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+        daily[date].failedCost += detailedRows
+          .filter((entry) => entry.status === "failed")
+          .reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+      } else {
+        daily[date].successfulCost += Number(log.cost || 0);
+      }
 
       const usageRows = normalizeUsageRows(log);
       if (usageRows.length) {
