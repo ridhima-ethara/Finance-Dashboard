@@ -31,6 +31,7 @@ const buildStatus = (review) => {
 };
 
 const buildRequestId = (reviewId = "") => `BBR/${String(reviewId || "pending").replace(/[^a-z0-9]/gi, "").toUpperCase()}`;
+const parseNumericInput = (value) => Number(value || 0);
 
 const ApprovalDetail = () => {
   const { id } = useParams();
@@ -50,16 +51,17 @@ const ApprovalDetail = () => {
 
   const [decision, setDecision] = useState(buildStatus(review));
   const [comment, setComment] = useState(review?.cfoDecision?.comment || "");
-  const [bufferPct, setBufferPct] = useState(0);
+  const [bufferPct, setBufferPct] = useState("");
 
   const originalRequested = Number(review?.requestedBudget || 0);
   const ctoForwardAmount = Number(review?.modifiedTotal || review?.recommendedBudget || review?.requestedBudget || 0);
-  const [approvedAmt, setApprovedAmt] = useState(review?.cfoDecision?.amount || ctoForwardAmount);
+  const [approvedAmt, setApprovedAmt] = useState(String(review?.cfoDecision?.amount ?? ctoForwardAmount ?? ""));
 
   useEffect(() => {
     setDecision(buildStatus(review));
-    setApprovedAmt(review?.cfoDecision?.amount || ctoForwardAmount || 0);
+    setApprovedAmt(String(review?.cfoDecision?.amount ?? ctoForwardAmount ?? ""));
     setComment(review?.cfoDecision?.comment || "");
+    setBufferPct("");
   }, [review, ctoForwardAmount]);
 
   const reviewPhases = review?.requestedPhases || [];
@@ -73,7 +75,9 @@ const ApprovalDetail = () => {
     }, 0);
   }, [project, taskLogs]);
   const remainingTasks = Math.max(0, Number(review?.tasks || 0) - loggedTasks);
-  const variance = approvedAmt - ctoForwardAmount;
+  const approvedAmountValue = parseNumericInput(approvedAmt);
+  const bufferPctValue = parseNumericInput(bufferPct);
+  const variance = approvedAmountValue - ctoForwardAmount;
 
   const breakdownItems = useMemo(() => {
     if (!review) return [];
@@ -127,30 +131,30 @@ const ApprovalDetail = () => {
   const approve = () => {
     cfoDecideBudgetReview(review.id, {
       decision: "approve",
-      amount: approvedAmt || ctoForwardAmount,
+      amount: approvedAmountValue || ctoForwardAmount,
       comment,
       reviewSeed: review,
     });
     setDecision("approved");
     toast.success("Budget approved", {
-      description: `${review.projectName} · ${fmtCurrency(approvedAmt || ctoForwardAmount, { compact: false })} routed to IT`,
+      description: `${review.projectName} · ${fmtCurrency(approvedAmountValue || ctoForwardAmount, { compact: false })} routed to IT`,
     });
   };
 
   const partial = () => {
-    if (!approvedAmt || approvedAmt <= 0 || approvedAmt >= ctoForwardAmount) {
+    if (!approvedAmountValue || approvedAmountValue <= 0 || approvedAmountValue >= ctoForwardAmount) {
       toast.error("Enter a partial amount below the CFO review amount");
       return;
     }
     cfoDecideBudgetReview(review.id, {
       decision: "partial",
-      amount: approvedAmt,
+      amount: approvedAmountValue,
       comment,
       reviewSeed: review,
     });
     setDecision("partial");
     toast.success("Budget partially approved", {
-      description: `${fmtCurrency(approvedAmt, { compact: false })} routed to IT`,
+      description: `${fmtCurrency(approvedAmountValue, { compact: false })} routed to IT`,
     });
   };
 
@@ -161,7 +165,7 @@ const ApprovalDetail = () => {
     }
     cfoDecideBudgetReview(review.id, {
       decision: "return",
-      amount: approvedAmt,
+      amount: approvedAmountValue,
       comment,
       reviewSeed: review,
     });
@@ -185,13 +189,13 @@ const ApprovalDetail = () => {
   };
 
   const allocateBuffer = () => {
-    if (!bufferPct || bufferPct <= 0 || bufferPct > 50) {
+    if (!bufferPctValue || bufferPctValue <= 0 || bufferPctValue > 50) {
       toast.error("Buffer must be between 1% and 50%");
       return;
     }
-    applyBufferAction({ projectId: review.projectId, pct: bufferPct, action: "allocate-project" });
+    applyBufferAction({ projectId: review.projectId, pct: bufferPctValue, action: "allocate-project" });
     toast.success("Hidden buffer allocated", {
-      description: `${bufferPct}% reserved for ${review.projectName}`,
+      description: `${bufferPctValue}% reserved for ${review.projectName}`,
     });
   };
 
@@ -290,7 +294,7 @@ const ApprovalDetail = () => {
                     min="0"
                     max="50"
                     value={bufferPct}
-                    onChange={(event) => setBufferPct(Number(event.target.value) || 0)}
+                    onChange={(event) => setBufferPct(event.target.value)}
                     data-testid="buffer-pct-input"
                     className="w-full h-9 pl-3 pr-8 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                   />
@@ -314,7 +318,7 @@ const ApprovalDetail = () => {
                   <input
                     type="number"
                     value={approvedAmt}
-                    onChange={(event) => setApprovedAmt(Number(event.target.value) || 0)}
+                    onChange={(event) => setApprovedAmt(event.target.value)}
                     data-testid="input-approved-amt"
                     className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                   />
@@ -357,7 +361,7 @@ const ApprovalDetail = () => {
                   </span>
                 </div>
                 <div className="text-xs text-zinc-300 mt-2">
-                  Final amount: <span className="font-semibold text-white tabular">{fmtCurrency(review.cfoDecision?.amount || approvedAmt || 0, { compact: false })}</span>
+                  Final amount: <span className="font-semibold text-white tabular">{fmtCurrency(review.cfoDecision?.amount || approvedAmountValue || 0, { compact: false })}</span>
                 </div>
                 {comment && <div className="text-xs text-zinc-300 mt-2">{comment}</div>}
               </div>

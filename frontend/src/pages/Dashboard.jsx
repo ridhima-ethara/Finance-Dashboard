@@ -5,6 +5,7 @@ import {
   ModelExpensesChart,
   InfraStackedChart,
   MonthlySpendChart,
+  MonthEndActualChart,
   CategoryDonut,
   UtilizationBars,
   SubscriptionsPanel,
@@ -256,6 +257,7 @@ const Dashboard = () => {
         <InfraStackedChart />
         <SubscriptionsPanel />
         <MonthlySpendChart />
+        <MonthEndActualChart />
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <CategoryDonut />
           <UtilizationBars />

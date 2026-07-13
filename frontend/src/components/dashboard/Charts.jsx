@@ -21,6 +21,7 @@ import { fmtCurrency, fmtPct } from "../../lib/format";
 import { useApp } from "../../context/AppContext";
 import {
   buildItActualDailyRows,
+  buildItMonthEndRows,
   summarizeProjectModelUsage,
 } from "../../lib/projectMetrics";
 
@@ -222,19 +223,36 @@ export const MonthlySpendChart = () => {
   const data = useMemo(() => {
     const rows = buildItActualDailyRows(projects, itMonthlyActuals);
     return Array.from(rows.reduce((map, row) => {
-      const current = map.get(row.date) || { date: row.date, budget: 0, actual: 0 };
+      const current = map.get(row.date) || { date: row.date, budget: 0, actual: 0, overrun: 0 };
       current.budget += Number(row.budget || 0);
       current.actual += Number(row.actual || 0);
       map.set(row.date, current);
       return map;
-    }, new Map()).values()).slice(-14);
+    }, new Map()).values())
+      .map((row) => ({
+        ...row,
+        overrun: Math.max(0, Number(row.actual || 0) - Number(row.budget || 0)),
+      }))
+      .slice(-14);
   }, [projects, itMonthlyActuals]);
+  const overrunDays = data.filter((row) => row.overrun > 0);
 
   return (
     <CardShell
       testid="chart-monthly-spend"
       title="Daily actual spend trend"
-      subtitle="Portfolio-wide · IT-filed actuals vs approved daily budget"
+      subtitle="Portfolio-wide · IT daily actuals vs approved daily allocation"
+      right={
+        <div className="text-xs text-zinc-500 tabular">
+          {overrunDays.length > 0 ? (
+            <>
+              <span className="font-semibold text-red-300">{overrunDays.length}</span> day{overrunDays.length === 1 ? "" : "s"} exceeded
+            </>
+          ) : (
+            <span className="font-semibold text-emerald-300">No daily overruns</span>
+          )}
+        </div>
+      }
     >
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -264,6 +282,74 @@ export const MonthlySpendChart = () => {
           </AreaChart>
         </ResponsiveContainer>
       </div>
+      {overrunDays.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {overrunDays.slice(-5).reverse().map((row) => (
+            <div key={row.date} className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-[11px] text-red-200 tabular">
+              {row.date.slice(5)} · +{fmtCurrency(row.overrun, { compact: false })}
+            </div>
+          ))}
+        </div>
+      )}
+    </CardShell>
+  );
+};
+
+export const MonthEndActualChart = () => {
+  const { projects, itMonthlyActuals } = useApp();
+  const data = useMemo(
+    () => buildItMonthEndRows(projects, itMonthlyActuals).slice(-6).map((row) => ({
+      name: getProjectLabel(row.projectName),
+      Budget: row.budget,
+      Actual: row.actual,
+      monthLabel: row.monthLabel,
+      variance: row.variance,
+    })),
+    [projects, itMonthlyActuals]
+  );
+
+  return (
+    <CardShell
+      testid="chart-month-end-actual"
+      title="Month-end actuals vs monthly allocation"
+      subtitle="IT monthly close compared with the current month budget allocation"
+      right={
+        <div className="text-xs text-zinc-500 tabular">
+          <span className="font-semibold text-white">{data.length}</span> project{data.length === 1 ? "" : "s"} filed
+        </div>
+      }
+    >
+      {data.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-6 text-center text-xs text-zinc-500">
+          No month-end actuals have been filed by IT yet.
+        </div>
+      ) : (
+        <div className="h-[280px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} barGap={6} barCategoryGap={18}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#71717A" }} axisLine={false} tickLine={false} />
+              <YAxis
+                tick={{ fontSize: 11, fill: "#71717A" }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`}
+              />
+              <Tooltip
+                content={<CustomTooltip />}
+                cursor={{ fill: "rgba(255,255,255,0.03)" }}
+              />
+              <Legend
+                iconType="square"
+                wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
+                formatter={(value) => <span className="text-zinc-400 text-xs">{value}</span>}
+              />
+              <Bar dataKey="Budget" fill={COLORS.info} radius={[4, 4, 0, 0]} maxBarSize={22} />
+              <Bar dataKey="Actual" fill={COLORS.actualSoft} radius={[4, 4, 0, 0]} maxBarSize={22} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </CardShell>
   );
 };

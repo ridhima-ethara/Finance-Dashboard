@@ -237,6 +237,8 @@ export const summarizeItProjectActuals = (entry = {}) => {
   const subsActual = dailyActuals.length
     ? dailyTotals.subsActual
     : Number(entry?.subsActual || 0);
+  const monthEndActual = Number(entry?.monthEndActual || 0);
+  const monthEndDate = entry?.monthEndDate || dailyActuals[dailyActuals.length - 1]?.date || entry?.updatedAt?.slice(0, 10) || "";
   const totalActual = Number(entry?.totalActual || 0) || (modelActual + infraActual + subsActual);
   const latestDailyActual = dailyActuals[dailyActuals.length - 1]?.total || Number(entry?.dailyApiCost || 0);
   const runRate = dailyActuals.length ? totalActual / dailyActuals.length : latestDailyActual;
@@ -245,6 +247,8 @@ export const summarizeItProjectActuals = (entry = {}) => {
     modelActual,
     infraActual,
     subsActual,
+    monthEndActual,
+    monthEndDate,
     totalActual,
     dailyActuals,
     latestDailyActual,
@@ -263,6 +267,19 @@ export const summarizeProjectModelUsage = (project, taskLogs = {}, actualEntry =
     return [...actuals.modelUsage].sort((left, right) => right.cost - left.cost || right.inputTokens - left.inputTokens);
   }
   return summarizeLoggedProject(project, taskLogs).models;
+};
+
+const getMonthLabel = (monthKey = "") => {
+  if (!monthKey) return "Current";
+  const [year, month] = String(monthKey).split("-").map(Number);
+  if (!year || !month) return "Current";
+  return new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+};
+
+const getDaysInMonth = (monthKey = "") => {
+  const [year, month] = String(monthKey).split("-").map(Number);
+  if (!year || !month) return 30;
+  return new Date(year, month, 0).getDate();
 };
 
 export const buildItActualDailyRows = (projects = [], itMonthlyActuals = {}) => {
@@ -304,6 +321,35 @@ export const buildItActualDailyRows = (projects = [], itMonthlyActuals = {}) => 
 
   return rows.sort((left, right) => (
     new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime()
+      || left.projectName.localeCompare(right.projectName)
+  ));
+};
+
+export const buildItMonthEndRows = (projects = [], itMonthlyActuals = {}) => {
+  const rows = [];
+
+  (projects || []).forEach((project) => {
+    const actuals = summarizeItProjectActuals(itMonthlyActuals[project?.id] || {});
+    if (actuals.monthEndActual <= 0) return;
+
+    const monthKey = (actuals.monthEndDate || new Date().toISOString()).slice(0, 7);
+    const monthDays = getDaysInMonth(monthKey);
+    const approvedDaily = Math.round(Number(project?.approvedBudget || 0) / 30);
+    const monthlyBudget = approvedDaily * monthDays;
+
+    rows.push({
+      monthKey,
+      monthLabel: getMonthLabel(monthKey),
+      projectId: project.id,
+      projectName: project.name,
+      budget: monthlyBudget,
+      actual: actuals.monthEndActual,
+      variance: actuals.monthEndActual - monthlyBudget,
+    });
+  });
+
+  return rows.sort((left, right) => (
+    left.monthKey.localeCompare(right.monthKey)
       || left.projectName.localeCompare(right.projectName)
   ));
 };

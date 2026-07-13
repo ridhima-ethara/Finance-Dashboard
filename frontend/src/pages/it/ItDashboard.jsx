@@ -24,24 +24,30 @@ import { toast } from "sonner";
 import { BEDROCK_MODELS } from "../../data/mockCatalog";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const toDraftNumberValue = (value) => {
+  if (value === null || value === undefined || value === "") return "";
+  return Number(value) === 0 ? "" : String(value);
+};
+const toSavedNumber = (value) => Number(value || 0);
 
 const buildUsageRow = (index = 0, row = {}) => ({
   id: row.id || `usage-${Date.now().toString(36)}-${index + 1}`,
   modelId: row.modelId || "",
   modelName: row.modelName || "",
-  cost: row.cost ?? "",
-  inputTokens: row.inputTokens ?? "",
-  outputTokens: row.outputTokens ?? "",
+  cost: toDraftNumberValue(row.cost),
+  inputTokens: toDraftNumberValue(row.inputTokens),
+  outputTokens: toDraftNumberValue(row.outputTokens),
 });
 
 const buildProjectDraft = (actualSummary, activeKeys = 0) => {
   const latestDaily = actualSummary.dailyActuals[actualSummary.dailyActuals.length - 1];
   return {
     actualDate: latestDaily?.date || todayIso(),
-    modelActual: latestDaily?.modelActual ?? actualSummary.modelActual ?? "",
-    infraActual: latestDaily?.infraActual ?? actualSummary.infraActual ?? "",
-    subsActual: latestDaily?.subsActual ?? actualSummary.subsActual ?? "",
-    activeKeys: actualSummary.activeKeys || activeKeys || 0,
+    modelActual: toDraftNumberValue(latestDaily?.modelActual ?? actualSummary.modelActual),
+    infraActual: toDraftNumberValue(latestDaily?.infraActual ?? actualSummary.infraActual),
+    subsActual: toDraftNumberValue(latestDaily?.subsActual ?? actualSummary.subsActual),
+    monthEndActual: toDraftNumberValue(actualSummary.monthEndActual),
+    activeKeys: toDraftNumberValue(actualSummary.activeKeys || activeKeys),
     note: actualSummary.note || "",
     modelUsage: actualSummary.modelUsage.map((row, index) => buildUsageRow(index, row)),
   };
@@ -138,11 +144,17 @@ const ItDashboard = () => {
     const draft = drafts[project.id] || buildProjectDraft(actualSummary, project.activeKeys);
     const dailyRow = {
       date: draft.actualDate || todayIso(),
-      modelActual: Number(draft.modelActual || 0),
-      infraActual: Number(draft.infraActual || 0),
-      subsActual: Number(draft.subsActual || 0),
+      modelActual: toSavedNumber(draft.modelActual),
+      infraActual: toSavedNumber(draft.infraActual),
+      subsActual: toSavedNumber(draft.subsActual),
     };
-    const dailyActuals = upsertDailyActualRow(project.actualEntry.dailyActuals || actualSummary.dailyActuals, dailyRow);
+    const latestDailyActual = Number(dailyRow.modelActual || 0) + Number(dailyRow.infraActual || 0) + Number(dailyRow.subsActual || 0);
+    const hasExistingDateRow = (project.actualEntry.dailyActuals || actualSummary.dailyActuals || []).some(
+      (row) => row?.date === dailyRow.date
+    );
+    const dailyActuals = latestDailyActual > 0 || hasExistingDateRow
+      ? upsertDailyActualRow(project.actualEntry.dailyActuals || actualSummary.dailyActuals, dailyRow)
+      : (project.actualEntry.dailyActuals || actualSummary.dailyActuals || []);
     const modelUsage = normalizeItModelUsageRows(draft.modelUsage).map((row) => ({
       ...row,
       modelName: row.modelName || BEDROCK_MODELS.find((model) => model.id === row.modelId)?.name || "Unspecified model",
@@ -153,7 +165,6 @@ const ItDashboard = () => {
       subsActual: sum.subsActual + Number(row.subsActual || 0),
     }), { modelActual: 0, infraActual: 0, subsActual: 0 });
     const totalActual = totals.modelActual + totals.infraActual + totals.subsActual;
-    const latestDailyActual = Number(dailyRow.modelActual || 0) + Number(dailyRow.infraActual || 0) + Number(dailyRow.subsActual || 0);
 
     saveItMonthlyActual(project.id, {
       dailyActuals,
@@ -163,7 +174,9 @@ const ItDashboard = () => {
       subsActual: totals.subsActual,
       totalActual,
       dailyApiCost: latestDailyActual,
-      activeKeys: Number(draft.activeKeys || project.activeKeys || 0),
+      monthEndActual: toSavedNumber(draft.monthEndActual),
+      monthEndDate: draft.actualDate || todayIso(),
+      activeKeys: toSavedNumber(draft.activeKeys || project.activeKeys),
       note: draft.note || "",
     });
 
@@ -240,7 +253,7 @@ const ItDashboard = () => {
           <div>
             <div className="font-display font-semibold text-[15px] text-white">Daily actuals &amp; model usage reconciliation</div>
             <div className="text-xs text-zinc-500 mt-0.5">
-              IT files the daily API actuals and the per-model usage mix that feed the CFO actuals, recovery, and monitoring views.
+              IT files the daily API actuals, month-end close numbers, and the per-model usage mix that feed the CFO actuals, recovery, and monitoring views.
             </div>
           </div>
           <Link to="/reports" className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium">
@@ -270,10 +283,11 @@ const ItDashboard = () => {
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
                     <Mini label="IT actual to date" value={fmtCurrency(actual.totalActual, { compact: false })} />
                     <Mini label="Last daily actual" value={fmtCurrency(actual.latestDailyActual, { compact: false })} />
+                    <Mini label="Month-end actual" value={fmtCurrency(actual.monthEndActual, { compact: false })} />
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-6 gap-3">
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-7 gap-3">
                   <DateField
                     label="Actual date"
                     value={draft.actualDate}
@@ -293,6 +307,11 @@ const ItDashboard = () => {
                     label="Subs actual"
                     value={draft.subsActual}
                     onChange={(value) => updateDraft(project.id, actual, project.activeKeys, { subsActual: value })}
+                  />
+                  <ActualField
+                    label="Month-end actual"
+                    value={draft.monthEndActual}
+                    onChange={(value) => updateDraft(project.id, actual, project.activeKeys, { monthEndActual: value })}
                   />
                   <ActualField
                     label="Active keys"
@@ -433,7 +452,7 @@ const ActualField = ({ label, value, onChange }) => (
     <input
       type="number"
       min="0"
-      value={value}
+      value={value ?? ""}
       onChange={(event) => onChange(event.target.value)}
       className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
     />

@@ -32,7 +32,7 @@ const buildLifecycle = (perProject, policyPct) =>
 
 const Buffer = () => {
   const { bufferOverview, applyBufferAction } = useApp();
-  const [pct, setPct] = useState(5); // percentage input
+  const [pct, setPct] = useState("5"); // percentage input
   const [selectedProject, setSelectedProject] = useState(bufferOverview.perProject[0]?.id || "");
   const [expanded, setExpanded] = useState({});
 
@@ -41,38 +41,39 @@ const Buffer = () => {
   const consumed = total - available;
   const utilizationPct = total ? Math.round((consumed / total) * 100) : 0;
   const proj = bufferOverview.perProject.find((p) => p.id === selectedProject);
+  const pctValue = Number(pct || 0);
   // Amount computed from % of pool for pool-level actions, and of project approved budget for project-level actions
-  const amountFromPct = Math.round((total * pct) / 100);
-  const amountFromPctProject = proj ? Math.round((proj.approved * pct) / 100) : 0;
+  const amountFromPct = Math.round((total * pctValue) / 100);
+  const amountFromPctProject = proj ? Math.round((proj.approved * pctValue) / 100) : 0;
 
   const lifecycle = useMemo(() => buildLifecycle(bufferOverview.perProject, bufferOverview.policyPct), [bufferOverview]);
 
   const validPct = (v) => v > 0 && v <= 100;
 
   const increase = () => {
-    if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
-    applyBufferAction({ pct, action: "increase-pool" });
-    toast.success("Buffer pool increased", { description: `+${pct}% of pool · ${fmtCurrency(amountFromPct, { compact: false })} · new total ${fmtCurrency(total + amountFromPct)}` });
+    if (!validPct(pctValue)) { toast.error("Enter a valid percentage (1-100)"); return; }
+    applyBufferAction({ pct: pctValue, action: "increase-pool" });
+    toast.success("Buffer pool increased", { description: `+${pctValue}% of pool · ${fmtCurrency(amountFromPct, { compact: false })} · new total ${fmtCurrency(total + amountFromPct)}` });
   };
   const reduce = () => {
-    if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
+    if (!validPct(pctValue)) { toast.error("Enter a valid percentage (1-100)"); return; }
     if (amountFromPct > available) { toast.error("Cannot reduce beyond available buffer"); return; }
-    applyBufferAction({ pct, action: "reduce-pool" });
-    toast.success("Buffer pool reduced", { description: `−${pct}% · ${fmtCurrency(amountFromPct, { compact: false })}` });
+    applyBufferAction({ pct: pctValue, action: "reduce-pool" });
+    toast.success("Buffer pool reduced", { description: `−${pctValue}% · ${fmtCurrency(amountFromPct, { compact: false })}` });
   };
   const allocate = () => {
-    if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
+    if (!validPct(pctValue)) { toast.error("Enter a valid percentage (1-100)"); return; }
     if (!proj) { toast.error("Select a project"); return; }
     if (amountFromPctProject > available) { toast.error("Amount exceeds available pool"); return; }
-    applyBufferAction({ projectId: proj.id, pct, action: "allocate-project" });
+    applyBufferAction({ projectId: proj.id, pct: pctValue, action: "allocate-project" });
     toast.success("Buffer allocated (hidden)", {
-      description: `${proj.name} · +${pct}% of approved (${fmtCurrency(amountFromPctProject, { compact: false })}) · not visible to TPM/CTO`,
+      description: `${proj.name} · +${pctValue}% of approved (${fmtCurrency(amountFromPctProject, { compact: false })}) · not visible to TPM/CTO`,
     });
   };
   const release = () => {
-    if (!validPct(pct)) { toast.error("Enter a valid percentage (1-100)"); return; }
+    if (!validPct(pctValue)) { toast.error("Enter a valid percentage (1-100)"); return; }
     if (!proj) { toast.error("Select a project"); return; }
-    applyBufferAction({ projectId: proj.id, pct, action: "release-project" });
+    applyBufferAction({ projectId: proj.id, pct: pctValue, action: "release-project" });
     toast.success("Buffer released back to pool", { description: `${proj.name} · +${fmtCurrency(amountFromPctProject, { compact: false })} freed` });
   };
 
@@ -172,23 +173,23 @@ const Buffer = () => {
                 max="100"
                 step="0.5"
                 value={pct}
-                onChange={(e) => setPct(Number(e.target.value) || 0)}
+                onChange={(e) => setPct(e.target.value)}
                 placeholder="5"
                 data-testid="buffer-pct"
                 className="w-full h-10 pl-8 pr-14 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               />
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-zinc-500 tabular">%</span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max="20"
-              step="0.5"
-              value={pct}
-              onChange={(e) => setPct(Number(e.target.value))}
-              data-testid="buffer-pct-slider"
-              className="w-full mt-2 accent-fuchsia-500"
-            />
+              <input
+                type="range"
+                min="0"
+                max="20"
+                step="0.5"
+                value={pctValue}
+                onChange={(e) => setPct(e.target.value)}
+                data-testid="buffer-pct-slider"
+                className="w-full mt-2 accent-fuchsia-500"
+              />
             <div className="mt-1 flex items-center justify-between text-[11px] text-zinc-500 tabular">
               <span>Pool amount: <span className="text-fuchsia-300 font-semibold">{fmtCurrency(amountFromPct, { compact: false })}</span></span>
               <span>Project amount: <span className="text-fuchsia-300 font-semibold">{fmtCurrency(amountFromPctProject, { compact: false })}</span></span>
@@ -198,16 +199,16 @@ const Buffer = () => {
 
         <div className="flex items-center gap-2 flex-wrap">
           <Button onClick={increase} className="h-9 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white gap-2" data-testid="btn-increase">
-            <Plus className="w-3.5 h-3.5" /> Increase pool by {pct}%
+            <Plus className="w-3.5 h-3.5" /> Increase pool by {pctValue}%
           </Button>
           <Button onClick={reduce} variant="outline" className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2" data-testid="btn-reduce">
-            <Minus className="w-3.5 h-3.5" /> Reduce pool by {pct}%
+            <Minus className="w-3.5 h-3.5" /> Reduce pool by {pctValue}%
           </Button>
           <Button onClick={allocate} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)]" data-testid="btn-allocate">
-            <Send className="w-3.5 h-3.5" /> Allocate {pct}% to project
+            <Send className="w-3.5 h-3.5" /> Allocate {pctValue}% to project
           </Button>
           <Button onClick={release} variant="outline" className="h-9 rounded-lg border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/15 gap-2" data-testid="btn-release">
-            <RotateCcw className="w-3.5 h-3.5" /> Release {pct}% back
+            <RotateCcw className="w-3.5 h-3.5" /> Release {pctValue}% back
           </Button>
         </div>
       </div>

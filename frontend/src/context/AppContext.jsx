@@ -543,8 +543,10 @@ export const AppProvider = ({ children }) => {
       const approvedBudget = p.approvedBudget + topupBonus + changeBonus;
       const recoveredAmount = recoveries[p.id] ?? recoveryByProject[p.id] ?? p.recoveredAmount;
       const itActuals = summarizeItProjectActuals(itMonthlyActuals[p.id] || {});
-      const hasItActuals = itActuals.totalActual > 0 || itActuals.dailyActuals.length > 0 || itActuals.modelUsage.length > 0;
-      const cfoActualSpend = hasItActuals ? itActuals.totalActual : Number(p.actualSpend || 0);
+      const hasItActuals = itActuals.totalActual > 0 || itActuals.dailyActuals.length > 0 || itActuals.modelUsage.length > 0 || itActuals.monthEndActual > 0;
+      const cfoActualSpend = hasItActuals
+        ? (itActuals.monthEndActual > 0 ? itActuals.monthEndActual : itActuals.totalActual)
+        : Number(p.actualSpend || 0);
       const cfoRemaining = approvedBudget - cfoActualSpend;
       const cfoUtilization = approvedBudget > 0 ? Math.round((cfoActualSpend / approvedBudget) * 100) : 0;
       const cfoVariance = approvedBudget - cfoActualSpend;
@@ -1873,6 +1875,7 @@ export const AppProvider = ({ children }) => {
     const infraActual = dailyActuals.length ? dailyTotals.infraActual : Number(payload?.infraActual || 0);
     const subsActual = dailyActuals.length ? dailyTotals.subsActual : Number(payload?.subsActual || 0);
     const totalActual = modelActual + infraActual + subsActual;
+    const monthEndActual = Number(payload?.monthEndActual || 0);
     setItMonthlyActuals((entries) => ({
       ...entries,
       [projectId]: {
@@ -1883,6 +1886,8 @@ export const AppProvider = ({ children }) => {
         infraActual,
         subsActual,
         totalActual,
+        monthEndActual,
+        monthEndDate: payload?.monthEndDate || entries[projectId]?.monthEndDate || "",
         updatedAt,
         updatedBy: user?.name || "IT",
       },
