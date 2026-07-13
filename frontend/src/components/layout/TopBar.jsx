@@ -1,4 +1,4 @@
-import { Search, Bell, Sparkles, LogOut, ChevronDown } from "lucide-react";
+import { Search, Bell, LogOut, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import {
@@ -9,12 +9,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { Button } from "../ui/button";
 import { NOTIFICATIONS } from "../../data/mockData";
 import { initials } from "../../lib/format";
 
 const TopBar = () => {
-  const { user, setAiOpen, setNotifOpen, logout, scope, setScope } = useApp();
+  const { user, setNotifOpen, logout, scope, setScope } = useApp();
   const nav = useNavigate();
   const unread = NOTIFICATIONS.filter((n) => !n.read).length;
   if (!user) return null;
@@ -51,17 +50,6 @@ const TopBar = () => {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          data-testid="btn-ai-panel"
-          onClick={() => setAiOpen(true)}
-          className="h-10 rounded-lg border-fuchsia-500/30 gap-2 bg-fuchsia-500/[0.06] hover:bg-fuchsia-500/[0.14] text-fuchsia-200"
-        >
-          <Sparkles className="w-4 h-4 text-fuchsia-400" />
-          <span className="font-medium">Ask AI</span>
-        </Button>
-
         <button
           data-testid="btn-notifications"
           onClick={() => setNotifOpen(true)}

@@ -124,6 +124,7 @@ const Projects = () => {
           const displayActual = isCFO ? Number(p.cfoActualSpend || p.actualSpend || 0) : Number(p.actualSpend || 0);
           const displayVariance = isCFO ? Number(p.cfoVariance || p.variance || 0) : Number(p.variance || 0);
           const displayUtilization = isCFO ? Number(p.cfoUtilization || p.utilization || 0) : Number(p.utilization || 0);
+          const displayExceeded = Math.max(Number(-displayVariance || 0), 0);
           return (
             <Link
               to={`/projects/${p.id}`}
@@ -161,8 +162,10 @@ const Projects = () => {
                   <div className={`text-sm font-semibold tabular ${budgetState.valueClass}`}>{fmtCurrency(budgetState.amount)}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">Actual</div>
-                  <div className="text-sm font-semibold text-white tabular">{fmtCurrency(displayActual)}</div>
+                  <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">{isCFO ? "Actual" : "Exceeded"}</div>
+                  <div className={`text-sm font-semibold tabular ${isCFO ? "text-white" : displayExceeded > 0 ? "text-red-300" : "text-zinc-400"}`}>
+                    {fmtCurrency(isCFO ? displayActual : displayExceeded)}
+                  </div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">Variance</div>

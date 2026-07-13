@@ -25,6 +25,8 @@ import {
   TrendingUp,
   Plus,
   Sparkles,
+  ArrowUpRightSquare,
+  PackageCheck,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import NewProjectDialog from "../../components/NewProjectDialog";
@@ -33,7 +35,7 @@ import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 
 const CtoDashboard = () => {
-  const { visibleProjects, taskLogs, budgetReviews, changeRequests, seedDemoProject } = useApp();
+  const { visibleProjects, taskLogs, budgetReviews, changeRequests, seedDemoProject, topupRequests, batchDeliveries } = useApp();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const nav = useNavigate();
 
@@ -52,6 +54,8 @@ const CtoDashboard = () => {
 
   const pendingReviews = budgetReviews.filter((review) => ["pending-cto", "returned", "resubmitted", "returned-to-tpm"].includes(review.status) || review.stage === "CTO Review").length;
   const pendingCRs = changeRequests.filter((request) => request.stage === "CTO Review").length;
+  const pendingTopups = topupRequests.filter((request) => request.status === "pending-cto").length;
+  const pendingTestingSamples = batchDeliveries.filter((delivery) => delivery.status === "testing-submitted").length;
   const highRisk = projectUsage.filter((entry) => entry.usage.utilization >= 90).length;
   const overBudget = projectUsage.filter((entry) => entry.usage.utilization >= 100).length;
 
@@ -142,7 +146,7 @@ const CtoDashboard = () => {
       </div>
 
       {/* CTO alert strip */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3" data-testid="cto-alert-strip">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3" data-testid="cto-alert-strip">
         <Link to="/budget-reviews" data-testid="cto-tile-reviews" className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/[0.06] hover:bg-fuchsia-500/[0.10] transition-colors p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-fuchsia-500/15 border border-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
             <ClipboardCheck className="w-4 h-4 text-fuchsia-300" />
@@ -162,6 +166,26 @@ const CtoDashboard = () => {
             <div className="text-white font-display font-semibold text-xl tabular">{pendingCRs} pending</div>
           </div>
           <ChevronRight className="w-4 h-4 text-amber-300" />
+        </Link>
+        <Link to="/topups" data-testid="cto-tile-topups" className="rounded-2xl border border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.10] transition-colors p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center flex-shrink-0">
+            <ArrowUpRightSquare className="w-4 h-4 text-sky-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300">Top-up requests</div>
+            <div className="text-white font-display font-semibold text-xl tabular">{pendingTopups} pending</div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-sky-300" />
+        </Link>
+        <Link to="/approvals" data-testid="cto-tile-testing-submitted" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.10] transition-colors p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
+            <PackageCheck className="w-4 h-4 text-emerald-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-emerald-300">Testing submitted</div>
+            <div className="text-white font-display font-semibold text-xl tabular">{pendingTestingSamples}</div>
+          </div>
+          <ChevronRight className="w-4 h-4 text-emerald-300" />
         </Link>
         <button
           type="button"

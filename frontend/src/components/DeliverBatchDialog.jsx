@@ -40,9 +40,9 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
   const [rndClientComment, setRndClientComment] = useState("");
   const [rndDecision, setRndDecision] = useState("accept"); // accept | reject | changes
 
-  const rndTotal = isTestingBudget
-    ? (phaseLoggedAmount || Number(phase?.estimated || 0))
-    : Number(taskCount || 0) * Number(estPerTask || 0);
+  const rndTotal = Number(taskCount || 0) > 0 && Number(estPerTask || 0) > 0
+    ? Number(taskCount || 0) * Number(estPerTask || 0)
+    : (phaseLoggedAmount || Number(phase?.estimated || 0));
 
   useEffect(() => {
     if (!open) return;
@@ -82,8 +82,8 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
 
   const submitRnd = () => {
     if (!project || !phase) { toast.error("Missing phase context"); return; }
-    if (!isTestingBudget && Number(taskCount) <= 0) { toast.error("Enter task count submitted"); return; }
-    if (!isTestingBudget && Number(estPerTask) <= 0) { toast.error("Enter estimated cost per task"); return; }
+    if (Number(taskCount) <= 0 && rndTotal <= 0) { toast.error("Enter task count or log cost for this submission"); return; }
+    if (Number(taskCount) > 0 && Number(estPerTask) <= 0) { toast.error("Enter estimated cost per task"); return; }
 
     const delivery = deliverBatch({
       projectId: project.id,
@@ -104,7 +104,7 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
 
     if (isTestingBudget) {
       toast.success("Testing sample submitted", {
-        description: `${project.name} · ${phase.name} · raise the R&D budget for the next sample`,
+        description: `${project.name} · ${phase.name} · CTO can now review the testing submission before the next R&D budget`,
       });
       onOpenChange(false);
       nav(`/budget-builder?projectId=${project.id}&budgetType=RnD&phaseId=${phase.id}&sampleIteration=1&sourceDeliveryId=${delivery.id}`);
@@ -215,45 +215,45 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
         {isRnd && (
           <div className="space-y-3 py-2" data-testid="deliver-rnd-form">
             <div className="grid grid-cols-2 gap-3">
-              {!isTestingBudget && (
-                <>
-                  <Field label="Task count submitted *">
-                    <div className="relative">
-                      <ListChecks className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="number" min="0" value={taskCount}
-                        onChange={(e) => setTaskCount(Number(e.target.value) || 0)}
-                        data-testid="deliver-rnd-task-count"
-                        className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      />
-                    </div>
-                  </Field>
+              <Field label={`Task count ${isTestingBudget ? "(testing sample)" : "submitted"} *`}>
+                <div className="relative">
+                  <ListChecks className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="number" min="0" value={taskCount}
+                    onChange={(e) => setTaskCount(Number(e.target.value) || 0)}
+                    data-testid="deliver-rnd-task-count"
+                    className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                  />
+                </div>
+              </Field>
 
-                  <Field label="Estimated $ / task *">
-                    <div className="relative">
-                      <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="number" min="0" step="0.01" value={estPerTask}
-                        onChange={(e) => setEstPerTask(Number(e.target.value) || 0)}
-                        data-testid="deliver-rnd-est-per-task"
-                        className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      />
-                    </div>
-                  </Field>
+              <Field label={`Estimated $ / task ${isTestingBudget ? "(testing)" : "*"} `}>
+                <div className="relative">
+                  <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="number" min="0" step="0.01" value={estPerTask}
+                    onChange={(e) => setEstPerTask(Number(e.target.value) || 0)}
+                    data-testid="deliver-rnd-est-per-task"
+                    className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                  />
+                </div>
+              </Field>
 
-                  <Field label="Trajectories">
-                    <input
-                      type="number" min="0" value={trajectories}
-                      onChange={(e) => setTrajectories(Number(e.target.value) || 0)}
-                      data-testid="deliver-rnd-trajectories"
-                      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                    />
-                  </Field>
-                </>
-              )}
+              <Field label="Trajectories">
+                <input
+                  type="number" min="0" value={trajectories}
+                  onChange={(e) => setTrajectories(Number(e.target.value) || 0)}
+                  data-testid="deliver-rnd-trajectories"
+                  className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                />
+              </Field>
 
               {isTestingBudget && (
-                <MiniField label="Testing spend" value={fmtCurrency(rndTotal, { compact: false })} tone="magenta" />
+                <MiniField
+                  label="Testing budget window"
+                  value={phase?.dates || `${phase?.start || "Planned"} -> ${phase?.end || "TBD"}`}
+                  tone="magenta"
+                />
               )}
 
               <Field label="Models used">
@@ -278,7 +278,7 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
             <Field label="Client comments">
               <textarea
                 value={rndClientComment} onChange={(e) => setRndClientComment(e.target.value)} rows={2}
-                placeholder="Client feedback on this batch"
+                placeholder={isTestingBudget ? "Testing completion note, early finish context, or sample handoff detail" : "Client feedback on this batch"}
                 data-testid="deliver-rnd-client-comment"
                 className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
               />
