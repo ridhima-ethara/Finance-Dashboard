@@ -350,3 +350,45 @@ P2
 ### Testing
 - Manual smoke tests via screenshots verified: Step 1 single phase, Step 1 multiple phases (matching reference image 2), Step 2 Budget Items with Bedrock model dropdown (matching reference image 1's tabs), CFO Dashboard 5-tile alert strip, CFO Batch Deliveries page. No automated agent run this iteration per user request.
 
+
+
+---
+
+## 2026-02-13 · GitHub Repo Sync + E2E Flow Audit
+
+### Pulled from `origin/main` (public repo: ridhima-ethara/Finance-Dashboard)
+Fast-forwarded 8 commits from HEAD, all reflected on preview:
+1. `850bd0c` CFO dashboard cards remove (kpi-runway, kpi-pending-approvals)
+2. `79981da` CFO dashboard project and topup view update (new Team/Budget/Tasks/Batch/Logs tabs on ProjectDetail)
+3. `0460465` Dashboards changes (14 files) — cleaner KPI grid layout
+4. `ddac328` RnD final Changes — added IT role card + `ItDashboard.jsx` + `projectMetrics.js`
+5. `0c79694` TPM final changes — new TPM dashboard KPIs and charts
+6. `a8bd0c8` CTO final changes — streamlined CTO sidebar + monitoring snapshot
+7. `b3d70db` CFO/IT final changes — IT actuals filing workflow + `ChangeRequestDetail.jsx`
+8. `669d77c` Flow fix 1 — reset seed data to clean-slate + user rename ("CFO Admin")
+9. `e256912` Flow fix 2 — chart pipeline driven by IT-filed actuals
+10. `b4550ef` Flow fix 3 — chart data pipeline refinement
+
+### E2E Flow Audit (iteration_10 → iteration_11)
+User requested a full E2E flow test spanning CTO → R&D → TPM → CTO approve → CFO approve → TPM task log → IT actuals → CFO dashboard, and to identify gaps.
+
+**Gap #1 (Fixed):** `mockUsers.js` R&D session name was "R&D Lead" but the TEAM roster only had "R&D Lead 1". Result: CTO could not add R&D user to `rndMembers`, and R&D user's `visibleProjects` filter returned empty — the R&D loop was invisible on the UI. **Fix**: renamed USERS entry (1-char change) to "R&D Lead 1".
+
+**Gap #2 (By Design):** TPM Production budget is gated by `project.readyForTpmBudget` (set only after R&D completes the testing → RnD → deliver-accept sequence). This is the intended workflow and now traversable via UI thanks to Gap #1 fix.
+
+**Verified by testing_agent (iteration_11):**
+- ✅ R&D quick-login card correctly shows "R&D Lead 1"
+- ✅ CTO can select R&D Lead 1 in `rnd-multi-picker` when creating a project
+- ✅ R&D user sees the project on `/projects` and inside `bb-project` dropdown
+- ✅ R&D → CTO → CFO Testing-budget approval loop completes end-to-end
+- ✅ Downstream code paths (RnD budget → deliver accept → TPM Production unlock → task log → IT actuals → CFO charts) verified via code review; UI execution is fully unblocked
+
+### Follow-up (Not blocking, noted for future iterations)
+- Minor: disable `bb-submit` when `bb-production-locked-banner` is visible (UX polish)
+- Refactor: AppContext.jsx is 2062 lines — split into role/domain slices
+- Robustness: switch R&D/TPM visibility filters from name-string matching to id-based (prevent roster drift bugs like Gap #1)
+- Suppress hydration warning caused by visual-editor overlay on `<option>` children (cosmetic)
+
+### Files touched this iteration
+- Modified: `frontend/src/data/mockUsers.js` (1 line)
+- Added: `/app/test_reports/iteration_10.json`, `/app/test_reports/iteration_11.json`
