@@ -149,7 +149,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
                 type="text"
                 value={form.clientProjectName}
                 onChange={(e) => update("clientProjectName", e.target.value)}
-                placeholder="e.g. Acme AI · Q3 Personalization"
+                placeholder="e.g. Client modernization program"
                 data-testid="input-client-project-name"
                 className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               />
@@ -161,7 +161,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
               type="text"
               value={form.internalName}
               onChange={(e) => update("internalName", e.target.value)}
-              placeholder="e.g. Nova, Falcon, Prism…"
+              placeholder="e.g. Internal delivery track"
               data-testid="input-internal-name"
               className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
             />

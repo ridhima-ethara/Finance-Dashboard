@@ -9,7 +9,7 @@ import { BEDROCK_MODELS, EC2_INSTANCES, SUBSCRIPTION_CATALOG } from "../../data/
 
 // Bifurcated change request — mirrors TopupRequestDialog structure: per-line ask + note.
 const ChangeRequestDialog = ({ open, onOpenChange }) => {
-  const { visibleProjects } = useApp();
+  const { visibleProjects, createChangeRequest } = useApp();
   const [project, setProject] = useState(visibleProjects[0]?.id || "");
   const [reason, setReason] = useState("");
   const [expectedTasks, setExpectedTasks] = useState("");
@@ -26,8 +26,37 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
 
   const submit = () => {
     if (!reason.trim()) return toast.error("Please explain the reason");
+    if (!project) return toast.error("Select a project first");
+    const projectName = visibleProjects.find((p) => p.id === project)?.name || "Project";
+    createChangeRequest({
+      projectId: project,
+      reason,
+      urgency,
+      expectedTasks,
+      timelineDelta: timeline,
+      breakdown: {
+        models: {
+          ...models,
+          optionLabel: BEDROCK_MODELS.find((option) => option.id === models.option)
+            ? `${BEDROCK_MODELS.find((option) => option.id === models.option)?.name} · ${BEDROCK_MODELS.find((option) => option.id === models.option)?.provider}`
+            : "",
+        },
+        infra: {
+          ...infra,
+          optionLabel: EC2_INSTANCES.find((option) => option.code === infra.option)
+            ? `${EC2_INSTANCES.find((option) => option.code === infra.option)?.code} · ${EC2_INSTANCES.find((option) => option.code === infra.option)?.family} · ${EC2_INSTANCES.find((option) => option.code === infra.option)?.vCPU} vCPU · ${EC2_INSTANCES.find((option) => option.code === infra.option)?.memoryGiB} GiB`
+            : "",
+        },
+        subs: {
+          ...subs,
+          optionLabel: SUBSCRIPTION_CATALOG.find((option) => option.name === subs.option)
+            ? `${SUBSCRIPTION_CATALOG.find((option) => option.name === subs.option)?.name} · $${SUBSCRIPTION_CATALOG.find((option) => option.name === subs.option)?.monthly}/month`
+            : "",
+        },
+      },
+    });
     toast.success("Change request submitted", {
-      description: `${visibleProjects.find((p) => p.id === project)?.name || "Project"} · ${totalAsk > 0 ? fmtCurrency(totalAsk, { compact: false }) : "no $ ask"} · ${urgency} · routed to CTO`,
+      description: `${projectName} · ${totalAsk > 0 ? fmtCurrency(totalAsk, { compact: false }) : "no $ ask"} · ${urgency} · routed to CTO`,
     });
     onOpenChange(false);
     setReason(""); setExpectedTasks(""); setTimeline("");

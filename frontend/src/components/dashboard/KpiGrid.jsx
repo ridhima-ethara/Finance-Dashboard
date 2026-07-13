@@ -9,8 +9,8 @@ import {
   CheckSquare,
 } from "lucide-react";
 import { fmtCurrency, fmtPct } from "../../lib/format";
-import { PORTFOLIO } from "../../data/mockData";
 import { useApp } from "../../context/AppContext";
+import { summarizeLoggedProject } from "../../lib/projectMetrics";
 
 // Individual KPI card - finance-grade
 const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", icon: Icon, testid }) => {
@@ -57,9 +57,34 @@ const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", icon: Icon, 
 };
 
 const KpiGrid = () => {
-  const { role } = useApp();
-  const cpiTone = PORTFOLIO.cpi >= 1 ? "positive" : "negative";
-  const runwayTone = PORTFOLIO.cashRunwayDays >= 30 ? "positive" : PORTFOLIO.cashRunwayDays >= 14 ? "warning" : "negative";
+  const { role, projects, budgetReviews, topupRequests, changeRequests, taskLogs } = useApp();
+  const summary = projects.reduce((acc, project) => {
+    const usage = summarizeLoggedProject(project, taskLogs);
+    const spend = Math.max(Number(project.actualSpend || 0), Number(usage.loggedSpend || 0));
+    acc.approvedBudget += Number(project.approvedBudget || 0);
+    acc.actualSpend += spend;
+    acc.remaining += Math.max(0, Number(project.approvedBudget || 0) - spend);
+    acc.activeProjects += 1;
+    acc.burnRate += usage.runRate || 0;
+    return acc;
+  }, {
+    approvedBudget: 0,
+    actualSpend: 0,
+    remaining: 0,
+    activeProjects: 0,
+    burnRate: 0,
+  });
+  const utilization = summary.approvedBudget > 0 ? Math.round((summary.actualSpend / summary.approvedBudget) * 100) : 0;
+  const cpi = summary.actualSpend > 0 ? Number((summary.approvedBudget / summary.actualSpend).toFixed(2)) : 0;
+  const cashRunwayDays = summary.burnRate > 0 ? Math.round(summary.remaining / summary.burnRate) : 0;
+  const pendingApprovals = budgetReviews.filter((review) => ["pending-cto", "forwarded-cfo", "returned"].includes(review.status) || review.stage === "CTO Review" || review.stage === "CFO Review").length
+    + topupRequests.filter((request) => request.status === "pending-cto" || request.status === "pending-cfo").length
+    + changeRequests.filter((request) => request.stage === "CTO Review" || request.stage === "CFO Review").length;
+  const pendingApprovalValue = budgetReviews.reduce((sum, review) => sum + Number(review.modifiedTotal || review.requestedBudget || 0), 0)
+    + topupRequests.reduce((sum, request) => sum + Number(request.amount || 0), 0)
+    + changeRequests.reduce((sum, request) => sum + Number(request.amount || 0), 0);
+  const cpiTone = cpi >= 1 ? "positive" : "negative";
+  const runwayTone = cashRunwayDays >= 30 ? "positive" : cashRunwayDays >= 14 ? "warning" : "negative";
   const hideCfoCards = role === "CFO";
 
   const cards = [
@@ -67,41 +92,41 @@ const KpiGrid = () => {
       testid: "kpi-approved-budget",
       label: "Approved Budget",
       icon: Wallet,
-      value: fmtCurrency(PORTFOLIO.approvedBudget),
-      sublabel: `${PORTFOLIO.activeProjects} active projects · locked`,
+      value: fmtCurrency(summary.approvedBudget),
+      sublabel: `${summary.activeProjects} active projects · locked`,
     },
     {
       testid: "kpi-actual-spend",
       label: "Actual Spend",
       icon: Activity,
-      value: fmtCurrency(PORTFOLIO.actualSpend),
-      sublabel: `${fmtPct(PORTFOLIO.utilization)} of approved`,
-      delta: `${fmtPct(PORTFOLIO.utilization)} util`,
-      tone: PORTFOLIO.utilization >= 100 ? "negative" : PORTFOLIO.utilization >= 85 ? "warning" : "positive",
+      value: fmtCurrency(summary.actualSpend),
+      sublabel: `${fmtPct(utilization)} of approved`,
+      delta: `${fmtPct(utilization)} util`,
+      tone: utilization >= 100 ? "negative" : utilization >= 85 ? "warning" : "positive",
     },
     {
       testid: "kpi-cpi",
       label: "Cost Performance (CPI)",
       icon: Gauge,
-      value: PORTFOLIO.cpi.toFixed(2),
-      sublabel: PORTFOLIO.cpi >= 1 ? "Under budget · efficient" : "Over budget · investigate",
-      delta: PORTFOLIO.cpi >= 1 ? "Efficient" : "Overrun",
+      value: cpi.toFixed(2),
+      sublabel: cpi >= 1 ? "Under budget · efficient" : "Over budget · investigate",
+      delta: cpi >= 1 ? "Efficient" : "Overrun",
       tone: cpiTone,
     },
     {
       testid: "kpi-burn-rate",
       label: "Burn Rate",
       icon: Flame,
-      value: `${fmtCurrency(PORTFOLIO.burnRate, { compact: false })}/day`,
-      sublabel: "Portfolio-wide 30-day avg",
+      value: `${fmtCurrency(summary.burnRate, { compact: false })}/day`,
+      sublabel: "Live logged daily run rate",
     },
     {
       testid: "kpi-runway",
       label: "Cash Runway",
       icon: Clock3,
-      value: PORTFOLIO.cashRunwayDays ? `${PORTFOLIO.cashRunwayDays} days` : "—",
+      value: cashRunwayDays ? `${cashRunwayDays} days` : "—",
       sublabel: "At current burn rate",
-      delta: PORTFOLIO.cashRunwayDays >= 30 ? "Comfortable" : PORTFOLIO.cashRunwayDays >= 14 ? "Monitor" : "Critical",
+      delta: cashRunwayDays >= 30 ? "Comfortable" : cashRunwayDays >= 14 ? "Monitor" : "Critical",
       tone: runwayTone,
       hidden: hideCfoCards,
     },
@@ -109,8 +134,8 @@ const KpiGrid = () => {
       testid: "kpi-pending-approvals",
       label: "Pending Approvals",
       icon: CheckSquare,
-      value: `${PORTFOLIO.pendingApprovals}`,
-      sublabel: `${fmtCurrency(PORTFOLIO.pendingApprovalValue)} awaiting decision`,
+      value: `${pendingApprovals}`,
+      sublabel: `${fmtCurrency(pendingApprovalValue)} awaiting decision`,
       delta: "Action needed",
       tone: "magenta",
       hidden: hideCfoCards,

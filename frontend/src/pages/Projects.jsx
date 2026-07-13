@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fmtCurrency, fmtPct, healthColor, utilColor, varianceColor } from "../lib/format";
 import { Search, Filter, Plus, ChevronRight, ArrowUpRightSquare, Lock } from "lucide-react";
@@ -15,12 +15,25 @@ const Projects = () => {
   const [requestOpen, setRequestOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
-  const { role, scope, visibleProjects } = useApp();
+  const { role, scope, visibleProjects, budgetReviews } = useApp();
   const isPL = role === "PL";
   const isCTO = role === "CTO";
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
   const canCreateProject = isCTO || isTPM || role === "R&D";
+  const latestBudgetReviewByProject = useMemo(() => {
+    const reviewTime = (review) => new Date(
+      review?.cfoDecision?.at
+      || review?.ctoAt
+      || review?.submittedAt
+      || 0
+    ).getTime();
+    return budgetReviews.reduce((map, review) => {
+      const current = map.get(review.projectId);
+      if (!current || reviewTime(review) > reviewTime(current)) map.set(review.projectId, review);
+      return map;
+    }, new Map());
+  }, [budgetReviews]);
 
   const filtered = visibleProjects.filter((p) => {
     if (scope !== "all" && p.type !== scope) return false;
@@ -105,6 +118,8 @@ const Projects = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((p) => {
           const c = healthColor(p.health);
+          const latestReview = latestBudgetReviewByProject.get(p.id);
+          const budgetState = getProjectBudgetCardState(p, latestReview);
           return (
             <Link
               to={`/projects/${p.id}`}
@@ -133,8 +148,8 @@ const Projects = () => {
 
               <div className="mt-4 grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">Approved</div>
-                  <div className="text-sm font-semibold text-white tabular">{fmtCurrency(p.approvedBudget)}</div>
+                  <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">{budgetState.label}</div>
+                  <div className={`text-sm font-semibold tabular ${budgetState.valueClass}`}>{fmtCurrency(budgetState.amount)}</div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">Actual</div>
@@ -181,6 +196,44 @@ const Projects = () => {
       <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} />
     </div>
   );
+};
+
+const getProjectBudgetCardState = (project, review) => {
+  if (!review) {
+    return Number(project.approvedBudget || 0) > 0
+      ? { label: "Approved", amount: Number(project.approvedBudget || 0), valueClass: "text-white" }
+      : { label: "Pending", amount: 0, valueClass: "text-amber-300" };
+  }
+
+  if (["approved", "partial"].includes(review.status)) {
+    return {
+      label: "Approved",
+      amount: Number(project.approvedBudget || review.cfoDecision?.amount || review.modifiedTotal || review.requestedBudget || 0),
+      valueClass: "text-white",
+    };
+  }
+
+  if (review.status === "returned-to-tpm") {
+    return {
+      label: "Returned",
+      amount: Number(review.requestedBudget || review.modifiedTotal || 0),
+      valueClass: "text-amber-300",
+    };
+  }
+
+  if (review.status === "rejected" || review.status === "rejected-by-cto") {
+    return {
+      label: "Rejected",
+      amount: Number(project.approvedBudget || 0),
+      valueClass: "text-red-300",
+    };
+  }
+
+  return {
+    label: "Pending",
+    amount: Number(review.modifiedTotal || review.requestedBudget || 0),
+    valueClass: "text-amber-300",
+  };
 };
 
 export default Projects;

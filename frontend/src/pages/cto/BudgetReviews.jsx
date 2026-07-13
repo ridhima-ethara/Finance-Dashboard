@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useState, useMemo } from "react";
-import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { fmtCurrency } from "../../lib/format";
+import { useApp } from "../../context/AppContext";
 import {
   ClipboardCheck,
   Clock3,
@@ -21,11 +21,16 @@ const urgencyColor = {
 };
 
 const BudgetReviews = () => {
+  const { budgetReviews } = useApp();
   const [search, setSearch] = useState("");
   const [urgencyFilter, setUrgencyFilter] = useState("all");
+  const queue = useMemo(
+    () => budgetReviews.filter((review) => ["pending-cto", "returned", "resubmitted", "returned-to-tpm"].includes(review.status) || review.stage === "CTO Review"),
+    [budgetReviews]
+  );
 
   const filtered = useMemo(() => {
-    return BUDGET_REVIEWS.filter((r) => {
+    return queue.filter((r) => {
       if (urgencyFilter !== "all" && r.urgency !== urgencyFilter) return false;
       if (search) {
         const s = search.toLowerCase();
@@ -34,11 +39,11 @@ const BudgetReviews = () => {
       }
       return true;
     });
-  }, [search, urgencyFilter]);
+  }, [queue, search, urgencyFilter]);
 
-  const totalRequested = BUDGET_REVIEWS.reduce((s, r) => s + r.requestedBudget, 0);
-  const totalRecommended = BUDGET_REVIEWS.reduce((s, r) => s + r.recommendedBudget, 0);
-  const highUrgency = BUDGET_REVIEWS.filter((r) => r.urgency === "High").length;
+  const totalRequested = queue.reduce((s, r) => s + Number(r.requestedBudget || 0), 0);
+  const totalRecommended = queue.reduce((s, r) => s + Number(r.recommendedBudget || r.requestedBudget || 0), 0);
+  const highUrgency = queue.filter((r) => r.urgency === "High").length;
 
   return (
     <div className="space-y-6" data-testid="page-budget-reviews">
@@ -51,14 +56,14 @@ const BudgetReviews = () => {
           </div>
           <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Budget reviews</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            {BUDGET_REVIEWS.length} budget{BUDGET_REVIEWS.length === 1 ? "" : "s"} awaiting your review · {highUrgency} high urgency
+            {queue.length} budget{queue.length === 1 ? "" : "s"} awaiting your review · {highUrgency} high urgency
           </p>
         </div>
       </div>
 
       {/* Summary stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="In queue" value={String(BUDGET_REVIEWS.length)} icon={ClipboardCheck} tone="magenta" testid="stat-in-queue" />
+        <StatCard label="In queue" value={String(queue.length)} icon={ClipboardCheck} tone="magenta" testid="stat-in-queue" />
         <StatCard label="High urgency" value={String(highUrgency)} icon={AlertTriangle} tone={highUrgency > 0 ? "negative" : "neutral"} testid="stat-high" />
         <StatCard label="Total requested" value={fmtCurrency(totalRequested)} testid="stat-total-req" />
         <StatCard label="Total recommended" value={fmtCurrency(totalRecommended)} tone="positive" testid="stat-total-rec" sub={fmtCurrency(totalRequested - totalRecommended) + " saved"} />
@@ -90,7 +95,7 @@ const BudgetReviews = () => {
                   : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
               }`}
             >
-              {u === "all" ? `All (${BUDGET_REVIEWS.length})` : u}
+              {u === "all" ? `All (${queue.length})` : u}
             </button>
           ))}
         </div>

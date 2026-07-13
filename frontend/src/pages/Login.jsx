@@ -174,7 +174,7 @@ const Login = () => {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="demo123"
+                    placeholder="Enter password"
                     className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                   />
                 </div>
@@ -192,7 +192,7 @@ const Login = () => {
           </div>
 
           <p className="mt-6 text-center text-[11px] text-zinc-600">
-            Demo mode · quick-login bypasses password. Session stored in your browser.
+            Role shortcut sign-in is available in this local workspace. Session stored in your browser.
           </p>
         </div>
       </div>

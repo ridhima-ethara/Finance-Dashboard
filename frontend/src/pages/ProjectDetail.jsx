@@ -13,13 +13,13 @@ import { useApp } from "../context/AppContext";
 import { isTpmView } from "../lib/roles";
 import { toast } from "sonner";
 import { TEAM } from "../data/mockUsers";
-import { BUDGET_REVIEWS, CHANGE_REQUESTS, getPhaseTasks } from "../data/mockTpm";
+import { getPhaseTasks } from "../data/mockTpm";
 import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
 import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
 import { DAILY_ACTIVITY } from "../data/mockAi";
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
-import { buildBudgetTracks, formatBudgetTypeLabel, summarizeLoggedProject } from "../lib/projectMetrics";
+import { buildBudgetTracks, formatBudgetTypeLabel, normalizeBudgetType, summarizeLoggedProject } from "../lib/projectMetrics";
 
 // Deterministic seed of team members per project — uses project id hash for stability.
 const seedTeam = (project) => {
@@ -37,10 +37,9 @@ const seedTeam = (project) => {
   const explicitMembers = (project.rndMembers || [])
     .map((name) => TEAM.find((member) => member.name === name) || { name, role: "R&D", email: `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` });
   const roster = [
-    { name: project.tpm || "Arjun Mehta", role: "TPM", email: `${(project.tpm || "arjun").toLowerCase().split(" ")[0]}@ethara.ai` },
-    { name: project.pl || "Aanya Sharma", role: "Project Lead", email: `${(project.pl || "aanya").toLowerCase().split(" ")[0]}@ethara.ai` },
+    ...(project.tpm ? [{ name: project.tpm, role: "TPM", email: `${project.tpm.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` }] : []),
+    ...(project.pl ? [{ name: project.pl, role: "Project Lead", email: `${project.pl.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` }] : []),
     ...explicitMembers,
-    ...TEAM.filter((m) => m.role === "Engineer" || m.role === "Project Lead").slice(0, Math.max(0, 2 - explicitMembers.length)),
   ];
   // Dedupe by name
   const seen = new Set();
@@ -51,17 +50,20 @@ const seedTeam = (project) => {
       name: m.name,
       role: m.role,
       email: m.email,
-      status: i === 0 ? "Online" : i === 1 ? "Online" : "Away",
-      tasksDone: [4, 2, 1, 0][i] ?? 0,
+      status: i === 0 ? "Online" : "Pending kickoff",
+      tasksDone: 0,
     }));
 };
 
 const statusMap = {
   "pending-cto": { label: "Pending · CTO", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   "pending-cfo": { label: "Pending · CFO", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
+  "forwarded-cfo": { label: "Pending · CFO", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   partial: { label: "Partially Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
+  "rejected-by-cto": { label: "Rejected · CTO", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
+  "returned-to-tpm": { label: "Returned", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
   recovered: { label: "Recovered · full", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "partial-recovered": { label: "Recovered · partial", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   "non-recoverable": { label: "Non-recoverable", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30", Icon: Lock },
@@ -75,13 +77,16 @@ const ProjectDetail = () => {
   const nav = useNavigate();
   const {
     setAiOpen, projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
-    removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask, taskLogs,
+    removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask, taskLogs, changeRequests,
   } = useApp();
   const p = projects.find((x) => x.id === id);
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
+  const isRnd = role === "R&D";
   const isRndProject = p?.type === "R&D";
-  const showRndBudgetTracks = isRndProject && role === "R&D";
+  const showRndBudgetTracks = isRndProject && isRnd;
+  const canRequestTopup = isTPM || isRnd;
+  const canManageExecution = isTPM || isRnd;
 
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
@@ -109,12 +114,18 @@ const ProjectDetail = () => {
   const projectTopups = useMemo(() => topupRequests.filter((r) => r.projectId === id), [topupRequests, id]);
   const projectBatches = useMemo(() => batchDeliveries.filter((b) => b.projectId === id), [batchDeliveries, id]);
   const projectBudgetRequests = useMemo(
-    () => buildProjectBudgetRequests({ projectId: id, submittedBudgets: budgets, liveBudgetReviews: budgetReviews, seedBudgetReviews: BUDGET_REVIEWS }),
+    () => buildProjectBudgetRequests({ projectId: id, submittedBudgets: budgets, liveBudgetReviews: budgetReviews, seedBudgetReviews: [] }),
     [id, budgets, budgetReviews]
+  );
+  const projectBudgetReviews = useMemo(
+    () => budgetReviews
+      .filter((review) => review.projectId === id)
+      .sort((left, right) => getBudgetReviewTimestamp(right) - getBudgetReviewTimestamp(left)),
+    [budgetReviews, id]
   );
   const budgetTracks = useMemo(() => buildBudgetTracks(p, budgets), [p, budgets]);
   const projectUsage = useMemo(() => summarizeLoggedProject(p, taskLogs), [p, taskLogs]);
-  const projectChangeRequests = useMemo(() => CHANGE_REQUESTS.filter((request) => request.projectId === id), [id]);
+  const projectChangeRequests = useMemo(() => changeRequests.filter((request) => request.projectId === id), [changeRequests, id]);
   const selectedPhase = useMemo(
     () => (p?.phases || []).find((phase) => phase.id === selectedPhaseId) || p?.phases?.[0] || null,
     [p, selectedPhaseId]
@@ -147,6 +158,12 @@ const ProjectDetail = () => {
     });
     return editable?.id || null;
   }, [batchPhases, projectBatches]);
+  const latestBudgetReview = projectBudgetReviews[0] || null;
+  const latestBudgetReviewMeta = latestBudgetReview ? getBudgetReviewMeta(latestBudgetReview.status) : null;
+  const executionUnlocked = Number(p?.approvedBudget || 0) > 0 && (p?.phases || []).length > 0;
+  const approvalLockMessage = latestBudgetReviewMeta
+    ? `Budget is ${latestBudgetReviewMeta.label.toLowerCase()}. Tasks, top-ups, and batch delivery unlock after CFO approval.`
+    : "Submit a budget and wait for CFO approval to unlock tasks and batch delivery.";
 
   if (!p) {
     return (
@@ -200,7 +217,7 @@ const ProjectDetail = () => {
               <Sparkles className="w-3.5 h-3.5 text-fuchsia-400" />
               Ask AI
             </Button>
-            {isTPM && (
+            {canRequestTopup && executionUnlocked && (
               <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-request-topup">
                 <ArrowUpRightSquare className="w-3.5 h-3.5" /> Request top-up
               </Button>
@@ -498,8 +515,13 @@ const ProjectDetail = () => {
                   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="rnd-budget-tracks">
                     <div className="mb-3">
                       <div className="font-display font-semibold text-[15px] text-white">Testing, R&amp;D, and rework budget tracks</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">Single-project view of submitted asks, tracked top-ups, and the current delivery target.</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Testing estimates stay tracked separately from the later R&amp;D ask, so both submission records remain visible through approval.</div>
                     </div>
+                    {!executionUnlocked && (
+                      <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
+                        {approvalLockMessage}
+                      </div>
+                    )}
                     {budgetTracks.ordered.length === 0 ? (
                       <div className="text-xs text-zinc-500 py-6 text-center">No Testing, R&amp;D, or Rework budget has been submitted yet.</div>
                     ) : (
@@ -771,12 +793,12 @@ const ProjectDetail = () => {
 
                 {/* Top-up requests (kept — accessible from within the specific project) */}
                 <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <ArrowUpRightSquare className="w-4 h-4 text-fuchsia-300" />
-                      <div className="font-display font-semibold text-[15px] text-white">Top-up requests</div>
-                    </div>
-                    {isTPM && (
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <ArrowUpRightSquare className="w-4 h-4 text-fuchsia-300" />
+                        <div className="font-display font-semibold text-[15px] text-white">Top-up requests</div>
+                      </div>
+                    {canRequestTopup && executionUnlocked && (
                       <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1" data-testid="btn-raise-topup-project">
                         <Plus className="w-3 h-3" /> Raise top-up
                       </Button>
@@ -806,9 +828,13 @@ const ProjectDetail = () => {
                   <ListChecks className="w-4 h-4 text-fuchsia-300" /> Daily task log
                   <span className="text-xs text-zinc-500 font-normal">({allLogs.length})</span>
                 </div>
-                <div className="text-xs text-zinc-500 mt-0.5">Logged by TPM · visible to CTO &amp; CFO · editable within 24 hours</div>
+                <div className="text-xs text-zinc-500 mt-0.5">
+                  {canManageExecution
+                    ? "Logged by the owning execution team · visible to CTO & CFO · editable within 24 hours"
+                    : "Logged by the owning execution team · visible to CTO & CFO"}
+                </div>
               </div>
-              {isTPM && p.phases?.[0] && (
+              {canManageExecution && executionUnlocked && p.phases?.[0] && (
                 <Button
                   size="sm"
                   onClick={() => { setEditingLog(null); setTaskLogPhase(selectedPhase || p.phases[0]); }}
@@ -819,10 +845,19 @@ const ProjectDetail = () => {
                 </Button>
               )}
             </div>
+            {!executionUnlocked && canManageExecution && (
+              <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
+                {approvalLockMessage}
+              </div>
+            )}
 
             {allLogs.length === 0 ? (
               <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-xs text-zinc-500">
-                {isTPM ? "No tasks logged yet. Use the Batch tab to log daily tasks per phase." : "No TPM logs for this project yet."}
+                {!executionUnlocked && canManageExecution
+                  ? "No task logging yet. This project unlocks once the current budget is approved."
+                  : canManageExecution
+                    ? "No tasks logged yet. Use the Batch tab to log daily tasks per phase."
+                    : "No execution logs for this project yet."}
               </div>
             ) : (
               <>
@@ -970,7 +1005,14 @@ const ProjectDetail = () => {
 
             {batchPhases.length === 0 && (
               <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center text-xs text-zinc-500">
-                No phases defined yet. Use Budget Builder to add phases.
+                {!executionUnlocked && latestBudgetReview
+                  ? `${latestBudgetReviewMeta?.label || "Budget pending"} · phase delivery will unlock after approval.`
+                  : "No phases defined yet. Use Budget Builder to add phases."}
+              </div>
+            )}
+            {!executionUnlocked && canManageExecution && latestBudgetReview && (
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.05] px-4 py-3 text-[11px] text-amber-200">
+                {approvalLockMessage}
               </div>
             )}
             {batchPhases.map((ph) => {
@@ -980,6 +1022,7 @@ const ProjectDetail = () => {
               const isSubmitted = !!delivery && !isRevisableDelivery;
               const isActivePhase = activeBatchPhaseId ? activeBatchPhaseId === ph.id : (!delivery || isRevisableDelivery);
               const isLockedPhase = !isSubmitted && !isActivePhase && role !== "R&D";
+              const lockedByApproval = !executionUnlocked;
               const topupsForPhase = projectTopups.filter((r) => r.phaseId === ph.id);
               const changesForPhase = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
               const logs = getPhaseLogs(p.id, ph.id);
@@ -1033,9 +1076,19 @@ const ProjectDetail = () => {
                             <PackageCheck className="w-3 h-3" /> {(statusMap[delivery.status] || statusMap["pending-cfo"]).label}
                           </span>
                         )}
+                        {delivery?.stage === "rnd-review" && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border border-sky-500/20 bg-sky-500/10 text-sky-200">
+                            <PackageCheck className="w-3 h-3" /> {getRndDeliveryCycleLabel(delivery)}
+                          </span>
+                        )}
                         {isLockedPhase && (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border border-white/10 bg-white/[0.03] text-zinc-400">
                             <Lock className="w-3 h-3" /> Locked until previous batch is submitted
+                          </span>
+                        )}
+                        {lockedByApproval && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border border-amber-500/30 bg-amber-500/10 text-amber-300">
+                            <Clock3 className="w-3 h-3" /> Waiting for approved budget
                           </span>
                         )}
                       </div>
@@ -1054,12 +1107,12 @@ const ProjectDetail = () => {
                         <PhaseMetric label="Recoverable" value={delivery ? (delivery.isRecoverable === false ? "No" : fmtCurrency(phaseRecoverableTotal, { compact: false })) : "—"} tone={delivery?.isRecoverable === false ? "warning" : "emerald"} />
                       </div>
                     </div>
-                    {isTPM && (
+                    {canManageExecution && (
                       <div className="flex items-center gap-2 flex-wrap">
                         <Button
                           size="sm"
                           onClick={() => { setEditingLog(null); setTaskLogPhase(ph); }}
-                          disabled={isLockedPhase || isSubmitted}
+                          disabled={lockedByApproval || isLockedPhase || isSubmitted}
                           data-testid={`btn-log-task-${ph.id}`}
                           className="h-8 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 text-xs gap-1"
                         >
@@ -1068,7 +1121,7 @@ const ProjectDetail = () => {
                         <Button
                           size="sm"
                           onClick={() => { setTopupPhaseId(ph.id); setTopupOpen(true); }}
-                          disabled={isLockedPhase || isSubmitted}
+                          disabled={lockedByApproval || isLockedPhase || isSubmitted}
                           data-testid={`btn-topup-${ph.id}`}
                           className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1"
                         >
@@ -1077,11 +1130,11 @@ const ProjectDetail = () => {
                         <Button
                           size="sm"
                           onClick={() => setDeliverPhase(ph)}
-                          disabled={isLockedPhase || (!!delivery && delivery.status !== "changes-requested")}
+                          disabled={lockedByApproval || isLockedPhase || (!!delivery && delivery.status !== "changes-requested")}
                           data-testid={`btn-deliver-${ph.id}`}
                           className="h-8 rounded-md bg-emerald-500 hover:bg-emerald-600 disabled:bg-emerald-500/25 disabled:text-emerald-200 text-white text-xs gap-1"
                         >
-                          <PackageCheck className="w-3 h-3" /> {delivery?.status === "changes-requested" ? "Deliver revised sample" : isSubmitted ? "Delivered" : "Deliver batch"}
+                          <PackageCheck className="w-3 h-3" /> {delivery?.status === "changes-requested" ? "Deliver revised sample" : isSubmitted ? "Delivered" : getDeliverButtonLabel(isRndProject, delivery)}
                         </Button>
                       </div>
                     )}
@@ -1173,8 +1226,8 @@ const ProjectDetail = () => {
                           )}
                           {delivery.stage === "rnd-review" && (
                             <div className="flex items-center justify-between text-[10px] text-zinc-400">
-                              <span>Sample cycle</span>
-                              <span className="text-[11px] text-white font-semibold tabular">Sample {delivery.sampleIteration || 1}</span>
+                              <span>Submitted cycle</span>
+                              <span className="text-[11px] text-white font-semibold tabular">{getRndDeliveryCycleLabel(delivery)}</span>
                             </div>
                           )}
                           {delivery.stage === "cfo-recovery" && (
@@ -1247,7 +1300,7 @@ const ProjectDetail = () => {
                                 return (
                                   <div key={entry.id} className="flex items-center justify-between gap-2 text-[10px] text-zinc-400">
                                     <span className="truncate">
-                                      {entry.stage === "rnd-review" ? `Sample ${entry.sampleIteration || 1}` : "Batch delivery"} · {fmtDate(entry.deliveredAt)}
+                                      {entry.stage === "rnd-review" ? getRndDeliveryCycleLabel(entry) : "Batch delivery"} · {fmtDate(entry.deliveredAt)}
                                     </span>
                                     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border ${entryMeta.cls}`}>
                                       <entryMeta.Icon className="w-2.5 h-2.5" />
@@ -1418,6 +1471,7 @@ const BudgetTrackCard = ({ track, topupCount, changeCount }) => {
   const modelTotal = sumBudgetLinesTotal(latest.items?.models);
   const infraTotal = sumBudgetLinesTotal(latest.items?.infra);
   const subsTotal = sumBudgetLinesTotal(latest.items?.subs);
+  const status = getBudgetReviewMeta(latest.status);
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
@@ -1426,8 +1480,9 @@ const BudgetTrackCard = ({ track, topupCount, changeCount }) => {
           <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">{track.label}</div>
           <div className="mt-1 text-lg font-display font-semibold text-white">{fmtCurrency(latest.total || 0, { compact: false })}</div>
         </div>
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border border-white/10 bg-white/[0.03] text-zinc-300 capitalize">
-          {latest.status || "submitted"}
+        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${status.cls}`}>
+          <status.Icon className="w-3 h-3" />
+          {status.label}
         </span>
       </div>
 
@@ -1546,6 +1601,8 @@ const budgetRequestStatusMap = {
   submitted: { label: "Submitted", cls: "bg-white/[0.04] text-zinc-300 border-white/10", Icon: Clock3 },
   resubmitted: { label: "Resubmitted", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   forwarded: { label: "Forwarded", cls: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30", Icon: ChevronRight },
+  "pending-cto": { label: "Pending · CTO", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "pending-cfo": { label: "Pending · CFO", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   "CTO Review": { label: "CTO review", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   "COO Approval": { label: "COO approval", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
@@ -1586,32 +1643,32 @@ const requestMatchesPhase = (request, phase) => {
 };
 
 const buildProjectBudgetRequests = ({ projectId, submittedBudgets, liveBudgetReviews, seedBudgetReviews }) => {
+  const mergedReviews = new Map();
+  seedBudgetReviews.filter((review) => review.projectId === projectId).forEach((review) => mergedReviews.set(review.id, review));
+  liveBudgetReviews.filter((review) => review.projectId === projectId).forEach((review) => mergedReviews.set(review.id, review));
+  const reviewBudgetIds = new Set(Array.from(mergedReviews.values()).map((review) => review.sourceBudgetId).filter(Boolean));
   const submitted = submittedBudgets
-    .filter((entry) => entry.projectId === projectId)
+    .filter((entry) => entry.projectId === projectId && !reviewBudgetIds.has(entry.id))
     .map((entry) => ({
       id: `budget-${entry.id}`,
       title: formatSubmittedBudgetTitle(entry.budgetType, entry.resubmitOfReviewId, entry.sampleIteration),
       amount: Number(entry.totals?.total || 0),
-      status: entry.status || "submitted",
+      status: entry.status || "pending-cto",
       phaseIds: (entry.phases || []).map((phase) => phase.id).filter(Boolean),
       phaseNames: (entry.phases || []).map((phase) => phase.name).filter(Boolean),
       scope: (entry.phases || []).length ? (entry.phases || []).map((phase) => phase.name).filter(Boolean).join(", ") : "Project-wide",
       when: fmtDate(entry.submittedAt),
     }));
 
-  const mergedReviews = new Map();
-  seedBudgetReviews.filter((review) => review.projectId === projectId).forEach((review) => mergedReviews.set(review.id, review));
-  liveBudgetReviews.filter((review) => review.projectId === projectId).forEach((review) => mergedReviews.set(review.id, review));
-
   const reviews = Array.from(mergedReviews.values()).map((review) => ({
     id: `review-${review.id}`,
     title: review.type || "Budget review",
     amount: Number(review.modifiedTotal || review.requestedBudget || review.currentBudget || 0),
     status:
-      review.status === "forwarded-cfo" ? "forwarded"
+      review.status === "forwarded-cfo" ? "pending-cfo"
         : review.status === "rejected-by-cto" ? "rejected"
           : review.status === "returned-to-tpm" ? "returned"
-            : review.status || review.stage || "submitted",
+            : review.status || review.stage || "pending-cto",
     phaseIds: (review.modifiedPhases || []).map((phase) => phase.id).filter(Boolean),
     phaseNames: (review.modifiedPhases || []).map((phase) => phase.name).filter(Boolean),
     scope: (review.modifiedPhases || []).length ? (review.modifiedPhases || []).map((phase) => phase.name).filter(Boolean).join(", ") : "Project-wide",
@@ -1629,6 +1686,31 @@ const formatSubmittedBudgetTitle = (budgetType, resubmitOfReviewId, sampleIterat
           : budgetType === "Production" ? "Production budget"
             : "Budget request";
   return resubmitOfReviewId ? `Resubmitted ${base}` : base;
+};
+
+const getBudgetReviewTimestamp = (review) => new Date(
+  review?.cfoDecision?.at
+  || review?.ctoAt
+  || review?.submittedAt
+  || 0
+).getTime();
+
+const getBudgetReviewMeta = (status) => (
+  statusMap[status]
+  || statusMap[status === "forwarded-cfo" ? "pending-cfo" : status]
+  || { label: "Submitted", cls: "bg-white/[0.04] text-zinc-300 border-white/10", Icon: Clock3 }
+);
+
+const getRndDeliveryCycleLabel = (delivery) => (
+  normalizeBudgetType(delivery?.budgetType) === "Testing"
+    ? "Testing submitted"
+    : `Sample ${delivery?.sampleIteration || 1}`
+);
+
+const getDeliverButtonLabel = (isRndProject, delivery) => {
+  if (delivery?.status === "changes-requested") return "Deliver revised sample";
+  if (isRndProject) return delivery ? "Submitted" : "Submit batch";
+  return delivery ? "Delivered" : "Deliver batch";
 };
 
 const getBudgetRequestMeta = (request) => budgetRequestStatusMap[request.status] || budgetRequestStatusMap.submitted;

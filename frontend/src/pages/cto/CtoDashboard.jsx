@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
-import { BUDGET_REVIEWS, CHANGE_REQUESTS } from "../../data/mockTpm";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import {
   ResponsiveContainer,
@@ -31,7 +30,7 @@ import NewProjectDialog from "../../components/NewProjectDialog";
 import { summarizeLoggedProject } from "../../lib/projectMetrics";
 
 const CtoDashboard = () => {
-  const { visibleProjects, taskLogs } = useApp();
+  const { visibleProjects, taskLogs, budgetReviews, changeRequests } = useApp();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
 
   const projectUsage = useMemo(
@@ -39,8 +38,8 @@ const CtoDashboard = () => {
     [visibleProjects, taskLogs]
   );
 
-  const pendingReviews = BUDGET_REVIEWS.filter((r) => r.stage === "CTO Review").length;
-  const pendingCRs = CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length;
+  const pendingReviews = budgetReviews.filter((review) => ["pending-cto", "returned", "resubmitted", "returned-to-tpm"].includes(review.status) || review.stage === "CTO Review").length;
+  const pendingCRs = changeRequests.filter((request) => request.stage === "CTO Review").length;
   const highRisk = projectUsage.filter((entry) => entry.usage.utilization >= 90).length;
   const overBudget = projectUsage.filter((entry) => entry.usage.utilization >= 100).length;
 

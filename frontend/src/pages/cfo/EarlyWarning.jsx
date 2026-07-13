@@ -1,121 +1,131 @@
 import { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
-import { PROJECTS } from "../../data/mockProjects";
-import { AI_COST_BY_MODEL, AI_COST_BY_PROVIDER } from "../../data/mockTpm";
-import { BUFFER } from "../../data/mockCfo";
+import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import {
   AlertTriangle,
   ShieldAlert,
-  TrendingUp,
-  Zap,
-  Bell,
   CheckCircle2,
   ChevronRight,
   Settings2,
-  Cpu,
 } from "lucide-react";
 
-// Alert generators
-const buildAlerts = () => {
+const formatStamp = (value) =>
+  value
+    ? new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "Awaiting review";
+
+const buildAlerts = ({ projects, topupRequests, budgetReviews, changeRequests }) => {
   const alerts = [];
-  // Budget overrun alerts
-  PROJECTS.filter((p) => p.utilization >= 100).forEach((p) => {
-    const overBy = p.actualSpend - p.estimatedBudget;
-    const pct = Math.round(((p.actualSpend - p.estimatedBudget) / p.estimatedBudget) * 100);
+
+  projects.filter((project) => Number(project.utilization || 0) >= 100).forEach((project) => {
+    const approved = Number(project.approvedBudget || 0);
+    const actual = Number(project.actualSpend || 0);
+    const overBy = Math.max(actual - approved, 0);
+    const pct = approved > 0 ? Math.round((overBy / approved) * 100) : 0;
     alerts.push({
-      id: `alert-over-${p.id}`,
+      id: `alert-over-${project.id}`,
       severity: "critical",
       type: "Budget overrun",
-      title: `${p.name} actual spend has exceeded estimated cost by ${fmtCurrency(overBy, { compact: false })} (+${pct}%)`,
-      desc: `Approved ${fmtCurrency(p.approvedBudget)} · actual ${fmtCurrency(p.actualSpend)} · TPM ${p.tpm}`,
-      project: p.name,
-      action: "Run Root Cause Analysis",
-      actionLink: `/projects/${p.id}`,
-      ts: "2 hours ago",
+      title: `${project.name} is over the approved budget by ${fmtCurrency(overBy, { compact: false })}${pct ? ` (+${pct}%)` : ""}`,
+      desc: `Approved ${fmtCurrency(approved)} · actual ${fmtCurrency(actual)} · owner ${project.tpm || "Unassigned"}`,
+      project: project.name,
+      action: "Open project",
+      actionLink: `/projects/${project.id}`,
+      ts: formatStamp(project.updatedAt || project.createdAt),
     });
   });
-  // High-risk (>= 90%)
-  const watchProjects = PROJECTS.filter((p) => p.utilization >= 90 && p.utilization < 100);
-  if (watchProjects.length >= 1) {
-    const combinedAtRisk = watchProjects.reduce((s, p) => s + (p.approvedBudget - p.actualSpend), 0);
+
+  const watchProjects = projects.filter((project) => {
+    const utilization = Number(project.utilization || 0);
+    return utilization >= 90 && utilization < 100;
+  });
+
+  if (watchProjects.length) {
+    const combinedAtRisk = watchProjects.reduce((sum, project) => (
+      sum + Math.max(Number(project.approvedBudget || 0) - Number(project.actualSpend || 0), 0)
+    ), 0);
     alerts.push({
       id: "alert-portfolio",
       severity: "high",
       type: "Portfolio risk",
-      title: `${watchProjects.map((p) => p.name).join(", ")} trending above their estimates`,
-      desc: `Combined at-risk amount: ${fmtCurrency(combinedAtRisk)} · consider pre-approving a top-up before end of sprint`,
+      title: `${watchProjects.length} ${watchProjects.length === 1 ? "project is" : "projects are"} approaching budget exhaustion`,
+      desc: `Combined remaining headroom: ${fmtCurrency(combinedAtRisk)} · review funding coverage before the next delivery window`,
       project: "Portfolio",
-      action: "View Portfolio",
+      action: "View portfolio",
       actionLink: "/projects",
-      ts: "4 hours ago",
+      ts: "Current workspace",
     });
   }
-  // AI cost spike
-  alerts.push({
-    id: "alert-ai-spike",
-    severity: "critical",
-    type: "AI cost spike",
-    title: "Opus 4.8 spend in Crowley Generation spiked 28% in the last 48 hours",
-    desc: `Investigate the volume increase or move classification workloads to Gemini 2.5 Pro to save ~$1.2k/mo`,
-    project: "Crowley Generation",
-    action: "Open AI Cost Analytics",
-    actionLink: "/ai-cost",
-    ts: "6 hours ago",
-  });
-  // Buffer threshold
-  BUFFER.alerts.forEach((b) => {
+
+  const pendingBudgetReviews = budgetReviews.filter((review) =>
+    !["approved", "partial", "rejected", "rejected-by-cto", "returned", "returned-to-tpm"].includes(review.status)
+  );
+  if (pendingBudgetReviews.length) {
+    const totalRequested = pendingBudgetReviews.reduce((sum, review) => sum + Number(review.requestedBudget || 0), 0);
     alerts.push({
-      id: `alert-buffer-${b.id}`,
-      severity: b.severity === "critical" ? "critical" : "high",
-      type: "Buffer threshold",
-      title: b.message,
-      desc: `Confidential buffer pool utilization crossed threshold — review policy or reduce allocation`,
-      project: b.project,
-      action: "Review Buffer Policy",
-      actionLink: "/buffer",
-      ts: "8 hours ago",
+      id: "alert-budget-queue",
+      severity: "high",
+      type: "Budget queue",
+      title: `${pendingBudgetReviews.length} ${pendingBudgetReviews.length === 1 ? "budget review is" : "budget reviews are"} awaiting action`,
+      desc: `${fmtCurrency(totalRequested)} remains pending in submitted baseline requests`,
+      project: "Approval queue",
+      action: "Review approvals",
+      actionLink: "/approval-queue",
+      ts: formatStamp(pendingBudgetReviews[0]?.submittedAt),
     });
+  }
+
+  const pendingTopups = topupRequests.filter((request) => !["approved", "partial", "rejected"].includes(request.status));
+  if (pendingTopups.length) {
+    const totalRequested = pendingTopups.reduce((sum, request) => sum + Number(request.amount || 0), 0);
+    alerts.push({
+      id: "alert-topups",
+      severity: "high",
+      type: "Top-up queue",
+      title: `${pendingTopups.length} ${pendingTopups.length === 1 ? "top-up request is" : "top-up requests are"} awaiting approval`,
+      desc: `${fmtCurrency(totalRequested)} requested across active project phases`,
+      project: pendingTopups[0]?.projectName || "Projects",
+      action: "Open top-ups",
+      actionLink: "/approval-queue?type=Top-up",
+      ts: formatStamp(pendingTopups[0]?.requestedAt),
+    });
+  }
+
+  const pendingChanges = changeRequests.filter((request) => !["approved", "partial", "rejected", "returned"].includes(request.status));
+  if (pendingChanges.length) {
+    const totalRequested = pendingChanges.reduce((sum, request) => sum + Number(request.amount || 0), 0);
+    alerts.push({
+      id: "alert-change-queue",
+      severity: "medium",
+      type: "Change requests",
+      title: `${pendingChanges.length} ${pendingChanges.length === 1 ? "change request is" : "change requests are"} open for review`,
+      desc: `${fmtCurrency(totalRequested)} is tied to scope, timeline, or cost-change asks`,
+      project: pendingChanges[0]?.projectName || "Projects",
+      action: "Review changes",
+      actionLink: "/approval-queue?type=Change%20Request",
+      ts: formatStamp(pendingChanges[0]?.createdAt),
+    });
+  }
+
+  const under = projects.find((project) => {
+    const utilization = Number(project.utilization || 0);
+    return utilization > 0 && utilization <= 30;
   });
-  // Vendor price
-  alerts.push({
-    id: "alert-vendor",
-    severity: "high",
-    type: "Vendor price change",
-    title: "OpenAI adjusted long-context pricing thresholds for GPT-4o",
-    desc: `Estimated impact +$340/mo across Atlas Ingest and Crowley Sourcing. Re-price affected budgets.`,
-    project: "OpenAI",
-    action: "View Vendor Detail",
-    actionLink: "/keys",
-    ts: "1 day ago",
-  });
-  // Estimation failure
-  alerts.push({
-    id: "alert-estimate",
-    severity: "medium",
-    type: "Estimation failure",
-    title: "Reimbursement estimates undercount — travel bills consistently >20% over plan",
-    desc: `Consider raising the reimbursement buffer from 5% to 8% for Q3 projects`,
-    project: "Portfolio",
-    action: "Update Estimate",
-    actionLink: "/approval-queue",
-    ts: "1 day ago",
-  });
-  // Good news
-  const under = PROJECTS.find((p) => p.utilization <= 30);
   if (under) {
     alerts.push({
       id: "alert-good",
       severity: "medium",
-      type: "Info",
-      title: `${under.name} actual spend is 76% below the buffered estimate`,
-      desc: `Consider releasing part of the reserved buffer back to the pool`,
+      type: "Low utilization",
+      title: `${under.name} is materially under plan`,
+      desc: `Current utilization is ${under.utilization}% of the approved budget. Revisit whether any reserved budget can be released.`,
       project: under.name,
-      action: "Release Buffer",
-      actionLink: "/buffer",
-      ts: "2 days ago",
+      action: "Open project",
+      actionLink: `/projects/${under.id}`,
+      ts: formatStamp(under.updatedAt || under.createdAt),
     });
   }
+
   return alerts;
 };
 
@@ -126,15 +136,19 @@ const sevStyle = {
 };
 
 const EarlyWarning = () => {
-  const alerts = useMemo(() => buildAlerts(), []);
+  const { projects, topupRequests, budgetReviews, changeRequests } = useApp();
+  const alerts = useMemo(
+    () => buildAlerts({ projects, topupRequests, budgetReviews, changeRequests }),
+    [projects, topupRequests, budgetReviews, changeRequests]
+  );
   const [filter, setFilter] = useState("all");
 
-  const filtered = alerts.filter((a) => (filter === "all" ? true : a.severity === filter));
+  const filtered = alerts.filter((alert) => (filter === "all" ? true : alert.severity === filter));
   const counts = {
     all: alerts.length,
-    critical: alerts.filter((a) => a.severity === "critical").length,
-    high: alerts.filter((a) => a.severity === "high").length,
-    medium: alerts.filter((a) => a.severity === "medium").length,
+    critical: alerts.filter((alert) => alert.severity === "critical").length,
+    high: alerts.filter((alert) => alert.severity === "high").length,
+    medium: alerts.filter((alert) => alert.severity === "medium").length,
   };
 
   const rules = [
@@ -155,54 +169,52 @@ const EarlyWarning = () => {
           </div>
           <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Early warning center</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Proactive alerts across budget, AI cost, vendor pricing, and buffer thresholds
+            Proactive alerts across budget, approvals, and delivery risk
           </p>
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-white/5 overflow-x-auto">
-        {["all", "critical", "high", "medium"].map((s) => (
+        {["all", "critical", "high", "medium"].map((severity) => (
           <button
-            key={s}
-            onClick={() => setFilter(s)}
-            data-testid={`ew-tab-${s}`}
+            key={severity}
+            onClick={() => setFilter(severity)}
+            data-testid={`ew-tab-${severity}`}
             className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-widest border-b-2 transition-colors ${
-              filter === s ? "border-fuchsia-400 text-fuchsia-300" : "border-transparent text-zinc-500 hover:text-zinc-200"
+              filter === severity ? "border-fuchsia-400 text-fuchsia-300" : "border-transparent text-zinc-500 hover:text-zinc-200"
             }`}
           >
-            {s === "all" ? "All alerts" : s} ({counts[s]})
+            {severity === "all" ? "All alerts" : severity} ({counts[severity]})
           </button>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Alerts list */}
         <div className="lg:col-span-2 space-y-2">
-          {filtered.map((a) => {
-            const s = sevStyle[a.severity];
+          {filtered.map((alert) => {
+            const style = sevStyle[alert.severity];
             return (
               <div
-                key={a.id}
-                data-testid={`alert-${a.id}`}
-                className={`bg-[#12121A] rounded-2xl border border-white/5 border-l-4 ${s.border} p-4 flex items-start gap-3`}
+                key={alert.id}
+                data-testid={`alert-${alert.id}`}
+                className={`bg-[#12121A] rounded-2xl border border-white/5 border-l-4 ${style.border} p-4 flex items-start gap-3`}
               >
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${s.icon}`}>
+                <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${style.icon}`}>
                   <AlertTriangle className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-white">{a.title}</div>
-                  <div className="text-xs text-zinc-400 mt-1 leading-relaxed">{a.desc}</div>
+                  <div className="text-sm font-semibold text-white">{alert.title}</div>
+                  <div className="text-xs text-zinc-400 mt-1 leading-relaxed">{alert.desc}</div>
                   <div className="mt-3 flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${s.pill}`}>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${style.pill}`}>
                       <span className="w-1.5 h-1.5 rounded-full bg-current" />
-                      {a.type}
+                      {alert.type}
                     </span>
-                    <span className="text-[11px] text-zinc-500">{a.project}</span>
-                    <Link to={a.actionLink} data-testid={`action-${a.id}`} className="ml-auto inline-flex items-center gap-1 text-[11px] text-fuchsia-300 hover:text-fuchsia-200 font-medium">
-                      {a.action} <ChevronRight className="w-3 h-3" />
+                    <span className="text-[11px] text-zinc-500">{alert.project}</span>
+                    <Link to={alert.actionLink} data-testid={`action-${alert.id}`} className="ml-auto inline-flex items-center gap-1 text-[11px] text-fuchsia-300 hover:text-fuchsia-200 font-medium">
+                      {alert.action} <ChevronRight className="w-3 h-3" />
                     </Link>
-                    <span className="text-[10px] text-zinc-600 tabular">{a.ts}</span>
+                    <span className="text-[10px] text-zinc-600 tabular">{alert.ts}</span>
                   </div>
                 </div>
               </div>
@@ -216,7 +228,6 @@ const EarlyWarning = () => {
           )}
         </div>
 
-        {/* Summary + Rules */}
         <div className="space-y-4">
           <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="alert-summary">
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Active alerts</div>
@@ -235,14 +246,14 @@ const EarlyWarning = () => {
               <div className="font-display font-semibold text-[13px] text-white">Alert rules active</div>
             </div>
             <div className="space-y-2 text-xs">
-              {rules.map((r) => (
-                <div key={r.name} data-testid={`rule-${r.name.toLowerCase().replace(/\s+/g, "-")}`} className="flex items-start justify-between gap-2">
+              {rules.map((rule) => (
+                <div key={rule.name} data-testid={`rule-${rule.name.toLowerCase().replace(/\s+/g, "-")}`} className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <div className="text-zinc-300 font-medium">{r.name}</div>
-                    <div className="text-[10px] text-zinc-500 truncate">{r.value}</div>
+                    <div className="text-zinc-300 font-medium">{rule.name}</div>
+                    <div className="text-[10px] text-zinc-500 truncate">{rule.value}</div>
                   </div>
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${r.on ? "text-emerald-300" : "text-zinc-500"}`}>
-                    <CheckCircle2 className="w-3 h-3" /> {r.on ? "On" : "Off"}
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-semibold ${rule.on ? "text-emerald-300" : "text-zinc-500"}`}>
+                    <CheckCircle2 className="w-3 h-3" /> {rule.on ? "On" : "Off"}
                   </span>
                 </div>
               ))}

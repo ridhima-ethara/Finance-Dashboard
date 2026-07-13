@@ -23,7 +23,7 @@ const Settings = () => {
   const { user } = useApp();
   const [users, setUsers] = useState(() =>
     USERS.map((u) => ({ ...u })).concat([
-      { id: "u5", name: "Nikhil Rao", role: "PL", title: "Chief Operating Officer", email: "coo@ethara.ai", password: "demo123", avatarUrl: "" },
+      { id: "u-extra-coo", name: "Operations Lead", role: "PL", title: "Chief Operating Officer", email: "coo@ethara.ai", password: "ethara123", avatarUrl: "" },
     ])
   );
   const [alerts, setAlerts] = useState({
@@ -49,7 +49,7 @@ const Settings = () => {
       return;
     }
     const id = `u-${Date.now().toString(36)}`;
-    setUsers((us) => [...us, { ...newUser, id, password: "demo123", avatarUrl: "" }]);
+    setUsers((us) => [...us, { ...newUser, id, password: "ethara123", avatarUrl: "" }]);
     toast.success("User added", { description: `${newUser.name} · ${newUser.role}` });
     setNewUser({ name: "", email: "", role: "PL", title: "" });
   };

@@ -1,8 +1,34 @@
 import { AlertTriangle } from "lucide-react";
 import { fmtCurrency, fmtPct } from "../../lib/format";
-import { PORTFOLIO } from "../../data/mockData";
+import { useApp } from "../../context/AppContext";
+import { summarizeLoggedProject } from "../../lib/projectMetrics";
 
 const AmountAtRisk = () => {
+  const { projects, taskLogs } = useApp();
+  const portfolio = projects.reduce((acc, project) => {
+    const usage = summarizeLoggedProject(project, taskLogs);
+    const spend = Math.max(Number(project.actualSpend || 0), Number(usage.loggedSpend || 0));
+    const approved = Number(project.approvedBudget || 0);
+    acc.approvedBudget += approved;
+    acc.amountAtRisk += Math.max(0, spend - approved);
+    acc.projectsOverBudget += spend > approved ? 1 : 0;
+    acc.healthScore += approved > 0 ? Math.max(0, 100 - Math.round((Math.max(0, spend - approved) / approved) * 100)) : 0;
+    acc.accuracy += approved > 0 ? Math.max(0, 100 - Math.round((Math.abs(approved - spend) / approved) * 100)) : 0;
+    return acc;
+  }, {
+    approvedBudget: 0,
+    amountAtRisk: 0,
+    projectsOverBudget: 0,
+    healthScore: 0,
+    accuracy: 0,
+  });
+  const projectCount = projects.length || 1;
+  const metrics = {
+    ...portfolio,
+    healthScore: projects.length ? Math.round(portfolio.healthScore / projectCount) : 0,
+    accuracy: projects.length ? Math.round(portfolio.accuracy / projectCount) : 0,
+  };
+
   return (
     <div
       data-testid="hero-amount-at-risk"
@@ -35,17 +61,17 @@ const AmountAtRisk = () => {
 
         <div className="mt-4 flex items-end gap-3 flex-wrap">
           <div className="font-display font-bold text-6xl tabular leading-none">
-            {fmtCurrency(PORTFOLIO.amountAtRisk)}
+            {fmtCurrency(metrics.amountAtRisk)}
           </div>
           <div className="text-zinc-400 text-base font-medium tabular pb-2">
-            of {fmtCurrency(PORTFOLIO.approvedBudget)} approved
+            of {fmtCurrency(metrics.approvedBudget)} approved
           </div>
         </div>
 
         <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl" data-testid="amount-at-risk-metrics">
-          <Metric label="Over budget" value={`${PORTFOLIO.projectsOverBudget} projects`} tone="danger" />
-          <Metric label="Health score" value={`${PORTFOLIO.healthScore}/100`} tone="warning" />
-          <Metric label="Est. accuracy" value={fmtPct(PORTFOLIO.accuracy)} tone="magenta" />
+          <Metric label="Over budget" value={`${metrics.projectsOverBudget} projects`} tone="danger" />
+          <Metric label="Health score" value={`${metrics.healthScore}/100`} tone="warning" />
+          <Metric label="Est. accuracy" value={fmtPct(metrics.accuracy)} tone="magenta" />
         </div>
       </div>
     </div>

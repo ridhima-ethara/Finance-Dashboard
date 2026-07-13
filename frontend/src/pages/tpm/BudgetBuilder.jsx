@@ -323,8 +323,8 @@ const BudgetBuilder = () => {
       sourceDeliveryId: requestedSourceDeliveryId,
       additionalMembers,
     });
-    toast.success(returnedReview ? "Budget resubmitted to CTO" : "Budget submitted", {
-      description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · ${distributedPhases.length} ${distributedPhases.length === 1 ? "phase" : "phases"}`,
+    toast.success(returnedReview ? "Budget resubmitted to CTO" : "Request sent to CTO", {
+      description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · awaiting review before tasks and delivery unlock`,
     });
     nav(returnedReview ? "/" : "/projects");
   };

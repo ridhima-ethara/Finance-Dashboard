@@ -25,10 +25,10 @@ import {
 import { Activity, TrendingUp, Wallet, Flame, Clock3, Gauge, AlertTriangle, DollarSign, PieChart as PieIcon, ShieldCheck } from "lucide-react";
 
 const FinancialMonitoring = () => {
-  const today = DAILY_ACTIVITY[DAILY_ACTIVITY.length - 1];
+  const today = DAILY_ACTIVITY[DAILY_ACTIVITY.length - 1] || { spend: 0, estimate: 0, approvals: 0, expenses: 0 };
   const totalDaily = DAILY_ACTIVITY.slice(-30).reduce((s, d) => s + d.spend, 0);
   const dailyAvg = Math.round(totalDaily / 30);
-  const monthly = MONTHLY_SPEND[MONTHLY_SPEND.length - 1];
+  const monthly = MONTHLY_SPEND[MONTHLY_SPEND.length - 1] || { actual: 0, budget: 0 };
   const variance = PORTFOLIO.estimatedBudget - PORTFOLIO.actualSpend;
   const runway = PORTFOLIO.cashRunwayDays;
   const risk = PORTFOLIO.utilization >= 90 ? "High" : PORTFOLIO.utilization >= 75 ? "Medium" : "Low";

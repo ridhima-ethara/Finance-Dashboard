@@ -83,6 +83,7 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
       phaseName: phase.name,
       proposedAmount: rndTotal,
       clientComment: rndClientComment,
+      sampleIteration: Number(project?.lastBudgetSubmission?.sampleIteration || 1),
       rnd: {
         taskCount: Number(taskCount),
         estPerTask: Number(estPerTask),

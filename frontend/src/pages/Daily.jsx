@@ -82,23 +82,25 @@ const Field = ({ label, children }) => (
 const Daily = () => {
   const { role } = useApp();
   const [openEstimate, setOpenEstimate] = useState(false);
-  const maxSpend = Math.max(...DAILY_ACTIVITY.map((d) => d.spend));
-  const totalToday = DAILY_ACTIVITY[DAILY_ACTIVITY.length - 1];
-  const total7d = DAILY_ACTIVITY.slice(-7).reduce((s, d) => s + d.spend, 0);
-  const total30d = DAILY_ACTIVITY.reduce((s, d) => s + d.spend, 0);
+  const activityRows = DAILY_ACTIVITY;
+  const modelTrajectoryRows = MODEL_TRAJECTORY;
+  const maxSpend = Math.max(1, ...activityRows.map((entry) => Number(entry.spend || 0)), 0);
+  const totalToday = activityRows[activityRows.length - 1] || { spend: 0, approvals: 0, expenses: 0, estimate: 0 };
+  const total7d = activityRows.slice(-7).reduce((s, d) => s + Number(d.spend || 0), 0);
+  const total30d = activityRows.reduce((s, d) => s + Number(d.spend || 0), 0);
   const approvalsToday = totalToday?.approvals || 0;
 
   // Build calendar heatmap (5 rows × 7 cols)
   const weeks = useMemo(() => {
     const w = [[], [], [], [], []];
     // Pad start with empties to align first day-of-week
-    const first = DAILY_ACTIVITY[0];
+    const first = activityRows[0];
     const pad = first ? first.dow : 0;
-    let cells = Array(pad).fill(null).concat(DAILY_ACTIVITY);
+    const cells = Array(pad).fill(null).concat(activityRows);
     // slice into rows of 7
     for (let i = 0; i < 5; i++) w[i] = cells.slice(i * 7, i * 7 + 7);
     return w;
-  }, []);
+  }, [activityRows]);
 
   return (
     <div className="space-y-6" data-testid="page-daily">
@@ -183,7 +185,7 @@ const Daily = () => {
         <ChartCard title="Daily spend vs estimate" subtitle="last 30 days">
           <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={DAILY_ACTIVITY}>
+              <BarChart data={activityRows}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(d) => d.slice(-2)} />
                 <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(1)}k`} />
@@ -199,7 +201,7 @@ const Daily = () => {
         <ChartCard title="Per-model trajectory" subtitle="daily spend · last 30 days" testid="chart-model-trajectory">
           <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={MODEL_TRAJECTORY}>
+              <LineChart data={modelTrajectoryRows}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
                 <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(d) => d.slice(-2)} />
                 <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${v}`} />
@@ -234,7 +236,7 @@ const Daily = () => {
             </tr>
           </thead>
           <tbody>
-            {[...DAILY_ACTIVITY].reverse().slice(0, 14).map((d) => {
+            {[...activityRows].reverse().slice(0, 14).map((d) => {
               const delta = d.estimate - d.spend;
               return (
                 <tr key={d.date} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">

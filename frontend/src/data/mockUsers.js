@@ -1,38 +1,38 @@
 // Users, roles, clients, and team data
 export const CURRENT_USER = {
   id: "u1",
-  name: "Vikram Kumar",
-  title: "CTO / Project Lead",
+  name: "CTO Admin",
+  title: "Technology Admin",
   role: "CTO",
-  avatarUrl: "https://images.pexels.com/photos/36645466/pexels-photo-36645466.jpeg",
+  avatarUrl: "",
 };
 
-// Auth users - one per role. Password is 'demo123' for all in demo mode.
+// Default role accounts for local workspace access.
 export const USERS = [
-  { id: "u1", name: "Vikram Kumar", role: "CTO", title: "Chief Technology Officer", email: "cto@ethara.ai", password: "demo123", avatarUrl: "https://images.pexels.com/photos/36645466/pexels-photo-36645466.jpeg" },
-  { id: "u2", name: "Priya Kapoor", role: "CFO", title: "Chief Financial Officer", email: "cfo@ethara.ai", password: "demo123", avatarUrl: "" },
-  { id: "u3", name: "Arjun Mehta", role: "TPM", title: "Technical Program Manager", email: "tpm@ethara.ai", password: "demo123", avatarUrl: "" },
-  { id: "u4", name: "Aanya Sharma", role: "PL", title: "Project Lead", email: "pl@ethara.ai", password: "demo123", avatarUrl: "" },
-  { id: "u5", name: "Neha Kapoor", role: "R&D", title: "R&D Lead", email: "rd@ethara.ai", password: "demo123", avatarUrl: "" },
-  { id: "u6", name: "Ishaan Roy", role: "IT", title: "IT Access Administrator", email: "it@ethara.ai", password: "demo123", avatarUrl: "" },
+  { id: "u1", name: "CTO Admin", role: "CTO", title: "Chief Technology Officer", email: "cto@ethara.ai", password: "ethara123", avatarUrl: "" },
+  { id: "u2", name: "CFO Admin", role: "CFO", title: "Chief Financial Officer", email: "cfo@ethara.ai", password: "ethara123", avatarUrl: "" },
+  { id: "u3", name: "TPM Lead", role: "TPM", title: "Technical Program Manager", email: "tpm@ethara.ai", password: "ethara123", avatarUrl: "" },
+  { id: "u4", name: "Project Lead", role: "PL", title: "Project Lead", email: "pl@ethara.ai", password: "ethara123", avatarUrl: "" },
+  { id: "u5", name: "R&D Lead", role: "R&D", title: "R&D Lead", email: "rd@ethara.ai", password: "ethara123", avatarUrl: "" },
+  { id: "u6", name: "IT Admin", role: "IT", title: "IT Access Administrator", email: "it@ethara.ai", password: "ethara123", avatarUrl: "" },
 ];
 
 export const ROLES = ["CTO", "CFO", "TPM", "R&D", "PL", "IT"];
 
 export const TEAM = [
-  { id: "u1", name: "Vikram Kumar", role: "CTO", email: "vikram@ethara.ai" },
-  { id: "u2", name: "Aanya Sharma", role: "Project Lead", email: "aanya@ethara.ai" },
-  { id: "u3", name: "Maria Lopez", role: "Project Lead", email: "maria@ethara.ai" },
-  { id: "u4", name: "Arjun Mehta", role: "Project Lead", email: "arjun@ethara.ai" },
-  { id: "u5", name: "Rahul Verma", role: "Engineer", email: "rahul@ethara.ai" },
-  { id: "u6", name: "Priya Kapoor", role: "Finance", email: "priya@ethara.ai" },
-  { id: "u7", name: "Nikhil Rao", role: "COO", email: "nikhil@ethara.ai" },
-  { id: "u8", name: "Sara Chen", role: "Engineer", email: "sara@ethara.ai" },
-  { id: "u9", name: "Neha Kapoor", role: "R&D", email: "neha@ethara.ai" },
-  { id: "u10", name: "Dev Patel", role: "R&D", email: "dev@ethara.ai" },
-  { id: "u11", name: "Kabir Singh", role: "Quality Lead", email: "kabir@ethara.ai" },
-  { id: "u12", name: "Ritu Shah", role: "Quality Lead", email: "ritu@ethara.ai" },
-  { id: "u13", name: "Ishaan Roy", role: "IT", email: "ishaan@ethara.ai" },
+  { id: "u1", name: "CTO Admin", role: "CTO", email: "cto@ethara.ai" },
+  { id: "u2", name: "TPM Lead", role: "Project Lead", email: "tpm.lead@ethara.ai" },
+  { id: "u3", name: "Project Lead 1", role: "Project Lead", email: "project.lead.1@ethara.ai" },
+  { id: "u4", name: "Project Lead 2", role: "Project Lead", email: "project.lead.2@ethara.ai" },
+  { id: "u5", name: "Engineer 1", role: "Engineer", email: "engineer.1@ethara.ai" },
+  { id: "u6", name: "Finance Lead", role: "Finance", email: "finance@ethara.ai" },
+  { id: "u7", name: "Operations Lead", role: "COO", email: "operations@ethara.ai" },
+  { id: "u8", name: "Engineer 2", role: "Engineer", email: "engineer.2@ethara.ai" },
+  { id: "u9", name: "R&D Lead 1", role: "R&D", email: "rnd.1@ethara.ai" },
+  { id: "u10", name: "R&D Lead 2", role: "R&D", email: "rnd.2@ethara.ai" },
+  { id: "u11", name: "Quality Lead 1", role: "Quality Lead", email: "quality.1@ethara.ai" },
+  { id: "u12", name: "Quality Lead 2", role: "Quality Lead", email: "quality.2@ethara.ai" },
+  { id: "u13", name: "IT Admin", role: "IT", email: "it@ethara.ai" },
 ];
 
-export const CLIENTS = ["Acme AI", "Northwind Data", "Helix Bio", "Ironclad", "Meridian", "Voltek"];
+export const CLIENTS = [];

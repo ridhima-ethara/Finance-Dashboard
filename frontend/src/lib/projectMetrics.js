@@ -192,7 +192,7 @@ export const buildBudgetTracks = (project, budgets = []) => {
     .filter((entry) => entry.projectId === project?.id)
     .map(normalizeTrackEntry);
 
-  const entries = [...projectHistory.map(normalizeTrackEntry), ...liveBudgets]
+  const entries = [...liveBudgets, ...projectHistory.map(normalizeTrackEntry)]
     .filter((entry) => {
       const key = `${entry.id}:${entry.submittedAt || ""}`;
       if (seen.has(key)) return false;

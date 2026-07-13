@@ -1,9 +1,7 @@
 import { useMemo, useState } from "react";
-import { MONTHLY_SPEND } from "../../data/mockFinance";
-import { PROJECTS } from "../../data/mockProjects";
-import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
+import { buildLoggedDailyRows } from "../../lib/projectMetrics";
 import {
   ResponsiveContainer,
   LineChart,
@@ -30,17 +28,57 @@ const PROJECT_TYPES = [
 
 const MODELS = ["Opus 4.8", "Sonnet", "GPT-4o", "Gemini 2.5 Pro", "Kimi", "Grok-2"];
 
-// Base forecast — extrapolate from last 3 months
-const buildForecast = () => {
-  const base = MONTHLY_SPEND.slice(-3).reduce((s, m) => s + m.actual, 0) / 3;
+const buildMonthlySpendRows = (projects = [], taskLogs = {}) => {
+  const rows = buildLoggedDailyRows(projects, taskLogs);
+  const byMonth = rows.reduce((acc, row) => {
+    const key = row.date.slice(0, 7);
+    acc[key] = acc[key] || {
+      key,
+      month: new Date(`${key}-01T00:00:00`).toLocaleDateString("en-US", { month: "short" }),
+      actual: 0,
+      budget: 0,
+      estimated: 0,
+    };
+    acc[key].actual += Number(row.spent || 0);
+    acc[key].budget += Number(row.approvedDaily || 0);
+    acc[key].estimated += Number(row.approvedDaily || 0);
+    return acc;
+  }, {});
+
+  return Object.values(byMonth).sort((left, right) => left.key.localeCompare(right.key));
+};
+
+const buildForecast = (monthlyRows = []) => {
+  const now = new Date();
+  const seedRows = monthlyRows.length
+    ? monthlyRows
+    : [{
+        key: now.toISOString().slice(0, 7),
+        month: now.toLocaleDateString("en-US", { month: "short" }),
+        actual: 0,
+        budget: 0,
+        estimated: 0,
+      }];
+  const trailing = seedRows.slice(-3);
+  const base = trailing.length ? trailing.reduce((sum, row) => sum + Number(row.actual || 0), 0) / trailing.length : 0;
+  const lastRow = seedRows[seedRows.length - 1];
+  const lastDate = new Date(`${lastRow.key}-01T00:00:00`);
   const rows = [
-    { month: "Jun", base: MONTHLY_SPEND[MONTHLY_SPEND.length - 1].actual, optimistic: null, pessimistic: null, actual: MONTHLY_SPEND[MONTHLY_SPEND.length - 1].actual },
+    {
+      month: lastRow.month,
+      base: Number(lastRow.actual || 0),
+      optimistic: null,
+      pessimistic: null,
+      actual: Number(lastRow.actual || 0),
+    },
   ];
-  ["Jul", "Aug", "Sep"].forEach((m, i) => {
-    const growth = 1.05 + i * 0.04;
+  [1, 2, 3].forEach((step, index) => {
+    const monthDate = new Date(lastDate);
+    monthDate.setMonth(lastDate.getMonth() + step);
+    const growth = 1.05 + index * 0.04;
     const b = Math.round(base * growth);
     rows.push({
-      month: m,
+      month: monthDate.toLocaleDateString("en-US", { month: "short" }),
       base: b,
       optimistic: Math.round(b * 0.85),
       pessimistic: Math.round(b * 1.20),
@@ -54,10 +92,10 @@ const MonthlyForecast = () => {
   const [projType, setProjType] = useState("rnd");
   const [tasks, setTasks] = useState(24);
   const [selectedModel, setSelectedModel] = useState("Opus 4.8");
-  const { projects, taskLogs } = useApp();
+  const { projects, taskLogs, budgetReviews } = useApp();
   const [selectedProjectId, setSelectedProjectId] = useState("");
-
-  const forecast = useMemo(buildForecast, []);
+  const monthlySpend = useMemo(() => buildMonthlySpendRows(projects, taskLogs), [projects, taskLogs]);
+  const forecast = useMemo(() => buildForecast(monthlySpend), [monthlySpend]);
 
   // ------- Task-cost exponential projection -------
   // Build historical cost/task series per phase across the portfolio (or a chosen project).
@@ -65,7 +103,7 @@ const MonthlyForecast = () => {
     const src = selectedProjectId ? projects.filter((p) => p.id === selectedProjectId) : projects;
     const out = [];
     src.forEach((p) => {
-      const review = BUDGET_REVIEWS.find((r) => r.projectId === p.id);
+      const review = budgetReviews.find((r) => r.projectId === p.id);
       const totalTasks = Number(review?.tasks || 0);
       const nPhases = (p.phases || []).length || 1;
       const perPhaseTasksFallback = totalTasks ? Math.round(totalTasks / nPhases) : 0;
@@ -92,7 +130,7 @@ const MonthlyForecast = () => {
       });
     });
     return out;
-  }, [selectedProjectId, projects, taskLogs]);
+  }, [selectedProjectId, projects, taskLogs, budgetReviews]);
 
   // Exponential fit y = a * e^(b*x)  via log-linear regression on positive y-values.
   const expoFit = useMemo(() => {
@@ -158,11 +196,28 @@ const MonthlyForecast = () => {
   const risk = projType === "rnd" || projType === "eval" ? "High" : projType === "poc" ? "Medium" : "Low";
   const overrunProb = PROJECT_TYPES.find((t) => t.id === projType)?.overrunPct || 40;
 
-  const similar = [
-    { name: "Crowley Generation", desc: `Similar model mix · ${tasks - 4} tasks`, match: "high" },
-    { name: "Kaiju Eval", desc: `Same model family · ${tasks + 3} tasks`, match: "high" },
-    { name: "Talos", desc: `Different provider · ${tasks - 8} tasks`, match: "partial" },
-  ];
+  const similar = useMemo(() => (
+    projects
+      .filter((project) => project.id !== selectedProjectId)
+      .slice(0, 3)
+      .map((project, index) => {
+        const plannedTasks = Number(
+          project.totalTasks
+          || (project.phases || []).reduce((sum, phase) => sum + Number(phase.totalTasks || phase.tasks || 0), 0)
+          || 0
+        );
+        return {
+          name: project.name,
+          desc: `${project.type || "Project"} · ${plannedTasks.toLocaleString()} planned tasks`,
+          match: index < 2 ? "high" : "partial",
+        };
+      })
+  ), [projects, selectedProjectId]);
+  const currentBase = Number(forecast[0]?.base || 0);
+  const projectedBase = Number(forecast[3]?.base || 0);
+  const projectedPessimistic = Number(forecast[3]?.pessimistic || 0);
+  const growthPct = currentBase > 0 ? Math.round(((projectedBase - currentBase) / currentBase) * 100) : 0;
+  const extraBuffer = Math.max(projectedPessimistic - projectedBase, 0);
 
   return (
     <div className="space-y-6" data-testid="page-monthly-forecast">
@@ -264,24 +319,30 @@ const MonthlyForecast = () => {
 
           <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="similar-projects">
             <div className="font-display font-semibold text-[15px] text-white mb-3">Similar historical projects</div>
-            <div className="space-y-2">
-              {similar.map((s) => (
-                <div key={s.name} className="flex items-center gap-3 p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                  <div className="w-8 h-8 rounded-lg bg-fuchsia-500/15 border border-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
-                    <Target className="w-3.5 h-3.5 text-fuchsia-300" />
+            {similar.length ? (
+              <div className="space-y-2">
+                {similar.map((s) => (
+                  <div key={s.name} className="flex items-center gap-3 p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                    <div className="w-8 h-8 rounded-lg bg-fuchsia-500/15 border border-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
+                      <Target className="w-3.5 h-3.5 text-fuchsia-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-white truncate">{s.name}</div>
+                      <div className="text-[11px] text-zinc-500 truncate">{s.desc}</div>
+                    </div>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                      s.match === "high" ? "bg-red-500/15 text-red-300 border border-red-500/30" : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                    }`}>
+                      {s.match === "high" ? "Match" : "Partial"}
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-white truncate">{s.name}</div>
-                    <div className="text-[11px] text-zinc-500 truncate">{s.desc}</div>
-                  </div>
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-                    s.match === "high" ? "bg-red-500/15 text-red-300 border border-red-500/30" : "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-                  }`}>
-                    {s.match === "high" ? "Match" : "Partial"}
-                  </span>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-6 text-xs text-zinc-500">
+                No historical projects are available yet for similarity matching.
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -317,13 +378,20 @@ const MonthlyForecast = () => {
         </div>
         <div className="mt-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 flex items-start gap-2 text-xs text-zinc-300">
           <Sparkles className="w-3.5 h-3.5 text-fuchsia-300 flex-shrink-0 mt-0.5" />
-          <span>
-            <span className="text-fuchsia-200 font-semibold">AI insight: </span>
-            Base forecast projects <span className="text-white font-semibold tabular">{fmtCurrency(forecast[3].base)}</span> spend in Sep — a{" "}
-            <span className="text-white font-semibold tabular">{Math.round(((forecast[3].base - forecast[0].base) / forecast[0].base) * 100)}%</span> increase over Jun.
-            Pessimistic scenario ({fmtCurrency(forecast[3].pessimistic)}) would require top-ups; consider pre-approving a{" "}
-            <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(forecast[3].pessimistic - forecast[3].base)}</span> buffer.
-          </span>
+          {currentBase > 0 ? (
+            <span>
+              <span className="text-fuchsia-200 font-semibold">AI insight: </span>
+              Base forecast projects <span className="text-white font-semibold tabular">{fmtCurrency(projectedBase)}</span> in the third forward month, a{" "}
+              <span className="text-white font-semibold tabular">{growthPct}%</span> lift over the current logged month.
+              Pessimistic spend ({fmtCurrency(projectedPessimistic)}) would require top-ups; consider keeping a{" "}
+              <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(extraBuffer)}</span> contingency available.
+            </span>
+          ) : (
+            <span>
+              <span className="text-fuchsia-200 font-semibold">AI insight: </span>
+              Forecasting will become more useful after monthly task logs are recorded. The chart is ready and will update automatically as spend lands.
+            </span>
+          )}
         </div>
       </div>
 

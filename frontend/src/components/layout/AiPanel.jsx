@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "../ui/sheet";
 import { useApp } from "../../context/AppContext";
 import { AI_INSIGHTS } from "../../data/mockData";
+import { summarizeLoggedProject } from "../../lib/projectMetrics";
 import { Sparkles, Send, ArrowRight } from "lucide-react";
 
 const toneStyles = {
@@ -12,25 +13,69 @@ const toneStyles = {
 };
 
 const SUGGESTIONS = [
-  "Explain Vesper Docker overrun",
-  "Which projects will exceed budget this month?",
-  "Recommend cheaper model for Crowley Generation",
-  "Forecast Q3 total spend",
+  "Summarize current portfolio risk",
+  "Which approvals are still pending?",
+  "Show projects trending over budget",
+  "Forecast current spend trajectory",
 ];
 
-const MOCK_ANSWERS = {
-  default:
-    "Based on the current portfolio, 3 of 8 projects are flagged. The biggest driver is Vesper Docker — actual $10.6k vs approved $13k, forecast $15.9k final. Moving heavy eval workloads from Opus 4.8 to Gemini 2.5 Pro could save an estimated 34% ($1.8k on remaining sprint). Would you like me to draft a top-up proposal?",
-  vesper:
-    "Vesper Docker is running 22% over. Root cause: Phase 2 Opus 4.8 inference volume 3.1× planned. Recommended action: (1) request $5k top-up now; (2) switch retry pipeline to Gemini 2.5 Pro; (3) cap max output tokens to 4k. Expected savings: $1.8k / sprint.",
-  forecast:
-    "Q3 portfolio forecast: $610k actual against $685k approved. Health score projected to rise from 58 → 71 if Vesper and Crowley Sourcing top-ups are approved in the next 5 days.",
-};
-
 const AiPanel = () => {
-  const { aiOpen, setAiOpen } = useApp();
+  const { aiOpen, setAiOpen, projects, budgetReviews, topupRequests, changeRequests, taskLogs, user } = useApp();
+  const snapshot = useMemo(() => {
+    const usageRows = projects.map((project) => ({
+      project,
+      usage: summarizeLoggedProject(project, taskLogs),
+    }));
+    const flaggedProjects = usageRows.filter(({ project, usage }) =>
+      Math.max(Number(project.utilization || 0), Number(usage.utilization || 0)) >= 90
+    );
+    const pendingBudgetReviews = budgetReviews.filter((review) =>
+      !["approved", "partial", "rejected", "rejected-by-cto", "returned", "returned-to-tpm"].includes(review.status)
+    );
+    const pendingTopups = topupRequests.filter((request) =>
+      !["approved", "partial", "rejected"].includes(request.status)
+    );
+    const pendingChanges = changeRequests.filter((request) =>
+      !["approved", "partial", "rejected", "returned"].includes(request.status)
+    );
+
+    return {
+      approvedBudget: usageRows.reduce((sum, { project }) => sum + Number(project.approvedBudget || 0), 0),
+      loggedSpend: usageRows.reduce((sum, { usage }) => sum + Number(usage.loggedSpend || 0), 0),
+      flaggedProjects,
+      pendingApprovals: pendingBudgetReviews.length + pendingTopups.length + pendingChanges.length,
+    };
+  }, [projects, budgetReviews, topupRequests, changeRequests, taskLogs]);
+
+  const answers = useMemo(() => {
+    if (!projects.length) {
+      return {
+        default:
+          "No live projects or approval activity are loaded yet. Create a project or submit a budget to start generating portfolio insights.",
+        overrun:
+          "No budget overruns are recorded yet. Once budgets and task logs are added, I can surface watch-list projects automatically.",
+        forecast:
+          "Forecasting will populate after project budgets and task logs are available. Right now the workspace is empty.",
+      };
+    }
+
+    const flaggedCount = snapshot.flaggedProjects.length;
+    const flaggedNames = snapshot.flaggedProjects.slice(0, 3).map(({ project }) => project.name).join(", ");
+
+    return {
+      default:
+        `There are ${projects.length} active projects, ${flaggedCount} ${flaggedCount === 1 ? "project" : "projects"} on the watch list, and ${snapshot.pendingApprovals} pending approval items. Ask me to break down any project, approval queue, or spend trend.`,
+      overrun:
+        flaggedCount > 0
+          ? `${flaggedCount} ${flaggedCount === 1 ? "project is" : "projects are"} currently trending above plan or into the watch range. Current focus: ${flaggedNames}.`
+          : "No projects are currently flagged for overrun. Logged spend remains within the approved budget ranges.",
+      forecast:
+        `Current approved budget is $${snapshot.approvedBudget.toLocaleString()} with $${snapshot.loggedSpend.toLocaleString()} logged so far. ${snapshot.pendingApprovals} approval items are still in flight and may change the forward forecast.`,
+    };
+  }, [projects, snapshot]);
+
   const [messages, setMessages] = useState([
-    { from: "ai", text: "Hi Vikram — I've reviewed today's portfolio. Ask me about any project, forecast, or expense." },
+    { from: "ai", text: `Hi ${user?.name?.split(" ")[0] || "there"} — I’ve reviewed the current workspace. Ask me about budgets, approvals, or project spend.` },
   ]);
   const [input, setInput] = useState("");
 
@@ -39,11 +84,11 @@ const AiPanel = () => {
     if (!query) return;
     const lower = query.toLowerCase();
     const answer =
-      lower.includes("vesper") || lower.includes("overrun")
-        ? MOCK_ANSWERS.vesper
-        : lower.includes("forecast") || lower.includes("q3")
-        ? MOCK_ANSWERS.forecast
-        : MOCK_ANSWERS.default;
+      lower.includes("overrun") || lower.includes("risk") || lower.includes("flag")
+        ? answers.overrun
+        : lower.includes("forecast") || lower.includes("spend") || lower.includes("approval")
+        ? answers.forecast
+        : answers.default;
     setMessages((m) => [...m, { from: "user", text: query }, { from: "ai", text: answer }]);
     setInput("");
   };
@@ -58,69 +103,72 @@ const AiPanel = () => {
             </div>
             <div>
               <SheetTitle className="font-display text-lg">AI Financial Assistant</SheetTitle>
-              <p className="text-xs text-zinc-500">Portfolio insights · powered by mock LLM</p>
+              <p className="text-xs text-zinc-500">Workspace insights and approval guidance</p>
             </div>
           </div>
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {/* Insights list */}
           <div className="space-y-2">
             <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
               Today's insights
             </div>
-            {AI_INSIGHTS.map((i) => (
-              <div
-                key={i.id}
-                data-testid={`insight-${i.id}`}
-                className={`p-4 rounded-xl border ${toneStyles[i.tone]} bg-[#12121A]`}
-              >
-                <div className="flex items-start justify-between gap-2 mb-1">
-                  <div className="font-semibold text-sm text-white">{i.title}</div>
-                  <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${toneStyles[i.tone]} border`}>
-                    {i.tag}
-                  </span>
+            {AI_INSIGHTS.length ? (
+              AI_INSIGHTS.map((i) => (
+                <div
+                  key={i.id}
+                  data-testid={`insight-${i.id}`}
+                  className={`p-4 rounded-xl border ${toneStyles[i.tone]} bg-[#12121A]`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-1">
+                    <div className="font-semibold text-sm text-white">{i.title}</div>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${toneStyles[i.tone]} border`}>
+                      {i.tag}
+                    </span>
+                  </div>
+                  <p className="text-xs text-zinc-400 leading-relaxed">{i.body}</p>
                 </div>
-                <p className="text-xs text-zinc-400 leading-relaxed">{i.body}</p>
+              ))
+            ) : (
+              <div className="p-4 rounded-xl border border-dashed border-white/10 bg-[#12121A] text-xs text-zinc-500">
+                Live AI insights will appear here after budgets, approvals, and task logs are added.
               </div>
-            ))}
+            )}
           </div>
 
-          {/* Chat */}
           <div className="space-y-3">
             <div className="text-[10px] font-semibold text-zinc-500 uppercase tracking-widest">
               Conversation
             </div>
-            {messages.map((m, i) => (
+            {messages.map((message, index) => (
               <div
-                key={i}
-                className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}
+                key={index}
+                className={`flex ${message.from === "user" ? "justify-end" : "justify-start"}`}
               >
                 <div
                   className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                    m.from === "user"
+                    message.from === "user"
                       ? "bg-fuchsia-500 text-white rounded-br-md"
                       : "bg-white/10 text-zinc-100 rounded-bl-md"
                   }`}
                 >
-                  {m.text}
+                  {message.text}
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Input + suggestions */}
         <div className="border-t border-white/5 p-4 bg-white/5">
           <div className="flex flex-wrap gap-1.5 mb-3">
-            {SUGGESTIONS.map((s) => (
+            {SUGGESTIONS.map((suggestion) => (
               <button
-                key={s}
-                data-testid={`ai-suggestion-${s.slice(0, 8).replace(/\s+/g, "-").toLowerCase()}`}
-                onClick={() => send(s)}
+                key={suggestion}
+                data-testid={`ai-suggestion-${suggestion.slice(0, 8).replace(/\s+/g, "-").toLowerCase()}`}
+                onClick={() => send(suggestion)}
                 className="text-[11px] px-2.5 py-1 rounded-full bg-[#12121A] border border-white/10 text-zinc-400 hover:border-fuchsia-500/40 hover:text-fuchsia-400 transition-colors flex items-center gap-1"
               >
-                {s}
+                {suggestion}
                 <ArrowRight className="w-3 h-3" />
               </button>
             ))}

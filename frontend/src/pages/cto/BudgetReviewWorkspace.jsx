@@ -1,7 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { BUDGET_REVIEWS } from "../../data/mockTpm";
-import { PROJECTS } from "../../data/mockProjects";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
@@ -29,17 +27,21 @@ import {
 const BudgetReviewWorkspace = () => {
   const { id } = useParams();
   const nav = useNavigate();
-  const { ctoModifyBudgetReview, ctoRejectBudgetReview, ctoReturnBudgetReview, budgetReviews } = useApp();
-  const review = useMemo(() => BUDGET_REVIEWS.find((r) => r.id === id) || BUDGET_REVIEWS[0], [id]);
-  const project = useMemo(() => PROJECTS.find((p) => p.id === review.projectId), [review]);
-  const priorModification = useMemo(() => budgetReviews.find((r) => r.id === review.id), [budgetReviews, review]);
+  const { ctoModifyBudgetReview, ctoRejectBudgetReview, ctoReturnBudgetReview, budgetReviews, projects } = useApp();
+  const review = useMemo(() => budgetReviews.find((r) => r.id === id) || null, [budgetReviews, id]);
+  const project = useMemo(() => projects.find((p) => p.id === review?.projectId) || null, [projects, review]);
+  const priorModification = useMemo(
+    () => (review ? budgetReviews.find((r) => r.id === review.id) : null),
+    [budgetReviews, review]
+  );
 
   const [tab, setTab] = useState("overview");
-  const amount = review.recommendedBudget;
+  const amount = review?.recommendedBudget || review?.requestedBudget || 0;
   const [comment, setComment] = useState("");
 
   const phases = project?.phases || [];
   const buildInitialPhases = () => {
+    if (!review) return [];
     if (priorModification?.modifiedPhases?.length) return priorModification.modifiedPhases;
     const denom = phases.reduce((s, p) => s + p.estimated, 0) || 1;
     return phases.map((p) => {
@@ -47,9 +49,9 @@ const BudgetReviewWorkspace = () => {
       return {
         id: p.id,
         name: p.name,
-        infra: Math.round(review.infraCost * weight),
-        model: Math.round(review.aiCost * weight),
-        subs: Math.round(review.subsCost * weight),
+        infra: Math.round(Number(review.infraCost || 0) * weight),
+        model: Math.round(Number(review.aiCost || 0) * weight),
+        subs: Math.round(Number(review.subsCost || 0) * weight),
       };
     });
   };

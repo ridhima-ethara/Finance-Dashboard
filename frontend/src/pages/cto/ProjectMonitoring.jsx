@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import { DAILY_ACTIVITY } from "../../data/mockAi";
@@ -21,6 +21,12 @@ const ProjectMonitoring = () => {
   const { visibleProjects } = useApp();
   const [selected, setSelected] = useState(visibleProjects[0]?.id || null);
   const [range, setRange] = useState("30d");
+
+  useEffect(() => {
+    if (!selected || !visibleProjects.some((project) => project.id === selected)) {
+      setSelected(visibleProjects[0]?.id || null);
+    }
+  }, [selected, visibleProjects]);
 
   const project = useMemo(() => visibleProjects.find((p) => p.id === selected), [selected, visibleProjects]);
   const daily = useMemo(() => (range === "7d" ? DAILY_ACTIVITY.slice(-7) : DAILY_ACTIVITY.slice(-30)), [range]);
@@ -45,7 +51,7 @@ const ProjectMonitoring = () => {
     );
   }
 
-  const today = DAILY_ACTIVITY[DAILY_ACTIVITY.length - 1];
+  const today = DAILY_ACTIVITY[DAILY_ACTIVITY.length - 1] || { spend: 0, estimate: 0, approvals: 0, expenses: 0 };
   const burnRate = project.burnRate * 1000;
   const remaining = project.approvedBudget - project.actualSpend;
   const runway = burnRate ? Math.round(remaining / burnRate) : "—";
