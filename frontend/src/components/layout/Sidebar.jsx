@@ -23,10 +23,12 @@ import {
   ScrollText,
   PackageCheck,
   HelpCircle,
+  DatabaseBackup,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { initials } from "../../lib/format";
 import WorkflowGuideDialog from "../WorkflowGuideDialog";
+import BackupDialog from "../BackupDialog";
 
 const NAV_CTO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
@@ -102,6 +104,7 @@ const Sidebar = () => {
   const nav = useNavigate();
   const NAV = pickNav(user?.role);
   const [guideOpen, setGuideOpen] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
   const handleLogout = () => {
     logout();
     nav("/login", { replace: true });
@@ -164,6 +167,15 @@ const Sidebar = () => {
           <HelpCircle className="w-4 h-4" />
           How it works
         </button>
+        <button
+          type="button"
+          onClick={() => setBackupOpen(true)}
+          data-testid="sidebar-btn-backup"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-zinc-400 hover:bg-fuchsia-500/10 hover:text-fuchsia-200 transition-colors"
+        >
+          <DatabaseBackup className="w-4 h-4" />
+          Backup &amp; Recover
+        </button>
         <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors" data-testid="sidebar-user">
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover border border-white/10" />
@@ -188,6 +200,7 @@ const Sidebar = () => {
       </div>
 
       <WorkflowGuideDialog open={guideOpen} onOpenChange={setGuideOpen} defaultRole={user?.role || "CTO"} />
+      <BackupDialog open={backupOpen} onOpenChange={setBackupOpen} />
     </aside>
   );
 };

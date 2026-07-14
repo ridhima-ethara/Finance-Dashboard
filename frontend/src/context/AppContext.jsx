@@ -766,6 +766,120 @@ export const AppProvider = ({ children }) => {
     if (snapshot.itMonthlyActuals !== undefined) setItMonthlyActuals(snapshot.itMonthlyActuals || {});
   };
 
+  // Map either raw localStorage-shape (keys like "ethara.customProjects.v3") OR
+  // workspace-shape (keys like "customProjects") to a canonical workspace snapshot.
+  const normalizeRawImportPayload = (raw) => {
+    if (!raw || typeof raw !== "object") return {};
+    // Localstorage-key → slice-key mapping (both v2 and v3 supported).
+    const localKeyMap = {
+      "ethara.buffers.v3": "buffers",
+      "ethara.buffers.v2": "buffers",
+      "ethara.bufferPool.v3": "bufferPool",
+      "ethara.bufferPool.v2": "bufferPool",
+      "ethara.recovery.v3": "recoveries",
+      "ethara.recovery.v2": "recoveries",
+      "ethara.customModels.v2": "customModels",
+      "ethara.customModels.v1": "customModels",
+      "ethara.customProjects.v3": "customProjects",
+      "ethara.customProjects.v2": "customProjects",
+      "ethara.taskLogs.v3": "taskLogs",
+      "ethara.taskLogs.v2": "taskLogs",
+      "ethara.topupRequests.v3": "topupRequests",
+      "ethara.topupRequests.v2": "topupRequests",
+      "ethara.budgets.v3": "budgets",
+      "ethara.budgets.v2": "budgets",
+      "ethara.batchDeliveries.v3": "batchDeliveries",
+      "ethara.batchDeliveries.v2": "batchDeliveries",
+      "ethara.budgetReviews.v3": "budgetReviews",
+      "ethara.budgetReviews.v2": "budgetReviews",
+      "ethara.changeRequests.v3": "changeRequests",
+      "ethara.changeRequests.v2": "changeRequests",
+      "ethara.teamRemovals.v3": "teamRemovals",
+      "ethara.teamRemovals.v2": "teamRemovals",
+      "ethara.modelKeys.v3": "modelKeys",
+      "ethara.modelKeys.v2": "modelKeys",
+      "ethara.itProvisioning.v3": "itProvisioning",
+      "ethara.itProvisioning.v2": "itProvisioning",
+      "ethara.itMonthlyActuals.v3": "itMonthlyActuals",
+      "ethara.itMonthlyActuals.v2": "itMonthlyActuals",
+    };
+    const out = {};
+    Object.entries(raw).forEach(([key, val]) => {
+      const sliceKey = localKeyMap[key] || (WORKSPACE_SLICE_KEYS.includes(key) ? key : null);
+      if (!sliceKey) return;
+      // localStorage stores each key as JSON.stringified — accept both string and parsed value.
+      let parsed = val;
+      if (typeof val === "string") {
+        try { parsed = JSON.parse(val); } catch { parsed = val; }
+      }
+      out[sliceKey] = parsed;
+    });
+    return out;
+  };
+
+  // Returns { imported: [sliceKey...], skipped: [key...] }
+  const importWorkspaceRaw = async (rawPayload) => {
+    const snapshot = normalizeRawImportPayload(rawPayload);
+    const importedKeys = Object.keys(snapshot);
+    if (!importedKeys.length) {
+      throw new Error("No recognized workspace keys found in the payload.");
+    }
+    // Merge with current values so unspecified slices are preserved.
+    const merged = {
+      buffers,
+      bufferPool,
+      recoveries,
+      customModels,
+      customProjects,
+      taskLogs,
+      topupRequests,
+      budgets,
+      batchDeliveries,
+      budgetReviews,
+      changeRequests,
+      teamRemovals,
+      modelKeys: modelKeyRecords,
+      itProvisioning: itProvisioningRequests,
+      itMonthlyActuals,
+      ...snapshot,
+    };
+    applyWorkspaceSnapshot(merged);
+    // Immediate push to backend so the import survives even if user closes the tab quickly.
+    setSyncStatus("saving");
+    try {
+      const res = await fetch(WORKSPACE_ENDPOINT, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(merged),
+      });
+      if (!res.ok) throw new Error(`Workspace save failed: ${res.status}`);
+      lastSavedPayloadRef.current = JSON.stringify(merged);
+      setSyncStatus("idle");
+    } catch (err) {
+      setSyncStatus("error");
+      throw err;
+    }
+    return { imported: importedKeys, count: importedKeys.length };
+  };
+
+  const exportWorkspaceSnapshot = () => ({
+    buffers,
+    bufferPool,
+    recoveries,
+    customModels,
+    customProjects,
+    taskLogs,
+    topupRequests,
+    budgets,
+    batchDeliveries,
+    budgetReviews,
+    changeRequests,
+    teamRemovals,
+    modelKeys: modelKeyRecords,
+    itProvisioning: itProvisioningRequests,
+    itMonthlyActuals,
+  });
+
   const fetchWorkspaceFromBackend = async () => {
     const res = await fetch(WORKSPACE_ENDPOINT, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) throw new Error(`Workspace fetch failed: ${res.status}`);
@@ -2609,6 +2723,8 @@ export const AppProvider = ({ children }) => {
     isAuth: !!user,
     hydrated,
     syncStatus,
+    importWorkspaceRaw,
+    exportWorkspaceSnapshot,
     login,
     logout,
     roles: ROLES,
