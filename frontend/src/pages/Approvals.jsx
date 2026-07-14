@@ -59,7 +59,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       if (r.ctoAt) {
         decisions.push({
           actor: "CTO",
-          decision: r.status === "rejected-by-cto" ? "reject" : "modify",
+          decision: r.status === "rejected-by-cto" ? "reject" : r.status === "returned-to-tpm" ? "return" : "modify",
           amount: r.modifiedTotal,
           comment: r.ctoComment,
           at: r.ctoAt,
@@ -76,6 +76,8 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       }
       const displayStatus = r.status === "forwarded-cfo"
         ? "forwarded-cfo"
+        : r.status === "returned-to-tpm"
+          ? "returned"
         : r.status === "rejected-by-cto"
           ? "rejected"
           : r.cfoDecision
@@ -87,7 +89,11 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
         title: "Budget review",
         subtitle: r.projectName,
         requestedAmount: r.requestedBudget,
-        approvedAmount: r.status === "rejected-by-cto" ? 0 : (r.cfoDecision?.amount ?? r.modifiedTotal),
+        approvedAmount: r.status === "rejected-by-cto"
+          ? 0
+          : r.status === "returned-to-tpm"
+            ? null
+            : (r.cfoDecision?.amount ?? r.modifiedTotal),
         reason: r.status === "forwarded-cfo"
           ? `CTO modified to ${r.modifiedTotal ? "$" + Number(r.modifiedTotal).toLocaleString() : "—"} — awaiting CFO sign-off`
           : (r.ctoComment || ""),

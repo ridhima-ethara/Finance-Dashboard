@@ -1,25 +1,97 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
-import { TEAM } from "../data/mockUsers";
-import { FolderPlus, User, Calendar as CalIcon, Link2, FileText, Users, Beaker, Upload, X } from "lucide-react";
+import { TEAM, USERS } from "../data/mockUsers";
+import { FolderPlus, User, Calendar as CalIcon, Link2, FileText, Users, Beaker, Upload, X, Plus } from "lucide-react";
 
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_SIZE = 750 * 1024;
+const ETHARA_EMAIL_REGEX = /^[a-z0-9._%+-]+@ethara\.ai$/i;
+const DIRECTORY = [...TEAM, ...USERS].reduce((acc, member) => {
+  if (!member?.email) return acc;
+  const key = String(member.email).trim().toLowerCase();
+  if (!acc.has(key)) acc.set(key, member);
+  return acc;
+}, new Map());
 
 const buildEmptyForm = (today) => ({
   clientProjectName: "",
   internalName: "",
   startDate: today,
   docUrl: "",
-  tpm: "",
-  plQlMembers: [],
-  rndMembers: [],
+  tpmEmails: [],
+  plQlEmails: [],
+  rndEmails: [],
   attachments: [],
 });
+
+const normalizeRoleForSection = (memberRole = "", sectionRole = "Member") => {
+  if (sectionRole === "TPM") return "TPM";
+  if (sectionRole === "R&D") return memberRole === "Engineer" ? "Engineer" : "R&D";
+  if (sectionRole === "PL / QL") {
+    if (memberRole === "Quality Lead" || memberRole === "QL") return "Quality Lead";
+    if (memberRole === "Project Lead" || memberRole === "PL") return "Project Lead";
+    return "PL / QL";
+  }
+  return memberRole || sectionRole;
+};
+
+const formatNameFromEmail = (email = "") => {
+  const localPart = String(email || "").split("@")[0] || "";
+  const acronyms = {
+    ai: "AI",
+    cfo: "CFO",
+    cto: "CTO",
+    it: "IT",
+    pl: "PL",
+    ql: "QL",
+    rd: "R&D",
+    rnd: "R&D",
+    tpm: "TPM",
+  };
+  return localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((token) => {
+      const lowered = token.toLowerCase();
+      if (acronyms[lowered]) return acronyms[lowered];
+      return token.charAt(0).toUpperCase() + token.slice(1);
+    })
+    .join(" ") || email;
+};
+
+const parseEmailTokens = (value = "") => (
+  String(value || "")
+    .split(/[\s,;\n]+/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean)
+);
+
+const resolveMemberFromEmail = (email, sectionRole) => {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  const match = DIRECTORY.get(normalizedEmail);
+  const role = normalizeRoleForSection(match?.role || "", sectionRole);
+  return {
+    id: match?.id || `member-${normalizedEmail.replace(/[^a-z0-9]+/g, "-")}`,
+    name: match?.name || formatNameFromEmail(normalizedEmail),
+    role,
+    email: normalizedEmail,
+  };
+};
+
+const dedupeEmails = (emails = []) => {
+  const seen = new Set();
+  return emails.reduce((acc, email) => {
+    const normalized = String(email || "").trim().toLowerCase();
+    if (!normalized || seen.has(normalized)) return acc;
+    seen.add(normalized);
+    acc.push(normalized);
+    return acc;
+  }, []);
+};
 
 const formatFileSize = (size) => {
   if (!size) return "0 KB";
@@ -36,13 +108,6 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
   const [form, setForm] = useState(() => buildEmptyForm(today));
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleMulti = (key, name) =>
-    setForm((f) => ({
-      ...f,
-      [key]: f[key].includes(name)
-        ? f[key].filter((n) => n !== name)
-        : [...f[key], name],
-    }));
   const handleFilePick = (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
@@ -85,34 +150,56 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
       attachments: current.attachments.filter((file) => file.id !== attachmentId),
     }));
 
-  const selectedMembers = Array.from(new Set([form.tpm, ...form.plQlMembers, ...form.rndMembers].filter(Boolean))).map((name) => {
-    const match = TEAM.find((member) => member.name === name);
-    return {
-      id: match?.id || `member-${name.toLowerCase().replace(/\s+/g, "-")}`,
-      name,
-      role: name === form.tpm ? "TPM" : match?.role || "R&D",
-      email: match?.email || `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai`,
-    };
-  });
+  const selectedMembers = useMemo(() => {
+    const recipients = [
+      ...form.tpmEmails.map((email) => resolveMemberFromEmail(email, "TPM")),
+      ...form.plQlEmails.map((email) => resolveMemberFromEmail(email, "PL / QL")),
+      ...form.rndEmails.map((email) => resolveMemberFromEmail(email, "R&D")),
+    ];
+    const seen = new Set();
+    return recipients.filter((member) => {
+      const key = String(member.email || "").trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [form.plQlEmails, form.rndEmails, form.tpmEmails]);
 
   const submit = () => {
     if (!form.clientProjectName.trim()) return toast.error("Enter the client project name");
     if (!form.internalName.trim()) return toast.error("Enter the internal project name");
-    if (!form.tpm) return toast.error("Assign a TPM");
+    if (!form.tpmEmails.length) return toast.error("Assign at least one TPM email");
     if (!form.startDate) return toast.error("Set the start date");
 
-    const plMembers = form.plQlMembers.filter((name) => {
-      const member = TEAM.find((entry) => entry.name === name);
-      return member?.role !== "Quality Lead";
-    });
-    const qlMembers = form.plQlMembers.filter((name) => {
-      const member = TEAM.find((entry) => entry.name === name);
-      return member?.role === "Quality Lead";
-    });
+    const invalidEmails = dedupeEmails([
+      ...form.tpmEmails,
+      ...form.plQlEmails,
+      ...form.rndEmails,
+    ]).filter((email) => !ETHARA_EMAIL_REGEX.test(email));
+    if (invalidEmails.length) {
+      return toast.error("Only @ethara.ai emails are allowed", {
+        description: invalidEmails.join(", "),
+      });
+    }
+
+    const tpmRecipients = form.tpmEmails.map((email) => resolveMemberFromEmail(email, "TPM"));
+    const plQlRecipients = form.plQlEmails.map((email) => resolveMemberFromEmail(email, "PL / QL"));
+    const rndRecipients = form.rndEmails.map((email) => resolveMemberFromEmail(email, "R&D"));
+    const primaryTpm = tpmRecipients[0];
+    const plMembers = plQlRecipients
+      .filter((member) => member.role !== "Quality Lead" && member.role !== "QL")
+      .map((member) => member.name);
+    const qlMembers = plQlRecipients
+      .filter((member) => member.role === "Quality Lead" || member.role === "QL")
+      .map((member) => member.name);
     const proj = addProject({
       ...form,
+      tpm: primaryTpm?.name || "",
+      tpmEmail: primaryTpm?.email || "",
+      assignedMembers: [...tpmRecipients, ...plQlRecipients, ...rndRecipients],
       plMembers,
       qlMembers,
+      rndMembers: rndRecipients.map((member) => member.name),
       createdBy: user?.name || "CTO",
       createdByRole: user?.role || "CTO",
     });
@@ -123,10 +210,6 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
     setForm(buildEmptyForm(today));
     setTimeout(() => nav(`/projects/${proj.id}`), 250);
   };
-
-  const tpmOptions = TEAM.filter((t) => ["Project Lead", "Engineer", "CTO"].includes(t.role));
-  const plQlOptions = TEAM.filter((t) => ["Project Lead", "Quality Lead"].includes(t.role));
-  const rndOptions = TEAM.filter((t) => t.role === "R&D" || t.role === "Engineer");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -233,90 +316,36 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
           </Field>
 
           <Field label="Assign TPM" hint="Owns budget building &amp; delivery">
-            <div className="relative">
-              <User className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <select
-                value={form.tpm}
-                onChange={(e) => update("tpm", e.target.value)}
-                data-testid="input-tpm"
-                className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-              >
-                <option value="">— Select TPM —</option>
-                {tpmOptions.map((t) => (
-                  <option key={t.id} value={t.name}>{t.name} · {t.role}</option>
-                ))}
-              </select>
-            </div>
+            <EmailRecipientsInput
+              icon={User}
+              emails={form.tpmEmails}
+              onChange={(emails) => update("tpmEmails", emails)}
+              placeholder="tpm@ethara.ai"
+              dataTestId="input-tpm"
+              helperText="Enter one or more TPM emails. The first email becomes the primary TPM owner; all listed emails receive kickoff."
+            />
           </Field>
 
           <Field label="Assign PL / QL" hint="Added to project members + kickoff">
-            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2 max-h-32 overflow-y-auto space-y-1" data-testid="plql-multi-picker">
-              {plQlOptions.length === 0 && (
-                <div className="text-xs text-zinc-500 px-2 py-1.5">No PL / QL members available.</div>
-              )}
-              {plQlOptions.map((t) => {
-                const on = form.plQlMembers.includes(t.name);
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => toggleMulti("plQlMembers", t.name)}
-                    data-testid={`plql-toggle-${t.id}`}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
-                      on ? "bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/30" : "text-zinc-300 hover:bg-white/[0.04] border border-transparent"
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center ${on ? "border-fuchsia-400 bg-fuchsia-500" : "border-white/20"}`}>
-                      {on && <span className="text-[9px] text-white">✓</span>}
-                    </span>
-                    <Users className="w-3 h-3 text-fuchsia-300" />
-                    <span className="font-medium">{t.name}</span>
-                    <span className="text-zinc-500 text-[10px]">· {t.role}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {form.plQlMembers.length > 0 && (
-              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-zinc-400">
-                <Users className="w-3 h-3" />
-                {form.plQlMembers.length} PL / QL assigned · {form.plQlMembers.join(", ")}
-              </div>
-            )}
+            <EmailRecipientsInput
+              icon={Users}
+              emails={form.plQlEmails}
+              onChange={(emails) => update("plQlEmails", emails)}
+              placeholder="pl@ethara.ai, quality.1@ethara.ai"
+              dataTestId="plql-multi-picker"
+              helperText="Enter one or more PL / QL emails. Matching demo emails are auto-mapped to Project Lead or Quality Lead."
+            />
           </Field>
 
           <Field label="Assign R&amp;D members" hint="Project appears on their dashboard">
-            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2 max-h-40 overflow-y-auto space-y-1" data-testid="rnd-multi-picker">
-              {rndOptions.length === 0 && (
-                <div className="text-xs text-zinc-500 px-2 py-1.5">No R&amp;D members available.</div>
-              )}
-              {rndOptions.map((t) => {
-                const on = form.rndMembers.includes(t.name);
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => toggleMulti("rndMembers", t.name)}
-                    data-testid={`rnd-toggle-${t.id}`}
-                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-xs transition-colors ${
-                      on ? "bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/30" : "text-zinc-300 hover:bg-white/[0.04] border border-transparent"
-                    }`}
-                  >
-                    <span className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center ${on ? "border-fuchsia-400 bg-fuchsia-500" : "border-white/20"}`}>
-                      {on && <span className="text-[9px] text-white">✓</span>}
-                    </span>
-                    <Beaker className="w-3 h-3 text-fuchsia-300" />
-                    <span className="font-medium">{t.name}</span>
-                    <span className="text-zinc-500 text-[10px]">· {t.role}</span>
-                  </button>
-                );
-              })}
-            </div>
-            {form.rndMembers.length > 0 && (
-              <div className="mt-1.5 flex items-center gap-1 text-[10px] text-zinc-400">
-                <Users className="w-3 h-3" />
-                {form.rndMembers.length} R&amp;D assigned · {form.rndMembers.join(", ")}
-              </div>
-            )}
+            <EmailRecipientsInput
+              icon={Beaker}
+              emails={form.rndEmails}
+              onChange={(emails) => update("rndEmails", emails)}
+              placeholder="rd@ethara.ai, engineer.1@ethara.ai"
+              dataTestId="rnd-multi-picker"
+              helperText="Enter one or more R&D or engineer emails. Every @ethara.ai address listed here is added to kickoff and project access."
+            />
           </Field>
         </div>
 
@@ -352,5 +381,99 @@ const Field = ({ label, hint, children }) => (
     {children}
   </div>
 );
+
+const EmailRecipientsInput = ({
+  icon: Icon,
+  emails = [],
+  onChange,
+  placeholder,
+  dataTestId,
+  helperText,
+}) => {
+  const [draft, setDraft] = useState("");
+
+  const addDraftEmails = () => {
+    const parsed = parseEmailTokens(draft);
+    if (!parsed.length) return;
+
+    const valid = [];
+    const invalid = [];
+    parsed.forEach((email) => {
+      if (ETHARA_EMAIL_REGEX.test(email)) valid.push(email);
+      else invalid.push(email);
+    });
+
+    if (valid.length) {
+      onChange(dedupeEmails([...emails, ...valid]));
+    }
+    if (invalid.length) {
+      toast.error("Only @ethara.ai emails are allowed", {
+        description: invalid.join(", "),
+      });
+    }
+    setDraft("");
+  };
+
+  const removeEmail = (email) => {
+    onChange(emails.filter((entry) => entry !== email));
+  };
+
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3" data-testid={dataTestId}>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Icon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="email"
+            data-testid={`${dataTestId}-input`}
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === ",") {
+                event.preventDefault();
+                addDraftEmails();
+              }
+            }}
+            onBlur={() => {
+              if (draft.trim()) addDraftEmails();
+            }}
+            placeholder={placeholder}
+            className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+          />
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addDraftEmails}
+          className="h-10 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-1.5"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add
+        </Button>
+      </div>
+      <div className="mt-2 text-[10px] text-zinc-500">{helperText}</div>
+      {emails.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {emails.map((email) => (
+            <span
+              key={email}
+              className="inline-flex items-center gap-1 rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] text-fuchsia-100"
+            >
+              {email}
+              <button
+                type="button"
+                onClick={() => removeEmail(email)}
+                className="text-fuchsia-200 hover:text-white"
+                aria-label={`Remove ${email}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default NewProjectDialog;

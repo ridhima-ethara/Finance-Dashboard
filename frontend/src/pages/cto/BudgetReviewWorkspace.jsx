@@ -43,7 +43,7 @@ const sumLineItems = (lines = []) => (Array.isArray(lines) ? lines : []).reduce(
 const BudgetReviewWorkspace = () => {
   const { id } = useParams();
   const nav = useNavigate();
-  const { ctoModifyBudgetReview, ctoRejectBudgetReview, ctoReturnBudgetReview, budgetReviews, projects, role } = useApp();
+  const { ctoModifyBudgetReview, ctoRejectBudgetReview, ctoReturnBudgetReview, budgetReviews, projects, role, user } = useApp();
   const review = useMemo(() => budgetReviews.find((r) => r.id === id) || null, [budgetReviews, id]);
   const project = useMemo(() => projects.find((p) => p.id === review?.projectId) || null, [projects, review]);
   const priorModification = useMemo(
@@ -97,6 +97,32 @@ const BudgetReviewWorkspace = () => {
     setModifiedItems(buildInitialItems());
   }, [buildInitialItems]);
 
+  const canEdit = role === "CTO";
+  const isRndReview =
+    review?.requesterRole === "R&D"
+    || ["Testing", "RnD", "Rework"].includes(review?.budgetType)
+    || (review.recoveryType || "").toLowerCase().includes("r&d")
+    || (review.type || "").toLowerCase().includes("r&d");
+  const returnTarget = isRndReview ? "R&D" : "TPM";
+  const canReviseReturnedReview = !canEdit
+    && review?.status === "returned-to-tpm"
+    && review?.tpm === user?.name
+    && (
+      (role === "R&D" && review?.returnedTo === "R&D")
+      || (role === "TPM" && (review?.returnedTo === "TPM" || !review?.returnedTo))
+    );
+  const resubmitHref = (() => {
+    if (!canReviseReturnedReview || !review) return "";
+    const next = new URLSearchParams({ edit: review.id, projectId: review.projectId });
+    if (review.budgetType) next.set("budgetType", review.budgetType);
+    if (review.sampleIteration) next.set("sampleIteration", String(review.sampleIteration));
+    return `/budget-builder?${next.toString()}`;
+  })();
+
+  useEffect(() => {
+    if (!canEdit && tab === "modify") setTab("overview");
+  }, [canEdit, tab]);
+
   if (!review || !project) {
     return (
       <div className="text-sm text-zinc-400">
@@ -109,13 +135,6 @@ const BudgetReviewWorkspace = () => {
   const requestedBudget = review.requestedBudget;
   const currentBudget = review.currentBudget;
   const recommended = review.recommendedBudget;
-  const canEdit = role === "CTO";
-  const isRndReview =
-    review.requesterRole === "R&D"
-    || ["Testing", "RnD", "Rework"].includes(review.budgetType)
-    || (review.recoveryType || "").toLowerCase().includes("r&d")
-    || (review.type || "").toLowerCase().includes("r&d");
-  const returnTarget = isRndReview ? "R&D" : "TPM";
 
   const phaseTotals = modifiedPhases.map((p) => ({
     ...p,
@@ -351,7 +370,7 @@ const BudgetReviewWorkspace = () => {
       <div className="flex items-center gap-1 border-b border-white/5 overflow-x-auto">
         {[
           { id: "overview", label: "Overview" },
-          { id: "modify", label: "Modify Budget" },
+          ...(canEdit ? [{ id: "modify", label: "Modify Budget" }] : []),
         ].map((t) => (
           <button
             key={t.id}
@@ -368,7 +387,7 @@ const BudgetReviewWorkspace = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
-          {coreOverviewPanels}
+          {tab === "overview" && coreOverviewPanels}
 
           {tab === "modify" && (
             <>
@@ -486,6 +505,30 @@ const BudgetReviewWorkspace = () => {
                   )}
                 </div>
               </Panel>
+              <Panel
+                testid="modify-reflection"
+                title="Changed budget reflection"
+                subtitle="This revised amount is what CTO will forward to CFO for the next approval step."
+              >
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                  <CompareBox label="Previous approved" value={currentBudget} />
+                  <CompareBox label={`${isRndReview ? "R&D" : "TPM"} requested`} value={requestedBudget} highlight="warning" />
+                  <CompareBox label="CTO modified total" value={modifiedTotal} highlight="magenta" />
+                </div>
+                <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-300 leading-relaxed">
+                  <span className="text-fuchsia-200 font-semibold">Updated budget: </span>
+                  CFO will receive <span className="text-white font-semibold tabular">{fmtCurrency(modifiedTotal, { compact: false })}</span>,
+                  {" "}which is{" "}
+                  <span className={delta >= 0 ? "text-amber-300 font-semibold tabular" : "text-emerald-300 font-semibold tabular"}>
+                    {delta >= 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })}
+                  </span>{" "}
+                  vs the current approved baseline and{" "}
+                  <span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold tabular" : "text-amber-300 font-semibold tabular"}>
+                    {modifiedDeltaVsRequested >= 0 ? "+" : ""}{fmtCurrency(modifiedDeltaVsRequested, { compact: false })}
+                  </span>{" "}
+                  vs the submitted request.
+                </div>
+              </Panel>
               {canEdit && (
                 <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 text-xs text-zinc-300 leading-relaxed">
                   <span className="text-fuchsia-200 font-semibold">Note: </span>
@@ -513,7 +556,7 @@ const BudgetReviewWorkspace = () => {
               <div className="mt-3 rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-2 text-[11px] text-zinc-300">
                 Edit values in <span className="text-fuchsia-300 font-semibold">Modify Budget</span> to change this figure.
               </div>
-            ) : (
+            ) : canEdit ? (
               <Button
                 onClick={() => setTab("modify")}
                 variant="outline"
@@ -522,7 +565,16 @@ const BudgetReviewWorkspace = () => {
               >
                 <Edit3 className="w-3.5 h-3.5" /> {isRndReview ? "Modify line-item pricing" : "Modify phase-wise breakdown"}
               </Button>
-            )}
+            ) : canReviseReturnedReview ? (
+              <Button
+                onClick={() => nav(resubmitHref)}
+                variant="outline"
+                className="w-full mt-3 h-9 rounded-lg border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 gap-2"
+                data-testid="btn-resubmit-returned-review"
+              >
+                <Undo2 className="w-3.5 h-3.5" /> Revise &amp; Resubmit
+              </Button>
+            ) : null}
 
             <div className="mt-4 space-y-1.5 text-xs">
               <Row label={`${isRndReview ? "R&D" : "TPM"} requested`} value={fmtCurrency(requestedBudget, { compact: false })} />
@@ -547,7 +599,9 @@ const BudgetReviewWorkspace = () => {
               <div className="mt-4 rounded-lg border border-white/5 bg-white/[0.02] p-3">
                 <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Review status</div>
                 <div className="text-xs text-zinc-300 leading-relaxed">
-                  This request is visible for tracking only. Approval, return, and rejection actions are restricted to CTO in this workspace.
+                  {canReviseReturnedReview
+                    ? `CTO returned this request to ${review.returnedTo || role} for revision. Review the notes here, then use Revise & Resubmit to update the ask and send it back through the same approval flow.`
+                    : "This request is visible for tracking only. Approval, return, and rejection actions are restricted to CTO in this workspace."}
                 </div>
               </div>
             )}
