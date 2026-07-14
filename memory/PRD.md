@@ -426,3 +426,36 @@ Added a first-time user onboarding modal and stripped demo-data helpers.
 - Added: `frontend/src/components/WorkflowGuideDialog.jsx` (+160 lines)
 - Modified: `frontend/src/pages/Login.jsx` (+20 lines), `frontend/src/components/layout/Sidebar.jsx` (+15 lines)
 - Reduced: `frontend/src/pages/cto/CtoDashboard.jsx` (-18 lines), `frontend/src/context/AppContext.jsx` (-40 lines)
+
+
+### 2026-02-14 · Persistent Backend Workspace Sync (SHARED)
+Migrated the entire workspace state layer from browser-only `localStorage` to a real MongoDB-backed FastAPI. Data now persists across cache clears, incognito sessions, other devices, and is visible to every role that signs into the shared workspace.
+
+**Backend (`backend/server.py`)**
+- New MongoDB collection: `workspace_state` (single document, `_id="singleton"`) — stores the full snapshot of all 15 slice keys.
+- `GET /api/workspace` → returns the full snapshot (empty dict if not yet initialised).
+- `PUT /api/workspace` → upsert-replaces the snapshot (adds `updatedAt` ISO timestamp).
+- Concurrency model: last-write-wins. Frontend debounces writes (800 ms) and refetches on tab focus so multiple roles/devices see each other's updates.
+
+**Frontend (`context/AppContext.jsx`)**
+- Added `BACKEND_URL`, `WORKSPACE_ENDPOINT`, `WORKSPACE_SLICE_KEYS` constants (all 15 keys).
+- Added `hydrated`, `syncStatus`, `saveTimerRef`, `lastSavedPayloadRef` bookkeeping.
+- **Initial hydration effect** — on mount, `GET /api/workspace`:
+  - If backend has data → populate all 15 setters from the snapshot.
+  - If backend is empty AND localStorage has data → PUT the localStorage snapshot to backend (one-time migration for users who already had projects/logs in their browser).
+  - Then set `hydrated=true`.
+- **Debounced save effect** — when any of the 15 slices change (after hydration), PUT full snapshot to `/api/workspace` after 800 ms of quiet.
+- **Focus refetch effect** — on window `focus`, refetch snapshot; if it changed on the server, apply it to local state (multi-user near-real-time sync without WebSockets).
+- Kept per-slice `localStorage.setItem` writes as offline-friendly cache (backend remains source of truth).
+- Exposed `hydrated` + `syncStatus` in the context value for future UI indicators.
+
+**End-to-end verified via headless browser:**
+1. **CTO** signs in on browser context A → creates `E2E-BackSync-2026` project via New Project dialog → project renders on page.
+2. Curl `GET /api/workspace` from external URL → new project visible in JSON payload with all fields (id `p-mrkhlvy8`, PRJ00994, TPM lead, etc.).
+3. **Fresh browser context B** (no shared localStorage/cookies) → sign in as **CFO** → navigate to `/projects` → same project visible in the list.
+
+**Files touched:**
+- Modified: `backend/server.py` (+~40 lines)
+- Modified: `frontend/src/context/AppContext.jsx` (~+140 lines net, per-slice localStorage writes retained as cache)
+
+**Deployment note:** After the user redeploys, the production URL will start persisting to the deployed MongoDB. Data entered on production is now permanent and shared across all sessions/devices/users on that URL.

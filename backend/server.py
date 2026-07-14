@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Body
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,7 +6,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
-from typing import List
+from typing import List, Any, Dict
 import uuid
 from datetime import datetime, timezone
 
@@ -65,6 +65,46 @@ async def get_status_checks():
             check['timestamp'] = datetime.fromisoformat(check['timestamp'])
     
     return status_checks
+
+
+# ---------------------------------------------------------------------------
+# Workspace state (shared across all users of the shared workspace)
+# ---------------------------------------------------------------------------
+# The frontend maintains ~15 slices of state (customProjects, taskLogs,
+# topupRequests, budgets, batchDeliveries, budgetReviews, changeRequests,
+# teamRemovals, modelKeys, itProvisioning, itMonthlyActuals, bufferPool,
+# buffers, recoveries, customModels). To keep the API surface minimal, we
+# persist the entire snapshot as ONE document in the `workspace_state`
+# collection. Reads return the full snapshot; writes upsert-replace it.
+# Concurrency model: last-write-wins, which is acceptable for this
+# single-team demo workspace.
+#
+# The frontend debounces writes (1s) and refetches on tab focus so multiple
+# roles/devices see each other's updates.
+# ---------------------------------------------------------------------------
+
+WORKSPACE_DOC_ID = "singleton"
+
+
+@api_router.get("/workspace")
+async def get_workspace_state() -> Dict[str, Any]:
+    """Return the full workspace state snapshot. Empty dict if not yet initialised."""
+    doc = await db.workspace_state.find_one({"_id": WORKSPACE_DOC_ID}, {"_id": 0})
+    return doc or {}
+
+
+@api_router.put("/workspace")
+async def put_workspace_state(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Replace the workspace state snapshot with the provided payload."""
+    payload = dict(payload or {})
+    payload["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    await db.workspace_state.update_one(
+        {"_id": WORKSPACE_DOC_ID},
+        {"$set": payload},
+        upsert=True,
+    )
+    return {"ok": True, "updatedAt": payload["updatedAt"]}
+
 
 # Include the router in the main app
 app.include_router(api_router)

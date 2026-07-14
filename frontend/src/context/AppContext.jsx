@@ -1,10 +1,37 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { USERS, ROLES, PROJECTS } from "../data/mockData";
 import { TEAM } from "../data/mockUsers";
 import { BEDROCK_MODELS } from "../data/mockCatalog";
 import { BUFFER } from "../data/mockCfo";
 import { formatBudgetTypeLabel, normalizeBudgetType, summarizeItProjectActuals } from "../lib/projectMetrics";
 import { buildCustomModelId } from "../lib/modelCatalog";
+
+// ---- Shared backend workspace sync ------------------------------------------------
+// The app now persists all workspace state to a real backend (MongoDB via FastAPI)
+// so data survives cache clears, incognito sessions, other devices, and is visible
+// to every role that signs into the shared workspace.
+// See backend/server.py — GET/PUT /api/workspace endpoints.
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+const WORKSPACE_ENDPOINT = `${BACKEND_URL}/api/workspace`;
+
+// Keys inside the workspace state doc. Order does not matter.
+const WORKSPACE_SLICE_KEYS = [
+  "buffers",
+  "bufferPool",
+  "recoveries",
+  "customModels",
+  "customProjects",
+  "taskLogs",
+  "topupRequests",
+  "budgets",
+  "batchDeliveries",
+  "budgetReviews",
+  "changeRequests",
+  "teamRemovals",
+  "modelKeys",
+  "itProvisioning",
+  "itMonthlyActuals",
+];
 
 const AppContext = createContext(null);
 const SESSION_KEY = "ethara.session.v1";
@@ -689,10 +716,18 @@ export const AppProvider = ({ children }) => {
   const [itProvisioningRequests, setItProvisioningRequests] = useState(() => readJSON(IT_PROVISIONING_KEY, []));
   const [itMonthlyActuals, setItMonthlyActuals] = useState(() => readJSON(IT_MONTHLY_ACTUALS_KEY, {}));
 
+  // Hydration + backend sync bookkeeping
+  const [hydrated, setHydrated] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("idle"); // idle | loading | saving | error
+  const saveTimerRef = useRef(null);
+  const lastSavedPayloadRef = useRef("");
+
   useEffect(() => {
     if (user) localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     else localStorage.removeItem(SESSION_KEY);
   }, [user]);
+
+  // Persist to localStorage as an offline-friendly cache (backend is source of truth).
   useEffect(() => localStorage.setItem(BUFFERS_KEY, JSON.stringify(buffers)), [buffers]);
   useEffect(() => localStorage.setItem(BUFFER_POOL_KEY, JSON.stringify(bufferPool)), [bufferPool]);
   useEffect(() => localStorage.setItem(RECOVERY_KEY, JSON.stringify(recoveries)), [recoveries]);
@@ -708,6 +743,185 @@ export const AppProvider = ({ children }) => {
   useEffect(() => localStorage.setItem(MODEL_KEYS_KEY, JSON.stringify(modelKeyRecords)), [modelKeyRecords]);
   useEffect(() => localStorage.setItem(IT_PROVISIONING_KEY, JSON.stringify(itProvisioningRequests)), [itProvisioningRequests]);
   useEffect(() => localStorage.setItem(IT_MONTHLY_ACTUALS_KEY, JSON.stringify(itMonthlyActuals)), [itMonthlyActuals]);
+
+  // Apply a snapshot returned from the backend into every local state slice.
+  const applyWorkspaceSnapshot = (snapshot) => {
+    if (!snapshot || typeof snapshot !== "object") return;
+    if (snapshot.buffers !== undefined) setBuffers(snapshot.buffers || {});
+    if (snapshot.bufferPool !== undefined && snapshot.bufferPool) setBufferPool(snapshot.bufferPool);
+    if (snapshot.recoveries !== undefined) setRecoveries(snapshot.recoveries || {});
+    if (snapshot.customModels !== undefined) setCustomModels(dedupeModels(snapshot.customModels || []));
+    if (snapshot.customProjects !== undefined) setCustomProjects(snapshot.customProjects || []);
+    if (snapshot.taskLogs !== undefined) setTaskLogs(snapshot.taskLogs || {});
+    if (snapshot.topupRequests !== undefined) setTopupRequests(snapshot.topupRequests || []);
+    if (snapshot.budgets !== undefined) setBudgets(snapshot.budgets || []);
+    if (snapshot.batchDeliveries !== undefined) setBatchDeliveries(snapshot.batchDeliveries || []);
+    if (snapshot.budgetReviews !== undefined) setBudgetReviews(snapshot.budgetReviews || []);
+    if (snapshot.changeRequests !== undefined) {
+      setChangeRequests((snapshot.changeRequests || []).map(normalizeChangeRequest));
+    }
+    if (snapshot.teamRemovals !== undefined) setTeamRemovals(snapshot.teamRemovals || {});
+    if (snapshot.modelKeys !== undefined) setModelKeyRecords(snapshot.modelKeys || []);
+    if (snapshot.itProvisioning !== undefined) setItProvisioningRequests(snapshot.itProvisioning || []);
+    if (snapshot.itMonthlyActuals !== undefined) setItMonthlyActuals(snapshot.itMonthlyActuals || {});
+  };
+
+  const fetchWorkspaceFromBackend = async () => {
+    const res = await fetch(WORKSPACE_ENDPOINT, { headers: { "Content-Type": "application/json" } });
+    if (!res.ok) throw new Error(`Workspace fetch failed: ${res.status}`);
+    return res.json();
+  };
+
+  // Initial hydration: pull backend, else migrate localStorage → backend.
+  useEffect(() => {
+    let cancelled = false;
+    setSyncStatus("loading");
+    (async () => {
+      try {
+        const remote = await fetchWorkspaceFromBackend();
+        const remoteHasData = remote && WORKSPACE_SLICE_KEYS.some((key) => {
+          const val = remote[key];
+          if (val === undefined || val === null) return false;
+          if (Array.isArray(val)) return val.length > 0;
+          if (typeof val === "object") return Object.keys(val).length > 0;
+          return true;
+        });
+        if (cancelled) return;
+        if (remoteHasData) {
+          applyWorkspaceSnapshot(remote);
+          lastSavedPayloadRef.current = JSON.stringify(WORKSPACE_SLICE_KEYS.reduce((acc, key) => {
+            acc[key] = remote[key] !== undefined ? remote[key] : null;
+            return acc;
+          }, {}));
+        } else {
+          // Backend empty — migrate any existing localStorage data upstream.
+          const localSnapshot = {
+            buffers: readJSON(BUFFERS_KEY, {}),
+            bufferPool: readJSON(BUFFER_POOL_KEY, null),
+            recoveries: readJSON(RECOVERY_KEY, {}),
+            customModels: readJSON(CUSTOM_MODELS_KEY, []),
+            customProjects: readJSON(CUSTOM_PROJECTS_KEY, []),
+            taskLogs: readJSON(TASK_LOGS_KEY, {}),
+            topupRequests: readJSON(TOPUP_REQ_KEY, []),
+            budgets: readJSON(BUDGETS_KEY, []),
+            batchDeliveries: readJSON(BATCH_DELIVERIES_KEY, []),
+            budgetReviews: readJSON(BUDGET_REVIEWS_KEY, []),
+            changeRequests: readJSON(CHANGE_REQUESTS_KEY, []),
+            teamRemovals: readJSON(TEAM_REMOVALS_KEY, {}),
+            modelKeys: readJSON(MODEL_KEYS_KEY, []),
+            itProvisioning: readJSON(IT_PROVISIONING_KEY, []),
+            itMonthlyActuals: readJSON(IT_MONTHLY_ACTUALS_KEY, {}),
+          };
+          const localHasData = WORKSPACE_SLICE_KEYS.some((key) => {
+            const val = localSnapshot[key];
+            if (val === undefined || val === null) return false;
+            if (Array.isArray(val)) return val.length > 0;
+            if (typeof val === "object") return Object.keys(val).length > 0;
+            return true;
+          });
+          if (localHasData) {
+            await fetch(WORKSPACE_ENDPOINT, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(localSnapshot),
+            });
+            lastSavedPayloadRef.current = JSON.stringify(localSnapshot);
+          } else {
+            lastSavedPayloadRef.current = "";
+          }
+        }
+        setSyncStatus("idle");
+      } catch (err) {
+        console.error("[workspace] initial sync failed", err);
+        if (!cancelled) setSyncStatus("error");
+      } finally {
+        if (!cancelled) setHydrated(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Debounced push of the full snapshot to the backend on any state change.
+  useEffect(() => {
+    if (!hydrated) return;
+    const snapshot = {
+      buffers,
+      bufferPool,
+      recoveries,
+      customModels,
+      customProjects,
+      taskLogs,
+      topupRequests,
+      budgets,
+      batchDeliveries,
+      budgetReviews,
+      changeRequests,
+      teamRemovals,
+      modelKeys: modelKeyRecords,
+      itProvisioning: itProvisioningRequests,
+      itMonthlyActuals,
+    };
+    const serialized = JSON.stringify(snapshot);
+    if (serialized === lastSavedPayloadRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(async () => {
+      setSyncStatus("saving");
+      try {
+        const res = await fetch(WORKSPACE_ENDPOINT, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: serialized,
+        });
+        if (!res.ok) throw new Error(`Workspace save failed: ${res.status}`);
+        lastSavedPayloadRef.current = serialized;
+        setSyncStatus("idle");
+      } catch (err) {
+        console.error("[workspace] save failed", err);
+        setSyncStatus("error");
+      }
+    }, 800);
+    return () => {
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    };
+  }, [
+    hydrated,
+    buffers,
+    bufferPool,
+    recoveries,
+    customModels,
+    customProjects,
+    taskLogs,
+    topupRequests,
+    budgets,
+    batchDeliveries,
+    budgetReviews,
+    changeRequests,
+    teamRemovals,
+    modelKeyRecords,
+    itProvisioningRequests,
+    itMonthlyActuals,
+  ]);
+
+  // Refetch on tab focus so multiple roles/devices see each other's changes.
+  useEffect(() => {
+    if (!hydrated) return undefined;
+    const onFocus = async () => {
+      try {
+        const remote = await fetchWorkspaceFromBackend();
+        const serialized = JSON.stringify(WORKSPACE_SLICE_KEYS.reduce((acc, key) => {
+          acc[key] = remote[key] !== undefined ? remote[key] : null;
+          return acc;
+        }, {}));
+        if (serialized === lastSavedPayloadRef.current) return;
+        applyWorkspaceSnapshot(remote);
+        lastSavedPayloadRef.current = serialized;
+      } catch (err) {
+        console.error("[workspace] focus refresh failed", err);
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [hydrated]);
 
   const login = ({ email, password, role }) => {
     if (role) {
@@ -2393,6 +2607,8 @@ export const AppProvider = ({ children }) => {
     user,
     role,
     isAuth: !!user,
+    hydrated,
+    syncStatus,
     login,
     logout,
     roles: ROLES,
