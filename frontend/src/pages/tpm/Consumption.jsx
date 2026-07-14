@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
@@ -12,13 +12,24 @@ import {
 } from "lucide-react";
 import { buildExecutionProjectView, buildItActualDailyRows, buildLoggedDailyRows, isProjectInRndLane, isProjectInTpmLane } from "../../lib/projectMetrics";
 
-const buildTrailingDates = (anchorDate, days) => {
+const shiftDate = (anchorDate, days) => {
   const anchor = new Date(anchorDate);
-  return Array.from({ length: days }, (_, index) => {
-    const date = new Date(anchor);
-    date.setDate(anchor.getDate() - (days - index - 1));
-    return date.toISOString().slice(0, 10);
-  });
+  anchor.setDate(anchor.getDate() + days);
+  return anchor.toISOString().slice(0, 10);
+};
+
+const buildDateRange = (startDate, endDate) => {
+  if (!startDate || !endDate) return [];
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+  const dates = [];
+  const cursor = new Date(start);
+  while (cursor <= end) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return dates;
 };
 
 // Heat intensity helper — % of approved daily budget consumed
@@ -40,7 +51,8 @@ const Consumption = () => {
   const usageOptions = useMemo(() => ({ lane: executionLane }), [executionLane]);
   const today = new Date().toISOString().slice(0, 10);
   const [selectedProjectId, setSelectedProjectId] = useState("all");
-  const [windowDays, setWindowDays] = useState(14);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const allDashboardProjects = useMemo(
     () => visibleProjects
       .filter((project) => (isRnd ? isProjectInRndLane(project) : isProjectInTpmLane(project)))
@@ -62,7 +74,33 @@ const Consumption = () => {
     [dashboardProjects, itMonthlyActuals]
   );
   const latestDate = dailyRows[dailyRows.length - 1]?.date || today;
-  const todayRows = dailyRows.filter((row) => row.date === latestDate);
+  useEffect(() => {
+    if (!dateTo) setDateTo(latestDate);
+    if (!dateFrom) setDateFrom(shiftDate(latestDate, -13));
+  }, [dateFrom, dateTo, latestDate]);
+
+  const normalizedRange = useMemo(() => {
+    const fallbackTo = dateTo || latestDate;
+    const fallbackFrom = dateFrom || shiftDate(fallbackTo, -13);
+    return fallbackFrom <= fallbackTo
+      ? { from: fallbackFrom, to: fallbackTo }
+      : { from: fallbackTo, to: fallbackFrom };
+  }, [dateFrom, dateTo, latestDate]);
+  const heatDates = useMemo(
+    () => buildDateRange(normalizedRange.from, normalizedRange.to),
+    [normalizedRange.from, normalizedRange.to]
+  );
+  const projectIds = dashboardProjects.map((project) => project.id);
+  const heatmap = useMemo(() => ({ dates: heatDates, rows: projectIds }), [heatDates, projectIds]);
+  const actualMap = useMemo(() => (
+    new Map(itActualRows.map((row) => [`${row.projectId}::${row.date}`, row]))
+  ), [itActualRows]);
+  const scopedDailyRows = useMemo(
+    () => dailyRows.filter((row) => row.date >= normalizedRange.from && row.date <= normalizedRange.to),
+    [dailyRows, normalizedRange.from, normalizedRange.to]
+  );
+  const displayDate = scopedDailyRows[scopedDailyRows.length - 1]?.date || normalizedRange.to || latestDate;
+  const todayRows = scopedDailyRows.filter((row) => row.date === displayDate);
 
   const totals = useMemo(() => (
     todayRows.reduce(
@@ -74,18 +112,6 @@ const Consumption = () => {
       { tasks: 0, trajectories: 0, cost: 0 }
     )
   ), [todayRows]);
-
-  const heatDates = useMemo(() => buildTrailingDates(latestDate, windowDays), [latestDate, windowDays]);
-  const firstHeatDate = heatDates[0] || latestDate;
-  const projectIds = dashboardProjects.map((project) => project.id);
-  const heatmap = useMemo(() => ({ dates: heatDates, rows: projectIds }), [heatDates, projectIds]);
-  const actualMap = useMemo(() => (
-    new Map(itActualRows.map((row) => [`${row.projectId}::${row.date}`, row]))
-  ), [itActualRows]);
-  const scopedDailyRows = useMemo(
-    () => dailyRows.filter((row) => row.date >= firstHeatDate),
-    [dailyRows, firstHeatDate]
-  );
 
   const cellFor = (projectId, date) => {
     const entry = scopedDailyRows.find((row) => row.projectId === projectId && row.date === date);
@@ -104,7 +130,7 @@ const Consumption = () => {
     const logged = entries.reduce((sum, row) => sum + Number(row.spent || 0), 0);
     const allocated = entries.reduce((sum, row) => sum + Number(row.approvedDaily || 0), 0);
     return {
-      name: project.name.split(" ")[0],
+      name: project.name,
       allocated,
       logged,
       remaining: Math.max(allocated - logged, 0),
@@ -137,7 +163,7 @@ const Consumption = () => {
             Logged daily consumption
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            {new Date(latestDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · task logs roll up here automatically for {isRnd ? "your R&D projects" : "your production projects"}
+            {new Date(displayDate).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} · task logs roll up here automatically for {isRnd ? "your R&D projects" : "your production projects"}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -154,17 +180,21 @@ const Consumption = () => {
               </option>
             ))}
           </select>
-          <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1" data-testid="consumption-date-filter">
-            {[7, 14, 30].map((days) => (
-              <button
-                key={days}
-                type="button"
-                onClick={() => setWindowDays(days)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${windowDays === days ? "bg-fuchsia-500/15 text-fuchsia-300" : "text-zinc-400 hover:text-zinc-100"}`}
-              >
-                Last {days}d
-              </button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap" data-testid="consumption-date-filter">
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+              aria-label="From date"
+              className="h-10 px-3 rounded-lg bg-[#12121A] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+            />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+              aria-label="To date"
+              className="h-10 px-3 rounded-lg bg-[#12121A] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+            />
           </div>
         </div>
       </div>
@@ -215,7 +245,7 @@ const Consumption = () => {
                 return (
                   <tr key={projectId} data-testid={`heat-row-${projectId}`}>
                     <td className="text-xs text-zinc-200 pr-3 py-0.5 whitespace-nowrap sticky left-0 bg-[#12121A]">
-                      <div className="truncate max-w-[140px]">{project.name}</div>
+                      <div className="max-w-[220px]" title={project.name}>{project.name}</div>
                     </td>
                     {heatmap.dates.map((date) => {
                       const cell = cellFor(projectId, date);
@@ -247,15 +277,15 @@ const Consumption = () => {
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="chart-approved-vs-actual">
         <div className="flex items-start justify-between mb-4">
           <div>
-            <div className="font-display font-semibold text-[15px] text-white">Allocated vs logged (last 15 days)</div>
-            <div className="text-xs text-zinc-500 mt-0.5">Daily budget allocation compared against task-log spend per project</div>
+            <div className="font-display font-semibold text-[15px] text-white">Allocated vs logged (selected range)</div>
+            <div className="text-xs text-zinc-500 mt-0.5">Daily budget allocation compared against task-log spend per project for the chosen dates</div>
           </div>
         </div>
         <div className="h-[260px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={perProject}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} interval={0} height={56} />
               <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`} />
               <Tooltip
                 contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }}

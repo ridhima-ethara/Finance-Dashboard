@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
 import {
@@ -15,17 +15,18 @@ import {
   Plus,
   Trash2,
   AlertTriangle,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
-import { BEDROCK_MODELS } from "../data/mockCatalog";
+import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../lib/modelCatalog";
 
 const uid = (prefix = "row") => `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
-const findModelMeta = (value = "") => {
+const findModelMeta = (modelCatalog = [], value = "") => {
   const needle = String(value || "").trim().toLowerCase();
-  return BEDROCK_MODELS.find((model) => {
+  return modelCatalog.find((model) => {
     const candidates = [
       model.id,
       model.name,
@@ -33,11 +34,11 @@ const findModelMeta = (value = "") => {
       `${model.name} ${model.provider}`,
     ];
     return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === needle);
-  }) || BEDROCK_MODELS.find((model) => String(model.name || "").trim().toLowerCase() === needle) || null;
+  }) || modelCatalog.find((model) => String(model.name || "").trim().toLowerCase() === needle) || null;
 };
 
-const buildSheetRow = (seed = {}) => {
-  const meta = findModelMeta(seed.modelId || seed.modelName) || BEDROCK_MODELS[0];
+const buildSheetRow = (modelCatalog = [], seed = {}) => {
+  const meta = findModelMeta(modelCatalog, seed.modelId || seed.modelName) || modelCatalog[0];
   const inputTokens = Number(seed.inputTokens || 0);
   const outputTokens = Number(seed.outputTokens || 0);
   return {
@@ -56,9 +57,7 @@ const buildSheetRow = (seed = {}) => {
 };
 
 const rowHasData = (row = {}) => Boolean(
-  row.modelId
-  || row.modelName
-  || row.task
+  row.task
   || row.stage
   || Number(row.cost || 0)
   || Number(row.llmCalls || 0)
@@ -66,17 +65,19 @@ const rowHasData = (row = {}) => Boolean(
   || Number(row.outputTokens || 0)
 );
 
-const normalizeRows = (rows = []) => (Array.isArray(rows) ? rows : []).map((row) => buildSheetRow(row));
+const normalizeRows = (rows = [], modelCatalog = []) => (
+  (Array.isArray(rows) ? rows : []).map((row) => buildSheetRow(modelCatalog, row))
+);
 
-const buildInitialSuccessfulRows = (editingLog) => {
+const buildInitialSuccessfulRows = (editingLog, modelCatalog = []) => {
   if (Array.isArray(editingLog?.successfulRows) && editingLog.successfulRows.length) {
-    return normalizeRows(editingLog.successfulRows);
+    return normalizeRows(editingLog.successfulRows, modelCatalog);
   }
   if (Array.isArray(editingLog?.modelUsage) && editingLog.modelUsage.length) {
-    return editingLog.modelUsage.map((row) => buildSheetRow({
+    return editingLog.modelUsage.map((row) => buildSheetRow(modelCatalog, {
       modelId: row.modelId,
       modelName: row.modelName,
-      task: "Imported task log",
+      task: row.tasksDone ? String(row.tasksDone) : "Imported task log",
       stage: "Execution",
       inputTokens: row.inputTokens,
       outputTokens: row.outputTokens,
@@ -84,56 +85,86 @@ const buildInitialSuccessfulRows = (editingLog) => {
       cost: row.cost,
     }));
   }
-  return [buildSheetRow()];
+  return [buildSheetRow(modelCatalog)];
 };
 
-const buildInitialFailedRows = (editingLog) => {
+const buildInitialFailedRows = (editingLog, modelCatalog = []) => {
   if (Array.isArray(editingLog?.failedRows) && editingLog.failedRows.length) {
-    return normalizeRows(editingLog.failedRows);
+    return normalizeRows(editingLog.failedRows, modelCatalog);
   }
   return [];
 };
 
-const splitLine = (line, delimiter) => {
-  if (delimiter === "\t") return line.split("\t");
-  return line.split(",").map((part) => part.trim());
-};
-
 const normalizeHeaderKey = (value = "") => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 
-const parseSheetText = (text = "") => {
-  const lines = String(text || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  if (!lines.length) return [];
+const parseNumericCell = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const normalized = String(value ?? "")
+    .replace(/[$,%\s]/g, "")
+    .replace(/,/g, "")
+    .trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
-  const delimiter = lines[0].includes("\t") ? "\t" : ",";
-  const firstRow = splitLine(lines[0], delimiter);
-  const headerKeys = firstRow.map(normalizeHeaderKey);
+const parseTaskQuantity = (value) => {
+  const normalized = String(value ?? "").replace(/,/g, "").trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const getRowTaskQuantity = (row = {}) => {
+  const explicit = parseTaskQuantity(row.task);
+  return explicit > 0 ? explicit : 1;
+};
+
+const sumRowTaskQuantity = (rows = []) => (
+  (Array.isArray(rows) ? rows : []).reduce((sum, row) => sum + (rowHasData(row) ? getRowTaskQuantity(row) : 0), 0)
+);
+
+const displayDraftNumber = (value, { decimals = null } = {}) => {
+  const numeric = Number(value || 0);
+  if (!numeric) return "";
+  return decimals === null ? String(numeric) : numeric.toFixed(decimals);
+};
+
+const toDraftCountString = (value) => {
+  const numeric = Number(value || 0);
+  return numeric > 0 ? String(numeric) : "";
+};
+
+const parseSheetGrid = (grid = [], modelCatalog = []) => {
+  const rows = (Array.isArray(grid) ? grid : [])
+    .map((row) => (Array.isArray(row) ? row : [row]))
+    .map((row) => row.map((cell) => (typeof cell === "string" ? cell.trim() : cell)))
+    .filter((row) => row.some((cell) => String(cell ?? "").trim()));
+  if (!rows.length) return [];
+
+  const headerKeys = rows[0].map(normalizeHeaderKey);
   const hasHeader = headerKeys.includes("model") || headerKeys.includes("modelname");
   const columns = hasHeader
     ? headerKeys
     : ["model", "task", "stage", "inputtokens", "inputtokensm", "outputtokens", "outputtokensm", "llmcalls", "cost"];
-  const dataLines = hasHeader ? lines.slice(1) : lines;
+  const dataRows = hasHeader ? rows.slice(1) : rows;
 
-  return dataLines.map((line) => {
-    const cells = splitLine(line, delimiter);
+  return dataRows.map((cells) => {
     const record = {};
     columns.forEach((column, index) => {
       const cell = cells[index] ?? "";
-      if (column === "model" || column === "modelname") record.model = cell;
-      if (column === "task") record.task = cell;
-      if (column === "stage") record.stage = cell;
-      if (column === "inputtokens") record.inputTokens = Number(cell || 0);
-      if (column === "inputtokensm") record.inputTokensM = Number(cell || 0);
-      if (column === "outputtokens") record.outputTokens = Number(cell || 0);
-      if (column === "outputtokensm") record.outputTokensM = Number(cell || 0);
-      if (column === "llmcalls") record.llmCalls = Number(cell || 0);
-      if (column === "cost" || column === "cost$" || column === "costusd") record.cost = Number(cell || 0);
+      if (column === "model" || column === "modelname") record.model = String(cell || "").trim();
+      if (column === "task") record.task = String(cell || "").trim();
+      if (column === "stage") record.stage = String(cell || "").trim();
+      if (column === "inputtokens") record.inputTokens = parseNumericCell(cell);
+      if (column === "inputtokensm") record.inputTokensM = parseNumericCell(cell);
+      if (column === "outputtokens") record.outputTokens = parseNumericCell(cell);
+      if (column === "outputtokensm") record.outputTokensM = parseNumericCell(cell);
+      if (column === "llmcall" || column === "llmcalls") record.llmCalls = parseNumericCell(cell);
+      if (column === "cost" || column === "cost$" || column === "costusd") record.cost = parseNumericCell(cell);
     });
-    const meta = findModelMeta(record.model);
-    return buildSheetRow({
+    const meta = findModelMeta(modelCatalog, record.model);
+    return buildSheetRow(modelCatalog, {
       modelId: meta?.id || "",
       modelName: meta?.name || record.model || "",
       task: record.task,
@@ -159,7 +190,7 @@ const aggregateRowsByModel = (rows = []) => {
       inputTokens: 0,
       outputTokens: 0,
     };
-    acc[key].tasksDone += 1;
+    acc[key].tasksDone += getRowTaskQuantity(row);
     acc[key].cost += Number(row.cost || 0);
     acc[key].inputTokens += Number(row.inputTokens || 0);
     acc[key].outputTokens += Number(row.outputTokens || 0);
@@ -169,7 +200,7 @@ const aggregateRowsByModel = (rows = []) => {
 };
 
 const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) => {
-  const { logPhaseTask, updatePhaseTask, getPhaseLogs, visibleProjects, user } = useApp();
+  const { logPhaseTask, updatePhaseTask, getPhaseLogs, visibleProjects, user, modelCatalog, addCustomModel } = useApp();
   const isEdit = !!editingLog;
 
   const projectList = useMemo(() => (project ? [project] : visibleProjects), [project, visibleProjects]);
@@ -189,30 +220,39 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
   const currentPhase = projectPhases.find((entry) => entry.id === phaseId) || phase || null;
 
-  const [successfulTasks, setSuccessfulTasks] = useState(editingLog?.successfulTasks ?? editingLog?.tasksDone ?? 0);
-  const [failedTasks, setFailedTasks] = useState(editingLog?.failedTasks ?? 0);
-  const [successTrajectories, setSuccessTrajectories] = useState(editingLog?.successTrajectories ?? editingLog?.trajectories ?? 0);
-  const [failedTrajectories, setFailedTrajectories] = useState(editingLog?.failedTrajectories ?? 0);
+  const [successfulTasks, setSuccessfulTasks] = useState(toDraftCountString(editingLog?.successfulTasks ?? editingLog?.tasksDone));
+  const [failedTasks, setFailedTasks] = useState(toDraftCountString(editingLog?.failedTasks));
+  const [successTrajectories, setSuccessTrajectories] = useState(toDraftCountString(editingLog?.successTrajectories ?? editingLog?.trajectories));
+  const [failedTrajectories, setFailedTrajectories] = useState(toDraftCountString(editingLog?.failedTrajectories));
   const [date, setDate] = useState(editingLog?.date || new Date().toISOString().slice(0, 10));
   const [notes, setNotes] = useState(editingLog?.notes || "");
-  const [successfulRows, setSuccessfulRows] = useState(() => buildInitialSuccessfulRows(editingLog));
-  const [failedRows, setFailedRows] = useState(() => buildInitialFailedRows(editingLog));
-  const [successPaste, setSuccessPaste] = useState("");
-  const [failedPaste, setFailedPaste] = useState("");
+  const [successfulRows, setSuccessfulRows] = useState(() => buildInitialSuccessfulRows(editingLog, modelCatalog));
+  const [failedRows, setFailedRows] = useState(() => buildInitialFailedRows(editingLog, modelCatalog));
+  const [successImportMeta, setSuccessImportMeta] = useState(null);
+  const [failedImportMeta, setFailedImportMeta] = useState(null);
+  const wasOpenRef = useRef(false);
+  const lastEditingLogIdRef = useRef(editingLog?.id || null);
 
   useEffect(() => {
-    if (!open) return;
-    setSuccessfulTasks(editingLog?.successfulTasks ?? editingLog?.tasksDone ?? 0);
-    setFailedTasks(editingLog?.failedTasks ?? 0);
-    setSuccessTrajectories(editingLog?.successTrajectories ?? editingLog?.trajectories ?? 0);
-    setFailedTrajectories(editingLog?.failedTrajectories ?? 0);
-    setDate(editingLog?.date || new Date().toISOString().slice(0, 10));
-    setNotes(editingLog?.notes || "");
-    setSuccessfulRows(buildInitialSuccessfulRows(editingLog));
-    setFailedRows(buildInitialFailedRows(editingLog));
-    setSuccessPaste("");
-    setFailedPaste("");
-  }, [editingLog, open]);
+    const openedNow = open && !wasOpenRef.current;
+    const editingLogChanged = open && lastEditingLogIdRef.current !== (editingLog?.id || null);
+
+    if (openedNow || editingLogChanged) {
+      setSuccessfulTasks(toDraftCountString(editingLog?.successfulTasks ?? editingLog?.tasksDone));
+      setFailedTasks(toDraftCountString(editingLog?.failedTasks));
+      setSuccessTrajectories(toDraftCountString(editingLog?.successTrajectories ?? editingLog?.trajectories));
+      setFailedTrajectories(toDraftCountString(editingLog?.failedTrajectories));
+      setDate(editingLog?.date || new Date().toISOString().slice(0, 10));
+      setNotes(editingLog?.notes || "");
+      setSuccessfulRows(buildInitialSuccessfulRows(editingLog, modelCatalog));
+      setFailedRows(buildInitialFailedRows(editingLog, modelCatalog));
+      setSuccessImportMeta(null);
+      setFailedImportMeta(null);
+    }
+
+    wasOpenRef.current = open;
+    lastEditingLogIdRef.current = editingLog?.id || null;
+  }, [editingLog, modelCatalog, open]);
 
   const existingLogs = useMemo(
     () => (activeProject && phaseId ? getPhaseLogs(activeProject.id, phaseId) : []),
@@ -227,8 +267,10 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   const populatedSuccessRows = useMemo(() => successfulRows.filter(rowHasData), [successfulRows]);
   const populatedFailedRows = useMemo(() => failedRows.filter(rowHasData), [failedRows]);
   const allRows = useMemo(() => [...populatedSuccessRows, ...populatedFailedRows], [populatedSuccessRows, populatedFailedRows]);
-  const derivedSuccessfulTasks = Number(successfulTasks || 0) || populatedSuccessRows.length;
-  const derivedFailedTasks = Number(failedTasks || 0) || populatedFailedRows.length;
+  const successfulTasksFromRows = useMemo(() => sumRowTaskQuantity(populatedSuccessRows), [populatedSuccessRows]);
+  const failedTasksFromRows = useMemo(() => sumRowTaskQuantity(populatedFailedRows), [populatedFailedRows]);
+  const derivedSuccessfulTasks = parseTaskQuantity(successfulTasks) || successfulTasksFromRows;
+  const derivedFailedTasks = parseTaskQuantity(failedTasks) || failedTasksFromRows;
   const derivedSuccessTrajectories = Number(successTrajectories || 0);
   const derivedFailedTrajectories = Number(failedTrajectories || 0);
 
@@ -254,17 +296,88 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     () => allRows.reduce((sum, row) => sum + Number(row.llmCalls || 0), 0),
     [allRows]
   );
+  const approvedDailyAllocation = useMemo(
+    () => Math.round(Number(activeProject?.approvedBudget || 0) / 30 * 100) / 100,
+    [activeProject?.approvedBudget]
+  );
+  const dailyAllocationVariance = approvedDailyAllocation - costTotal;
+  const dailyAllocationUtilization = approvedDailyAllocation > 0
+    ? Math.round((costTotal / approvedDailyAllocation) * 100)
+    : 0;
+  const modelConsumptionRows = useMemo(() => {
+    const grouped = allRows.reduce((acc, row) => {
+      const key = row.modelId || row.modelName || uid("mdl");
+      acc[key] = acc[key] || {
+        modelId: row.modelId || "",
+        modelName: row.modelName || "Unspecified model",
+        tasks: 0,
+        successfulCost: 0,
+        failedCost: 0,
+        totalCost: 0,
+        llmCalls: 0,
+        inputTokens: 0,
+        outputTokens: 0,
+      };
+      const cost = Number(row.cost || 0);
+      acc[key].tasks += getRowTaskQuantity(row);
+      acc[key].totalCost += cost;
+      acc[key].llmCalls += Number(row.llmCalls || 0);
+      acc[key].inputTokens += Number(row.inputTokens || 0);
+      acc[key].outputTokens += Number(row.outputTokens || 0);
+      if (populatedSuccessRows.some((entry) => entry.id === row.id)) {
+        acc[key].successfulCost += cost;
+      } else {
+        acc[key].failedCost += cost;
+      }
+      return acc;
+    }, {});
+
+    return Object.values(grouped)
+      .map((row) => ({
+        ...row,
+        sharePct: costTotal > 0 ? Math.round((row.totalCost / costTotal) * 100) : 0,
+      }))
+      .sort((left, right) => (
+        right.totalCost - left.totalCost
+          || right.inputTokens - left.inputTokens
+          || right.tasks - left.tasks
+      ));
+  }, [allRows, costTotal, populatedSuccessRows]);
   const doneAlreadyExcludingEdit = isEdit ? doneAlready - (Number(editingLog?.successfulTasks ?? editingLog?.tasksDone) || 0) : doneAlready;
   const projectedDone = doneAlreadyExcludingEdit + derivedSuccessfulTasks;
   const progressPct = phaseTotalTasks > 0 ? Math.min(100, Math.round((projectedDone / phaseTotalTasks) * 100)) : 0;
   const primaryUsage = [...modelUsage].sort((left, right) => Number(right.cost || 0) - Number(left.cost || 0))[0];
+  const modelOptions = useMemo(
+    () => modelCatalog.map((model) => ({
+      value: model.id,
+      label: buildModelOptionLabel(model),
+    })),
+    [modelCatalog]
+  );
+
+  const createAndSelectCustomModel = (setter, rowId) => {
+    const created = promptForCustomModel(addCustomModel);
+    if (!created) return;
+    setter((rows) => rows.map((row) => (
+      row.id === rowId
+        ? { ...row, modelId: created.id, modelName: created.name }
+        : row
+    )));
+    toast.success("Custom model added", {
+      description: `${created.name} · ${created.provider} is now available in all model dropdowns.`,
+    });
+  };
 
   const updateSheetRow = (setter, id, key, value) => {
+    if (key === "modelId" && value === ADD_CUSTOM_MODEL_OPTION) {
+      createAndSelectCustomModel(setter, id);
+      return;
+    }
     setter((rows) => rows.map((row) => {
       if (row.id !== id) return row;
       const next = { ...row, [key]: value };
       if (key === "modelId") {
-        const meta = BEDROCK_MODELS.find((model) => model.id === value);
+        const meta = modelCatalog.find((model) => model.id === value);
         next.modelName = meta?.name || "";
       }
       if (["inputTokens", "outputTokens", "llmCalls", "cost", "inputTokensM", "outputTokensM"].includes(key)) {
@@ -280,37 +393,64 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     }));
   };
 
-  const addSheetRow = (setter) => setter((rows) => [...rows, buildSheetRow()]);
+  const addSheetRow = (setter) => setter((rows) => [...rows, buildSheetRow(modelCatalog)]);
   const removeSheetRow = (setter, id) => setter((rows) => rows.filter((row) => row.id !== id));
 
-  const importSheetRows = (type) => {
-    const source = type === "success" ? successPaste : failedPaste;
-    const parsed = parseSheetText(source);
-    if (!parsed.length) {
-      toast.error("No valid task rows found in the pasted sheet");
+  const importSheetFile = async (type, file) => {
+    if (!file) return;
+    const lowerName = String(file.name || "").toLowerCase();
+    if (!/\.(csv|xlsx|xls)$/.test(lowerName)) {
+      toast.error("Upload a CSV or Excel file");
       return;
     }
-    const setter = type === "success" ? setSuccessfulRows : setFailedRows;
-    setter((rows) => {
-      const current = rows.filter(rowHasData);
-      return [...current, ...parsed];
-    });
-    if (type === "success") setSuccessPaste("");
-    if (type === "failed") setFailedPaste("");
-    toast.success(`${parsed.length} ${type === "success" ? "successful" : "failed"} row${parsed.length === 1 ? "" : "s"} imported`);
+
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = lowerName.endsWith(".csv")
+        ? XLSX.read(await file.text(), { type: "string" })
+        : XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const firstSheet = workbook.SheetNames[0];
+      const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], {
+        header: 1,
+        raw: false,
+        defval: "",
+      });
+      const parsed = parseSheetGrid(rawRows, modelCatalog);
+      if (!parsed.length) {
+        toast.error("No valid task rows found in the uploaded sheet");
+        return;
+      }
+
+      const setter = type === "success" ? setSuccessfulRows : setFailedRows;
+      const setMeta = type === "success" ? setSuccessImportMeta : setFailedImportMeta;
+      setter((rows) => {
+        const current = rows.filter(rowHasData);
+        return [...current, ...parsed];
+      });
+      setMeta({
+        fileName: file.name,
+        sheetName: firstSheet,
+        rowCount: parsed.length,
+      });
+      toast.success(`${parsed.length} ${type === "success" ? "successful" : "failed"} row${parsed.length === 1 ? "" : "s"} imported from ${file.name}`);
+    } catch (error) {
+      toast.error("Could not read that sheet", {
+        description: error?.message || "Please upload a valid CSV or Excel file.",
+      });
+    }
   };
 
   const reset = () => {
-    setSuccessfulTasks(0);
-    setFailedTasks(0);
-    setSuccessTrajectories(0);
-    setFailedTrajectories(0);
+    setSuccessfulTasks("");
+    setFailedTasks("");
+    setSuccessTrajectories("");
+    setFailedTrajectories("");
     setDate(new Date().toISOString().slice(0, 10));
     setNotes("");
-    setSuccessfulRows([buildSheetRow()]);
+    setSuccessfulRows([buildSheetRow(modelCatalog)]);
     setFailedRows([]);
-    setSuccessPaste("");
-    setFailedPaste("");
+    setSuccessImportMeta(null);
+    setFailedImportMeta(null);
   };
 
   const submit = () => {
@@ -451,28 +591,28 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             title="Successful task log"
             accent="fuchsia"
             rows={successfulRows}
-            pasteValue={successPaste}
-            onPasteChange={setSuccessPaste}
-            onImport={() => importSheetRows("success")}
+            modelOptions={modelOptions}
+            importMeta={successImportMeta}
+            onFileImport={(file) => importSheetFile("success", file)}
             onAddRow={() => addSheetRow(setSuccessfulRows)}
             onUpdateRow={(id, key, value) => updateSheetRow(setSuccessfulRows, id, key, value)}
             onRemoveRow={(id) => removeSheetRow(setSuccessfulRows, id)}
             testidPrefix="success"
-            helper="Paste rows copied from Excel / Sheets with columns: Model, Task, Stage, Input Tokens, Input Tokens (M), Output Tokens, Output Tokens (M), LLM Calls, Cost ($)."
+            helper="Upload the successful-task CSV / Excel sheet with columns: Model, Task, Stage, Input Tokens, Input Tokens (M), Output Tokens, Output Tokens (M), LLM Calls, Cost ($). The uploaded rows appear below in the manual editor."
           />
 
           <TaskSheetSection
             title="Failed task log"
             accent="amber"
             rows={failedRows}
-            pasteValue={failedPaste}
-            onPasteChange={setFailedPaste}
-            onImport={() => importSheetRows("failed")}
+            modelOptions={modelOptions}
+            importMeta={failedImportMeta}
+            onFileImport={(file) => importSheetFile("failed", file)}
             onAddRow={() => addSheetRow(setFailedRows)}
             onUpdateRow={(id, key, value) => updateSheetRow(setFailedRows, id, key, value)}
             onRemoveRow={(id) => removeSheetRow(setFailedRows, id)}
             testidPrefix="failed"
-            helper="Capture failed tasks separately so the daily burn, token usage, and utilization view keep both successful and failed effort visible."
+            helper="Upload the failed-task CSV / Excel sheet separately so the daily burn, token usage, and utilization view keeps failed effort visible too. You can still add manual rows below."
           />
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -480,8 +620,8 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
               <input
                 type="number"
                 min="0"
-                value={successfulTasks}
-                onChange={(e) => setSuccessfulTasks(Number(e.target.value) || 0)}
+                value={successfulTasks === "" ? displayDraftNumber(successfulTasksFromRows) : successfulTasks}
+                onChange={(e) => setSuccessfulTasks(e.target.value)}
                 data-testid="task-successful-count"
                 className={`${summaryInp} tabular`}
               />
@@ -490,8 +630,8 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
               <input
                 type="number"
                 min="0"
-                value={failedTasks}
-                onChange={(e) => setFailedTasks(Number(e.target.value) || 0)}
+                value={failedTasks === "" ? displayDraftNumber(failedTasksFromRows) : failedTasks}
+                onChange={(e) => setFailedTasks(e.target.value)}
                 data-testid="task-failed-count"
                 className={`${summaryInp} tabular`}
               />
@@ -501,7 +641,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                 type="number"
                 min="0"
                 value={successTrajectories}
-                onChange={(e) => setSuccessTrajectories(Number(e.target.value) || 0)}
+                onChange={(e) => setSuccessTrajectories(e.target.value)}
                 data-testid="task-successful-trajectories"
                 className={`${summaryInp} tabular`}
               />
@@ -511,7 +651,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                 type="number"
                 min="0"
                 value={failedTrajectories}
-                onChange={(e) => setFailedTrajectories(Number(e.target.value) || 0)}
+                onChange={(e) => setFailedTrajectories(e.target.value)}
                 data-testid="task-failed-trajectories"
                 className={`${summaryInp} tabular`}
               />
@@ -565,6 +705,89 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             </div>
           )}
 
+          {modelConsumptionRows.length > 0 && (
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4" data-testid="task-model-consumption">
+              <div className="mb-3">
+                <div className="text-sm font-semibold text-white">Model-wise consumption for the day</div>
+                <div className="text-[11px] text-zinc-500 mt-1">
+                  When multiple models are logged, each model&apos;s cost and token burn rolls into the total day spend below.
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[920px] text-sm">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                      <th className="text-left py-2 px-3">Model</th>
+                      <th className="text-right py-2 px-3">Tasks</th>
+                      <th className="text-right py-2 px-3">Success ($)</th>
+                      <th className="text-right py-2 px-3">Failed ($)</th>
+                      <th className="text-right py-2 px-3">Total ($)</th>
+                      <th className="text-right py-2 px-3">Day share</th>
+                      <th className="text-right py-2 px-3">LLM calls</th>
+                      <th className="text-right py-2 px-3">Input tokens</th>
+                      <th className="text-right py-2 px-3">Output tokens</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {modelConsumptionRows.map((row) => (
+                      <tr key={row.modelId || row.modelName} className="border-b border-white/5 last:border-b-0">
+                        <td className="py-2 px-3 text-white font-medium">{row.modelName}</td>
+                        <td className="py-2 px-3 text-right tabular text-zinc-300">{row.tasks.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right tabular text-emerald-300">{fmtCurrency(row.successfulCost, { compact: false })}</td>
+                        <td className="py-2 px-3 text-right tabular text-amber-300">{fmtCurrency(row.failedCost, { compact: false })}</td>
+                        <td className="py-2 px-3 text-right tabular text-fuchsia-300 font-semibold">{fmtCurrency(row.totalCost, { compact: false })}</td>
+                        <td className="py-2 px-3 text-right tabular text-zinc-200">{row.sharePct}%</td>
+                        <td className="py-2 px-3 text-right tabular text-zinc-300">{row.llmCalls.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right tabular text-zinc-300">{row.inputTokens.toLocaleString()}</td>
+                        <td className="py-2 px-3 text-right tabular text-zinc-300">{row.outputTokens.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-fuchsia-500/30">
+                      <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Day total</td>
+                      <td className="py-3 px-3 text-right tabular text-zinc-300">{modelConsumptionRows.reduce((sum, row) => sum + row.tasks, 0).toLocaleString()}</td>
+                      <td className="py-3 px-3 text-right tabular text-emerald-300">{fmtCurrency(successCost, { compact: false })}</td>
+                      <td className="py-3 px-3 text-right tabular text-amber-300">{fmtCurrency(failedCost, { compact: false })}</td>
+                      <td className="py-3 px-3 text-right tabular text-fuchsia-300 font-bold">{fmtCurrency(costTotal, { compact: false })}</td>
+                      <td className="py-3 px-3 text-right tabular text-zinc-200">{costTotal > 0 ? "100%" : "0%"}</td>
+                      <td className="py-3 px-3 text-right tabular text-zinc-300">{llmCallTotal.toLocaleString()}</td>
+                      <td className="py-3 px-3 text-right tabular text-zinc-300">{inputTokenTotal.toLocaleString()}</td>
+                      <td className="py-3 px-3 text-right tabular text-zinc-300">{outputTokenTotal.toLocaleString()}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Field label="Allocated / day">
+              <div className={`${summaryInp} ${approvedDailyAllocation > 0 ? "text-white" : "text-zinc-500"}`} data-testid="task-day-allocated">
+                {approvedDailyAllocation > 0 ? fmtCurrency(approvedDailyAllocation, { compact: false }) : "No approved daily allocation"}
+              </div>
+            </Field>
+            <Field label="Logged today">
+              <div className={`${summaryInp} text-fuchsia-300`} data-testid="task-day-logged">{fmtCurrency(costTotal, { compact: false })}</div>
+            </Field>
+            <Field label={dailyAllocationVariance >= 0 ? "Remaining vs day" : "Exceeded vs day"}>
+              <div
+                className={`${summaryInp} ${dailyAllocationVariance >= 0 ? "text-emerald-300" : "text-red-300"}`}
+                data-testid="task-day-variance"
+              >
+                {approvedDailyAllocation > 0 ? fmtCurrency(Math.abs(dailyAllocationVariance), { compact: false }) : "—"}
+              </div>
+            </Field>
+            <Field label="Day utilization">
+              <div
+                className={`${summaryInp} ${dailyAllocationUtilization > 100 ? "text-red-300" : dailyAllocationUtilization >= 80 ? "text-amber-300" : "text-zinc-100"}`}
+                data-testid="task-day-utilization"
+              >
+                {approvedDailyAllocation > 0 ? `${dailyAllocationUtilization}%` : "—"}
+              </div>
+            </Field>
+          </div>
+
           <Field label="Note / remark" hint="Optional">
             <div className="relative">
               <StickyNote className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-3 pointer-events-none" />
@@ -581,11 +804,11 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
           <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-3 flex items-start gap-2 text-[11px] text-zinc-300">
             <Coins className="w-3.5 h-3.5 text-fuchsia-300 flex-shrink-0 mt-0.5" />
-            Logged totals roll into the non-CFO dashboards as owned consumption, while CFO keeps the actual-vs-approved finance view. Failed-task rows are preserved too so utilization, burn, and alerts can reflect the full day effort.
+            Logged totals roll into the non-CFO dashboards as owned consumption, while CFO keeps the actual-vs-approved finance view. Day allocation above uses the same approved-daily-budget comparison surfaced in the consumption dashboards.
           </div>
           <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 flex items-start gap-2 text-[11px] text-amber-100">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
-            If you do not enter the successful / failed task totals manually, the log uses the imported row counts for that day.
+            If you leave the successful / failed task totals blank, the log automatically uses the uploaded task quantities for that day. Numeric task cells are summed; named task rows count as one task each.
           </div>
         </div>
 
@@ -628,9 +851,9 @@ const TaskSheetSection = ({
   title,
   helper,
   rows,
-  pasteValue,
-  onPasteChange,
-  onImport,
+  modelOptions,
+  importMeta,
+  onFileImport,
   onAddRow,
   onUpdateRow,
   onRemoveRow,
@@ -663,26 +886,42 @@ const TaskSheetSection = ({
       </div>
 
       <div className="grid gap-2 md:grid-cols-[1fr_auto] mb-3">
-        <textarea
-          value={pasteValue}
-          onChange={(e) => onPasteChange(e.target.value)}
-          rows={3}
-          placeholder="Paste Excel / Sheets rows here"
-          data-testid={`${testidPrefix}-paste`}
-          className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
-        />
-        <Button
-          type="button"
-          onClick={onImport}
-          data-testid={`${testidPrefix}-import`}
-          className="h-10 self-start rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200"
+        <label
+          className="h-11 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 text-sm text-zinc-200 flex items-center gap-2 cursor-pointer hover:bg-white/[0.06]"
+          data-testid={`${testidPrefix}-upload-label`}
         >
-          Import rows
-        </Button>
+          <Upload className={`w-4 h-4 ${accent === "amber" ? "text-amber-300" : "text-fuchsia-300"}`} />
+          Upload Excel / CSV
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onFileImport(file);
+              e.target.value = "";
+            }}
+            data-testid={`${testidPrefix}-upload`}
+            className="hidden"
+          />
+        </label>
+        <div className="text-[11px] text-zinc-500 self-center">
+          First sheet is extracted and loaded into the editable manual section below.
+        </div>
       </div>
+
+      {importMeta && (
+        <div className="mb-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300" data-testid={`${testidPrefix}-import-meta`}>
+          Imported <span className="text-white font-medium">{importMeta.fileName}</span>
+          {importMeta.sheetName ? <span> · Sheet: {importMeta.sheetName}</span> : null}
+          <span> · {importMeta.rowCount} row{importMeta.rowCount === 1 ? "" : "s"} loaded</span>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <div className="min-w-[1180px] space-y-2">
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+            Manual input section
+          </div>
           <div className="grid grid-cols-[1.35fr_1.1fr_.9fr_.9fr_.9fr_.9fr_.9fr_.8fr_.8fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
             <span>Model</span>
             <span>Task</span>
@@ -703,11 +942,15 @@ const TaskSheetSection = ({
                 data-testid={`${testidPrefix}-model-${row.id}`}
                 className={rowInp}
               >
-                {BEDROCK_MODELS.map((model) => (
-                  <option key={model.id} value={model.id} className="bg-[#12121A]">
-                    {model.name} · {model.provider}
+                <option value="">Select model</option>
+                {modelOptions.map((model) => (
+                  <option key={model.value} value={model.value} className="bg-[#12121A]">
+                    {model.label}
                   </option>
                 ))}
+                <option value={ADD_CUSTOM_MODEL_OPTION} className="bg-[#12121A]">
+                  + Add new model...
+                </option>
               </select>
               <input
                 value={row.task}
@@ -727,7 +970,7 @@ const TaskSheetSection = ({
                 type="number"
                 min="0"
                 step="1"
-                value={row.inputTokens}
+                value={displayDraftNumber(row.inputTokens)}
                 onChange={(e) => onUpdateRow(row.id, "inputTokens", e.target.value)}
                 data-testid={`${testidPrefix}-input-${row.id}`}
                 className={`${rowInp} text-right tabular`}
@@ -736,7 +979,7 @@ const TaskSheetSection = ({
                 type="number"
                 min="0"
                 step="0.001"
-                value={row.inputTokensM}
+                value={displayDraftNumber(row.inputTokensM, { decimals: 3 })}
                 onChange={(e) => onUpdateRow(row.id, "inputTokensM", e.target.value)}
                 data-testid={`${testidPrefix}-input-m-${row.id}`}
                 className={`${rowInp} text-right tabular`}
@@ -745,7 +988,7 @@ const TaskSheetSection = ({
                 type="number"
                 min="0"
                 step="1"
-                value={row.outputTokens}
+                value={displayDraftNumber(row.outputTokens)}
                 onChange={(e) => onUpdateRow(row.id, "outputTokens", e.target.value)}
                 data-testid={`${testidPrefix}-output-${row.id}`}
                 className={`${rowInp} text-right tabular`}
@@ -754,7 +997,7 @@ const TaskSheetSection = ({
                 type="number"
                 min="0"
                 step="0.001"
-                value={row.outputTokensM}
+                value={displayDraftNumber(row.outputTokensM, { decimals: 3 })}
                 onChange={(e) => onUpdateRow(row.id, "outputTokensM", e.target.value)}
                 data-testid={`${testidPrefix}-output-m-${row.id}`}
                 className={`${rowInp} text-right tabular`}
@@ -763,7 +1006,7 @@ const TaskSheetSection = ({
                 type="number"
                 min="0"
                 step="1"
-                value={row.llmCalls}
+                value={displayDraftNumber(row.llmCalls)}
                 onChange={(e) => onUpdateRow(row.id, "llmCalls", e.target.value)}
                 data-testid={`${testidPrefix}-calls-${row.id}`}
                 className={`${rowInp} text-right tabular`}
@@ -772,7 +1015,7 @@ const TaskSheetSection = ({
                 type="number"
                 min="0"
                 step="0.01"
-                value={row.cost}
+                value={displayDraftNumber(row.cost)}
                 onChange={(e) => onUpdateRow(row.id, "cost", e.target.value)}
                 data-testid={`${testidPrefix}-cost-${row.id}`}
                 className={`${rowInp} text-right tabular`}

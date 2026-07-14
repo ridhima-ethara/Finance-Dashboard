@@ -4,6 +4,7 @@ import { TEAM } from "../data/mockUsers";
 import { BEDROCK_MODELS } from "../data/mockCatalog";
 import { BUFFER } from "../data/mockCfo";
 import { formatBudgetTypeLabel, normalizeBudgetType, summarizeItProjectActuals } from "../lib/projectMetrics";
+import { buildCustomModelId } from "../lib/modelCatalog";
 
 const AppContext = createContext(null);
 const SESSION_KEY = "ethara.session.v1";
@@ -21,6 +22,7 @@ const MODEL_KEYS_KEY = "ethara.modelKeys.v2";
 const IT_PROVISIONING_KEY = "ethara.itProvisioning.v2";
 const BUFFER_POOL_KEY = "ethara.bufferPool.v2";
 const IT_MONTHLY_ACTUALS_KEY = "ethara.itMonthlyActuals.v2";
+const CUSTOM_MODELS_KEY = "ethara.customModels.v1";
 
 const readJSON = (key, fallback) => {
   try {
@@ -28,6 +30,73 @@ const readJSON = (key, fallback) => {
   } catch {
     return fallback;
   }
+};
+
+const normalizeModelRecord = (model = {}, index = 0) => ({
+  id: String(model.id || buildCustomModelId(model) || `custom.model.${index + 1}`),
+  name: String(model.name || `Custom model ${index + 1}`).trim(),
+  provider: String(model.provider || "Custom").trim(),
+  modality: String(model.modality || "Chat").trim(),
+  pricePer1kIn: Number(model.pricePer1kIn || 0),
+  pricePer1kOut: Number(model.pricePer1kOut || 0),
+  isCustom: Boolean(model.isCustom),
+});
+
+const dedupeModels = (models = []) => {
+  const seen = new Set();
+  return (Array.isArray(models) ? models : []).reduce((acc, model, index) => {
+    const normalized = normalizeModelRecord(model, index);
+    const idKey = String(normalized.id || "").trim().toLowerCase();
+    const nameKey = `${String(normalized.name || "").trim().toLowerCase()}::${String(normalized.provider || "").trim().toLowerCase()}`;
+    const key = idKey || nameKey;
+    if (!key || seen.has(key) || seen.has(nameKey)) return acc;
+    seen.add(key);
+    seen.add(nameKey);
+    acc.push(normalized);
+    return acc;
+  }, []);
+};
+
+const mergeModelCatalog = (baseModels = [], customModels = []) => {
+  const seen = new Set();
+  return [...(Array.isArray(baseModels) ? baseModels : []), ...dedupeModels(customModels)].reduce((acc, model, index) => {
+    const normalized = index < baseModels.length ? model : normalizeModelRecord(model, index);
+    const idKey = String(normalized.id || "").trim().toLowerCase();
+    const nameKey = `${String(normalized.name || "").trim().toLowerCase()}::${String(normalized.provider || "").trim().toLowerCase()}`;
+    if (!idKey && !nameKey) return acc;
+    if (seen.has(idKey) || seen.has(nameKey)) return acc;
+    if (idKey) seen.add(idKey);
+    if (nameKey) seen.add(nameKey);
+    acc.push(normalized);
+    return acc;
+  }, []);
+};
+
+const findModelInCatalog = (catalog = BEDROCK_MODELS, value = "") => {
+  const needle = String(value || "").trim().toLowerCase();
+  if (!needle) return null;
+  return (catalog || []).find((model) => {
+    const candidates = [
+      model.id,
+      model.name,
+      `${model.name} · ${model.provider}`,
+      `${model.name} ${model.provider}`,
+    ];
+    return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === needle);
+  }) || null;
+};
+
+const parseTaskQuantity = (value) => {
+  if (typeof value === "number") return Number.isFinite(value) && value > 0 ? value : 0;
+  const normalized = String(value ?? "").replace(/,/g, "").trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
+const getTaskQuantityFromRow = (row = {}) => {
+  const explicitQuantity = parseTaskQuantity(row.task);
+  return explicitQuantity > 0 ? explicitQuantity : 1;
 };
 
 const maskKey = (full) => `${full.slice(0, 7)}${"•".repeat(18)}${full.slice(-4)}`;
@@ -42,6 +111,8 @@ const providerPrefix = {
   OpenAI: "oai",
   Google: "gog",
   xAI: "xai",
+  "Moonshot AI": "kmi",
+  "Zhipu AI": "glm",
 };
 
 const buildSyntheticKey = ({ provider, env, seed }) => {
@@ -49,6 +120,54 @@ const buildSyntheticKey = ({ provider, env, seed }) => {
   const mode = env === "production" ? "live" : "test";
   const safeSeed = String(seed || "demo").replace(/[^a-z0-9]/gi, "").slice(0, 14) || Math.random().toString(36).slice(2, 10);
   return `sk-${prefix}-${mode}-${safeSeed}${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const resolveMemberNameFromEmail = (email = "") => {
+  const localPart = String(email || "").split("@")[0] || "";
+  const acronyms = {
+    ai: "AI",
+    cfo: "CFO",
+    cto: "CTO",
+    it: "IT",
+    pl: "PL",
+    ql: "QL",
+    rd: "R&D",
+    rnd: "R&D",
+    tpm: "TPM",
+  };
+  return localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((token) => {
+      const lowered = token.toLowerCase();
+      if (acronyms[lowered]) return acronyms[lowered];
+      return token.charAt(0).toUpperCase() + token.slice(1);
+    })
+    .join(" ") || email;
+};
+
+const findDirectoryMember = ({ name, email }) => {
+  const normalizedEmail = String(email || "").trim().toLowerCase();
+  if (normalizedEmail) {
+    const matchByEmail = [...TEAM, ...USERS].find((member) => String(member?.email || "").trim().toLowerCase() === normalizedEmail);
+    if (matchByEmail) return matchByEmail;
+  }
+  const normalizedName = String(name || "").trim().toLowerCase();
+  if (normalizedName) {
+    return [...TEAM, ...USERS].find((member) => String(member?.name || "").trim().toLowerCase() === normalizedName) || null;
+  }
+  return null;
+};
+
+const normalizeProjectMemberRole = (candidateRole = "", fallbackRole = "Member") => {
+  if (fallbackRole === "TPM") return "TPM";
+  if (fallbackRole === "R&D") return candidateRole === "Engineer" ? "Engineer" : "R&D";
+  if (fallbackRole === "PL / QL") {
+    if (candidateRole === "Quality Lead" || candidateRole === "QL") return "Quality Lead";
+    if (candidateRole === "Project Lead" || candidateRole === "PL") return "Project Lead";
+    return "PL / QL";
+  }
+  return candidateRole || fallbackRole;
 };
 
 const normalizeMemberRecord = (member, fallbackRole = "Member", fallbackStatus = "Pending kickoff") => ({
@@ -60,15 +179,18 @@ const normalizeMemberRecord = (member, fallbackRole = "Member", fallbackStatus =
   tasksDone: Number(member.tasksDone || 0),
 });
 
-const buildTeamMember = ({ projectId, name, role, fallbackStatus = "Pending kickoff", index = 0 }) => {
-  const member = TEAM.find((entry) => entry.name === name);
+const buildTeamMember = ({ projectId, name, email, role, fallbackStatus = "Pending kickoff", index = 0 }) => {
+  const member = findDirectoryMember({ name, email });
+  const resolvedEmail = email || member?.email || (name ? `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` : "");
+  const resolvedName = name || member?.name || resolveMemberNameFromEmail(resolvedEmail);
+  const resolvedRole = normalizeProjectMemberRole(member?.role || role || "", role || member?.role || "R&D");
   return normalizeMemberRecord({
     id: member?.id || `${projectId}-tm-${index + 1}`,
-    name,
-    role: role || member?.role || "R&D",
-    email: member?.email || `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai`,
+    name: resolvedName,
+    role: resolvedRole,
+    email: resolvedEmail,
     status: role === "TPM" ? "Online" : fallbackStatus,
-  }, role || member?.role || "R&D", fallbackStatus);
+  }, resolvedRole, fallbackStatus);
 };
 
 const mergeTeamMembers = (existing = [], incoming = []) => {
@@ -80,9 +202,9 @@ const mergeTeamMembers = (existing = [], incoming = []) => {
   return Array.from(merged.values());
 };
 
-const summarizeRequestedLines = (items = {}, fallbackProject) => {
+const summarizeRequestedLines = (items = {}, fallbackProject, modelCatalog = BEDROCK_MODELS) => {
   const modelLines = (items.models || []).map((line, index) => {
-    const meta = line.meta || BEDROCK_MODELS.find((model) => model.id === line.modelId);
+    const meta = line.meta || findModelInCatalog(modelCatalog, line.modelId || line.modelName);
     return {
       id: line.id || `mdl-${index + 1}`,
       modelId: line.modelId || meta?.id || "",
@@ -118,8 +240,8 @@ const summarizeRequestedLines = (items = {}, fallbackProject) => {
   };
 };
 
-const normalizeTaskSheetRow = (row = {}, index = 0, status = "success") => {
-  const modelMeta = BEDROCK_MODELS.find((model) => model.id === row.modelId || model.name === row.modelName);
+const normalizeTaskSheetRow = (row = {}, index = 0, status = "success", modelCatalog = BEDROCK_MODELS) => {
+  const modelMeta = findModelInCatalog(modelCatalog, row.modelId || row.modelName);
   const inputTokens = Number(row.inputTokens || 0);
   const outputTokens = Number(row.outputTokens || 0);
   return {
@@ -138,9 +260,9 @@ const normalizeTaskSheetRow = (row = {}, index = 0, status = "success") => {
   };
 };
 
-const normalizeTaskSheetRows = (rows = [], status = "success") =>
+const normalizeTaskSheetRows = (rows = [], status = "success", modelCatalog = BEDROCK_MODELS) =>
   (Array.isArray(rows) ? rows : [])
-    .map((row, index) => normalizeTaskSheetRow(row, index, status))
+    .map((row, index) => normalizeTaskSheetRow(row, index, status, modelCatalog))
     .filter((row) => (
       row.modelId
       || row.modelName
@@ -165,7 +287,7 @@ const aggregateTaskRowsToModelUsage = ({ successfulRows = [], failedRows = [], f
         inputTokens: 0,
         outputTokens: 0,
       };
-      acc[key].tasksDone += 1;
+      acc[key].tasksDone += getTaskQuantityFromRow(row);
       acc[key].cost += Number(row.cost || 0);
       acc[key].inputTokens += Number(row.inputTokens || 0);
       acc[key].outputTokens += Number(row.outputTokens || 0);
@@ -245,6 +367,37 @@ const sumBudgetItems = (items = {}) =>
   sumBudgetLines(items.models) + sumBudgetLines(items.infra) + sumBudgetLines(items.subs);
 
 const clonePhases = (phases = []) => phases.map((phase) => ({ ...phase }));
+
+const normalizeBreakdownEntries = (section = {}, fallbackProvider = "") => {
+  const rawEntries = Array.isArray(section?.entries) && section.entries.length
+    ? section.entries
+    : section?.enabled || section?.amount || section?.optionId || section?.optionLabel || section?.note
+      ? [section]
+      : [];
+
+  return rawEntries
+    .map((entry, index) => ({
+      id: entry.id || `${String(fallbackProvider || "entry").toLowerCase()}-${index + 1}`,
+      optionId: entry.optionId || "",
+      optionLabel: String(entry.optionLabel || entry.label || "").trim(),
+      note: String(entry.note || "").trim(),
+      amount: Number(entry.amount || entry.estCost || 0),
+      provider: String(entry.provider || fallbackProvider || "").trim(),
+      billingUnit: entry.billingUnit || "",
+    }))
+    .filter((entry) => entry.amount > 0 || entry.optionLabel || entry.note);
+};
+
+const buildNormalizedBreakdownSection = (entries = [], extra = {}) => {
+  if (!entries.length) return null;
+  return {
+    amount: entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
+    optionLabel: entries.map((entry) => entry.optionLabel).filter(Boolean).join(" | "),
+    note: entries.map((entry) => entry.note).filter(Boolean).join(" | "),
+    entries,
+    ...extra,
+  };
+};
 
 const getPendingWorkflowMeta = (budgetType = "") => {
   const normalized = normalizeBudgetType(budgetType);
@@ -523,6 +676,7 @@ export const AppProvider = ({ children }) => {
     projectConsumed: Object.fromEntries(BUFFER.perProject.map((entry) => [entry.id, entry.consumed])),
   }));
   const [recoveries, setRecoveries] = useState(() => readJSON(RECOVERY_KEY, {}));
+  const [customModels, setCustomModels] = useState(() => dedupeModels(readJSON(CUSTOM_MODELS_KEY, [])));
   const [customProjects, setCustomProjects] = useState(() => readJSON(CUSTOM_PROJECTS_KEY, []));
   const [taskLogs, setTaskLogs] = useState(() => readJSON(TASK_LOGS_KEY, {}));
   const [topupRequests, setTopupRequests] = useState(() => readJSON(TOPUP_REQ_KEY, []));
@@ -542,6 +696,7 @@ export const AppProvider = ({ children }) => {
   useEffect(() => localStorage.setItem(BUFFERS_KEY, JSON.stringify(buffers)), [buffers]);
   useEffect(() => localStorage.setItem(BUFFER_POOL_KEY, JSON.stringify(bufferPool)), [bufferPool]);
   useEffect(() => localStorage.setItem(RECOVERY_KEY, JSON.stringify(recoveries)), [recoveries]);
+  useEffect(() => localStorage.setItem(CUSTOM_MODELS_KEY, JSON.stringify(customModels)), [customModels]);
   useEffect(() => localStorage.setItem(CUSTOM_PROJECTS_KEY, JSON.stringify(customProjects)), [customProjects]);
   useEffect(() => localStorage.setItem(TASK_LOGS_KEY, JSON.stringify(taskLogs)), [taskLogs]);
   useEffect(() => localStorage.setItem(TOPUP_REQ_KEY, JSON.stringify(topupRequests)), [topupRequests]);
@@ -571,6 +726,35 @@ export const AppProvider = ({ children }) => {
     return { ok: true, user: safe };
   };
   const logout = () => setUser(null);
+
+  const modelCatalog = useMemo(
+    () => mergeModelCatalog(BEDROCK_MODELS, customModels),
+    [customModels]
+  );
+
+  const addCustomModel = ({ name, provider, modality, pricePer1kIn, pricePer1kOut }) => {
+    const trimmedName = String(name || "").trim();
+    if (!trimmedName) return null;
+    const trimmedProvider = String(provider || "Custom").trim() || "Custom";
+    const existing = modelCatalog.find((model) => (
+      String(model.name || "").trim().toLowerCase() === trimmedName.toLowerCase()
+      && String(model.provider || "").trim().toLowerCase() === trimmedProvider.toLowerCase()
+    ));
+    if (existing) return existing;
+
+    const customModel = normalizeModelRecord({
+      id: buildCustomModelId({ name: trimmedName, provider: trimmedProvider }),
+      name: trimmedName,
+      provider: trimmedProvider,
+      modality: String(modality || "Chat").trim() || "Chat",
+      pricePer1kIn: Number(pricePer1kIn || 0),
+      pricePer1kOut: Number(pricePer1kOut || 0),
+      isCustom: true,
+    });
+
+    setCustomModels((current) => dedupeModels([...current, customModel]));
+    return customModel;
+  };
 
   // Merge overrides + apply approved top-ups / change requests into project budgets
   const projects = useMemo(() => {
@@ -814,25 +998,53 @@ export const AppProvider = ({ children }) => {
   const addProject = (payload) => {
     const id = `p-${Date.now().toString(36)}`;
     const isTpmCreatedProject = String(payload.createdByRole || "").trim().toUpperCase() === "TPM";
-    const rndMembers = payload.rndMembers || [];
-    const plMembers = payload.plMembers || [];
-    const qlMembers = payload.qlMembers || [];
-    const allMembers = [
-      payload.tpm ? { name: payload.tpm, role: "TPM", status: "Online" } : null,
-      ...plMembers.map((name) => ({ name, role: "PL / QL" })),
-      ...qlMembers.map((name) => ({ name, role: "QL" })),
-      ...rndMembers.map((name) => ({ name, role: "R&D" })),
-    ].filter(Boolean);
-    const teamMembers = mergeTeamMembers(
-      [],
-      allMembers.map((member, index) => buildTeamMember({
-        projectId: id,
-        name: member.name,
-        role: member.role,
-        fallbackStatus: member.status || "Pending kickoff",
-        index,
-      }))
-    );
+    const explicitMembers = Array.isArray(payload.assignedMembers)
+      ? payload.assignedMembers.filter((member) => member?.name || member?.email)
+      : [];
+    const fallbackRndMembers = payload.rndMembers || [];
+    const fallbackPlMembers = payload.plMembers || [];
+    const fallbackQlMembers = payload.qlMembers || [];
+    const seededMembers = explicitMembers.length
+      ? explicitMembers.map((member, index) => buildTeamMember({
+          projectId: id,
+          name: member.name,
+          email: member.email,
+          role: member.role,
+          fallbackStatus: member.status || "Pending kickoff",
+          index,
+        }))
+      : [
+          payload.tpm ? { name: payload.tpm, role: "TPM", status: "Online" } : null,
+          ...fallbackPlMembers.map((name) => ({ name, role: "PL / QL" })),
+          ...fallbackQlMembers.map((name) => ({ name, role: "QL" })),
+          ...fallbackRndMembers.map((name) => ({ name, role: "R&D" })),
+        ]
+          .filter(Boolean)
+          .map((member, index) => buildTeamMember({
+            projectId: id,
+            name: member.name,
+            email: member.email,
+            role: member.role,
+            fallbackStatus: member.status || "Pending kickoff",
+            index,
+          }));
+    const teamMembers = mergeTeamMembers([], seededMembers);
+    const tpmMember = teamMembers.find((member) => member.role === "TPM");
+    const plMembers = payload.plMembers?.length
+      ? payload.plMembers
+      : teamMembers
+          .filter((member) => member.role === "PL / QL" || member.role === "Project Lead")
+          .map((member) => member.name);
+    const qlMembers = payload.qlMembers?.length
+      ? payload.qlMembers
+      : teamMembers
+          .filter((member) => member.role === "QL" || member.role === "Quality Lead")
+          .map((member) => member.name);
+    const rndMembers = payload.rndMembers?.length
+      ? payload.rndMembers
+      : teamMembers
+          .filter((member) => member.role === "R&D" || member.role === "Engineer")
+          .map((member) => member.name);
     const docs = [
       ...(payload.docUrl
         ? [{
@@ -884,8 +1096,8 @@ export const AppProvider = ({ children }) => {
       client: payload.clientProjectName || "New Engagement",
       createdBy: payload.createdBy || "CTO",
       createdByRole: payload.createdByRole || "CTO",
-      pl: plMembers[0] || payload.tpm,
-      tpm: payload.tpm,
+      pl: plMembers[0] || payload.tpm || tpmMember?.name || "",
+      tpm: payload.tpm || tpmMember?.name || "",
       rnd: rndMembers[0] || null,
       rndMembers,
       plMembers,
@@ -983,8 +1195,8 @@ export const AppProvider = ({ children }) => {
     failedRows,
   }) => {
     const id = `tl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const normalizedSuccessfulRows = normalizeTaskSheetRows(successfulRows, "success");
-    const normalizedFailedRows = normalizeTaskSheetRows(failedRows, "failed");
+    const normalizedSuccessfulRows = normalizeTaskSheetRows(successfulRows, "success", modelCatalog);
+    const normalizedFailedRows = normalizeTaskSheetRows(failedRows, "failed", modelCatalog);
     const normalizedModelUsage = aggregateTaskRowsToModelUsage({
       successfulRows: normalizedSuccessfulRows,
       failedRows: normalizedFailedRows,
@@ -1053,10 +1265,10 @@ export const AppProvider = ({ children }) => {
           if (t.id !== logId) return t;
           if (!isTaskEditable(t)) return t;
           const normalizedSuccessfulRows = Array.isArray(patch.successfulRows)
-            ? normalizeTaskSheetRows(patch.successfulRows, "success")
+            ? normalizeTaskSheetRows(patch.successfulRows, "success", modelCatalog)
             : (t.successfulRows || []);
           const normalizedFailedRows = Array.isArray(patch.failedRows)
-            ? normalizeTaskSheetRows(patch.failedRows, "failed")
+            ? normalizeTaskSheetRows(patch.failedRows, "failed", modelCatalog)
             : (t.failedRows || []);
           const normalizedModelUsage = aggregateTaskRowsToModelUsage({
             successfulRows: normalizedSuccessfulRows,
@@ -1762,7 +1974,7 @@ export const AppProvider = ({ children }) => {
         approvedAmount,
       });
       const members = mergeTeamMembers(project?.teamMembers || [], project?.kickoffMail?.recipients || []);
-      const requestedLines = summarizeRequestedLines(scaledProjectState.budgetItems || nextReview.items || {}, project);
+      const requestedLines = summarizeRequestedLines(scaledProjectState.budgetItems || nextReview.items || {}, project, modelCatalog);
       const budgetType = normalizeBudgetType(project?.lastBudgetSubmission?.budgetType || nextReview.budgetType || "Production");
       const itEntry = {
         id: `it-${reviewId}`,
@@ -1830,22 +2042,27 @@ export const AppProvider = ({ children }) => {
     const project = projects.find((entry) => entry.id === projectId);
     const id = `cr-${Date.now().toString(36)}`;
     const now = new Date().toISOString();
+    const modelEntries = normalizeBreakdownEntries(
+      breakdown?.models,
+      findModelInCatalog(modelCatalog, breakdown?.models?.optionId)?.provider || "Model"
+    ).map((entry) => {
+      const meta = findModelInCatalog(modelCatalog, entry.optionId || entry.optionLabel);
+      return {
+        ...entry,
+        optionId: entry.optionId || meta?.id || "",
+        optionLabel: entry.optionLabel || (meta ? `${meta.name} · ${meta.provider}` : "Model"),
+        provider: entry.provider || meta?.provider || "Custom",
+      };
+    });
+    const infraEntries = normalizeBreakdownEntries(breakdown?.infra, "Infrastructure");
+    const subEntries = normalizeBreakdownEntries(breakdown?.subs, "Subscription").map((entry) => ({
+      ...entry,
+      billingUnit: entry.billingUnit || "per month",
+    }));
     const normalizedBreakdown = {
-      models: breakdown?.models?.enabled ? {
-        amount: Number(breakdown.models.amount || 0),
-        optionLabel: breakdown.models.optionLabel || "",
-        note: breakdown.models.note || "",
-      } : null,
-      infra: breakdown?.infra?.enabled ? {
-        amount: Number(breakdown.infra.amount || 0),
-        optionLabel: breakdown.infra.optionLabel || "",
-        note: breakdown.infra.note || "",
-      } : null,
-      subs: breakdown?.subs?.enabled ? {
-        amount: Number(breakdown.subs.amount || 0),
-        optionLabel: breakdown.subs.optionLabel || "",
-        note: breakdown.subs.note || "",
-      } : null,
+      models: buildNormalizedBreakdownSection(modelEntries),
+      infra: buildNormalizedBreakdownSection(infraEntries),
+      subs: buildNormalizedBreakdownSection(subEntries, { billingUnit: "per month" }),
     };
     const amount = Number(
       (normalizedBreakdown.models?.amount || 0)
@@ -1983,22 +2200,27 @@ export const AppProvider = ({ children }) => {
     if (decision === "approve" || decision === "partial") {
       const project = projects.find((entry) => entry.id === currentRequest.projectId);
       const members = mergeTeamMembers(project?.teamMembers || [], project?.kickoffMail?.recipients || []);
-      const requestedModels = currentRequest.breakdown?.models?.amount ? [{
-        id: `${currentRequest.id}-model`,
-        label: currentRequest.breakdown.models.optionLabel || "Model change",
-        provider: "Anthropic",
-        amount: Number(currentRequest.breakdown.models.amount || 0),
-      }] : [];
-      const requestedInfra = currentRequest.breakdown?.infra?.amount ? [{
-        id: `${currentRequest.id}-infra`,
-        label: currentRequest.breakdown.infra.optionLabel || "Infrastructure change",
-        amount: Number(currentRequest.breakdown.infra.amount || 0),
-      }] : [];
-      const requestedSubs = currentRequest.breakdown?.subs?.amount ? [{
-        id: `${currentRequest.id}-subs`,
-        label: currentRequest.breakdown.subs.optionLabel || "Subscription change",
-        amount: Number(currentRequest.breakdown.subs.amount || 0),
-      }] : [];
+      const requestedModels = normalizeBreakdownEntries(currentRequest.breakdown?.models).map((entry, index) => {
+        const meta = findModelInCatalog(modelCatalog, entry.optionId || entry.optionLabel);
+        return {
+          id: entry.id || `${currentRequest.id}-model-${index + 1}`,
+          modelId: entry.optionId || meta?.id || "",
+          label: entry.optionLabel || meta?.name || "Model change",
+          provider: entry.provider || meta?.provider || "Custom",
+          amount: Number(entry.amount || 0),
+          usageTag: entry.note || "",
+        };
+      });
+      const requestedInfra = normalizeBreakdownEntries(currentRequest.breakdown?.infra).map((entry, index) => ({
+        id: entry.id || `${currentRequest.id}-infra-${index + 1}`,
+        label: entry.optionLabel || "Infrastructure change",
+        amount: Number(entry.amount || 0),
+      }));
+      const requestedSubs = normalizeBreakdownEntries(currentRequest.breakdown?.subs).map((entry, index) => ({
+        id: entry.id || `${currentRequest.id}-subs-${index + 1}`,
+        label: entry.optionLabel || "Subscription change",
+        amount: Number(entry.amount || 0),
+      }));
       const itEntry = {
         id: `it-cr-${currentRequest.id}`,
         sourceReviewId: currentRequest.id,
@@ -2181,6 +2403,8 @@ export const AppProvider = ({ children }) => {
     scope,
     setScope,
     projects,
+    modelCatalog,
+    addCustomModel,
     visibleProjects,
     bufferOverview,
     teamRemovals,

@@ -12,6 +12,7 @@ import { EC2_INSTANCES, BEDROCK_MODELS, SUBSCRIPTION_CATALOG } from "../../data/
 import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { TEAM } from "../../data/mockUsers";
 import { normalizeBudgetType } from "../../lib/projectMetrics";
+import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../../lib/modelCatalog";
 
 const uid = () => Math.random().toString(36).slice(2, 8);
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -26,8 +27,8 @@ const seedCostPerTask = (model) => {
   return Math.round((model.pricePer1kIn * 4 + model.pricePer1kOut * 1) * 10000) / 10000;
 };
 
-const emptyModelItem = (totalTrajectories = 0) => {
-  const m = BEDROCK_MODELS[0];
+const emptyModelItem = (modelCatalog = BEDROCK_MODELS, totalTrajectories = 0) => {
+  const m = modelCatalog[0] || BEDROCK_MODELS[0];
   const costPerTask = seedCostPerTask(m);
   return {
     id: uid(),
@@ -66,7 +67,7 @@ const BudgetBuilder = () => {
   const requestedPhaseId = params.get("phaseId") || "";
   const requestedSampleIteration = Math.max(Number(params.get("sampleIteration") || 1), 1);
   const requestedSourceDeliveryId = params.get("sourceDeliveryId") || null;
-  const { visibleProjects, submitBudget, budgetReviews, role, user } = useApp();
+  const { visibleProjects, submitBudget, budgetReviews, role, user, modelCatalog, addCustomModel } = useApp();
   const isRnd = role === "R&D";
 
   const [step, setStep] = useState(1); // 1=Details, 2=Budget Items, 3=Preview
@@ -111,7 +112,7 @@ const BudgetBuilder = () => {
   // ---- Step 2: Budget items ----
   const [selectedTypes, setSelectedTypes] = useState({ models: true, infra: true, subs: true });
   const [activeTab, setActiveTab] = useState("models");
-  const [models, setModels] = useState([emptyModelItem(DIRECT_COST_BUDGET_TYPES.includes(initialBudgetType) ? 0 : 500 * 3)]);
+  const [models, setModels] = useState([emptyModelItem(modelCatalog, DIRECT_COST_BUDGET_TYPES.includes(initialBudgetType) ? 0 : 500 * 3)]);
   const [infra, setInfra] = useState([emptyInfraItem()]);
   const [subs, setSubs] = useState([emptySubItem()]);
 
@@ -127,7 +128,6 @@ const BudgetBuilder = () => {
   }, [returnedReview, visibleProjects]);
 
   const project = visibleProjects.find((p) => p.id === projectId);
-  const productionBudgetLocked = !isRnd && project?.type === "R&D" && !project?.readyForTpmBudget && budgetType === "Production";
   const additionalMemberOptions = useMemo(() => {
     const taken = new Set((project?.teamMembers || []).map((member) => member.name));
     return TEAM.filter((member) => !taken.has(member.name) && !["Finance", "COO", "IT"].includes(member.role));
@@ -177,14 +177,14 @@ const BudgetBuilder = () => {
   useEffect(() => {
     if (isDirectCostBudget) return;
     setModels((rows) => rows.map((r) => {
-      const meta = BEDROCK_MODELS.find((m) => m.id === r.modelId) || BEDROCK_MODELS[0];
+      const meta = modelCatalog.find((m) => m.id === r.modelId) || modelCatalog[0] || BEDROCK_MODELS[0];
       return {
         ...r,
         provider: meta.provider,
         estCost: Math.round(Number(r.costPerTask || 0) * modelPricingUnits * 100) / 100,
       };
     }));
-  }, [modelPricingUnits, isDirectCostBudget]);
+  }, [modelCatalog, modelPricingUnits, isDirectCostBudget]);
 
   useEffect(() => {
     if ((isDirectCostBudget || usesRndWorkflow) && deliveryMode !== "single") setDeliveryMode("single");
@@ -205,7 +205,7 @@ const BudgetBuilder = () => {
       if (r.id !== id) return r;
       const next = { ...r, [key]: v };
       if (key === "modelId") {
-        const meta = BEDROCK_MODELS.find((m) => m.id === next.modelId) || BEDROCK_MODELS[0];
+        const meta = modelCatalog.find((m) => m.id === next.modelId) || modelCatalog[0] || BEDROCK_MODELS[0];
         next.provider = meta.provider;
         next.costPerTask = seedCostPerTask(meta);
       }
@@ -216,6 +216,30 @@ const BudgetBuilder = () => {
       next.estCost = Math.round(Number(next.costPerTask || 0) * modelPricingUnits * 100) / 100;
       return next;
     }));
+  };
+  const handleModelSelect = (rowId, value) => {
+    if (value === ADD_CUSTOM_MODEL_OPTION) {
+      const created = promptForCustomModel(addCustomModel);
+      if (!created) return;
+      setModels((rows) => rows.map((row) => {
+        if (row.id !== rowId) return row;
+        const next = {
+          ...row,
+          modelId: created.id,
+          provider: created.provider,
+          costPerTask: seedCostPerTask(created),
+        };
+        if (!isDirectCostBudget) {
+          next.estCost = Math.round(Number(next.costPerTask || 0) * modelPricingUnits * 100) / 100;
+        }
+        return next;
+      }));
+      toast.success("Custom model added", {
+        description: `${created.name} · ${created.provider} is now available across the workspace.`,
+      });
+      return;
+    }
+    updateModelRow(rowId, "modelId", value);
   };
   const updateInfraRow = (id, key, v) => {
     setInfra((rows) => rows.map((r) => {
@@ -304,14 +328,8 @@ const BudgetBuilder = () => {
   const saveDraft = () => toast.success("Draft saved", { description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · auto-saved` });
 
   const doSubmit = () => {
-    if (productionBudgetLocked) {
-      toast.error("Production budget is locked", {
-        description: "R&D must finish the accepted sample cycle before TPM can raise the production budget.",
-      });
-      return;
-    }
     const items = {
-      models: selectedTypes.models ? models.map((m) => ({ ...m, meta: BEDROCK_MODELS.find((x) => x.id === m.modelId) })) : [],
+      models: selectedTypes.models ? models.map((m) => ({ ...m, meta: modelCatalog.find((x) => x.id === m.modelId) })) : [],
       infra: selectedTypes.infra ? infra.map((i) => ({ ...i, meta: EC2_INSTANCES.find((x) => x.code === i.instance) })) : [],
       subs: selectedTypes.subs ? subs : [],
     };
@@ -379,16 +397,6 @@ const BudgetBuilder = () => {
             <div className="text-amber-200 font-semibold uppercase tracking-widest text-[10px] mb-0.5">Returned by CTO — please revise</div>
             <div><span className="text-white font-semibold">Comment:</span> {returnedReview.ctoComment || "—"}</div>
             <div className="text-[11px] text-zinc-400 mt-1">Original ask: <span className="text-white tabular">{fmtCurrency(returnedReview.requestedBudget, { compact: false })}</span> · Returned {new Date(returnedReview.ctoAt || Date.now()).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</div>
-          </div>
-        </div>
-      )}
-
-      {productionBudgetLocked && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4 flex items-start gap-3" data-testid="bb-production-locked-banner">
-          <MessageSquareWarning className="w-4 h-4 text-amber-300 mt-0.5 flex-shrink-0" />
-          <div className="text-xs text-zinc-200 leading-relaxed">
-            <div className="text-amber-200 font-semibold uppercase tracking-widest text-[10px] mb-0.5">TPM budget is waiting on R&amp;D</div>
-            <div>R&amp;D sample acceptance has not completed yet. TPM production budgeting unlocks only after the accepted R&amp;D cycle is finished.</div>
           </div>
         </div>
       )}
@@ -654,7 +662,7 @@ const BudgetBuilder = () => {
                     {isDirectCostBudget ? "· enter the model-cost estimate directly" : "· est. cost = tasks × trajectories × cost/task"}
                   </span>
                 </div>
-                <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem(isDirectCostBudget ? 0 : modelPricingUnits)])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
+                <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem(modelCatalog, isDirectCostBudget ? 0 : modelPricingUnits)])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add model
                 </Button>
               </div>
@@ -668,11 +676,12 @@ const BudgetBuilder = () => {
                   <span />
                 </div>
                 {models.map((r) => {
-                  const meta = BEDROCK_MODELS.find((m) => m.id === r.modelId);
+                  const meta = modelCatalog.find((m) => m.id === r.modelId);
                   return (
                     <div key={r.id} data-testid={`bb-row-model-${r.id}`} className={`grid ${isDirectCostBudget ? "grid-cols-[1.35fr_1fr_1fr_1fr_28px]" : "grid-cols-[1.2fr_1fr_1fr_1fr_1fr_28px]"} gap-2 items-center py-1`}>
-                      <select value={r.modelId} onChange={(e) => updateModelRow(r.id, "modelId", e.target.value)} data-testid={`bb-model-select-${r.id}`} className={rowInp}>
-                        {BEDROCK_MODELS.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      <select value={r.modelId} onChange={(e) => handleModelSelect(r.id, e.target.value)} data-testid={`bb-model-select-${r.id}`} className={rowInp}>
+                        {modelCatalog.map((m) => <option key={m.id} value={m.id}>{buildModelOptionLabel(m)}</option>)}
+                        <option value={ADD_CUSTOM_MODEL_OPTION}>+ Add new model...</option>
                       </select>
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 leading-8 truncate">{meta?.provider}</div>
                       <select

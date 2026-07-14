@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Button } from "./ui/button";
 import {
@@ -17,14 +17,9 @@ import {
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
-import { BEDROCK_MODELS, EC2_INSTANCES, SUBSCRIPTION_CATALOG } from "../data/mockCatalog";
+import { EC2_INSTANCES, SUBSCRIPTION_CATALOG } from "../data/mockCatalog";
+import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../lib/modelCatalog";
 import { normalizeBudgetType } from "../lib/projectMetrics";
-
-const MODEL_OPTIONS = BEDROCK_MODELS.map((model) => ({
-  value: model.id,
-  label: `${model.name} · ${model.provider}`,
-  provider: model.provider,
-}));
 
 const INFRA_OPTIONS = EC2_INSTANCES.map((instance) => ({
   value: instance.code,
@@ -39,11 +34,11 @@ const SUBSCRIPTION_OPTIONS = SUBSCRIPTION_CATALOG.map((subscription) => ({
 
 const uid = (prefix = "row") => `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
-const buildModelLine = () => ({
+const buildModelLine = (modelOptions = []) => ({
   id: uid("mdl"),
-  optionId: MODEL_OPTIONS[0]?.value || "",
-  optionLabel: MODEL_OPTIONS[0]?.label || "",
-  provider: MODEL_OPTIONS[0]?.provider || "",
+  optionId: modelOptions[0]?.value || "",
+  optionLabel: modelOptions[0]?.label || "",
+  provider: modelOptions[0]?.provider || "",
   amount: 0,
   note: "",
 });
@@ -65,9 +60,9 @@ const buildInfraState = () => ({
   note: "",
 });
 
-const buildModelState = () => ({
+const buildModelState = (modelOptions = []) => ({
   enabled: true,
-  lines: [buildModelLine()],
+  lines: [buildModelLine(modelOptions)],
 });
 
 const buildSubscriptionState = () => ({
@@ -85,8 +80,13 @@ const joinLineLabels = (lines = []) => lines.map((line) => line.optionLabel).fil
 const joinLineNotes = (lines = []) => lines.map((line) => String(line.note || "").trim()).filter(Boolean).join(" | ");
 
 const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => {
-  const { createTopupRequest, visibleProjects, batchDeliveries, budgets } = useApp();
+  const { createTopupRequest, visibleProjects, batchDeliveries, budgets, modelCatalog, addCustomModel } = useApp();
   const projectList = useMemo(() => (project ? [project] : visibleProjects), [project, visibleProjects]);
+  const modelOptions = useMemo(() => modelCatalog.map((model) => ({
+    value: model.id,
+    label: buildModelOptionLabel(model),
+    provider: model.provider,
+  })), [modelCatalog]);
 
   const [projectId, setProjectId] = useState(project?.id || projectList[0]?.id || "");
   const [phaseId, setPhaseId] = useState(defaultPhaseId || "");
@@ -94,9 +94,11 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
   const [urgency, setUrgency] = useState("Normal");
   const [reason, setReason] = useState("");
   const [bufferPct, setBufferPct] = useState(0);
-  const [models, setModels] = useState(buildModelState);
+  const [models, setModels] = useState(() => buildModelState(modelOptions));
   const [infra, setInfra] = useState(buildInfraState);
   const [subs, setSubs] = useState(buildSubscriptionState);
+  const wasOpenRef = useRef(false);
+  const lastProjectIdRef = useRef(project?.id || projectList[0]?.id || "");
 
   const activeProject = useMemo(
     () => projectList.find((entry) => entry.id === projectId) || project || null,
@@ -156,14 +158,22 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
   }, [defaultPhaseId, isRndProject, phaseId, phaseOptions, sampleIteration]);
 
   useEffect(() => {
-    if (!open) return;
-    setUrgency("Normal");
-    setReason("");
-    setBufferPct(0);
-    setModels(buildModelState());
-    setInfra(buildInfraState());
-    setSubs(buildSubscriptionState());
-  }, [open, activeProject?.id]);
+    const currentProjectId = activeProject?.id || "";
+    const openedNow = open && !wasOpenRef.current;
+    const projectChangedWhileOpen = open && wasOpenRef.current && lastProjectIdRef.current !== currentProjectId;
+
+    if (openedNow || projectChangedWhileOpen) {
+      setUrgency("Normal");
+      setReason("");
+      setBufferPct(0);
+      setModels(buildModelState(modelOptions));
+      setInfra(buildInfraState());
+      setSubs(buildSubscriptionState());
+    }
+
+    wasOpenRef.current = open;
+    lastProjectIdRef.current = currentProjectId;
+  }, [activeProject?.id, modelOptions, open]);
 
   const activePhase = isRndProject
     ? phaseOptions.find((option) => option.sampleIteration === sampleIteration) || phaseOptions[0] || null
@@ -203,6 +213,30 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     ...current,
     lines: current.lines.length === 1 ? current.lines : current.lines.filter((line) => line.id !== lineId),
   }));
+  const handleModelOptionChange = (lineId, value) => {
+    if (value === ADD_CUSTOM_MODEL_OPTION) {
+      const created = promptForCustomModel(addCustomModel);
+      if (!created) return;
+      setModels((current) => ({
+        ...current,
+        lines: current.lines.map((line) => (
+          line.id === lineId
+            ? {
+                ...line,
+                optionId: created.id,
+                optionLabel: buildModelOptionLabel(created),
+                provider: created.provider || "",
+              }
+            : line
+        )),
+      }));
+      toast.success("Custom model added", {
+        description: `${created.name} · ${created.provider} is now available in all model dropdowns.`,
+      });
+      return;
+    }
+    updateMultiLine(setModels, lineId, "optionId", value, modelOptions, (option) => ({ provider: option?.provider || "" }));
+  };
 
   const submit = () => {
     if (!activeProject) {
@@ -370,14 +404,15 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
                 addLabel="Add model"
                 amountTestId="tur-models-amount"
                 total={modelsAmount}
-                onAdd={() => addMultiLine(setModels, buildModelLine)}
+                onAdd={() => addMultiLine(setModels, () => buildModelLine(modelOptions))}
                 onRemove={(lineId) => removeMultiLine(setModels, lineId)}
-                onOptionChange={(lineId, value) => updateMultiLine(setModels, lineId, "optionId", value, MODEL_OPTIONS, (option) => ({ provider: option?.provider || "" }))}
-                onAmountChange={(lineId, value) => updateMultiLine(setModels, lineId, "amount", value, MODEL_OPTIONS, () => ({}))}
-                onNoteChange={(lineId, value) => updateMultiLine(setModels, lineId, "note", value, MODEL_OPTIONS, () => ({}))}
-                options={MODEL_OPTIONS}
+                onOptionChange={handleModelOptionChange}
+                onAmountChange={(lineId, value) => updateMultiLine(setModels, lineId, "amount", value, modelOptions, () => ({}))}
+                onNoteChange={(lineId, value) => updateMultiLine(setModels, lineId, "note", value, modelOptions, () => ({}))}
+                options={modelOptions}
                 notePlaceholder="Why this model uplift is needed"
                 testidPrefix="tur-models"
+                allowCustomOption
               />
 
               <SingleLineSection
@@ -578,6 +613,7 @@ const MultiLineSection = ({
   notePlaceholder,
   testidPrefix,
   billingUnitLabel,
+  allowCustomOption = false,
 }) => (
   <div className={`rounded-xl border p-3 ${enabled ? "border-fuchsia-500/30 bg-fuchsia-500/[0.04]" : "border-white/5 bg-white/[0.02]"}`} data-testid={`${testidPrefix}-row`}>
     <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -620,6 +656,11 @@ const MultiLineSection = ({
                     {option.label}
                   </option>
                 ))}
+                {allowCustomOption && (
+                  <option value={ADD_CUSTOM_MODEL_OPTION} className="bg-[#12121A]">
+                    + Add new model...
+                  </option>
+                )}
               </select>
             </div>
             <div>
