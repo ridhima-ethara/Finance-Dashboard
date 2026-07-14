@@ -17,12 +17,12 @@ const DIRECTORY = [...TEAM, ...USERS].reduce((acc, member) => {
   return acc;
 }, new Map());
 
-const buildEmptyForm = (today) => ({
+const buildEmptyForm = (today, user) => ({
   clientProjectName: "",
   internalName: "",
   startDate: today,
   docUrl: "",
-  tpmEmails: [],
+  tpmEmails: user?.role === "TPM" && user?.email ? [String(user.email).trim().toLowerCase()] : [],
   plQlEmails: [],
   rndEmails: [],
   attachments: [],
@@ -105,7 +105,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const [form, setForm] = useState(() => buildEmptyForm(today));
+  const [form, setForm] = useState(() => buildEmptyForm(today, user));
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const handleFilePick = (event) => {
@@ -207,7 +207,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
       description: `${proj.name} · kickoff sent to ${selectedMembers.length} member${selectedMembers.length === 1 ? "" : "s"}`,
     });
     onOpenChange(false);
-    setForm(buildEmptyForm(today));
+    setForm(buildEmptyForm(today, user));
     setTimeout(() => nav(`/projects/${proj.id}`), 250);
   };
 

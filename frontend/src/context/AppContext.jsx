@@ -8,21 +8,21 @@ import { buildCustomModelId } from "../lib/modelCatalog";
 
 const AppContext = createContext(null);
 const SESSION_KEY = "ethara.session.v1";
-const BUFFERS_KEY = "ethara.buffers.v2";
-const RECOVERY_KEY = "ethara.recovery.v2";
-const CUSTOM_PROJECTS_KEY = "ethara.customProjects.v2";
-const TASK_LOGS_KEY = "ethara.taskLogs.v2";
-const TOPUP_REQ_KEY = "ethara.topupRequests.v2";
-const BUDGETS_KEY = "ethara.budgets.v2";
-const BATCH_DELIVERIES_KEY = "ethara.batchDeliveries.v2";
-const BUDGET_REVIEWS_KEY = "ethara.budgetReviews.v2";
-const CHANGE_REQUESTS_KEY = "ethara.changeRequests.v2";
-const TEAM_REMOVALS_KEY = "ethara.teamRemovals.v2";
-const MODEL_KEYS_KEY = "ethara.modelKeys.v2";
-const IT_PROVISIONING_KEY = "ethara.itProvisioning.v2";
-const BUFFER_POOL_KEY = "ethara.bufferPool.v2";
-const IT_MONTHLY_ACTUALS_KEY = "ethara.itMonthlyActuals.v2";
-const CUSTOM_MODELS_KEY = "ethara.customModels.v1";
+const BUFFERS_KEY = "ethara.buffers.v3";
+const RECOVERY_KEY = "ethara.recovery.v3";
+const CUSTOM_PROJECTS_KEY = "ethara.customProjects.v3";
+const TASK_LOGS_KEY = "ethara.taskLogs.v3";
+const TOPUP_REQ_KEY = "ethara.topupRequests.v3";
+const BUDGETS_KEY = "ethara.budgets.v3";
+const BATCH_DELIVERIES_KEY = "ethara.batchDeliveries.v3";
+const BUDGET_REVIEWS_KEY = "ethara.budgetReviews.v3";
+const CHANGE_REQUESTS_KEY = "ethara.changeRequests.v3";
+const TEAM_REMOVALS_KEY = "ethara.teamRemovals.v3";
+const MODEL_KEYS_KEY = "ethara.modelKeys.v3";
+const IT_PROVISIONING_KEY = "ethara.itProvisioning.v3";
+const BUFFER_POOL_KEY = "ethara.bufferPool.v3";
+const IT_MONTHLY_ACTUALS_KEY = "ethara.itMonthlyActuals.v3";
+const CUSTOM_MODELS_KEY = "ethara.customModels.v2";
 
 const readJSON = (key, fallback) => {
   try {
