@@ -404,3 +404,25 @@ Implemented the "Potential improvement" from the previous audit — a one-click 
 **Verified via screenshot smoke test:** button renders, click creates "Demo Project 1" with correct state, toast + navigation work. Downstream TPM can build a Production budget directly against the seeded project (Production tab unlocked because `readyForTpmBudget=true`).
 
 **Files touched:** `frontend/src/context/AppContext.jsx` (+40 lines), `frontend/src/pages/cto/CtoDashboard.jsx` (+14 lines).
+
+
+### 2026-02-14 · Workflow Guide + Remove Demo Data
+Added a first-time user onboarding modal and stripped demo-data helpers.
+
+**Additions**
+- New `components/WorkflowGuideDialog.jsx` — modal with 5 role tabs (CTO / CFO / TPM / R&D / IT). Each tab shows a concise, numbered workflow (4–5 steps) explaining exactly what that role does day-to-day in the app. Footer summarizes overall project lifecycle: R&D testing → TPM production budget → CTO review → CFO sign-off → Delivery.
+- `pages/Login.jsx`: new `btn-how-it-works` pill button below the credential toggle — opens the guide before users sign in.
+- `components/layout/Sidebar.jsx`: new `sidebar-btn-how-it-works` entry in the user footer — passes the signed-in user's role as `defaultRole` so the guide opens on the right tab.
+
+**Removals (demo data)**
+- Removed the `Seed demo project` button (`btn-cto-seed-demo`) from CTO dashboard.
+- Removed the `seedDemoProject` function (39 lines) from `context/AppContext.jsx` and dropped it from the context value.
+- Removed related unused imports (`Sparkles`, `toast`, `useNavigate`, `handleSeedDemo`) from `CtoDashboard.jsx`.
+- Static mock data files (`mockProjects`, `mockFinance`, `mockAi`, `mockTpm`, `mockCfo`) were already empty from earlier work — no further changes needed there.
+
+**Verified via smoke test:** Login → click "1st time here? See how it works" → dialog opens with 5 role tabs; clicking TPM shows correct 5-step workflow. Signed in as CTO → dashboard shows no demo-seed button, `btn-cto-new-project` still present, `sidebar-btn-how-it-works` visible, all KPIs = 0, empty-state message renders correctly.
+
+**Files touched:**
+- Added: `frontend/src/components/WorkflowGuideDialog.jsx` (+160 lines)
+- Modified: `frontend/src/pages/Login.jsx` (+20 lines), `frontend/src/components/layout/Sidebar.jsx` (+15 lines)
+- Reduced: `frontend/src/pages/cto/CtoDashboard.jsx` (-18 lines), `frontend/src/context/AppContext.jsx` (-40 lines)

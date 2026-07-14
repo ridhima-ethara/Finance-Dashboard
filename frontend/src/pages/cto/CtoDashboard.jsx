@@ -24,28 +24,16 @@ import {
   Cpu,
   TrendingUp,
   Plus,
-  Sparkles,
   ArrowUpRightSquare,
   PackageCheck,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import NewProjectDialog from "../../components/NewProjectDialog";
 import { summarizeLoggedProject } from "../../lib/projectMetrics";
-import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
 
 const CtoDashboard = () => {
-  const { visibleProjects, taskLogs, budgetReviews, changeRequests, seedDemoProject, topupRequests, batchDeliveries } = useApp();
+  const { visibleProjects, taskLogs, budgetReviews, changeRequests, topupRequests, batchDeliveries } = useApp();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
-  const nav = useNavigate();
-
-  const handleSeedDemo = () => {
-    const proj = seedDemoProject();
-    toast.success("Demo project seeded", {
-      description: `${proj.name} · already at Ready for TPM production budget`,
-    });
-    setTimeout(() => nav(`/projects/${proj.id}`), 250);
-  };
 
   const projectUsage = useMemo(
     () => visibleProjects.map((project) => ({ project, usage: summarizeLoggedProject(project, taskLogs) })),
@@ -124,16 +112,6 @@ const CtoDashboard = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            onClick={handleSeedDemo}
-            variant="outline"
-            className="h-9 rounded-lg border-fuchsia-500/40 bg-fuchsia-500/[0.06] hover:bg-fuchsia-500/[0.12] text-fuchsia-200 gap-2"
-            data-testid="btn-cto-seed-demo"
-            title="Create a demo project already promoted to Production-ready (skips R&D testing loop)"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            Seed demo project
-          </Button>
           <Button
             onClick={() => setNewProjectOpen(true)}
             className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"

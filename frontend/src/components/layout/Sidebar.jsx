@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from "react-router-dom";
+import { useState } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -21,9 +22,11 @@ import {
   Bot,
   ScrollText,
   PackageCheck,
+  HelpCircle,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { initials } from "../../lib/format";
+import WorkflowGuideDialog from "../WorkflowGuideDialog";
 
 const NAV_CTO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
@@ -98,6 +101,7 @@ const Sidebar = () => {
   const { user, logout } = useApp();
   const nav = useNavigate();
   const NAV = pickNav(user?.role);
+  const [guideOpen, setGuideOpen] = useState(false);
   const handleLogout = () => {
     logout();
     nav("/login", { replace: true });
@@ -150,7 +154,16 @@ const Sidebar = () => {
       </div>
 
       {/* User */}
-      <div className="border-t border-white/5 p-3">
+      <div className="border-t border-white/5 p-3 space-y-2">
+        <button
+          type="button"
+          onClick={() => setGuideOpen(true)}
+          data-testid="sidebar-btn-how-it-works"
+          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-zinc-400 hover:bg-fuchsia-500/10 hover:text-fuchsia-200 transition-colors"
+        >
+          <HelpCircle className="w-4 h-4" />
+          How it works
+        </button>
         <div className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 transition-colors" data-testid="sidebar-user">
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt={user.name} className="w-9 h-9 rounded-full object-cover border border-white/10" />
@@ -173,6 +186,8 @@ const Sidebar = () => {
           </button>
         </div>
       </div>
+
+      <WorkflowGuideDialog open={guideOpen} onOpenChange={setGuideOpen} defaultRole={user?.role || "CTO"} />
     </aside>
   );
 };
