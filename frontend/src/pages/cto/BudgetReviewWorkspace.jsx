@@ -3,7 +3,9 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
+import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
 import { useApp } from "../../context/AppContext";
+import { areBudgetItemsEqual, areBudgetPhasesEqual } from "../../lib/budgetReview";
 import {
   ArrowLeft,
   X,
@@ -15,11 +17,8 @@ import {
   Cpu,
   Server,
   Layers,
-  Save,
   Edit3,
   FileText,
-  Wallet,
-  CreditCard,
   Undo2,
 } from "lucide-react";
 
@@ -33,6 +32,7 @@ const cloneReviewItems = (items = {}) => ({
   models: cloneLines(items.models || []),
   infra: cloneLines(items.infra || []),
   subs: cloneLines(items.subs || []),
+  misc: cloneLines(items.misc || []),
 });
 
 const sumLineItems = (lines = []) => (Array.isArray(lines) ? lines : []).reduce(
@@ -51,7 +51,7 @@ const BudgetReviewWorkspace = () => {
     [budgetReviews, review]
   );
 
-  const [tab, setTab] = useState("overview");
+  const [isEditing, setIsEditing] = useState(false);
   const amount = review?.recommendedBudget || review?.requestedBudget || 0;
   const [comment, setComment] = useState("");
 
@@ -72,10 +72,10 @@ const BudgetReviewWorkspace = () => {
     });
   };
   const buildInitialItems = useCallback(() => {
-    if (!review) return { models: [], infra: [], subs: [] };
+    if (!review) return { models: [], infra: [], subs: [], misc: [] };
     if (priorModification?.modifiedItems) return cloneReviewItems(priorModification.modifiedItems);
     const submittedItems = cloneReviewItems(review.items || {});
-    if (submittedItems.models.length || submittedItems.infra.length || submittedItems.subs.length) return submittedItems;
+    if (submittedItems.models.length || submittedItems.infra.length || submittedItems.subs.length || submittedItems.misc.length) return submittedItems;
     return {
       models: Number(review.aiCost || 0) > 0
         ? [{ id: "models-summary", label: "Models", estCost: Number(review.aiCost || 0), amount: Number(review.aiCost || 0), meta: { name: "Models" } }]
@@ -85,6 +85,9 @@ const BudgetReviewWorkspace = () => {
         : [],
       subs: Number(review.subsCost || 0) > 0
         ? [{ id: "subs-summary", label: "Subscriptions", estCost: Number(review.subsCost || 0), amount: Number(review.subsCost || 0), subscription: "Subscriptions" }]
+        : [],
+      misc: Number(review.miscCost || 0) > 0
+        ? [{ id: "general-summary", label: "General request", optionLabel: "General request", estCost: Number(review.miscCost || 0), amount: Number(review.miscCost || 0), note: "Submitted general request" }]
         : [],
     };
   }, [priorModification?.modifiedItems, review]);
@@ -97,7 +100,7 @@ const BudgetReviewWorkspace = () => {
     setModifiedItems(buildInitialItems());
   }, [buildInitialItems]);
 
-  const canEdit = role === "CTO";
+  const canEdit = role === "CTO" && isEditableCtoReview(review);
   const isRndReview =
     review?.requesterRole === "R&D"
     || ["Testing", "RnD", "Rework"].includes(review?.budgetType)
@@ -119,10 +122,6 @@ const BudgetReviewWorkspace = () => {
     return `/budget-builder?${next.toString()}`;
   })();
 
-  useEffect(() => {
-    if (!canEdit && tab === "modify") setTab("overview");
-  }, [canEdit, tab]);
-
   if (!review || !project) {
     return (
       <div className="text-sm text-zinc-400">
@@ -134,8 +133,6 @@ const BudgetReviewWorkspace = () => {
 
   const requestedBudget = review.requestedBudget;
   const currentBudget = review.currentBudget;
-  const recommended = review.recommendedBudget;
-
   const phaseTotals = modifiedPhases.map((p) => ({
     ...p,
     total: Number(p.infra || 0) + Number(p.model || 0) + Number(p.subs || 0),
@@ -147,15 +144,17 @@ const BudgetReviewWorkspace = () => {
     subs: phaseTotals.reduce((s, p) => s + Number(p.subs || 0), 0),
   };
   const itemBasedTotals = {
-    total: sumLineItems(modifiedItems.models) + sumLineItems(modifiedItems.infra) + sumLineItems(modifiedItems.subs),
+    total: sumLineItems(modifiedItems.models) + sumLineItems(modifiedItems.infra) + sumLineItems(modifiedItems.subs) + sumLineItems(modifiedItems.misc),
     model: sumLineItems(modifiedItems.models),
     infra: sumLineItems(modifiedItems.infra),
     subs: sumLineItems(modifiedItems.subs),
+    misc: sumLineItems(modifiedItems.misc),
   };
-  const modifiedTotal = isRndReview ? itemBasedTotals.total : phaseBasedTotals.total;
+  const modifiedTotal = isRndReview ? itemBasedTotals.total : phaseBasedTotals.total + itemBasedTotals.misc;
   const modifiedInfra = isRndReview ? itemBasedTotals.infra : phaseBasedTotals.infra;
   const modifiedModel = isRndReview ? itemBasedTotals.model : phaseBasedTotals.model;
   const modifiedSubs = isRndReview ? itemBasedTotals.subs : phaseBasedTotals.subs;
+  const modifiedGeneral = itemBasedTotals.misc;
   const modifiedDeltaVsRequested = modifiedTotal - requestedBudget;
 
   const updateCell = (phaseId, key, val) => {
@@ -180,7 +179,7 @@ const BudgetReviewWorkspace = () => {
     setModifiedItems(buildInitialItems());
   };
 
-  const effectiveAmount = tab === "modify" ? modifiedTotal : amount;
+  const effectiveAmount = isEditing ? modifiedTotal : amount;
   const delta = effectiveAmount - currentBudget;
   const savings = requestedBudget - effectiveAmount;
   const modifiedPhasePayload = isRndReview
@@ -196,6 +195,7 @@ const BudgetReviewWorkspace = () => {
     {
       key: "models",
       label: "Models",
+      lineLabel: "Model",
       color: "text-fuchsia-300",
       lines: modifiedItems.models,
       fallback: "No model line submitted.",
@@ -205,6 +205,7 @@ const BudgetReviewWorkspace = () => {
     {
       key: "infra",
       label: "Infrastructure",
+      lineLabel: "Infrastructure",
       color: "text-sky-300",
       lines: modifiedItems.infra,
       fallback: "No infrastructure line submitted.",
@@ -214,15 +215,73 @@ const BudgetReviewWorkspace = () => {
     {
       key: "subs",
       label: "Subscriptions",
+      lineLabel: "Subscription",
       color: "text-emerald-300",
       lines: modifiedItems.subs,
       fallback: "No subscription line submitted.",
       getTitle: (line) => line.subscription || line.optionLabel || line.label || "Subscription allocation",
       getDetail: (line) => Array.isArray(line.members) && line.members.length ? line.members.join(", ") : "Submitted subscription line",
     },
+    {
+      key: "misc",
+      label: "General",
+      lineLabel: "General request",
+      color: "text-amber-300",
+      lines: modifiedItems.misc,
+      fallback: "No general request line submitted.",
+      getTitle: (line) => line.optionLabel || line.label || "General request",
+      getDetail: (line) => line.note || line.detail || "Submitted general request line",
+    },
   ];
+  const renderItemSection = (section) => (
+    <div key={section.key} className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+        <div className={`text-[10px] uppercase tracking-widest font-semibold ${section.color}`}>{section.label}</div>
+        <div className="text-[11px] text-zinc-500">
+          Subtotal <span className="text-white font-semibold tabular">{fmtCurrency(sumLineItems(section.lines), { compact: false })}</span>
+        </div>
+      </div>
+      {section.lines.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                <th className="text-left py-2 px-3">{section.lineLabel || (section.label.endsWith("s") ? section.label.slice(0, -1) : section.label)} line</th>
+                <th className="text-left py-2 px-3">Detail</th>
+                <th className="text-right py-2 px-3">Cost ($)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {section.lines.map((line, index) => (
+                <tr key={line.id || `${section.key}-${index + 1}`} className="border-b border-white/5 last:border-b-0">
+                  <td className="py-2 px-3 text-white font-medium">{section.getTitle(line)}</td>
+                  <td className="py-2 px-3 text-xs text-zinc-500">{section.getDetail(line)}</td>
+                  <td className="py-2 px-3">
+                    <input
+                      type="number"
+                      min="0"
+                      step="10"
+                      value={Number(line.estCost || line.amount || 0)}
+                      onChange={(e) => updateItemCost(section.key, line.id, e.target.value)}
+                      disabled={!canEdit}
+                      data-testid={`modify-${section.key}-${line.id || index}`}
+                      className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="px-3 py-4 text-xs text-zinc-500">{section.fallback}</div>
+      )}
+    </div>
+  );
 
   const approveAndForward = () => {
+    const ctoModified = !areBudgetPhasesEqual(modifiedPhases, buildInitialPhases())
+      || !areBudgetItemsEqual(modifiedItems, buildInitialItems());
     ctoModifyBudgetReview({
       reviewId: review.id,
       projectId: project.id,
@@ -230,8 +289,10 @@ const BudgetReviewWorkspace = () => {
       tpm: review.tpm,
       requestedBudget,
       modifiedPhases: modifiedPhasePayload,
-      modifiedItems: isRndReview ? cloneReviewItems(modifiedItems) : null,
+      modifiedItems: cloneReviewItems(modifiedItems),
       ctoComment: comment,
+      itemBased: isRndReview,
+      ctoModified,
     });
     toast.success("Approved & forwarded to CFO", {
       description: `${review.projectName} · ${fmtCurrency(modifiedTotal, { compact: false })}${savings > 0 ? ` · ${fmtCurrency(savings, { compact: false })} saved vs request` : ""}`,
@@ -272,39 +333,134 @@ const BudgetReviewWorkspace = () => {
     nav("/budget-reviews");
   };
 
-  const saveDraft = () => toast("Draft saved", { description: "Your modifications will be preserved" });
+  const overviewFields = [
+    { label: "Client", value: review.client },
+    { label: "Requester", value: `${isRndReview ? "R&D" : "TPM"} · ${review.tpm}` },
+    { label: "Raised from", value: isRndReview ? "R&D" : "TPM" },
+    { label: "Team type", value: review.teamType || "—" },
+    { label: "Timeline", value: review.timeline },
+    ...(!isTestingBudget(review?.budgetType) ? [{ label: "Tasks", value: String(review.tasks) }] : []),
+    { label: "Phases", value: String(review.phases) },
+  ];
   const coreOverviewPanels = (
     <>
       <Panel testid="overview-project" title="Project overview">
         <div className="grid grid-cols-2 gap-3">
-          <InfoField label="Client" value={review.client} />
-          <InfoField label="Recovery type" value={review.recoveryType} />
-          <InfoField label="Requester" value={`${isRndReview ? "R&D" : "TPM"} · ${review.tpm}`} />
-          <InfoField label="Timeline" value={review.timeline} />
-          <InfoField label="Tasks" value={String(review.tasks)} />
-          <InfoField label="Phases" value={String(review.phases)} />
+          {overviewFields.map((field) => (
+            <InfoField key={field.label} label={field.label} value={field.value} />
+          ))}
         </div>
       </Panel>
       <Panel testid="overview-justification" title={`Justification from ${isRndReview ? "R&D" : "TPM"}`}>
         <div className="text-sm text-zinc-200 leading-relaxed">{review.justification}</div>
       </Panel>
       <Panel testid="overview-breakdown" title="Budget breakdown">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          <BreakdownCell icon={Cpu} label="AI Models" value={review.aiCost} color="#E619B8" />
-          <BreakdownCell icon={Server} label="Infrastructure" value={review.infraCost} color="#3B82F6" />
-          <BreakdownCell icon={Layers} label="Subscriptions" value={review.subsCost} color="#10B981" />
-        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+              <BreakdownCell icon={Cpu} label="AI Models" value={isEditing ? modifiedModel : review.aiCost} color="#E619B8" />
+              <BreakdownCell icon={Server} label="Infrastructure" value={isEditing ? modifiedInfra : review.infraCost} color="#3B82F6" />
+              <BreakdownCell icon={Layers} label="Subscriptions" value={isEditing ? modifiedSubs : review.subsCost} color="#10B981" />
+              <BreakdownCell icon={FileText} label="General" value={isEditing ? modifiedGeneral : review.miscCost} color="#F59E0B" />
+            </div>
+            <div className="mt-4">
+              <GeneralBudgetTableCard
+                lines={modifiedItems.misc}
+                title="General budget table"
+                subtitle={canEdit ? "This table updates live as CTO edits the general budget line costs." : "Submitted phase-wise general budget rows."}
+                testid="cto-general-budget-table"
+              />
+            </div>
+            {isEditing && (
+              <div className="mt-4 space-y-4">
+                {isRndReview ? (
+                  itemSections.map(renderItemSection)
+                ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+                        <th className="text-left py-2 px-3">Phase</th>
+                        <th className="text-right py-2 px-3">Infra ($)</th>
+                        <th className="text-right py-2 px-3">Model ($)</th>
+                        <th className="text-right py-2 px-3">Subs ($)</th>
+                        <th className="text-right py-2 px-3">Phase total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {phaseTotals.map((p) => (
+                        <tr key={p.id} data-testid={`modify-phase-${p.id}`} className="border-b border-white/5">
+                          <td className="py-2 px-3 text-white font-medium">{p.name}</td>
+                          <td className="py-2 px-3">
+                            <input type="number" min="0" step="100" value={p.infra} onChange={(e) => updateCell(p.id, "infra", e.target.value)} disabled={!canEdit} data-testid={`modify-infra-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input type="number" min="0" step="100" value={p.model} onChange={(e) => updateCell(p.id, "model", e.target.value)} disabled={!canEdit} data-testid={`modify-model-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
+                          </td>
+                          <td className="py-2 px-3">
+                            <input type="number" min="0" step="100" value={p.subs} onChange={(e) => updateCell(p.id, "subs", e.target.value)} disabled={!canEdit} data-testid={`modify-subs-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
+                          </td>
+                          <td className="py-2 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.total, { compact: false })}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t-2 border-fuchsia-500/30">
+                        <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Modified total</td>
+                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedInfra, { compact: false })}</td>
+                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedModel, { compact: false })}</td>
+                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedSubs, { compact: false })}</td>
+                        <td className="py-3 px-3 text-right text-fuchsia-300 font-bold text-lg tabular">{fmtCurrency(phaseBasedTotals.total, { compact: false })}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                {(modifiedItems.misc.length > 0 || Number(review.miscCost || 0) > 0) && renderItemSection(itemSections.find((section) => section.key === "misc"))}
+              </>
+            )}
+            <div className="flex items-center justify-between text-[11px] flex-wrap gap-2">
+              <div className="text-zinc-500 tabular">
+                {isRndReview ? "R&D" : "TPM"} requested <span className="text-white">{fmtCurrency(requestedBudget, { compact: false })}</span> · your modified ask is{" "}
+                <span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold" : "text-amber-300 font-semibold"}>
+                  {modifiedDeltaVsRequested >= 0 ? "+" : ""}{fmtCurrency(modifiedDeltaVsRequested, { compact: false })}
+                </span> vs request
+              </div>
+              {canEdit && (
+                <button onClick={resetToOriginal} data-testid="btn-reset-modify" className="text-[11px] text-fuchsia-300 hover:text-fuchsia-200">
+                  Reset to original breakdown
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </Panel>
       <Panel testid="overview-comparison" title="Estimated vs business requirement" subtitle="Prior baseline vs current ask">
-        <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className={`grid gap-3 mb-4 ${isEditing ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2"}`}>
           <CompareBox label="Previous approved" value={currentBudget} />
           <CompareBox label={`${isRndReview ? "R&D" : "TPM"} requested`} value={requestedBudget} highlight="warning" />
+          {isEditing && <CompareBox label="CTO modified total" value={modifiedTotal} highlight="magenta" />}
         </div>
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-300 leading-relaxed">
-          <span className="text-fuchsia-200 font-semibold">Difference: </span>
-          Requested budget is <span className="text-white font-semibold tabular">{fmtCurrency(requestedBudget - currentBudget, { compact: false })}</span>{" "}
-          above the previously approved amount ({fmtPct(Math.round(((requestedBudget - currentBudget) / (currentBudget || 1)) * 100))} increase).
-          Buffer requested is <span className="text-fuchsia-300 font-semibold">{review.bufferPct}%</span> with <span className="text-zinc-100 font-semibold">{review.recoveryType}</span> recovery.
+          {isEditing ? (
+            <>
+              <span className="text-fuchsia-200 font-semibold">Updated budget: </span>
+              CFO will receive <span className="text-white font-semibold tabular">{fmtCurrency(modifiedTotal, { compact: false })}</span>,
+              {" "}which is{" "}
+              <span className={delta >= 0 ? "text-amber-300 font-semibold tabular" : "text-emerald-300 font-semibold tabular"}>
+                {delta >= 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })}
+              </span>{" "}
+              vs the current approved baseline and{" "}
+              <span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold tabular" : "text-amber-300 font-semibold tabular"}>
+                {modifiedDeltaVsRequested >= 0 ? "+" : ""}{fmtCurrency(modifiedDeltaVsRequested, { compact: false })}
+              </span>{" "}
+              vs the submitted request.
+            </>
+          ) : (
+            <>
+              <span className="text-fuchsia-200 font-semibold">Difference: </span>
+              Requested budget is <span className="text-white font-semibold tabular">{fmtCurrency(requestedBudget - currentBudget, { compact: false })}</span>{" "}
+              above the previously approved amount ({fmtPct(Math.round(((requestedBudget - currentBudget) / (currentBudget || 1)) * 100))} increase).
+            </>
+          )}
         </div>
       </Panel>
       {priorModification && (
@@ -345,9 +501,6 @@ const BudgetReviewWorkspace = () => {
         <div className="flex items-center gap-2 flex-wrap">
           {canEdit ? (
             <>
-              <Button variant="outline" className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2" onClick={saveDraft} data-testid="btn-save-draft">
-                <Save className="w-3.5 h-3.5" /> Save draft
-              </Button>
               <Button variant="outline" className="h-9 rounded-lg border-amber-500/30 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 gap-2" onClick={returnToTpm} data-testid="btn-return-tpm">
                 <Undo2 className="w-3.5 h-3.5" /> Return to {isRndReview ? "R&D" : "TPM"}
               </Button>
@@ -366,176 +519,14 @@ const BudgetReviewWorkspace = () => {
         </div>
       </div>
 
-      {/* Tabs — simplified to Overview + Modify Budget only */}
-      <div className="flex items-center gap-1 border-b border-white/5 overflow-x-auto">
-        {[
-          { id: "overview", label: "Overview" },
-          ...(canEdit ? [{ id: "modify", label: "Modify Budget" }] : []),
-        ].map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            data-testid={`tab-${t.id}`}
-            className={`px-4 py-2.5 text-xs font-semibold uppercase tracking-widest border-b-2 transition-colors whitespace-nowrap ${
-              tab === t.id ? "border-fuchsia-400 text-fuchsia-300" : "border-transparent text-zinc-500 hover:text-zinc-200"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 space-y-4">
-          {tab === "overview" && coreOverviewPanels}
-
-          {tab === "modify" && (
-            <>
-              <Panel
-                testid="modify-summary"
-                title={isRndReview ? "Modify budget · line-item pricing" : "Modify budget · phase-wise breakdown"}
-                subtitle={isRndReview ? "Edit model, infrastructure, and subscription pricing — overall budget recalculates automatically" : "Edit Infra, Model &amp; Subscription per phase — overall budget recalculates automatically"}
-              >
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                  <BreakdownCell icon={Server} label="Infra (new)" value={modifiedInfra} color="#3B82F6" />
-                  <BreakdownCell icon={Cpu} label="Models (new)" value={modifiedModel} color="#E619B8" />
-                  <BreakdownCell icon={CreditCard} label="Subs (new)" value={modifiedSubs} color="#10B981" />
-                  <BreakdownCell icon={Wallet} label="Modified total" value={modifiedTotal} color="#F59E0B" />
-                </div>
-                {isRndReview ? (
-                  <div className="space-y-4">
-                    {itemSections.map((section) => (
-                      <div key={section.key} className="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden">
-                        <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
-                          <div className={`text-[10px] uppercase tracking-widest font-semibold ${section.color}`}>{section.label}</div>
-                          <div className="text-[11px] text-zinc-500">
-                            Subtotal <span className="text-white font-semibold tabular">{fmtCurrency(sumLineItems(section.lines), { compact: false })}</span>
-                          </div>
-                        </div>
-                        {section.lines.length ? (
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                              <thead>
-                                <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                                  <th className="text-left py-2 px-3">{section.label.slice(0, -1) || section.label} line</th>
-                                  <th className="text-left py-2 px-3">Detail</th>
-                                  <th className="text-right py-2 px-3">Cost ($)</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {section.lines.map((line, index) => (
-                                  <tr key={line.id || `${section.key}-${index + 1}`} className="border-b border-white/5 last:border-b-0">
-                                    <td className="py-2 px-3 text-white font-medium">{section.getTitle(line)}</td>
-                                    <td className="py-2 px-3 text-xs text-zinc-500">{section.getDetail(line)}</td>
-                                    <td className="py-2 px-3">
-                                      <input
-                                        type="number"
-                                        min="0"
-                                        step="10"
-                                        value={Number(line.estCost || line.amount || 0)}
-                                        onChange={(e) => updateItemCost(section.key, line.id, e.target.value)}
-                                        disabled={!canEdit}
-                                        data-testid={`modify-${section.key}-${line.id || index}`}
-                                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                                      />
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        ) : (
-                          <div className="px-3 py-4 text-xs text-zinc-500">{section.fallback}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                          <th className="text-left py-2 px-3">Phase</th>
-                          <th className="text-right py-2 px-3">Infra ($)</th>
-                          <th className="text-right py-2 px-3">Model ($)</th>
-                          <th className="text-right py-2 px-3">Subs ($)</th>
-                          <th className="text-right py-2 px-3">Phase total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {phaseTotals.map((p) => (
-                          <tr key={p.id} data-testid={`modify-phase-${p.id}`} className="border-b border-white/5">
-                            <td className="py-2 px-3 text-white font-medium">{p.name}</td>
-                            <td className="py-2 px-3">
-                              <input type="number" min="0" step="100" value={p.infra} onChange={(e) => updateCell(p.id, "infra", e.target.value)} disabled={!canEdit} data-testid={`modify-infra-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                            </td>
-                            <td className="py-2 px-3">
-                              <input type="number" min="0" step="100" value={p.model} onChange={(e) => updateCell(p.id, "model", e.target.value)} disabled={!canEdit} data-testid={`modify-model-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                            </td>
-                            <td className="py-2 px-3">
-                              <input type="number" min="0" step="100" value={p.subs} onChange={(e) => updateCell(p.id, "subs", e.target.value)} disabled={!canEdit} data-testid={`modify-subs-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                            </td>
-                            <td className="py-2 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.total, { compact: false })}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t-2 border-fuchsia-500/30">
-                          <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Modified total</td>
-                          <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedInfra, { compact: false })}</td>
-                          <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedModel, { compact: false })}</td>
-                          <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedSubs, { compact: false })}</td>
-                          <td className="py-3 px-3 text-right text-fuchsia-300 font-bold text-lg tabular">{fmtCurrency(modifiedTotal, { compact: false })}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
-                <div className="mt-3 flex items-center justify-between text-[11px] flex-wrap gap-2">
-                  <div className="text-zinc-500 tabular">
-                    {isRndReview ? "R&D" : "TPM"} requested <span className="text-white">{fmtCurrency(requestedBudget, { compact: false })}</span> · your modified ask is
-                    {" "}<span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold" : "text-amber-300 font-semibold"}>
-                      {modifiedDeltaVsRequested >= 0 ? "+" : ""}{fmtCurrency(modifiedDeltaVsRequested, { compact: false })}
-                    </span> vs request
-                  </div>
-                  {canEdit && (
-                    <button onClick={resetToOriginal} data-testid="btn-reset-modify" className="text-[11px] text-fuchsia-300 hover:text-fuchsia-200">
-                      Reset to original breakdown
-                    </button>
-                  )}
-                </div>
-              </Panel>
-              <Panel
-                testid="modify-reflection"
-                title="Changed budget reflection"
-                subtitle="This revised amount is what CTO will forward to CFO for the next approval step."
-              >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-                  <CompareBox label="Previous approved" value={currentBudget} />
-                  <CompareBox label={`${isRndReview ? "R&D" : "TPM"} requested`} value={requestedBudget} highlight="warning" />
-                  <CompareBox label="CTO modified total" value={modifiedTotal} highlight="magenta" />
-                </div>
-                <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-300 leading-relaxed">
-                  <span className="text-fuchsia-200 font-semibold">Updated budget: </span>
-                  CFO will receive <span className="text-white font-semibold tabular">{fmtCurrency(modifiedTotal, { compact: false })}</span>,
-                  {" "}which is{" "}
-                  <span className={delta >= 0 ? "text-amber-300 font-semibold tabular" : "text-emerald-300 font-semibold tabular"}>
-                    {delta >= 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })}
-                  </span>{" "}
-                  vs the current approved baseline and{" "}
-                  <span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold tabular" : "text-amber-300 font-semibold tabular"}>
-                    {modifiedDeltaVsRequested >= 0 ? "+" : ""}{fmtCurrency(modifiedDeltaVsRequested, { compact: false })}
-                  </span>{" "}
-                  vs the submitted request.
-                </div>
-              </Panel>
-              {canEdit && (
-                <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 text-xs text-zinc-300 leading-relaxed">
-                  <span className="text-fuchsia-200 font-semibold">Note: </span>
-                  When you click <span className="text-white font-semibold">Approve &amp; Forward to CFO</span>, your modified breakdown is saved and forwarded. Use <span className="text-amber-300 font-semibold">Return to {isRndReview ? "R&D" : "TPM"}</span> to send it back with comments so they can edit and resubmit.
-                </div>
-              )}
-            </>
+          {coreOverviewPanels}
+          {canEdit && isEditing && (
+            <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 text-xs text-zinc-300 leading-relaxed">
+              <span className="text-fuchsia-200 font-semibold">Note: </span>
+              When you click <span className="text-white font-semibold">Approve &amp; Forward to CFO</span>, your modified breakdown is saved and forwarded. Use <span className="text-amber-300 font-semibold">Return to {isRndReview ? "R&D" : "TPM"}</span> to send it back with comments so they can edit and resubmit.
+            </div>
           )}
         </div>
 
@@ -543,7 +534,7 @@ const BudgetReviewWorkspace = () => {
         <div className="space-y-4">
           <div className="bg-[#12121A] rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.03] p-5 sticky top-4" data-testid="decision-panel">
             <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300 mb-2">
-              {tab === "modify" ? "Modified total (live)" : "Approval amount"}
+              {isEditing ? "Modified total (live)" : "Approval amount"}
             </div>
             <div className="flex items-baseline gap-2">
               <span className="font-display text-3xl font-semibold text-white tabular">{fmtCurrency(effectiveAmount, { compact: false })}</span>
@@ -552,18 +543,28 @@ const BudgetReviewWorkspace = () => {
               {delta >= 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })} vs current · {savings > 0 ? `${fmtCurrency(savings, { compact: false })} below request` : savings < 0 ? `${fmtCurrency(-savings, { compact: false })} above request` : "at request"}
             </div>
 
-            {tab === "modify" ? (
-              <div className="mt-3 rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-2 text-[11px] text-zinc-300">
-                Edit values in <span className="text-fuchsia-300 font-semibold">Modify Budget</span> to change this figure.
-              </div>
+            {isEditing ? (
+              <>
+                <div className="mt-3 rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-2 text-[11px] text-zinc-300">
+                  Edit the line items in the overview below to change this figure.
+                </div>
+                <Button
+                  onClick={() => setIsEditing(false)}
+                  variant="outline"
+                  className="w-full mt-3 h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
+                  data-testid="btn-stop-modify-budget"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> Back to overview
+                </Button>
+              </>
             ) : canEdit ? (
               <Button
-                onClick={() => setTab("modify")}
+                onClick={() => setIsEditing(true)}
                 variant="outline"
                 className="w-full mt-3 h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
                 data-testid="btn-modify-budget"
               >
-                <Edit3 className="w-3.5 h-3.5" /> {isRndReview ? "Modify line-item pricing" : "Modify phase-wise breakdown"}
+                <Edit3 className="w-3.5 h-3.5" /> {isRndReview ? "Modify line-item pricing" : "Modify budget inline"}
               </Button>
             ) : canReviseReturnedReview ? (
               <Button
@@ -578,9 +579,8 @@ const BudgetReviewWorkspace = () => {
 
             <div className="mt-4 space-y-1.5 text-xs">
               <Row label={`${isRndReview ? "R&D" : "TPM"} requested`} value={fmtCurrency(requestedBudget, { compact: false })} />
+              {isEditing && <Row label="CTO modified total" value={fmtCurrency(modifiedTotal, { compact: false })} valueColor="text-fuchsia-300" />}
               <Row label="Previous approved" value={fmtCurrency(currentBudget, { compact: false })} />
-              <Row label="Buffer" value={`${review.bufferPct}%`} />
-              <Row label="Recovery" value={review.recoveryType} />
             </div>
 
             {canEdit ? (
@@ -657,5 +657,15 @@ const Row = ({ label, value, valueColor = "text-white" }) => (
     <span className={`font-semibold tabular ${valueColor}`}>{value}</span>
   </div>
 );
+
+const isEditableCtoReview = (review = {}) => {
+  const status = String(review?.status || "").trim().toLowerCase();
+  if (["forwarded-cfo", "pending-cfo", "approved", "partial", "rejected", "rejected-by-cto", "returned-to-tpm"].includes(status)) {
+    return false;
+  }
+  return true;
+};
+
+const isTestingBudget = (budgetType = "") => String(budgetType || "").trim().toLowerCase() === "testing";
 
 export default BudgetReviewWorkspace;

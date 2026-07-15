@@ -11,7 +11,6 @@ import { Link } from "react-router-dom";
 //   Actual cost / task = sum(log.cost) / sum(log.tasksDone) (from TPM daily logs)
 const CostPerTaskView = () => {
   const { projects, taskLogs } = useApp();
-  const [scope, setScope] = useState("all"); // all | rnd | production
   const [sort, setSort] = useState("costPerTask");
 
   const rows = useMemo(() => {
@@ -57,14 +56,12 @@ const CostPerTaskView = () => {
 
   const filtered = useMemo(() => {
     let r = rows.filter((x) => x.planned > 0); // only phases with derivable unit economics
-    if (scope === "rnd") r = r.filter((x) => (x.projectType || "").toLowerCase().includes("r&d") || (x.projectType || "").toLowerCase() === "rnd");
-    else if (scope === "production") r = r.filter((x) => (x.projectType || "").toLowerCase() === "production");
     r = [...r];
     if (sort === "costPerTask") r.sort((a, b) => b.costPerTask - a.costPerTask);
     else if (sort === "costPerTraj") r.sort((a, b) => b.costPerTraj - a.costPerTraj);
     else if (sort === "budget") r.sort((a, b) => b.budget - a.budget);
     return r;
-  }, [rows, scope, sort]);
+  }, [rows, sort]);
 
   const totals = useMemo(() => {
     const tasks = filtered.reduce((s, r) => s + r.planned, 0);
@@ -87,25 +84,9 @@ const CostPerTaskView = () => {
             <Cpu className="w-3 h-3" /> Unit economics
           </div>
           <div className="font-display font-semibold text-[15px] text-white mt-1">Cost per task &amp; per trajectory</div>
-          <div className="text-xs text-zinc-500 mt-0.5">Per-phase breakdown across the portfolio · derived from planned tasks × trajectories</div>
+          <div className="text-xs text-zinc-500 mt-0.5">Per-phase breakdown across all projects · derived from planned tasks × trajectories</div>
         </div>
         <div className="flex items-center gap-1.5">
-          <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1" data-testid="cpt-scope">
-            {[
-              { k: "all", label: "All" },
-              { k: "rnd", label: "R&D" },
-              { k: "production", label: "Production" },
-            ].map((s) => (
-              <button
-                key={s.k}
-                onClick={() => setScope(s.k)}
-                data-testid={`cpt-scope-${s.k}`}
-                className={`px-3 py-1 rounded-md text-[11px] font-medium ${scope === s.k ? "bg-fuchsia-500/15 text-fuchsia-200" : "text-zinc-400 hover:text-zinc-100"}`}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
           <div className="relative">
             <Filter className="w-3 h-3 text-zinc-500 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             <select
@@ -133,7 +114,7 @@ const CostPerTaskView = () => {
 
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-xs text-zinc-500">
-          No phases match the selected scope.
+          No phases are available yet.
         </div>
       ) : (
         <div className="overflow-x-auto">

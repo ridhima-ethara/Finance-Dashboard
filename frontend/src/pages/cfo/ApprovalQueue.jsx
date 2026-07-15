@@ -38,7 +38,7 @@ const changeRequestStatusLabel = (request) => {
   return request.stage === "CTO Review" ? "CTO Review" : "Pending";
 };
 
-// Merge budget reviews + top-up requests + change requests into one unified queue
+// Merge budget reviews + budget change requests + change requests into one unified queue
 const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
   const items = [];
   let seq = 100;
@@ -68,7 +68,7 @@ const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
       raw: r,
     });
   });
-  // Real top-up requests from context
+  // Real budget change requests from context
   topupRequests.forEach((r) => {
     seq += 1;
     items.push({
@@ -76,7 +76,7 @@ const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
       href: `/topup-requests/${r.id}`,
       requestId: `TUR/2026/00${seq}`,
       type: "Top-up",
-      title: `${r.phaseName} top-up`,
+      title: `${r.phaseName} budget change`,
       project: r.projectName,
       subLabel: r.phaseName,
       raisedBy: r.requester,
@@ -117,6 +117,7 @@ const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
 };
 
 const typeIcons = { Budget: FileText, "Top-up": ArrowUpRightSquare, "Change Request": GitPullRequest };
+const typeLabels = { Budget: "Budget", "Top-up": "Budget Change", "Change Request": "Change Request", All: "All" };
 const statusChip = {
   Pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   "CTO Review": "bg-amber-500/15 text-amber-300 border-amber-500/30",
@@ -185,7 +186,7 @@ const ApprovalQueue = () => {
               typeFilter === t ? "border-fuchsia-400 text-white" : "border-transparent text-zinc-400 hover:text-zinc-200"
             }`}
           >
-            {t}
+            {typeLabels[t] || t}
             {t === "All" && (
               <span className="inline-flex items-center px-1.5 py-0.5 rounded-full bg-fuchsia-500/15 text-fuchsia-300 text-[10px] font-semibold tabular">
                 {typeCounts.All}
@@ -240,7 +241,7 @@ const ApprovalQueue = () => {
                     <td className="py-3 px-4">
                       <Link to={q.href} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold bg-fuchsia-500/10 border border-fuchsia-500/25 text-fuchsia-200">
                         <Icon className="w-3 h-3" />
-                        {q.type}
+                        {typeLabels[q.type] || q.type}
                       </Link>
                     </td>
                     <td className="py-3 px-4 text-zinc-300 tabular text-xs">{q.requestId}</td>

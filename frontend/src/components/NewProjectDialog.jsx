@@ -4,22 +4,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Button } from "./ui/button";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
-import { TEAM, USERS } from "../data/mockUsers";
+import { findProjectDirectoryMember, getProjectMembersForSection } from "../data/employeeDirectory";
 import { FolderPlus, User, Calendar as CalIcon, Link2, FileText, Users, Beaker, Upload, X, Plus } from "lucide-react";
 
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_SIZE = 750 * 1024;
 const ETHARA_EMAIL_REGEX = /^[a-z0-9._%+-]+@ethara\.ai$/i;
-const DIRECTORY = [...TEAM, ...USERS].reduce((acc, member) => {
-  if (!member?.email) return acc;
-  const key = String(member.email).trim().toLowerCase();
-  if (!acc.has(key)) acc.set(key, member);
-  return acc;
-}, new Map());
 
 const buildEmptyForm = (today, user) => ({
   clientProjectName: "",
   internalName: "",
+  goal: "",
   startDate: today,
   docUrl: "",
   tpmEmails: user?.role === "TPM" && user?.email ? [String(user.email).trim().toLowerCase()] : [],
@@ -72,7 +67,7 @@ const parseEmailTokens = (value = "") => (
 
 const resolveMemberFromEmail = (email, sectionRole) => {
   const normalizedEmail = String(email || "").trim().toLowerCase();
-  const match = DIRECTORY.get(normalizedEmail);
+  const match = findProjectDirectoryMember({ email: normalizedEmail });
   const role = normalizeRoleForSection(match?.role || "", sectionRole);
   return {
     id: match?.id || `member-${normalizedEmail.replace(/[^a-z0-9]+/g, "-")}`,
@@ -102,12 +97,21 @@ const formatFileSize = (size) => {
 const NewProjectDialog = ({ open, onOpenChange }) => {
   const nav = useNavigate();
   const { addProject, user } = useApp();
+  const isRndCreator = user?.role === "R&D";
 
   const today = new Date().toISOString().slice(0, 10);
 
   const [form, setForm] = useState(() => buildEmptyForm(today, user));
+  const tpmSuggestions = useMemo(() => getProjectMembersForSection("TPM"), []);
+  const plQlSuggestions = useMemo(() => getProjectMembersForSection("PL / QL"), []);
+  const rndSuggestions = useMemo(() => getProjectMembersForSection("R&D"), []);
+  const rndSuggestionEmails = useMemo(
+    () => new Set(rndSuggestions.map((member) => String(member.email || "").trim().toLowerCase())),
+    [rndSuggestions]
+  );
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+  const isRndDepartmentEmail = (email = "") => rndSuggestionEmails.has(String(email || "").trim().toLowerCase());
   const handleFilePick = (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
@@ -168,7 +172,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
   const submit = () => {
     if (!form.clientProjectName.trim()) return toast.error("Enter the client project name");
     if (!form.internalName.trim()) return toast.error("Enter the internal project name");
-    if (!form.tpmEmails.length) return toast.error("Assign at least one TPM email");
+    if (!isRndCreator && !form.tpmEmails.length) return toast.error("Assign at least one TPM email");
     if (!form.startDate) return toast.error("Set the start date");
 
     const invalidEmails = dedupeEmails([
@@ -179,6 +183,12 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
     if (invalidEmails.length) {
       return toast.error("Only @ethara.ai emails are allowed", {
         description: invalidEmails.join(", "),
+      });
+    }
+    const invalidRndEmails = form.rndEmails.filter((email) => !isRndDepartmentEmail(email));
+    if (invalidRndEmails.length) {
+      return toast.error("Only R&D department members can be assigned here", {
+        description: invalidRndEmails.join(", "),
       });
     }
 
@@ -250,6 +260,17 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
             />
           </Field>
 
+          <Field label="Project Goal" hint="Shared with kickoff recipients">
+            <textarea
+              value={form.goal}
+              onChange={(e) => update("goal", e.target.value)}
+              placeholder="e.g. Validate the sample workflow, scope, requirements, and delivery goal for this project"
+              data-testid="input-kickoff-goal"
+              rows={3}
+              className="w-full px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-y min-h-[88px]"
+            />
+          </Field>
+
           <Field label="Start date">
             <div className="relative">
               <CalIcon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -315,25 +336,31 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
             )}
           </Field>
 
-          <Field label="Assign TPM" hint="Owns budget building &amp; delivery">
+          <Field label="Assign TPM" hint={isRndCreator ? "Optional during R&D kickoff" : "Owns budget building &amp; delivery"}>
             <EmailRecipientsInput
               icon={User}
               emails={form.tpmEmails}
               onChange={(emails) => update("tpmEmails", emails)}
               placeholder="tpm@ethara.ai"
               dataTestId="input-tpm"
-              helperText="Enter one or more TPM emails. The first email becomes the primary TPM owner; all listed emails receive kickoff."
+              helperText={
+                isRndCreator
+                  ? "TPM is optional for R&D kickoff. If you add TPM here, they receive kickoff and see the project as under R&D currently until sample handoff."
+                  : "Enter one or more TPM emails. The first email becomes the primary TPM owner; all listed emails receive kickoff."
+              }
+              suggestions={tpmSuggestions}
             />
           </Field>
 
-          <Field label="Assign PL / QL" hint="Added to project members + kickoff">
+          <Field label="Assign PL / QL" hint={isRndCreator ? "Optional kickoff recipients" : "Added to project members + kickoff"}>
             <EmailRecipientsInput
               icon={Users}
               emails={form.plQlEmails}
               onChange={(emails) => update("plQlEmails", emails)}
-              placeholder="pl@ethara.ai, quality.1@ethara.ai"
-              dataTestId="plql-multi-picker"
-              helperText="Enter one or more PL / QL emails. Matching demo emails are auto-mapped to Project Lead or Quality Lead."
+            placeholder="pl@ethara.ai, quality.1@ethara.ai"
+            dataTestId="plql-multi-picker"
+            helperText="Enter one or more PL / QL emails. Matching employee directory emails are auto-mapped to Project Lead or Quality Lead."
+              suggestions={plQlSuggestions}
             />
           </Field>
 
@@ -344,7 +371,10 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
               onChange={(emails) => update("rndEmails", emails)}
               placeholder="rd@ethara.ai, engineer.1@ethara.ai"
               dataTestId="rnd-multi-picker"
-              helperText="Enter one or more R&D or engineer emails. Every @ethara.ai address listed here is added to kickoff and project access."
+              helperText="Only employees from the R&D department can be added here. Everyone listed here gets kickoff access and the kickoff mail."
+              suggestions={rndSuggestions}
+              validateEmail={isRndDepartmentEmail}
+              invalidEmailTitle="Only R&D department members can be assigned here"
             />
           </Field>
         </div>
@@ -389,8 +419,12 @@ const EmailRecipientsInput = ({
   placeholder,
   dataTestId,
   helperText,
+  suggestions = [],
+  validateEmail,
+  invalidEmailTitle,
 }) => {
   const [draft, setDraft] = useState("");
+  const suggestionListId = `${dataTestId}-directory`;
 
   const addDraftEmails = () => {
     const parsed = parseEmailTokens(draft);
@@ -398,9 +432,17 @@ const EmailRecipientsInput = ({
 
     const valid = [];
     const invalid = [];
+    const disallowed = [];
     parsed.forEach((email) => {
-      if (ETHARA_EMAIL_REGEX.test(email)) valid.push(email);
-      else invalid.push(email);
+      if (!ETHARA_EMAIL_REGEX.test(email)) {
+        invalid.push(email);
+        return;
+      }
+      if (validateEmail && !validateEmail(email)) {
+        disallowed.push(email);
+        return;
+      }
+      valid.push(email);
     });
 
     if (valid.length) {
@@ -409,6 +451,11 @@ const EmailRecipientsInput = ({
     if (invalid.length) {
       toast.error("Only @ethara.ai emails are allowed", {
         description: invalid.join(", "),
+      });
+    }
+    if (disallowed.length) {
+      toast.error(invalidEmailTitle || "Some emails cannot be added here", {
+        description: disallowed.join(", "),
       });
     }
     setDraft("");
@@ -425,6 +472,7 @@ const EmailRecipientsInput = ({
           <Icon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="email"
+            list={suggestions.length ? suggestionListId : undefined}
             data-testid={`${dataTestId}-input`}
             value={draft}
             onChange={(event) => setDraft(event.target.value)}
@@ -440,6 +488,15 @@ const EmailRecipientsInput = ({
             placeholder={placeholder}
             className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
           />
+          {suggestions.length > 0 && (
+            <datalist id={suggestionListId}>
+              {suggestions.map((member) => (
+                <option key={member.id} value={member.email}>
+                  {member.searchLabel}
+                </option>
+              ))}
+            </datalist>
+          )}
         </div>
         <Button
           type="button"
@@ -451,7 +508,14 @@ const EmailRecipientsInput = ({
           Add
         </Button>
       </div>
-      <div className="mt-2 text-[10px] text-zinc-500">{helperText}</div>
+      <div className="mt-2 space-y-1">
+        <div className="text-[10px] text-zinc-500">{helperText}</div>
+        {suggestions.length > 0 && (
+          <div className="text-[10px] text-zinc-600">
+            {suggestions.length} directory member{suggestions.length === 1 ? "" : "s"} available in this section. Start typing to use the employee sheet-backed suggestions.
+          </div>
+        )}
+      </div>
       {emails.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {emails.map((email) => (

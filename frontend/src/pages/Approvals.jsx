@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { isTpmView } from "../lib/roles";
 import { fmtCurrency, fmtDate } from "../lib/format";
+import { getCtoForwardLabel, hasCtoModifiedBudgetReview } from "../lib/budgetReview";
 import { APPROVALS } from "../data/mockData";
 import { Button } from "../components/ui/button";
 import PartialApprovalDialog from "../components/PartialApprovalDialog";
@@ -24,7 +25,7 @@ const STATUS_MAP = {
   pending: { label: "Pending", tone: "amber", Icon: Clock3 },
   "pending-cto": { label: "Pending · CTO Review", tone: "amber", Icon: Clock3 },
   "pending-cfo": { label: "Pending · CFO Sign-off", tone: "sky", Icon: Clock3 },
-  "forwarded-cfo": { label: "Modified by CTO · Forwarded to CFO", tone: "sky", Icon: Clock3 },
+  "forwarded-cfo": { label: "Pending · CFO Sign-off", tone: "sky", Icon: Clock3 },
   approved: { label: "Approved", tone: "emerald", Icon: CheckCircle2 },
   partial: { label: "Partially Approved", tone: "emerald-soft", Icon: Percent },
   "partial-recovered": { label: "Partially Recovered", tone: "emerald-soft", Icon: Percent },
@@ -42,12 +43,19 @@ const toneClasses = {
 };
 
 const typeConfig = {
-  Topup: { label: "Top-up", Icon: ArrowUpRightSquare, tone: "text-fuchsia-300" },
+  Topup: { label: "Budget Change", Icon: ArrowUpRightSquare, tone: "text-fuchsia-300" },
   Budget: { label: "Budget", Icon: Wallet, tone: "text-sky-300" },
   Batch: { label: "Batch Delivery", Icon: PackageCheck, tone: "text-emerald-300" },
 };
 
-// Build TPM's request rows from context (top-ups + batches + budget reviews) + any mock budget requests they own.
+const buildBudgetResubmitHref = (review) => {
+  const next = new URLSearchParams({ edit: review.id, projectId: review.projectId });
+  if (review.budgetType) next.set("budgetType", review.budgetType);
+  if (review.sampleIteration) next.set("sampleIteration", String(review.sampleIteration));
+  return `/budget-builder?${next.toString()}`;
+};
+
+// Build TPM's request rows from context (budget changes + batches + budget reviews) + any mock budget requests they own.
 const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetReviews }) => {
   const rows = [];
 
@@ -55,12 +63,18 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
   budgetReviews
     .filter((r) => r.tpm === userName)
     .forEach((r) => {
+      const ctoModified = hasCtoModifiedBudgetReview(r);
       const decisions = [];
       if (r.ctoAt) {
         decisions.push({
           actor: "CTO",
-          decision: r.status === "rejected-by-cto" ? "reject" : r.status === "returned-to-tpm" ? "return" : "modify",
-          amount: r.modifiedTotal,
+          decision: r.status === "rejected-by-cto" ? "reject" : r.status === "returned-to-tpm" ? "return" : ctoModified ? "modify" : "approve",
+          label: r.status === "rejected-by-cto"
+            ? "Rejected"
+            : r.status === "returned-to-tpm"
+              ? "Returned for changes"
+              : getCtoForwardLabel(r),
+          amount: r.status === "rejected-by-cto" ? 0 : (r.modifiedTotal ?? r.requestedBudget),
           comment: r.ctoComment,
           at: r.ctoAt,
         });
@@ -76,6 +90,10 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       }
       const displayStatus = r.status === "forwarded-cfo"
         ? "forwarded-cfo"
+        : r.status === "pending-cto"
+          ? "pending-cto"
+        : r.status === "pending-cfo"
+          ? "pending-cfo"
         : r.status === "returned-to-tpm"
           ? "returned"
         : r.status === "rejected-by-cto"
@@ -83,6 +101,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
           : r.cfoDecision
             ? (r.cfoDecision.decision === "approve" ? "approved" : r.cfoDecision.decision === "partial" ? "partial" : r.cfoDecision.decision === "return" ? "returned" : "rejected")
             : "pending";
+      const canRevise = r.status === "returned-to-tpm";
       rows.push({
         id: r.id,
         type: "Budget",
@@ -95,12 +114,15 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
             ? null
             : (r.cfoDecision?.amount ?? r.modifiedTotal),
         reason: r.status === "forwarded-cfo"
-          ? `CTO modified to ${r.modifiedTotal ? "$" + Number(r.modifiedTotal).toLocaleString() : "—"} — awaiting CFO sign-off`
-          : (r.ctoComment || ""),
-        submittedAt: r.ctoAt,
+          ? ctoModified
+            ? `CTO modified to ${r.modifiedTotal ? "$" + Number(r.modifiedTotal).toLocaleString() : "—"} — awaiting CFO sign-off`
+            : `Approved by CTO and forwarded to CFO${r.ctoComment ? ` — ${r.ctoComment}` : ""}`
+          : (r.ctoComment || r.justification || ""),
+        submittedAt: r.submittedAt || r.ctoAt,
         status: displayStatus,
         decisions,
-        href: `/budget-reviews/${r.id}`,
+        href: canRevise ? buildBudgetResubmitHref(r) : `/approvals/${r.id}`,
+        ctaLabel: canRevise ? "Revise & Resubmit" : "View full details",
       });
     });
 
@@ -130,7 +152,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       rows.push({
         id: r.id,
         type: "Topup",
-        title: `${r.phaseName} top-up`,
+        title: `${r.phaseName} budget change`,
         subtitle: r.projectName,
         requestedAmount: r.amount,
         approvedAmount: r.status === "rejected" ? 0 : approvedAmount,
@@ -139,6 +161,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
         status: r.status,
         decisions,
         href: `/topup-requests/${r.id}`,
+        ctaLabel: "View full details",
       });
     });
 
@@ -168,6 +191,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
         status: d.status,
         decisions,
         href: "/batch-deliveries",
+        ctaLabel: "View full details",
       });
     });
 
@@ -184,7 +208,8 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       submittedAt: a.ts,
       status: "pending",
       decisions: [{ actor: a.stage, decision: "pending", amount: null, comment: `Currently at ${a.stage} stage.`, at: a.ts }],
-      href: "/approval-queue",
+      href: null,
+      ctaLabel: null,
     });
   });
 
@@ -284,7 +309,7 @@ const TpmMyRequests = () => {
         <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center" data-testid="my-req-empty">
           <Info className="w-8 h-8 mx-auto text-zinc-600 mb-3" />
           <div className="text-sm text-zinc-300 font-medium">Nothing to show here yet</div>
-          <div className="text-xs text-zinc-500 mt-1">Raise a top-up or deliver a batch to see it tracked here.</div>
+          <div className="text-xs text-zinc-500 mt-1">Raise a budget change or deliver a batch to see it tracked here.</div>
         </div>
       )}
       <div className="space-y-3">
@@ -360,7 +385,7 @@ const TpmMyRequests = () => {
                             <span className="text-white font-semibold">{d.actor}</span>
                             <span className="text-zinc-500">·</span>
                             <span className="text-zinc-300 capitalize">
-                              {d.decision === "approve" ? "Approved" : d.decision === "partial" ? "Partially approved" : d.decision === "reject" ? "Rejected" : d.decision === "modify" ? "Modified & forwarded to CFO" : d.decision === "return" ? "Returned for changes" : d.decision}
+                              {d.label || (d.decision === "approve" ? "Approved" : d.decision === "partial" ? "Partially approved" : d.decision === "reject" ? "Rejected" : d.decision === "modify" ? "Modified & forwarded to CFO" : d.decision === "return" ? "Returned for changes" : d.decision)}
                             </span>
                             {d.amount != null && d.decision !== "pending" && d.decision !== "reject" && (
                               <>
@@ -386,7 +411,7 @@ const TpmMyRequests = () => {
               {r.href && (
                 <div className="mt-3 flex items-center justify-end">
                   <Link to={r.href} data-testid={`open-${r.id}`} className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200">
-                    View full details <ChevronRight className="w-3 h-3" />
+                    {r.ctaLabel || "View full details"} <ChevronRight className="w-3 h-3" />
                   </Link>
                 </div>
               )}
@@ -424,7 +449,7 @@ const LegacyApprovals = () => {
     <div className="space-y-6" data-testid="page-approvals-legacy">
       <div>
         <h1 className="font-display font-semibold text-3xl tracking-tight text-white">Approvals</h1>
-        <p className="text-sm text-zinc-400 mt-1">Budget requests, top-ups &amp; modifications pending decision · full / partial / reject supported</p>
+        <p className="text-sm text-zinc-400 mt-1">Budget requests, budget changes &amp; modifications pending decision · full / partial / reject supported</p>
       </div>
       <div className="bg-[#12121A] rounded-2xl border border-white/5 overflow-hidden">
         <table className="w-full">

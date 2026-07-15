@@ -6,20 +6,16 @@ import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
 import Approvals from "./pages/Approvals";
-import Topups from "./pages/Topups";
-import TpmTopups from "./pages/tpm/TpmTopups";
-import { isTpmView } from "./lib/roles";
+import MyRequestDetail from "./pages/MyRequestDetail";
 import Reimbursements from "./pages/Reimbursements";
 import AuditLog from "./pages/AuditLog";
 import Settings from "./pages/Settings";
 import Team from "./pages/Team";
 import Tasks from "./pages/Tasks";
 import Login from "./pages/Login";
-import ModelKeys from "./pages/ModelKeys";
 import Daily from "./pages/Daily";
 import BudgetBuilder from "./pages/tpm/BudgetBuilder";
 import PhaseWorkspace from "./pages/tpm/PhaseWorkspace";
-import AiCost from "./pages/tpm/AiCost";
 import Consumption from "./pages/tpm/Consumption";
 import BudgetReviews from "./pages/cto/BudgetReviews";
 import BudgetReviewWorkspace from "./pages/cto/BudgetReviewWorkspace";
@@ -45,9 +41,10 @@ const Protected = ({ children }) => {
   return children;
 };
 
-const TopupsRoute = () => {
+const RoleProtected = ({ roles = [], children }) => {
   const { role } = useApp();
-  return isTpmView(role) ? <TpmTopups /> : <Topups />;
+  if (roles.length && !roles.includes(role)) return <Navigate to="/" replace />;
+  return children;
 };
 
 function App() {
@@ -68,28 +65,43 @@ function App() {
               <Route path="/projects" element={<Projects />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/approvals" element={<Approvals />} />
-              <Route path="/topups" element={<TopupsRoute />} />
+              <Route path="/approvals/:id" element={<MyRequestDetail />} />
+              <Route path="/topups" element={<Navigate to="/projects" replace />} />
               <Route path="/reimbursements" element={<Reimbursements />} />
               <Route path="/audit" element={<AuditLog />} />
               <Route path="/team" element={<Team />} />
               <Route path="/tasks" element={<Tasks />} />
-              <Route path="/keys" element={<ModelKeys />} />
+              <Route path="/keys" element={<Navigate to="/projects" replace />} />
               <Route path="/daily" element={<Daily />} />
               <Route path="/budget-builder" element={<BudgetBuilder />} />
               <Route path="/projects/:id/phase/:phaseId" element={<PhaseWorkspace />} />
-              <Route path="/ai-cost" element={<AiCost />} />
+              <Route path="/ai-cost" element={<Navigate to="/projects" replace />} />
               <Route path="/consumption" element={<Consumption />} />
               <Route path="/budget-reviews" element={<BudgetReviews />} />
               <Route path="/budget-reviews/:id" element={<BudgetReviewWorkspace />} />
               <Route path="/change-requests" element={<ChangeRequests />} />
               <Route path="/monitoring" element={<ProjectMonitoring />} />
               <Route path="/approval-queue" element={<ApprovalQueue />} />
-              <Route path="/approval-queue/:id" element={<ApprovalDetail />} />
+              <Route
+                path="/approval-queue/:id"
+                element={(
+                  <RoleProtected roles={["CFO"]}>
+                    <ApprovalDetail />
+                  </RoleProtected>
+                )}
+              />
               <Route path="/approval-queue/change-request/:id" element={<ChangeRequestDetail />} />
               <Route path="/topup-requests/:id" element={<TopupRequestDetail />} />
               <Route path="/batch-deliveries" element={<CfoBatchDeliveries />} />
               <Route path="/financial-monitoring" element={<FinancialMonitoring />} />
-              <Route path="/buffer" element={<Buffer />} />
+              <Route
+                path="/buffer"
+                element={(
+                  <RoleProtected roles={["CFO"]}>
+                    <Buffer />
+                  </RoleProtected>
+                )}
+              />
               <Route path="/recovery" element={<Recovery />} />
               <Route path="/early-warning" element={<EarlyWarning />} />
               <Route path="/monthly-forecast" element={<MonthlyForecast />} />

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useApp } from "../context/AppContext";
+import { isTpmView } from "../lib/roles";
 import { fmtCurrency } from "../lib/format";
 import { toast } from "sonner";
 import { Button } from "../components/ui/button";
@@ -49,6 +50,8 @@ const TopupRequestDetail = () => {
   const { id } = useParams();
   const nav = useNavigate();
   const { topupRequests, projects, role, ctoDecideTopup, cfoDecideTopup, getPhaseLogs } = useApp();
+  const backHref = isTpmView(role) ? "/approvals" : "/approval-queue";
+  const backLabel = isTpmView(role) ? "My Requests" : "Approval Queue";
 
   const req = useMemo(() => topupRequests.find((request) => request.id === id), [topupRequests, id]);
   const project = useMemo(() => req && projects.find((entry) => entry.id === req.projectId), [projects, req]);
@@ -64,7 +67,7 @@ const TopupRequestDetail = () => {
   if (!req) {
     return (
       <div className="text-sm text-zinc-400">
-        Top-up request not found. <button onClick={() => nav("/approval-queue")} className="text-fuchsia-300 underline">Back to queue</button>
+        Budget change request not found. <button onClick={() => nav(backHref)} className="text-fuchsia-300 underline">Back</button>
       </div>
     );
   }
@@ -137,7 +140,7 @@ const TopupRequestDetail = () => {
       return;
     }
     ctoDecideTopup(req.id, { comment, decision: "reject" });
-    toast.error("Top-up rejected by CTO");
+    toast.error("Budget change rejected by CTO");
   };
 
   const doCfoApprove = () => {
@@ -164,7 +167,7 @@ const TopupRequestDetail = () => {
       return;
     }
     cfoDecideTopup(req.id, { comment, decision: "reject" });
-    toast.error("Top-up rejected by CFO");
+    toast.error("Budget change rejected by CFO");
   };
 
   const ctoDone = !!req.ctoDecision;
@@ -180,14 +183,14 @@ const TopupRequestDetail = () => {
 
   return (
     <div className="space-y-4" data-testid="page-topup-detail">
-      <button onClick={() => nav("/approval-queue")} className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white" data-testid="btn-back">
-        <ArrowLeft className="w-3.5 h-3.5" /> Approval Queue
+      <button onClick={() => nav(backHref)} className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white" data-testid="btn-back">
+        <ArrowLeft className="w-3.5 h-3.5" /> {backLabel}
       </button>
 
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="font-display font-semibold text-3xl tracking-tight text-white">{req.projectName}</h1>
         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/30">
-          Top-up request
+          Budget change request
         </span>
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${stage.cls}`}>
           {stage.label}
@@ -279,21 +282,15 @@ const TopupRequestDetail = () => {
             ))}
             {!hasBreakdown && (
               <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
-                This request predates line-item capture, so only the total top-up amount is available.
+                This request predates line-item capture, so only the total budget change amount is available.
               </div>
             )}
-            {(Number(req.baseAmount || 0) > 0 || Number(req.bufferAmount || 0) > 0) && (
+            {Number(req.baseAmount || 0) > 0 && (
               <div className="mt-4 space-y-1 text-xs text-zinc-400">
                 {Number(req.baseAmount || 0) > 0 && (
                   <div className="flex items-center justify-between">
                     <span>Base request</span>
                     <span className="text-zinc-200 font-semibold tabular">{fmtCurrency(req.baseAmount, { compact: false })}</span>
-                  </div>
-                )}
-                {Number(req.bufferAmount || 0) > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span>Buffer ({Number(req.bufferPct || 0)}%)</span>
-                    <span className="text-zinc-200 font-semibold tabular">{fmtCurrency(req.bufferAmount, { compact: false })}</span>
                   </div>
                 )}
               </div>
@@ -402,7 +399,6 @@ const TopupRequestDetail = () => {
             <div className="space-y-2 text-sm">
               <Row label="Requested" value={fmtCurrency(req.amount, { compact: false })} />
               {Number(req.baseAmount || 0) > 0 && <Row label="Base ask" value={fmtCurrency(req.baseAmount, { compact: false })} />}
-              {Number(req.bufferAmount || 0) > 0 && <Row label={`Buffer (${Number(req.bufferPct || 0)}%)`} value={fmtCurrency(req.bufferAmount, { compact: false })} />}
               {breakdownSections.map((section) => (
                 <Row
                   key={section.key}
@@ -461,7 +457,7 @@ const BreakdownSection = ({ title, icon: Icon, color, entry, helper }) => {
               <LineItem
                 key={line.id || `${title}-${index + 1}`}
                 name={line.optionLabel || title}
-                sub={line.billingUnit === "per month" ? "Recurring line item" : "Top-up line item"}
+                sub={line.provider || (line.billingUnit === "per month" ? "Recurring line item" : "Budget change line item")}
                 detail={String(line.note || "").trim() || helper}
                 value={formatEntryAmount(line)}
               />

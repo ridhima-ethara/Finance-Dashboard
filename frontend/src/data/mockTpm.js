@@ -1,33 +1,26 @@
-// Empty transactional TPM / CTO dataset. Live workflow records are created in AppContext.
+import {
+  DEMO_AI_COST_BY_MODEL,
+  DEMO_AI_COST_BY_PROJECT,
+  DEMO_AI_COST_BY_PROVIDER,
+  DEMO_AI_COST_MONTHLY,
+  DEMO_AI_COST_TODAY,
+  DEMO_AI_COST_TREND,
+  DEMO_BUDGET_REVIEWS,
+  DEMO_CHANGE_REQUESTS,
+  DEMO_PHASE_TASKS,
+  DEMO_REPORTS_CATALOG,
+} from "./demoState";
 
-export const AI_COST_TODAY = {
-  total: 0,
-  budget: 0,
-  yesterday: 0,
-  wowChange: 0,
-  tokensInput: 0,
-  tokensOutput: 0,
-  avgLatencyMs: 0,
-  requests: 0,
-};
-
-export const AI_COST_MONTHLY = {
-  total: 0,
-  budget: 0,
-  forecast: 0,
-  projected: 0,
-  daysElapsed: 0,
-  daysRemaining: 0,
-};
-
-export const AI_COST_BY_PROVIDER = [];
-export const AI_COST_BY_MODEL = [];
-export const AI_COST_TREND = [];
-export const AI_COST_BY_PROJECT = [];
-export const PHASE_TASKS = {};
-export const getPhaseTasks = () => [];
-export const CHANGE_REQUESTS = [];
-export const BUDGET_REVIEWS = [];
+export const AI_COST_TODAY = DEMO_AI_COST_TODAY;
+export const AI_COST_MONTHLY = DEMO_AI_COST_MONTHLY;
+export const AI_COST_BY_PROVIDER = DEMO_AI_COST_BY_PROVIDER;
+export const AI_COST_BY_MODEL = DEMO_AI_COST_BY_MODEL;
+export const AI_COST_TREND = DEMO_AI_COST_TREND;
+export const AI_COST_BY_PROJECT = DEMO_AI_COST_BY_PROJECT;
+export const PHASE_TASKS = DEMO_PHASE_TASKS;
+export const getPhaseTasks = (projectId, phaseId) => PHASE_TASKS[`${projectId}::${phaseId}`] || [];
+export const CHANGE_REQUESTS = DEMO_CHANGE_REQUESTS;
+export const BUDGET_REVIEWS = DEMO_BUDGET_REVIEWS;
 export const CTO_AUDIT = [];
 export const DAILY_CONSUMPTION_LOG = [];
-export const REPORTS_CATALOG = [];
+export const REPORTS_CATALOG = DEMO_REPORTS_CATALOG;

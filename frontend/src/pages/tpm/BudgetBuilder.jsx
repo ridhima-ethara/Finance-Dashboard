@@ -1,39 +1,89 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import { Button } from "../../components/ui/button";
 import { toast } from "sonner";
 import {
   ArrowLeft, Plus, Trash2, Save, Send, Sparkles, ClipboardCheck, Cpu, Server, CreditCard,
-  CheckCircle2, ChevronRight, UserPlus, MessageSquareWarning,
+  CheckCircle2, ChevronRight, UserPlus, MessageSquareWarning, FileText,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { EC2_INSTANCES, BEDROCK_MODELS, SUBSCRIPTION_CATALOG } from "../../data/mockCatalog";
+import { EC2_INSTANCES, BEDROCK_MODELS, PLATFORM_PROVIDERS, SUBSCRIPTION_CATALOG } from "../../data/mockCatalog";
 import { BUDGET_REVIEWS } from "../../data/mockTpm";
-import { TEAM } from "../../data/mockUsers";
-import { normalizeBudgetType } from "../../lib/projectMetrics";
+import { isProjectInTpmLane, normalizeBudgetType } from "../../lib/projectMetrics";
 import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../../lib/modelCatalog";
+import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
+import {
+  DEFAULT_GENERAL_BUDGET_HEADERS,
+  buildEmptyGeneralBudgetTableRow,
+  getGeneralBudgetColumnCellKey,
+  isGeneralBudgetTableLine,
+  normalizeGeneralBudgetHeaders,
+  normalizeGeneralBudgetRows,
+  parseGeneralBudgetTable,
+  serializeGeneralBudgetTableRows,
+  sumGeneralBudgetRows,
+} from "../../lib/generalBudget";
 
 const uid = () => Math.random().toString(36).slice(2, 8);
 const todayISO = () => new Date().toISOString().slice(0, 10);
 const plusDaysISO = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
 const splitPhaseDates = (value = "") => String(value).split("→").map((part) => part.trim());
 const HOURS_PER_MONTH = 730; // AWS standard
+const MS_PER_DAY = 86400000;
 const DIRECT_COST_BUDGET_TYPES = ["Testing"];
+const TEAM_TYPE_OPTIONS = ["Technical", "Generalist", "R&D"];
+const MODEL_PLATFORM_PRIORITY = PLATFORM_PROVIDERS;
+const MODEL_PLATFORM_MAP = {
+  AWS: new Set(["AI21", "Amazon", "Anthropic", "Cohere", "DeepSeek", "Meta", "Mistral", "Stability AI"]),
+  OpenAI: new Set(["OpenAI"]),
+  GCP: new Set(["Google"]),
+  Moonshot: new Set(["Moonshot AI"]),
+};
 
-// Seed cost/task from the Bedrock catalog (~4K in + 1K out per trajectory) — user can override.
+const getInfraProvider = (instance = {}) => String(instance?.provider || "AWS").trim() || "AWS";
+const withInfraProvider = (instance = {}) => ({ ...instance, provider: getInfraProvider(instance) });
+const getModelPlatform = (model = {}) => {
+  const explicit = String(model?.platform || "").trim();
+  if (explicit) return explicit;
+  const provider = String(model?.provider || "").trim();
+  if (MODEL_PLATFORM_PRIORITY.includes(provider)) return provider;
+  const matched = MODEL_PLATFORM_PRIORITY.find((platform) => MODEL_PLATFORM_MAP[platform]?.has(provider));
+  return matched || "OpenRouter";
+};
+const getModelsForProvider = (catalog = [], provider = "") => {
+  const filtered = catalog.filter((model) => getModelPlatform(model) === provider);
+  return filtered.length ? filtered : catalog;
+};
+const getInstancesForProvider = (provider = "") => {
+  const filtered = EC2_INSTANCES.filter((instance) => getInfraProvider(instance) === provider);
+  return filtered.length ? filtered : EC2_INSTANCES;
+};
+const getDailyRateFromMonthly = (monthlyAmount = 0) => Number(monthlyAmount || 0) / 30;
+const getInclusiveDayCount = (start = "", end = "") => {
+  if (!start || !end) return 0;
+  const startTs = new Date(`${start}T00:00:00`).getTime();
+  const endTs = new Date(`${end}T00:00:00`).getTime();
+  if (Number.isNaN(startTs) || Number.isNaN(endTs) || endTs < startTs) return 0;
+  return Math.floor((endTs - startTs) / MS_PER_DAY) + 1;
+};
+const formatBudgetTypeOptionLabel = (value = "") => (value === "RnD" ? "Sample" : value);
+
+// Seed cost/task from the model catalog (~4K in + 1K out per trajectory) — user can override.
 const seedCostPerTask = (model) => {
   if (!model) return 0.05;
   return Math.round((model.pricePer1kIn * 4 + model.pricePer1kOut * 1) * 10000) / 10000;
 };
 
 const emptyModelItem = (modelCatalog = BEDROCK_MODELS, totalTrajectories = 0) => {
-  const m = modelCatalog[0] || BEDROCK_MODELS[0];
+  const defaultPlatform = MODEL_PLATFORM_PRIORITY[0];
+  const providerModels = getModelsForProvider(modelCatalog, defaultPlatform);
+  const m = providerModels[0] || modelCatalog[0] || BEDROCK_MODELS[0];
   const costPerTask = seedCostPerTask(m);
   return {
     id: uid(),
     modelId: m.id,
-    provider: m.provider,
+    provider: getModelPlatform(m),
     usageTag: "Trajectory building",
     costPerTask,
     estCost: Math.round(costPerTask * totalTrajectories * 100) / 100,
@@ -42,12 +92,24 @@ const emptyModelItem = (modelCatalog = BEDROCK_MODELS, totalTrajectories = 0) =>
 const emptyInfraItem = () => {
   const inst = EC2_INSTANCES[0];
   const monthly = Math.round(inst.hourly * HOURS_PER_MONTH * 100) / 100;
-  return { id: uid(), instance: inst.code, monthlyCost: monthly, months: 1, estCost: monthly };
+  return {
+    id: uid(),
+    provider: getInfraProvider(inst),
+    instance: inst.code,
+    monthlyCost: monthly,
+    estCost: monthly,
+  };
 };
 const emptySubItem = () => {
   const s = SUBSCRIPTION_CATALOG[0];
-  return { id: uid(), subscription: s.name, pricePerSeat: s.monthly, seats: 1, months: 1, members: [], estCost: s.monthly };
+  return { id: uid(), subscription: s.name, pricePerSeat: s.monthly, seats: 1, members: [], estCost: s.monthly };
 };
+const emptyGeneralItem = () => ({
+  id: uid(),
+  label: "",
+  note: "",
+  estCost: 0,
+});
 
 const emptyPhase = (n, start, end) => ({
   id: `p${n}`,
@@ -67,8 +129,9 @@ const BudgetBuilder = () => {
   const requestedPhaseId = params.get("phaseId") || "";
   const requestedSampleIteration = Math.max(Number(params.get("sampleIteration") || 1), 1);
   const requestedSourceDeliveryId = params.get("sourceDeliveryId") || null;
-  const { visibleProjects, submitBudget, budgetReviews, role, user, modelCatalog, addCustomModel } = useApp();
+  const { visibleProjects: allVisibleProjects, submitBudget, budgetReviews, budgets, role, user, modelCatalog, addCustomModel } = useApp();
   const isRnd = role === "R&D";
+  const testingInfraPrefillAppliedRef = useRef(false);
 
   const [step, setStep] = useState(1); // 1=Details, 2=Budget Items, 3=Preview
 
@@ -77,6 +140,23 @@ const BudgetBuilder = () => {
     if (!editReviewId) return null;
     return budgetReviews.find((r) => r.id === editReviewId) || BUDGET_REVIEWS.find((r) => r.id === editReviewId) || null;
   }, [editReviewId, budgetReviews]);
+  const visibleProjects = useMemo(() => {
+    if (isRnd) return allVisibleProjects;
+    const activeProjects = allVisibleProjects.filter((project) => isProjectInTpmLane(project));
+    if (returnedReview?.projectId && !activeProjects.some((project) => project.id === returnedReview.projectId)) {
+      const returnedProject = allVisibleProjects.find((project) => project.id === returnedReview.projectId);
+      return returnedProject ? [returnedProject, ...activeProjects] : activeProjects;
+    }
+    return activeProjects;
+  }, [allVisibleProjects, isRnd, returnedReview]);
+  const modelProviderOptions = useMemo(
+    () => MODEL_PLATFORM_PRIORITY.filter((platform) => getModelsForProvider(modelCatalog, platform).length > 0),
+    [modelCatalog]
+  );
+  const infraProviderOptions = useMemo(
+    () => MODEL_PLATFORM_PRIORITY.filter((platform) => getInstancesForProvider(platform).length > 0),
+    []
+  );
 
   // ---- Step 1: Details ----
   const [projectId, setProjectId] = useState(
@@ -86,10 +166,16 @@ const BudgetBuilder = () => {
     || ""
   );
   const [priority, setPriority] = useState("Medium");
+  const [teamType, setTeamType] = useState(returnedReview?.teamType || (isRnd ? "R&D" : "Technical"));
   const showReworkOption = requestedBudgetType === "Rework" || normalizeBudgetType(returnedReview?.budgetType) === "Rework";
-  const budgetTypeOptions = isRnd
-    ? ["Testing", "RnD", ...(showReworkOption ? ["Rework"] : [])]
-    : ["Production", "RnD"];
+  const budgetTypeOptions = useMemo(
+    () => (
+      isRnd
+        ? ["Testing", "RnD", ...(showReworkOption ? ["Rework"] : [])]
+        : ["Production", "RnD"]
+    ),
+    [isRnd, showReworkOption]
+  );
   const initialBudgetType =
     returnedReview?.budgetType
     || (budgetTypeOptions.includes(requestedBudgetType) ? requestedBudgetType : null)
@@ -110,37 +196,193 @@ const BudgetBuilder = () => {
   ]);
 
   // ---- Step 2: Budget items ----
-  const [selectedTypes, setSelectedTypes] = useState({ models: true, infra: true, subs: true });
+  const [selectedTypes, setSelectedTypes] = useState({ models: true, infra: true, subs: true, general: false });
   const [activeTab, setActiveTab] = useState("models");
   const [models, setModels] = useState([emptyModelItem(modelCatalog, DIRECT_COST_BUDGET_TYPES.includes(initialBudgetType) ? 0 : 500 * 3)]);
   const [infra, setInfra] = useState([emptyInfraItem()]);
   const [subs, setSubs] = useState([emptySubItem()]);
+  const [general, setGeneral] = useState([]);
+const [generalMode, setGeneralMode] = useState("table");
+  const [generalTableHeaders, setGeneralTableHeaders] = useState(DEFAULT_GENERAL_BUDGET_HEADERS);
+  const [generalTableRows, setGeneralTableRows] = useState([]);
+  const selectedProject = useMemo(
+    () => visibleProjects.find((project) => project.id === projectId) || null,
+    [visibleProjects, projectId]
+  );
+  const subscriptionMemberPool = useMemo(() => {
+    const coreMembers = [
+      ...(selectedProject?.tpm ? [{ name: selectedProject.tpm, role: "TPM", email: selectedProject.tpmEmail || "" }] : []),
+      ...((selectedProject?.plMembers || []).map((name) => ({ name, role: "Project Lead", email: "" }))),
+      ...((selectedProject?.qlMembers || []).map((name) => ({ name, role: "Quality Lead", email: "" }))),
+      ...((selectedProject?.rndMembers || []).map((name) => ({ name, role: "R&D", email: "" }))),
+    ];
+    const roster = [
+      ...(selectedProject?.teamMembers || []),
+      ...(selectedProject?.kickoffMail?.recipients || []),
+      ...coreMembers,
+    ];
+    const seen = new Set();
+    return roster.reduce((acc, member, index) => {
+      const key = String(member?.email || member?.id || member?.name || "").trim().toLowerCase();
+      if (!key || seen.has(key)) return acc;
+      seen.add(key);
+      acc.push({
+        id: member?.id || member?.email || `${member?.name || "member"}-${index}`,
+        name: member?.name || "Unknown member",
+        role: member?.role || "Member",
+        email: member?.email || "",
+      });
+      return acc;
+    }, []);
+  }, [selectedProject]);
 
   // If prefilling from a returned review, hydrate reasonable defaults
   useEffect(() => {
     if (!returnedReview) return;
-    // Prefer stored modifiedPhases; fall back to review requested budget
     const proj = visibleProjects.find((p) => p.id === returnedReview.projectId);
     if (proj) setProjectId(proj.id);
+    const hydratedBudgetType = normalizeBudgetType(returnedReview.budgetType || initialBudgetType);
+    if (budgetTypeOptions.includes(hydratedBudgetType)) setBudgetType(hydratedBudgetType);
+    if (returnedReview.teamType && TEAM_TYPE_OPTIONS.includes(returnedReview.teamType)) setTeamType(returnedReview.teamType);
+    setPriority(
+      returnedReview.urgency === "High"
+        ? "High"
+        : returnedReview.urgency === "Low"
+          ? "Low"
+          : "Medium"
+    );
+
+    const reviewPhases = Array.isArray(returnedReview.requestedPhases) ? returnedReview.requestedPhases : [];
+    if (reviewPhases.length > 1 && !DIRECT_COST_BUDGET_TYPES.includes(hydratedBudgetType)) {
+      setDeliveryMode("multiple");
+      setPhases(reviewPhases.map((phase, index) => ({
+        id: phase.id || `p${index + 1}`,
+        name: phase.name || `Phase ${index + 1}`,
+        tasks: Number(phase.tasks || 0),
+        trajectories: Number(phase.trajectories || 0),
+        start: phase.start || todayISO(),
+        end: phase.end || plusDaysISO(14),
+      })));
+    } else {
+      const phase = reviewPhases[0] || null;
+      setDeliveryMode("single");
+      if (phase?.start) setSingleStart(phase.start);
+      if (phase?.end) setSingleEnd(phase.end);
+      setSinglePhase({
+        tasks: Number(phase?.tasks || returnedReview.tasks || 0),
+        trajectories: Number(phase?.trajectories || 0),
+      });
+    }
+
+    const reviewItems = returnedReview.items || {};
+    const hasModelLines = Array.isArray(reviewItems.models) && reviewItems.models.length > 0;
+    const hasInfraLines = Array.isArray(reviewItems.infra) && reviewItems.infra.length > 0;
+    const hasSubLines = Array.isArray(reviewItems.subs) && reviewItems.subs.length > 0;
+    const hasGeneralLines = Array.isArray(reviewItems.misc) && reviewItems.misc.length > 0;
+    const generalTableState = parseGeneralBudgetTable(reviewItems.misc || []);
+    const nextModels = hasModelLines
+      ? reviewItems.models.map((line) => {
+          const meta = modelCatalog.find((entry) => entry.id === line.modelId) || line.meta || modelCatalog[0] || BEDROCK_MODELS[0];
+          return {
+            id: line.id || uid(),
+            modelId: line.modelId || meta?.id || modelCatalog[0]?.id || BEDROCK_MODELS[0]?.id,
+            provider: line.platform || getModelPlatform({ ...meta, provider: line.provider || meta?.provider }) || modelProviderOptions[0] || "",
+            usageTag: line.usageTag || "Trajectory building",
+            costPerTask: Number(line.costPerTask || seedCostPerTask(meta)),
+            estCost: Number(line.estCost || line.amount || 0),
+          };
+        })
+      : [emptyModelItem(modelCatalog, DIRECT_COST_BUDGET_TYPES.includes(hydratedBudgetType) ? 0 : 500 * 3)];
+    const nextInfra = hasInfraLines
+      ? reviewItems.infra.map((line) => {
+          const meta = EC2_INSTANCES.find((entry) => entry.code === (line.instance || line.meta?.code)) || line.meta || EC2_INSTANCES[0];
+          const monthlyCost = Number(line.monthlyCost || line.meta?.monthlyCost || line.estCost || line.amount || 0);
+          return {
+            id: line.id || uid(),
+            provider: line.provider || line.meta?.provider || getInfraProvider(meta),
+            instance: line.instance || meta?.code || EC2_INSTANCES[0].code,
+            monthlyCost,
+            estCost: Number(line.estCost || line.amount || monthlyCost || 0),
+          };
+        })
+      : [emptyInfraItem()];
+    const nextSubs = hasSubLines
+      ? reviewItems.subs.map((line) => {
+          const meta = SUBSCRIPTION_CATALOG.find((entry) => entry.name === line.subscription) || SUBSCRIPTION_CATALOG[0];
+          return {
+            id: line.id || uid(),
+            subscription: line.subscription || meta?.name || SUBSCRIPTION_CATALOG[0].name,
+            pricePerSeat: Number(line.pricePerSeat || meta?.monthly || line.estCost || line.amount || 0),
+            seats: Number(line.seats || Math.max(line.members?.length || 0, 1)),
+            members: Array.isArray(line.members) ? line.members : [],
+            estCost: Number(line.estCost || line.amount || 0),
+          };
+        })
+      : [emptySubItem()];
+    const nextGeneral = hasGeneralLines
+      ? reviewItems.misc.filter((line) => !isGeneralBudgetTableLine(line)).map((line) => ({
+          id: line.id || uid(),
+          label: line.label || line.optionLabel || "General request",
+          note: line.note || line.detail || "",
+          estCost: Number(line.estCost || line.amount || 0),
+        }))
+      : [];
+    const nextGeneralTableRows = generalTableState.rows.length
+      ? generalTableState.rows
+      : nextGeneral.map((line) => ({
+          id: line.id || uid(),
+          phaseId: "",
+          phaseName: "",
+          estCost: Number(line.estCost || 0),
+          cells: {
+            [DEFAULT_GENERAL_BUDGET_HEADERS[0]]: line.label || "",
+            [DEFAULT_GENERAL_BUDGET_HEADERS[1]]: line.note || "",
+          },
+        }));
+
+    setModels(nextModels);
+    setInfra(nextInfra);
+    setSubs(nextSubs);
+    setGeneral(nextGeneral);
+    setGeneralMode("table");
+    setGeneralTableHeaders(generalTableState.rows.length ? generalTableState.headers : DEFAULT_GENERAL_BUDGET_HEADERS);
+    setGeneralTableRows(nextGeneralTableRows);
+
+    const nextSelectedTypes = {
+      models: hasModelLines || Number(returnedReview.aiCost || 0) > 0,
+      infra: hasInfraLines || Number(returnedReview.infraCost || 0) > 0,
+      subs: hasSubLines || Number(returnedReview.subsCost || 0) > 0,
+      general: hasGeneralLines || Number(returnedReview.miscCost || 0) > 0,
+    };
+    setSelectedTypes(nextSelectedTypes);
+    setActiveTab(["models", "infra", "subs", "general"].find((key) => nextSelectedTypes[key]) || "models");
     toast.info("Returned budget loaded — edit and resubmit", {
       description: returnedReview.ctoComment || "Address CTO comments below",
     });
-  }, [returnedReview, visibleProjects]);
+  }, [returnedReview, visibleProjects, modelCatalog, modelProviderOptions, budgetTypeOptions, initialBudgetType]);
 
   const project = visibleProjects.find((p) => p.id === projectId);
-  const additionalMemberOptions = useMemo(() => {
-    const taken = new Set((project?.teamMembers || []).map((member) => member.name));
-    return TEAM.filter((member) => !taken.has(member.name) && !["Finance", "COO", "IT"].includes(member.role));
-  }, [project]);
-  const [additionalMembers, setAdditionalMembers] = useState([]);
+  const generalPhaseOptions = useMemo(() => (
+    deliveryMode === "single"
+      ? [{
+          id: "p1",
+          name: isDirectCostBudget ? `${budgetType} estimate` : "Delivery",
+        }]
+      : phases.map((phase, index) => ({
+          id: phase.id || `p${index + 1}`,
+          name: phase.name || `Phase ${index + 1}`,
+        }))
+  ), [budgetType, deliveryMode, isDirectCostBudget, phases]);
 
-  const toggleAdditionalMember = (member) => {
-    setAdditionalMembers((current) => (
-      current.some((entry) => entry.name === member.name)
-        ? current.filter((entry) => entry.name !== member.name)
-        : [...current, { name: member.name, role: member.role }]
-    ));
-  };
+  useEffect(() => {
+    if (!visibleProjects.length) {
+      if (projectId) setProjectId("");
+      return;
+    }
+    if (!visibleProjects.some((entry) => entry.id === projectId)) {
+      setProjectId(visibleProjects[0]?.id || "");
+    }
+  }, [visibleProjects, projectId]);
 
   useEffect(() => {
     if (!project || returnedReview || !requestedPhaseId) return;
@@ -154,6 +396,34 @@ const BudgetBuilder = () => {
     if (phaseStart) setSingleStart(phaseStart);
     if (phaseEnd) setSingleEnd(phaseEnd);
   }, [project, requestedPhaseId, returnedReview]);
+
+  useEffect(() => {
+    if (returnedReview || requestedBudgetType !== "RnD" || !requestedSourceDeliveryId || !projectId || testingInfraPrefillAppliedRef.current) return;
+    const latestTestingBudget = budgets
+      .filter((entry) => entry.projectId === projectId && normalizeBudgetType(entry.budgetType) === "Testing")
+      .sort((left, right) => new Date(right.submittedAt || 0).getTime() - new Date(left.submittedAt || 0).getTime())[0];
+    const testingInfraLines = Array.isArray(latestTestingBudget?.items?.infra) ? latestTestingBudget.items.infra : [];
+    if (!testingInfraLines.length) return;
+
+    setInfra(testingInfraLines.map((line, index) => {
+      const meta = EC2_INSTANCES.find((entry) => entry.code === (line.instance || line.meta?.code)) || line.meta || EC2_INSTANCES[0];
+      const monthlyCost = Number(line.monthlyCost || line.meta?.monthlyCost || line.estCost || line.amount || 0);
+      return {
+        id: line.id || `prefill-infra-${index + 1}`,
+        provider: line.provider || line.meta?.provider || getInfraProvider(meta),
+        instance: line.instance || meta?.code || EC2_INSTANCES[0].code,
+        monthlyCost,
+        estCost: Number(line.estCost || line.amount || monthlyCost || 0),
+      };
+    }));
+    setSelectedTypes((current) => ({ ...current, infra: true }));
+    testingInfraPrefillAppliedRef.current = true;
+  }, [budgets, projectId, requestedBudgetType, requestedSourceDeliveryId, returnedReview]);
+
+  const budgetDurationDays = useMemo(() => {
+    if (deliveryMode === "single") return getInclusiveDayCount(singleStart, singleEnd);
+    return phases.reduce((sum, phase) => sum + getInclusiveDayCount(phase.start, phase.end), 0);
+  }, [deliveryMode, singleEnd, singleStart, phases]);
 
   // Trajectories drive model volume (tasks × trajectories × costPerTraj)
   const totalTrajectories = useMemo(() => {
@@ -180,22 +450,68 @@ const BudgetBuilder = () => {
       const meta = modelCatalog.find((m) => m.id === r.modelId) || modelCatalog[0] || BEDROCK_MODELS[0];
       return {
         ...r,
-        provider: meta.provider,
+        provider: r.provider || getModelPlatform(meta),
         estCost: Math.round(Number(r.costPerTask || 0) * modelPricingUnits * 100) / 100,
       };
     }));
   }, [modelCatalog, modelPricingUnits, isDirectCostBudget]);
 
   useEffect(() => {
+    setInfra((rows) => rows.map((row) => {
+      const provider = row.provider || getInfraProvider(EC2_INSTANCES.find((instance) => instance.code === row.instance) || EC2_INSTANCES[0]);
+      const providerInstances = getInstancesForProvider(provider);
+      const meta = providerInstances.find((instance) => instance.code === row.instance) || providerInstances[0] || EC2_INSTANCES[0];
+      const monthlyCost = Number(row.monthlyCost || 0);
+      return {
+        ...row,
+        provider,
+        instance: meta.code,
+        estCost: Math.round(getDailyRateFromMonthly(monthlyCost) * budgetDurationDays * 100) / 100,
+      };
+    }));
+    setSubs((rows) => rows.map((row) => ({
+      ...row,
+      estCost: Math.round((Number(row.pricePerSeat || 0) * Number(row.seats || 1) * budgetDurationDays / 30) * 100) / 100,
+    })));
+  }, [budgetDurationDays]);
+
+  useEffect(() => {
     if ((isDirectCostBudget || usesRndWorkflow) && deliveryMode !== "single") setDeliveryMode("single");
   }, [isDirectCostBudget, usesRndWorkflow, deliveryMode]);
+
+  useEffect(() => {
+    setGeneralTableRows((rows) => rows.map((row) => {
+      const matchedPhase = generalPhaseOptions.find((option) => option.id === row.phaseId) || generalPhaseOptions[0] || null;
+      return {
+        ...row,
+        phaseId: row.phaseId || matchedPhase?.id || "",
+        phaseName: matchedPhase?.name || row.phaseName || "",
+      };
+    }));
+  }, [generalPhaseOptions]);
+
+  const generalTablePreviewLines = useMemo(
+    () => serializeGeneralBudgetTableRows(generalTableRows, generalTableHeaders, generalPhaseOptions),
+    [generalTableRows, generalTableHeaders, generalPhaseOptions]
+  );
+  const generalPhaseTotals = useMemo(() => {
+    const totalsByPhase = generalTablePreviewLines.reduce((acc, row) => {
+      const phaseId = row.phaseId || generalPhaseOptions[0]?.id || "p1";
+      const phaseName = row.phaseName || generalPhaseOptions.find((option) => option.id === phaseId)?.name || "Delivery";
+      acc[phaseId] = acc[phaseId] || { phaseId, phaseName, total: 0 };
+      acc[phaseId].total += Number(row.amount || row.estCost || 0);
+      return acc;
+    }, {});
+    return Object.values(totalsByPhase);
+  }, [generalPhaseOptions, generalTablePreviewLines]);
 
   const totals = useMemo(() => {
     const m = selectedTypes.models ? models.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
     const i = selectedTypes.infra ? infra.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
     const su = selectedTypes.subs ? subs.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
-    return { models: m, infra: i, subs: su, total: m + i + su };
-  }, [models, infra, subs, selectedTypes]);
+    const g = selectedTypes.general ? sumGeneralBudgetRows(generalTableRows) : 0;
+    return { models: m, infra: i, subs: su, general: g, total: m + i + su + g };
+  }, [models, infra, subs, generalTableRows, selectedTypes]);
 
   const updateRow = (setter) => (id, key, v) => setter((rows) => rows.map((r) => (r.id === id ? { ...r, [key]: v } : r)));
   const removeRow = (setter) => (id) => setter((r) => r.filter((x) => x.id !== id));
@@ -204,9 +520,16 @@ const BudgetBuilder = () => {
     setModels((rows) => rows.map((r) => {
       if (r.id !== id) return r;
       const next = { ...r, [key]: v };
+      if (key === "provider") {
+        const providerModels = getModelsForProvider(modelCatalog, next.provider);
+        const meta = providerModels.find((model) => model.id === next.modelId) || providerModels[0] || modelCatalog[0] || BEDROCK_MODELS[0];
+        next.modelId = meta.id;
+        next.provider = getModelPlatform(meta);
+        next.costPerTask = seedCostPerTask(meta);
+      }
       if (key === "modelId") {
         const meta = modelCatalog.find((m) => m.id === next.modelId) || modelCatalog[0] || BEDROCK_MODELS[0];
-        next.provider = meta.provider;
+        next.provider = getModelPlatform(meta);
         next.costPerTask = seedCostPerTask(meta);
       }
       if (isDirectCostBudget) {
@@ -226,7 +549,7 @@ const BudgetBuilder = () => {
         const next = {
           ...row,
           modelId: created.id,
-          provider: created.provider,
+          provider: getModelPlatform(created),
           costPerTask: seedCostPerTask(created),
         };
         if (!isDirectCostBudget) {
@@ -245,12 +568,19 @@ const BudgetBuilder = () => {
     setInfra((rows) => rows.map((r) => {
       if (r.id !== id) return r;
       const next = { ...r, [key]: v };
-      if (["instance", "monthlyCost", "months"].includes(key)) {
+      if (key === "provider") {
+        const providerInstances = getInstancesForProvider(next.provider);
+        const meta = providerInstances[0] || EC2_INSTANCES[0];
+        next.instance = meta.code;
+        next.monthlyCost = Math.round(meta.hourly * HOURS_PER_MONTH * 100) / 100;
+      }
+      if (["instance", "monthlyCost", "provider"].includes(key)) {
         if (key === "instance") {
           const inst = EC2_INSTANCES.find((x) => x.code === next.instance) || EC2_INSTANCES[0];
+          next.provider = getInfraProvider(inst);
           next.monthlyCost = Math.round(inst.hourly * HOURS_PER_MONTH * 100) / 100;
         }
-        next.estCost = Math.round(Number(next.monthlyCost || 0) * Number(next.months || 1) * 100) / 100;
+        next.estCost = Math.round(getDailyRateFromMonthly(next.monthlyCost) * budgetDurationDays * 100) / 100;
       }
       return next;
     }));
@@ -263,8 +593,8 @@ const BudgetBuilder = () => {
         const s = SUBSCRIPTION_CATALOG.find((x) => x.name === next.subscription) || SUBSCRIPTION_CATALOG[0];
         next.pricePerSeat = s.monthly;
       }
-      if (["subscription", "seats", "pricePerSeat", "months"].includes(key)) {
-        next.estCost = Math.round(Number(next.pricePerSeat || 0) * Number(next.seats || 1) * Number(next.months || 1) * 100) / 100;
+      if (["subscription", "seats", "pricePerSeat"].includes(key)) {
+        next.estCost = Math.round((Number(next.pricePerSeat || 0) * Number(next.seats || 1) * budgetDurationDays / 30) * 100) / 100;
       }
       return next;
     }));
@@ -277,31 +607,158 @@ const BudgetBuilder = () => {
       return { ...r, members, seats: Math.max(members.length, 1) };
     }));
   };
+  const updateGeneralRow = (id, key, v) => {
+    setGeneral((rows) => rows.map((row) => (
+      row.id === id
+        ? { ...row, [key]: key === "estCost" ? (Number(v) || 0) : v }
+        : row
+    )));
+  };
+  const remapGeneralTableRows = (rows, previousHeaders, nextHeaders) => rows.map((row) => ({
+    ...row,
+    cells: Object.fromEntries(nextHeaders.flatMap((header, index) => {
+      const previousHeader = previousHeaders[index];
+      const stableKey = getGeneralBudgetColumnCellKey(index);
+      const value = row.cells?.[stableKey] ?? (previousHeader ? (row.cells?.[previousHeader] || "") : "");
+      return [
+        [header, value],
+        [stableKey, value],
+      ];
+    })),
+  }));
+  const applyGeneralTableHeaders = (nextHeadersInput) => {
+    setGeneralTableHeaders((currentHeaders) => {
+      const nextHeaders = normalizeGeneralBudgetHeaders(nextHeadersInput);
+      setGeneralTableRows((rows) => remapGeneralTableRows(rows, currentHeaders, nextHeaders));
+      return nextHeaders;
+    });
+  };
+  const updateGeneralTableHeader = (index, value) => {
+    setGeneralTableHeaders((currentHeaders) => {
+      const nextHeaders = [...currentHeaders];
+      nextHeaders[index] = value;
+      setGeneralTableRows((rows) => remapGeneralTableRows(rows, currentHeaders, nextHeaders));
+      return nextHeaders;
+    });
+  };
+  const addGeneralTableRow = () => {
+    const defaultPhase = generalPhaseOptions[0] || {};
+    setGeneralTableRows((rows) => [
+      ...rows,
+      buildEmptyGeneralBudgetTableRow({
+        phaseId: defaultPhase.id || "",
+        phaseName: defaultPhase.name || "",
+        headers: generalTableHeaders,
+      }),
+    ]);
+  };
+  const updateGeneralTableRow = (id, key, value, columnIndex = -1) => {
+    setGeneralTableRows((rows) => rows.map((row) => {
+      if (row.id !== id) return row;
+      if (key === "phaseId") {
+        const phaseMeta = generalPhaseOptions.find((option) => option.id === value) || null;
+        return {
+          ...row,
+          phaseId: value,
+          phaseName: phaseMeta?.name || row.phaseName || "",
+        };
+      }
+      if (key === "estCost") {
+        return { ...row, estCost: Number(value) || 0 };
+      }
+      return {
+        ...row,
+        cells: {
+          ...row.cells,
+          ...(columnIndex >= 0 ? { [getGeneralBudgetColumnCellKey(columnIndex)]: value } : {}),
+          [key]: value,
+        },
+      };
+    }));
+  };
+  const removeGeneralTableRow = (id) => setGeneralTableRows((rows) => rows.filter((row) => row.id !== id));
+  const switchGeneralMode = (nextMode) => {
+    setGeneralMode(nextMode);
+    if (nextMode === "requests" && general.length === 0) {
+      setGeneral([emptyGeneralItem()]);
+    }
+    if (nextMode === "table" && generalTableRows.length === 0) {
+      const defaultPhase = generalPhaseOptions[0] || {};
+      setGeneralTableRows([
+        buildEmptyGeneralBudgetTableRow({
+          phaseId: defaultPhase.id || "",
+          phaseName: defaultPhase.name || "",
+          headers: generalTableHeaders,
+        }),
+      ]);
+    }
+  };
+  const toggleBudgetType = (key) => {
+    const currentlyEnabled = selectedTypes[key];
+    if (!currentlyEnabled) {
+      if (key === "general") {
+        if (generalMode === "table" && generalTableRows.length === 0) {
+          const defaultPhase = generalPhaseOptions[0] || {};
+          setGeneralTableRows([
+            buildEmptyGeneralBudgetTableRow({
+              phaseId: defaultPhase.id || "",
+              phaseName: defaultPhase.name || "",
+              headers: generalTableHeaders,
+            }),
+          ]);
+        }
+        if (generalMode === "requests" && general.length === 0) setGeneral([emptyGeneralItem()]);
+      }
+      setActiveTab(key);
+    } else if (activeTab === key) {
+      const fallback = ["models", "infra", "subs", "general"].find((entry) => entry !== key && selectedTypes[entry]);
+      if (fallback) setActiveTab(fallback);
+    }
+    setSelectedTypes((state) => ({ ...state, [key]: !state[key] }));
+  };
 
   const distributedPhases = useMemo(() => {
+    const baseTotal = totals.models + totals.infra + totals.subs;
     if (deliveryMode === "single") {
       return [{
         id: "p1",
         name: isDirectCostBudget ? `${budgetType} estimate` : "Delivery",
         start: singleStart,
         end: singleEnd,
-        budget: totals.total,
+        budget: baseTotal + totals.general,
         tasks: isDirectCostBudget ? 0 : Number(singlePhase.tasks),
         trajectories: isDirectCostBudget ? 0 : Number(singlePhase.trajectories),
       }];
     }
-    // weight by tasks × trajectories
+    const tablePhaseTotals = Object.fromEntries(generalPhaseTotals.map((entry) => [entry.phaseId, entry.total]));
     const totalTraj = phases.reduce((sum, phase) => {
       const weightedTraj = Number(phase.tasks || 0) * Number(phase.trajectories || 0);
       return sum + (weightedTraj > 0 ? weightedTraj : Number(phase.tasks || 0) || 1);
     }, 0) || 1;
-    return phases.map((p) => {
+    let distributedBase = 0;
+    return phases.map((p, index) => {
       const traj = Number(p.tasks || 0) * Number(p.trajectories || 0);
       const shareUnits = traj > 0 ? traj : Number(p.tasks || 0) || 1;
-      const share = shareUnits / totalTraj;
-      return { ...p, budget: Math.round(totals.total * share) };
+      const baseBudget = index === phases.length - 1
+        ? Math.max(0, Math.round((baseTotal - distributedBase) * 100) / 100)
+        : Math.max(0, Math.round(((shareUnits / totalTraj) * baseTotal) * 100) / 100);
+      distributedBase += baseBudget;
+      return { ...p, budget: baseBudget + Number(tablePhaseTotals[p.id] || 0) };
     });
-  }, [deliveryMode, phases, singleStart, singleEnd, singlePhase, totals.total, isDirectCostBudget, budgetType]);
+  }, [
+    budgetType,
+    deliveryMode,
+    generalPhaseTotals,
+    isDirectCostBudget,
+    phases,
+    singleEnd,
+    singlePhase,
+    singleStart,
+    totals.general,
+    totals.infra,
+    totals.models,
+    totals.subs,
+  ]);
 
   const canProceedDetails = () => {
     if (!projectId) { toast.error("Select a project"); return false; }
@@ -320,7 +777,16 @@ const BudgetBuilder = () => {
     return true;
   };
   const canProceedItems = () => {
-    if (!selectedTypes.models && !selectedTypes.infra && !selectedTypes.subs) { toast.error("Select at least one budget type"); return false; }
+    if (!selectedTypes.models && !selectedTypes.infra && !selectedTypes.subs && !selectedTypes.general) { toast.error("Select at least one budget type"); return false; }
+    if (selectedTypes.general) {
+      const populatedRows = normalizeGeneralBudgetRows(generalTableRows, generalTableHeaders)
+        .filter((row) => Object.values(row.cells || {}).some((value) => String(value || "").trim()) || Number(row.estCost || 0) > 0);
+      if (!populatedRows.length) { toast.error("Add at least one general budget table row"); return false; }
+      if (generalPhaseOptions.length > 1 && populatedRows.some((row) => !row.phaseId)) {
+        toast.error("Assign a phase to each general budget row");
+        return false;
+      }
+    }
     if (totals.total <= 0) { toast.error("Add at least one budget item"); return false; }
     return true;
   };
@@ -329,15 +795,32 @@ const BudgetBuilder = () => {
 
   const doSubmit = () => {
     const items = {
-      models: selectedTypes.models ? models.map((m) => ({ ...m, meta: modelCatalog.find((x) => x.id === m.modelId) })) : [],
-      infra: selectedTypes.infra ? infra.map((i) => ({ ...i, meta: EC2_INSTANCES.find((x) => x.code === i.instance) })) : [],
-      subs: selectedTypes.subs ? subs : [],
+      models: selectedTypes.models ? models.map((m) => {
+        const meta = modelCatalog.find((x) => x.id === m.modelId);
+        return {
+          ...m,
+          platform: m.provider,
+          meta: meta ? { ...meta, platform: getModelPlatform(meta) } : meta,
+        };
+      }) : [],
+      infra: selectedTypes.infra ? infra.map((i) => {
+        const meta = EC2_INSTANCES.find((x) => x.code === i.instance) || EC2_INSTANCES[0];
+        return {
+          ...i,
+          provider: i.provider || getInfraProvider(meta),
+          days: budgetDurationDays,
+          meta: withInfraProvider(meta),
+        };
+      }) : [],
+      subs: selectedTypes.subs ? subs.map((entry) => ({ ...entry, days: budgetDurationDays })) : [],
+      misc: selectedTypes.general ? generalTablePreviewLines : [],
     };
     submitBudget({
       projectId,
       projectName: project?.name || projectId,
       budgetType,
       priority,
+      teamType,
       totalTasks: Number(totalTasks),
       totalTrajectories,
       delivery: { mode: deliveryMode, singleStart, singleEnd },
@@ -347,7 +830,6 @@ const BudgetBuilder = () => {
       resubmitOfReviewId: returnedReview?.id || null,
       sampleIteration: isReworkBudget ? requestedSampleIteration : 1,
       sourceDeliveryId: requestedSourceDeliveryId,
-      additionalMembers,
     });
     toast.success(returnedReview ? "Budget resubmitted to CTO" : "Request sent to CTO", {
       description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · awaiting review before tasks and delivery unlock`,
@@ -425,14 +907,21 @@ const BudgetBuilder = () => {
                 {["Low", "Medium", "High", "Critical"].map((p) => <option key={p}>{p}</option>)}
               </select>
             </Field>
-            <Field label="Budget type *" hint={usesRndWorkflow ? "Testing first, then R&D delivery. Rework appears only after changes are asked." : null}>
+            <Field label="Budget type *" hint={usesRndWorkflow ? "Testing first, then Sample delivery. Rework appears only after changes are asked." : null}>
               <select
                 value={budgetType}
                 onChange={(e) => setBudgetType(e.target.value)}
                 data-testid="bb-budget-type"
                 className={ipStyle}
               >
-                {budgetTypeOptions.map((b) => <option key={b} value={b}>{b}</option>)}
+                {budgetTypeOptions.map((b) => <option key={b} value={b}>{formatBudgetTypeOptionLabel(b)}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Field label="Team type *" hint="Which delivery pool this budget belongs to">
+              <select value={teamType} onChange={(e) => setTeamType(e.target.value)} data-testid="bb-team-type" className={ipStyle}>
+                {TEAM_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
               </select>
             </Field>
           </div>
@@ -494,40 +983,8 @@ const BudgetBuilder = () => {
                   <input type="date" value={singleEnd} onChange={(e) => setSingleEnd(e.target.value)} data-testid="bb-single-end" className={ipStyle} />
                 </Field>
               </div>
-            </div>
-          )}
-
-          {project && (
-            <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.02] p-4" data-testid="bb-additional-members">
-              <div className="flex items-start justify-between gap-3 flex-wrap">
-                <div>
-                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Add members to this project</div>
-                  <div className="text-xs text-zinc-500 mt-1">Useful when TPM adds more execution members during budget build. Added members join the project roster and kickoff access list.</div>
-                </div>
-                {additionalMembers.length > 0 && (
-                  <div className="text-[11px] text-fuchsia-300 font-semibold">{additionalMembers.length} selected</div>
-                )}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {additionalMemberOptions.length === 0 && (
-                  <div className="text-xs text-zinc-500">All available members are already attached to this project.</div>
-                )}
-                {additionalMemberOptions.map((member) => {
-                  const on = additionalMembers.some((entry) => entry.name === member.name);
-                  return (
-                    <button
-                      key={member.id}
-                      type="button"
-                      onClick={() => toggleAdditionalMember(member)}
-                      data-testid={`bb-add-member-${member.id}`}
-                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium border transition-colors ${
-                        on ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-200" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
-                      }`}
-                    >
-                      {member.name} · {member.role}
-                    </button>
-                  );
-                })}
+              <div className="rounded-lg bg-white/[0.02] border border-white/5 px-3 py-2 text-[11px] text-zinc-400">
+                Total days · <span className="text-fuchsia-300 font-semibold tabular">{budgetDurationDays.toLocaleString()}</span>
               </div>
             </div>
           )}
@@ -568,6 +1025,9 @@ const BudgetBuilder = () => {
                     <Field label="End *">
                       <input type="date" value={ph.end} onChange={(e) => updateRow(setPhases)(ph.id, "end", e.target.value)} data-testid={`bb-phase-end-${ph.id}`} className={ipStyle} />
                     </Field>
+                    <Field label="Total days">
+                      <div className={ipStyle + " tabular flex items-center text-fuchsia-300"}>{getInclusiveDayCount(ph.start, ph.end).toLocaleString()}</div>
+                    </Field>
                   </div>
                 </div>
               ))}
@@ -585,10 +1045,10 @@ const BudgetBuilder = () => {
           <div className="mt-6 flex items-center justify-between">
             <div className="text-xs text-zinc-400">
               {isDirectCostBudget
-                ? `${budgetType} estimate · direct cost only`
+                ? `${formatBudgetTypeOptionLabel(budgetType)} estimate · direct cost only · ${budgetDurationDays.toLocaleString()} days`
                 : totalTrajectories > 0
-                  ? <>Total trajectories: <span className="text-fuchsia-300 font-semibold tabular">{totalTrajectories.toLocaleString()}</span> · {totalTasks.toLocaleString()} tasks</>
-                  : <>{totalTasks.toLocaleString()} tasks · trajectories optional for this budget</>}
+                  ? <>Total trajectories: <span className="text-fuchsia-300 font-semibold tabular">{totalTrajectories.toLocaleString()}</span> · {totalTasks.toLocaleString()} tasks · {budgetDurationDays.toLocaleString()} days</>
+                  : <>{totalTasks.toLocaleString()} tasks · trajectories optional for this budget · {budgetDurationDays.toLocaleString()} days</>}
             </div>
             <Button
               onClick={() => canProceedDetails() && setStep(2)}
@@ -611,12 +1071,13 @@ const BudgetBuilder = () => {
                 { k: "models", label: "Models", desc: isDirectCostBudget ? "Direct model-cost estimate" : "AI models · cost = provider × trajectories" },
                 { k: "infra", label: "Infrastructure", desc: "Enter monthly $ — daily cost auto-shown" },
                 { k: "subs", label: "Subscriptions", desc: "$ per seat + assign members" },
+                { k: "general", label: "General", desc: "Freelancers, tools, APIs, datasets, licenses, and other external project costs" },
               ].map((t) => {
                 const on = selectedTypes[t.k];
                 return (
                   <button
                     key={t.k}
-                    onClick={() => setSelectedTypes((s) => ({ ...s, [t.k]: !s[t.k] }))}
+                    onClick={() => toggleBudgetType(t.k)}
                     data-testid={`bb-type-${t.k}`}
                     className={`px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                       on ? "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
@@ -636,6 +1097,7 @@ const BudgetBuilder = () => {
               { k: "models", label: "Models" },
               { k: "infra", label: "Infrastructure" },
               { k: "subs", label: "Subscriptions" },
+              { k: "general", label: "General" },
             ].filter((t) => selectedTypes[t.k]).map((t) => (
               <button
                 key={t.k}
@@ -657,9 +1119,9 @@ const BudgetBuilder = () => {
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <Cpu className="w-4 h-4 text-fuchsia-300" />
-                  <div className="text-sm font-semibold text-white">{isDirectCostBudget ? "AI Models · direct estimate" : "AI Models · Bedrock"}</div>
+                  <div className="text-sm font-semibold text-white">{isDirectCostBudget ? "AI Models · direct estimate" : "AI Models"}</div>
                   <span className="text-[11px] text-zinc-500">
-                    {isDirectCostBudget ? "· enter the model-cost estimate directly" : "· est. cost = tasks × trajectories × cost/task"}
+                    {isDirectCostBudget ? "· enter the model-cost estimate directly" : "· choose provider first, then the matching model"}
                   </span>
                 </div>
                 <Button size="sm" onClick={() => setModels((r) => [...r, emptyModelItem(modelCatalog, isDirectCostBudget ? 0 : modelPricingUnits)])} data-testid="bb-add-model" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
@@ -667,23 +1129,31 @@ const BudgetBuilder = () => {
                 </Button>
               </div>
               <div className="space-y-1.5">
-                <div className={`grid ${isDirectCostBudget ? "grid-cols-[1.35fr_1fr_1fr_1fr_28px]" : "grid-cols-[1.2fr_1fr_1fr_1fr_1fr_28px]"} gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5`}>
-                  <span>Model</span>
+                <div className={`grid ${isDirectCostBudget ? "grid-cols-[.9fr_1.45fr_1fr_1fr_28px]" : "grid-cols-[.9fr_1.3fr_1fr_1fr_1fr_28px]"} gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5`}>
                   <span>Provider</span>
+                  <span>Model</span>
                   <span>Usage tag</span>
                   {!isDirectCostBudget && <span className="text-right">Cost / task ($)</span>}
                   <span className="text-right">Est. cost</span>
                   <span />
                 </div>
                 {models.map((r) => {
-                  const meta = modelCatalog.find((m) => m.id === r.modelId);
+                  const providerModels = getModelsForProvider(modelCatalog, r.provider || modelProviderOptions[0] || "");
+                  const meta = providerModels.find((m) => m.id === r.modelId) || modelCatalog.find((m) => m.id === r.modelId) || providerModels[0] || modelCatalog[0];
                   return (
-                    <div key={r.id} data-testid={`bb-row-model-${r.id}`} className={`grid ${isDirectCostBudget ? "grid-cols-[1.35fr_1fr_1fr_1fr_28px]" : "grid-cols-[1.2fr_1fr_1fr_1fr_1fr_28px]"} gap-2 items-center py-1`}>
-                      <select value={r.modelId} onChange={(e) => handleModelSelect(r.id, e.target.value)} data-testid={`bb-model-select-${r.id}`} className={rowInp}>
-                        {modelCatalog.map((m) => <option key={m.id} value={m.id}>{buildModelOptionLabel(m)}</option>)}
+                    <div key={r.id} data-testid={`bb-row-model-${r.id}`} className={`grid ${isDirectCostBudget ? "grid-cols-[.9fr_1.45fr_1fr_1fr_28px]" : "grid-cols-[.9fr_1.3fr_1fr_1fr_1fr_28px]"} gap-2 items-center py-1`}>
+                      <select
+                        value={r.provider || modelProviderOptions[0] || ""}
+                        onChange={(e) => updateModelRow(r.id, "provider", e.target.value)}
+                        data-testid={`bb-model-provider-${r.id}`}
+                        className={rowInp}
+                      >
+                        {modelProviderOptions.map((provider) => <option key={provider} value={provider}>{provider}</option>)}
+                      </select>
+                      <select value={meta?.id || r.modelId} onChange={(e) => handleModelSelect(r.id, e.target.value)} data-testid={`bb-model-select-${r.id}`} className={rowInp}>
+                        {providerModels.map((m) => <option key={m.id} value={m.id}>{buildModelOptionLabel(m)}</option>)}
                         <option value={ADD_CUSTOM_MODEL_OPTION}>+ Add new model...</option>
                       </select>
-                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 leading-8 truncate">{meta?.provider}</div>
                       <select
                         value={r.usageTag || "Trajectory building"}
                         onChange={(e) => updateModelRow(r.id, "usageTag", e.target.value)}
@@ -742,25 +1212,30 @@ const BudgetBuilder = () => {
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-fuchsia-300" />
                   <div className="text-sm font-semibold text-white">Infrastructure · monthly spend</div>
-                  <span className="text-[11px] text-zinc-500">· daily cost shown alongside</span>
+                  <span className="text-[11px] text-zinc-500">· provider first, daily cost and total days shown alongside</span>
                 </div>
                 <Button size="sm" onClick={() => setInfra((r) => [...r, emptyInfraItem()])} data-testid="bb-add-infra" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add instance
                 </Button>
               </div>
               <div className="space-y-1.5">
-                <div className="grid grid-cols-[1.6fr_1fr_.7fr_.9fr_.9fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
-                  <span>EC2 Instance</span><span className="text-right">Monthly cost ($)</span><span className="text-right">Months</span><span className="text-right">≈ $/day</span><span className="text-right">Est. cost</span><span />
+                <div className="grid grid-cols-[.85fr_1.55fr_1fr_.7fr_.9fr_.9fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
+                  <span>Provider</span><span>Infra instance</span><span className="text-right">Monthly cost ($)</span><span className="text-right">Days</span><span className="text-right">≈ $/day</span><span className="text-right">Est. cost</span><span />
                 </div>
                 {infra.map((r) => {
-                  const perDay = Math.round((Number(r.monthlyCost || 0) / 30) * 100) / 100;
+                  const provider = r.provider || infraProviderOptions[0] || getInfraProvider(EC2_INSTANCES[0]);
+                  const providerInstances = getInstancesForProvider(provider);
+                  const perDay = Math.round(getDailyRateFromMonthly(r.monthlyCost) * 100) / 100;
                   return (
-                    <div key={r.id} data-testid={`bb-row-infra-${r.id}`} className="grid grid-cols-[1.6fr_1fr_.7fr_.9fr_.9fr_28px] gap-2 items-center py-1">
+                    <div key={r.id} data-testid={`bb-row-infra-${r.id}`} className="grid grid-cols-[.85fr_1.55fr_1fr_.7fr_.9fr_.9fr_28px] gap-2 items-center py-1">
+                      <select value={provider} onChange={(e) => updateInfraRow(r.id, "provider", e.target.value)} data-testid={`bb-infra-provider-${r.id}`} className={rowInp}>
+                        {infraProviderOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
                       <select value={r.instance} onChange={(e) => updateInfraRow(r.id, "instance", e.target.value)} data-testid={`bb-infra-select-${r.id}`} className={rowInp}>
-                        {EC2_INSTANCES.map((i) => <option key={i.code} value={i.code}>{i.code} · {i.family} · {i.vCPU} vCPU · {i.memoryGiB} GiB</option>)}
+                        {providerInstances.map((i) => <option key={i.code} value={i.code}>{i.code} · {i.family} · {i.vCPU} vCPU · {i.memoryGiB} GiB</option>)}
                       </select>
                       <input type="number" min="0" step="10" value={r.monthlyCost} onChange={(e) => updateInfraRow(r.id, "monthlyCost", e.target.value)} data-testid={`bb-infra-monthly-${r.id}`} className={rowInp + " tabular text-right"} />
-                      <input type="number" min="1" value={r.months} onChange={(e) => updateInfraRow(r.id, "months", e.target.value)} className={rowInp + " tabular text-right"} />
+                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{budgetDurationDays.toLocaleString()}</div>
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 tabular text-right leading-8">${perDay.toLocaleString()}</div>
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
                       <RemoveBtn onClick={() => removeRow(setInfra)(r.id)} testid={`bb-infra-remove-${r.id}`} />
@@ -770,6 +1245,9 @@ const BudgetBuilder = () => {
               </div>
               <div className="mt-2 text-[11px] text-zinc-500">
                 Total infrastructure: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.infra, { compact: false })}</span>
+              </div>
+              <div className="mt-1 text-[11px] text-zinc-500">
+                Duration comes from the selected phase dates: <span className="text-zinc-300 font-medium">{budgetDurationDays.toLocaleString()} days</span>.
               </div>
             </div>
           )}
@@ -781,13 +1259,21 @@ const BudgetBuilder = () => {
                 <div className="flex items-center gap-2">
                   <CreditCard className="w-4 h-4 text-fuchsia-300" />
                   <div className="text-sm font-semibold text-white">Subscriptions · seat-based</div>
-                  <span className="text-[11px] text-zinc-500">· assign members below each row</span>
+                  <span className="text-[11px] text-zinc-500">· assign members below each row, days auto-follow the selected phase dates</span>
                 </div>
                 <Button size="sm" onClick={() => setSubs((r) => [...r, emptySubItem()])} data-testid="bb-add-sub" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add subscription
                 </Button>
               </div>
               <div className="space-y-3">
+                <div className="grid grid-cols-[1.4fr_.8fr_.6fr_.8fr_.9fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
+                  <span>Subscription</span>
+                  <span className="text-right">Price / seat / month ($)</span>
+                  <span className="text-right">Seats</span>
+                  <span className="text-right">Days</span>
+                  <span className="text-right">Est. cost</span>
+                  <span />
+                </div>
                 {subs.map((r) => (
                   <div key={r.id} data-testid={`bb-row-sub-${r.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
                     <div className="grid grid-cols-[1.4fr_.8fr_.6fr_.8fr_.9fr_28px] gap-2 items-center">
@@ -796,25 +1282,30 @@ const BudgetBuilder = () => {
                       </select>
                       <input type="number" min="0" step="1" value={r.pricePerSeat} onChange={(e) => updateSubRow(r.id, "pricePerSeat", e.target.value)} data-testid={`bb-sub-price-${r.id}`} className={rowInp + " tabular text-right"} title="$ per seat / month" />
                       <input type="number" min="1" value={r.seats} onChange={(e) => updateSubRow(r.id, "seats", e.target.value)} className={rowInp + " tabular text-right"} title="Seats" />
-                      <input type="number" min="1" value={r.months} onChange={(e) => updateSubRow(r.id, "months", e.target.value)} className={rowInp + " tabular text-right"} title="Months" />
+                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{budgetDurationDays.toLocaleString()}</div>
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
                       <RemoveBtn onClick={() => removeRow(setSubs)(r.id)} testid={`bb-sub-remove-${r.id}`} />
                     </div>
                     <div className="grid grid-cols-[45px_1fr] gap-2 items-start pl-1">
                       <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pt-1.5"><UserPlus className="w-3 h-3 inline mr-1" />Members</div>
                       <div className="flex flex-wrap gap-1.5" data-testid={`bb-sub-members-${r.id}`}>
-                        {TEAM.slice(0, 8).map((m) => {
+                        {subscriptionMemberPool.length === 0 ? (
+                          <div className="text-[11px] text-zinc-500">
+                            Add members to this project first. The current project roster will appear here for subscription access selection.
+                          </div>
+                        ) : subscriptionMemberPool.map((m) => {
                           const on = r.members.includes(m.name);
                           return (
                             <button
                               key={m.id}
                               onClick={() => toggleSubMember(r.id, m.name)}
                               data-testid={`bb-sub-${r.id}-member-${m.id}`}
+                              title={m.email ? `${m.name} · ${m.email}` : `${m.name} · ${m.role}`}
                               className={`px-2 py-0.5 rounded-md text-[10px] font-medium border transition-colors ${
                                 on ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-200" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
                               }`}
                             >
-                              {m.name.split(" ")[0]}
+                              {m.name}
                             </button>
                           );
                         })}
@@ -825,6 +1316,186 @@ const BudgetBuilder = () => {
               </div>
               <div className="mt-2 text-[11px] text-zinc-500">
                 Total subscriptions: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.subs, { compact: false })}</span>
+              </div>
+              <div className="mt-1 text-[11px] text-zinc-500">
+                Subscription estimates are prorated over <span className="text-zinc-300 font-medium">{budgetDurationDays.toLocaleString()} days</span>.
+              </div>
+            </div>
+          )}
+
+          {/* General */}
+      {activeTab === "general" && selectedTypes.general && (
+            <div className="mt-4" data-testid="bb-pane-general">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-fuchsia-300" />
+                  <div className="text-sm font-semibold text-white">General budget requests</div>
+                  <span className="text-[11px] text-zinc-500">· freelancers, external tools, datasets, APIs, licenses, and other operational asks</span>
+                </div>
+              </div>
+              {generalMode === "requests" ? (
+                <>
+                  <div className="flex justify-end mb-3">
+                    <Button size="sm" onClick={() => setGeneral((rows) => [...rows, emptyGeneralItem()])} data-testid="bb-add-general" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
+                      <Plus className="w-3 h-3" /> Add request
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="grid grid-cols-[1.1fr_1.6fr_.9fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
+                      <span>Expense / request title</span>
+                      <span>Vendor / note</span>
+                      <span className="text-right">Cost ($)</span>
+                      <span />
+                    </div>
+                    {general.map((row) => (
+                      <div key={row.id} data-testid={`bb-row-general-${row.id}`} className="grid grid-cols-[1.1fr_1.6fr_.9fr_28px] gap-2 items-center py-1">
+                        <input
+                          value={row.label}
+                          onChange={(e) => updateGeneralRow(row.id, "label", e.target.value)}
+                          data-testid={`bb-general-label-${row.id}`}
+                          placeholder="e.g. Fiverr task, external dataset"
+                          className={rowInp}
+                        />
+                        <input
+                          value={row.note}
+                          onChange={(e) => updateGeneralRow(row.id, "note", e.target.value)}
+                          data-testid={`bb-general-note-${row.id}`}
+                          placeholder="Vendor, purpose, or dependency note"
+                          className={rowInp}
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="10"
+                          value={row.estCost}
+                          onChange={(e) => updateGeneralRow(row.id, "estCost", e.target.value)}
+                          data-testid={`bb-general-cost-${row.id}`}
+                          className={rowInp + " tabular text-right"}
+                        />
+                        <RemoveBtn onClick={() => removeRow(setGeneral)(row.id)} testid={`bb-general-remove-${row.id}`} />
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <div>
+                        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Table headers</div>
+                        <div className="text-[11px] text-zinc-500 mt-1">Create the columns you need, then add phase-wise rows underneath.</div>
+                      </div>
+                      <Button
+                        size="sm"
+                        type="button"
+                        onClick={() => applyGeneralTableHeaders([...generalTableHeaders, `Column ${generalTableHeaders.length + 1}`])}
+                        data-testid="bb-general-add-header"
+                        className="h-8 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 text-xs gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Add header
+                      </Button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {generalTableHeaders.map((header, index) => (
+                        <div key={`general-header-${index}`} className="flex items-center gap-1">
+                          <input
+                            value={header}
+                            onChange={(e) => updateGeneralTableHeader(index, e.target.value)}
+                            onBlur={() => applyGeneralTableHeaders(generalTableHeaders)}
+                            data-testid={`bb-general-header-${index}`}
+                            className={`${rowInp} min-w-[150px]`}
+                          />
+                          {generalTableHeaders.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => applyGeneralTableHeaders(generalTableHeaders.filter((_, headerIndex) => headerIndex !== index))}
+                              data-testid={`bb-general-remove-header-${index}`}
+                              className="w-7 h-7 rounded-md hover:bg-red-500/20 text-zinc-500 hover:text-red-300 flex items-center justify-center"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <Button size="sm" onClick={addGeneralTableRow} data-testid="bb-add-general-table-row" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
+                      <Plus className="w-3 h-3" /> Add row
+                    </Button>
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-white/10 bg-white/[0.02]">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead>
+                        <tr className="border-b border-white/5 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+                          <th className="py-2 px-3 text-left">Phase</th>
+                          {generalTableHeaders.map((header) => (
+                            <th key={header} className="py-2 px-3 text-left">{header}</th>
+                          ))}
+                          <th className="py-2 px-3 text-right">Cost ($)</th>
+                          <th className="w-10" />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {generalTableRows.map((row) => (
+                          <tr key={row.id} data-testid={`bb-row-general-table-${row.id}`} className="border-b border-white/5 last:border-b-0">
+                            <td className="py-2 px-3">
+                              <select
+                                value={row.phaseId || generalPhaseOptions[0]?.id || ""}
+                                onChange={(e) => updateGeneralTableRow(row.id, "phaseId", e.target.value)}
+                                data-testid={`bb-general-phase-${row.id}`}
+                                className={`${rowInp} w-full`}
+                              >
+                                {generalPhaseOptions.map((option) => (
+                                  <option key={option.id} value={option.id}>{option.name}</option>
+                                ))}
+                              </select>
+                            </td>
+                            {generalTableHeaders.map((header, index) => (
+                              <td key={`${row.id}-${index}`} className="py-2 px-3">
+                                <input
+                                  value={row.cells?.[getGeneralBudgetColumnCellKey(index)] ?? row.cells?.[header] ?? ""}
+                                  onChange={(e) => updateGeneralTableRow(row.id, header, e.target.value, index)}
+                                  data-testid={`bb-general-cell-${row.id}-${header}`}
+                                  className={`${rowInp} w-full`}
+                                />
+                              </td>
+                            ))}
+                            <td className="py-2 px-3">
+                              <input
+                                type="number"
+                                min="0"
+                                step="10"
+                                value={row.estCost}
+                                onChange={(e) => updateGeneralTableRow(row.id, "estCost", e.target.value)}
+                                data-testid={`bb-general-table-cost-${row.id}`}
+                                className={`${rowInp} w-full tabular text-right`}
+                              />
+                            </td>
+                            <td className="py-2 px-3">
+                              <RemoveBtn onClick={() => removeGeneralTableRow(row.id)} testid={`bb-general-table-remove-${row.id}`} />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {generalPhaseTotals.map((entry) => (
+                      <div key={entry.phaseId} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                        <div className="text-zinc-500">{entry.phaseName}</div>
+                        <div className="text-white font-semibold tabular">{fmtCurrency(entry.total, { compact: false })}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-2 text-[11px] text-zinc-500">
+                Total general requests: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.general, { compact: false })}</span>
               </div>
             </div>
           )}
@@ -848,10 +1519,11 @@ const BudgetBuilder = () => {
       {step === 3 && (
         <div className="space-y-4">
           <Card title="3. Preview & Submit" subtitle="Final review before submitting" testid="bb-step-preview">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
               <MiniStat label="Total budget" value={fmtCurrency(totals.total, { compact: false })} tone="magenta" />
               <MiniStat label={isDirectCostBudget ? "Estimate mode" : "Trajectories"} value={isDirectCostBudget ? "Direct cost" : totalTrajectories.toLocaleString()} />
               <MiniStat label={isDirectCostBudget ? "Budget type" : "Tasks"} value={isDirectCostBudget ? budgetType : totalTasks.toLocaleString()} />
+              <MiniStat label="Team type" value={teamType} />
               <MiniStat label="Delivery" value={deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -859,19 +1531,18 @@ const BudgetBuilder = () => {
                 { k: "Models", v: totals.models, on: selectedTypes.models },
                 { k: "Infrastructure", v: totals.infra, on: selectedTypes.infra },
                 { k: "Subscriptions", v: totals.subs, on: selectedTypes.subs },
+                { k: "General", v: totals.general, on: selectedTypes.general },
               ].filter((x) => x.on)} />
               <SummaryCard title="Phase summary" rows={distributedPhases.map((p) => ({ id: p.id, k: `${p.name} · ${p.start || ""} → ${p.end || ""}`, v: p.budget }))} />
             </div>
-            {additionalMembers.length > 0 && (
-              <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                <div className="text-[12px] font-semibold text-white mb-2">Members being added with this budget</div>
-                <div className="flex flex-wrap gap-1.5">
-                  {additionalMembers.map((member) => (
-                    <span key={`${member.name}-${member.role}`} className="px-2 py-1 rounded-md text-[11px] border border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-200">
-                      {member.name} · {member.role}
-                    </span>
-                  ))}
-                </div>
+            {selectedTypes.general && generalMode === "table" && (
+              <div className="mt-4">
+                <GeneralBudgetTableCard
+                  lines={generalTablePreviewLines}
+                  title="General budget table preview"
+                  subtitle="This phase-wise table is what CTO and CFO will review."
+                  testid="bb-general-table-preview"
+                />
               </div>
             )}
             <div className="mt-4 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3 text-xs">

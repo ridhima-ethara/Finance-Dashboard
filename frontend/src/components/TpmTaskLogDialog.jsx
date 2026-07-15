@@ -16,11 +16,21 @@ import {
   Trash2,
   AlertTriangle,
   Upload,
+  FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
 import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../lib/modelCatalog";
+import {
+  DEFAULT_GENERAL_BUDGET_HEADERS,
+  getGeneralActualRowsCostTotal,
+  getGeneralActualRowsCount,
+  normalizeGeneralActualRows,
+  normalizeGeneralBudgetHeaders,
+  parseGeneralActualSheetGrid,
+  parseGeneralBudgetTable,
+} from "../lib/generalBudget";
 
 const uid = (prefix = "row") => `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -199,8 +209,41 @@ const aggregateRowsByModel = (rows = []) => {
   return Object.values(grouped);
 };
 
+const buildGeneralActualRow = (headers = DEFAULT_GENERAL_BUDGET_HEADERS, seed = {}) => {
+  const safeHeaders = normalizeGeneralBudgetHeaders(headers);
+  return {
+    id: seed.id || uid("general"),
+    estCost: Number(seed.estCost || seed.amount || seed.cost || 0),
+    cells: Object.fromEntries(
+      safeHeaders.map((header) => [header, String(seed.cells?.[header] ?? seed[header] ?? "").trim()])
+    ),
+  };
+};
+
+const generalActualRowHasData = (row = {}) => (
+  Object.values(row.cells || {}).some((value) => String(value || "").trim())
+  || Number(row.estCost || row.cost || row.amount || 0) > 0
+);
+
+const buildInitialGeneralActualRows = (editingLog, headers = DEFAULT_GENERAL_BUDGET_HEADERS) => {
+  if (Array.isArray(editingLog?.generalActualRows) && editingLog.generalActualRows.length) {
+    return normalizeGeneralActualRows(editingLog.generalActualRows, headers);
+  }
+  return [buildGeneralActualRow(headers)];
+};
+
 const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) => {
-  const { logPhaseTask, updatePhaseTask, getPhaseLogs, visibleProjects, user, modelCatalog, addCustomModel } = useApp();
+  const {
+    logPhaseTask,
+    updatePhaseTask,
+    getPhaseLogs,
+    visibleProjects,
+    budgets,
+    budgetReviews,
+    user,
+    modelCatalog,
+    addCustomModel,
+  } = useApp();
   const isEdit = !!editingLog;
 
   const projectList = useMemo(() => (project ? [project] : visibleProjects), [project, visibleProjects]);
@@ -230,6 +273,26 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   const [failedRows, setFailedRows] = useState(() => buildInitialFailedRows(editingLog, modelCatalog));
   const [successImportMeta, setSuccessImportMeta] = useState(null);
   const [failedImportMeta, setFailedImportMeta] = useState(null);
+  const approvedGeneralBudgetLines = useMemo(() => {
+    const projectLines = Array.isArray(activeProject?.budgetItems?.misc) ? activeProject.budgetItems.misc : [];
+    if (projectLines.length) return projectLines;
+    const latestRaisedBudget = [...(Array.isArray(budgets) ? budgets : []), ...(Array.isArray(budgetReviews) ? budgetReviews : [])]
+      .filter((entry) => entry?.projectId === activeProject?.id)
+      .sort((left, right) => new Date(right?.submittedAt || right?.createdAt || 0).getTime() - new Date(left?.submittedAt || left?.createdAt || 0).getTime())[0];
+    return Array.isArray(latestRaisedBudget?.items?.misc) ? latestRaisedBudget.items.misc : [];
+  }, [activeProject?.budgetItems?.misc, activeProject?.id, budgetReviews, budgets]);
+  const generalBudgetTable = useMemo(
+    () => parseGeneralBudgetTable(approvedGeneralBudgetLines),
+    [approvedGeneralBudgetLines]
+  );
+  const hasGeneralBudget = approvedGeneralBudgetLines.length > 0;
+  const generalActualHeaders = useMemo(
+    () => normalizeGeneralBudgetHeaders(generalBudgetTable.isTableMode ? generalBudgetTable.headers : DEFAULT_GENERAL_BUDGET_HEADERS),
+    [generalBudgetTable.headers, generalBudgetTable.isTableMode]
+  );
+  const [logMode, setLogMode] = useState(editingLog?.logType === "general-actual" ? "general" : "model");
+  const [generalActualRows, setGeneralActualRows] = useState(() => buildInitialGeneralActualRows(editingLog, generalActualHeaders));
+  const [generalImportMeta, setGeneralImportMeta] = useState(null);
   const wasOpenRef = useRef(false);
   const lastEditingLogIdRef = useRef(editingLog?.id || null);
 
@@ -248,11 +311,14 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
       setFailedRows(buildInitialFailedRows(editingLog, modelCatalog));
       setSuccessImportMeta(null);
       setFailedImportMeta(null);
+      setLogMode(editingLog?.logType === "general-actual" ? "general" : "model");
+      setGeneralActualRows(buildInitialGeneralActualRows(editingLog, generalActualHeaders));
+      setGeneralImportMeta(null);
     }
 
     wasOpenRef.current = open;
     lastEditingLogIdRef.current = editingLog?.id || null;
-  }, [editingLog, modelCatalog, open]);
+  }, [editingLog, generalActualHeaders, modelCatalog, open]);
 
   const existingLogs = useMemo(
     () => (activeProject && phaseId ? getPhaseLogs(activeProject.id, phaseId) : []),
@@ -266,6 +332,10 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
   const populatedSuccessRows = useMemo(() => successfulRows.filter(rowHasData), [successfulRows]);
   const populatedFailedRows = useMemo(() => failedRows.filter(rowHasData), [failedRows]);
+  const populatedGeneralActualRows = useMemo(
+    () => generalActualRows.filter(generalActualRowHasData),
+    [generalActualRows]
+  );
   const allRows = useMemo(() => [...populatedSuccessRows, ...populatedFailedRows], [populatedSuccessRows, populatedFailedRows]);
   const successfulTasksFromRows = useMemo(() => sumRowTaskQuantity(populatedSuccessRows), [populatedSuccessRows]);
   const failedTasksFromRows = useMemo(() => sumRowTaskQuantity(populatedFailedRows), [populatedFailedRows]);
@@ -284,6 +354,14 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     [populatedFailedRows]
   );
   const costTotal = successCost + failedCost;
+  const generalActualCostTotal = useMemo(
+    () => getGeneralActualRowsCostTotal(populatedGeneralActualRows),
+    [populatedGeneralActualRows]
+  );
+  const generalActualRowCount = useMemo(
+    () => getGeneralActualRowsCount(populatedGeneralActualRows),
+    [populatedGeneralActualRows]
+  );
   const inputTokenTotal = useMemo(
     () => allRows.reduce((sum, row) => sum + Number(row.inputTokens || 0), 0),
     [allRows]
@@ -300,9 +378,10 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     () => Math.round(Number(activeProject?.approvedBudget || 0) / 30 * 100) / 100,
     [activeProject?.approvedBudget]
   );
-  const dailyAllocationVariance = approvedDailyAllocation - costTotal;
+  const effectiveCostTotal = logMode === "general" ? generalActualCostTotal : costTotal;
+  const dailyAllocationVariance = approvedDailyAllocation - effectiveCostTotal;
   const dailyAllocationUtilization = approvedDailyAllocation > 0
-    ? Math.round((costTotal / approvedDailyAllocation) * 100)
+    ? Math.round((effectiveCostTotal / approvedDailyAllocation) * 100)
     : 0;
   const modelConsumptionRows = useMemo(() => {
     const grouped = allRows.reduce((acc, row) => {
@@ -395,6 +474,23 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
   const addSheetRow = (setter) => setter((rows) => [...rows, buildSheetRow(modelCatalog)]);
   const removeSheetRow = (setter, id) => setter((rows) => rows.filter((row) => row.id !== id));
+  const addGeneralActualRow = () => setGeneralActualRows((rows) => [...rows, buildGeneralActualRow(generalActualHeaders)]);
+  const updateGeneralActualRow = (id, key, value) => {
+    setGeneralActualRows((rows) => rows.map((row) => {
+      if (row.id !== id) return row;
+      if (key === "estCost") {
+        return { ...row, estCost: Number(value || 0) };
+      }
+      return {
+        ...row,
+        cells: {
+          ...row.cells,
+          [key]: value,
+        },
+      };
+    }));
+  };
+  const removeGeneralActualRow = (id) => setGeneralActualRows((rows) => rows.filter((row) => row.id !== id));
 
   const importSheetFile = async (type, file) => {
     if (!file) return;
@@ -440,6 +536,48 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     }
   };
 
+  const importGeneralActualFile = async (file) => {
+    if (!file) return;
+    const lowerName = String(file.name || "").toLowerCase();
+    if (!/\.(csv|xlsx|xls)$/.test(lowerName)) {
+      toast.error("Upload a CSV or Excel file");
+      return;
+    }
+
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = lowerName.endsWith(".csv")
+        ? XLSX.read(await file.text(), { type: "string" })
+        : XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const firstSheet = workbook.SheetNames[0];
+      const rawRows = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], {
+        header: 1,
+        raw: false,
+        defval: "",
+      });
+      const parsed = parseGeneralActualSheetGrid(rawRows, generalActualHeaders);
+      if (!parsed.rows.length) {
+        toast.error("No valid budget rows found in the uploaded sheet");
+        return;
+      }
+
+      setGeneralActualRows((rows) => {
+        const current = rows.filter(generalActualRowHasData);
+        return [...current, ...parsed.rows];
+      });
+      setGeneralImportMeta({
+        fileName: file.name,
+        sheetName: firstSheet,
+        rowCount: parsed.rows.length,
+      });
+      toast.success(`${parsed.rows.length} general actual row${parsed.rows.length === 1 ? "" : "s"} imported from ${file.name}`);
+    } catch (error) {
+      toast.error("Could not read that sheet", {
+        description: error?.message || "Please upload a valid CSV or Excel file.",
+      });
+    }
+  };
+
   const reset = () => {
     setSuccessfulTasks("");
     setFailedTasks("");
@@ -451,12 +589,60 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     setFailedRows([]);
     setSuccessImportMeta(null);
     setFailedImportMeta(null);
+    setGeneralActualRows([buildGeneralActualRow(generalActualHeaders)]);
+    setGeneralImportMeta(null);
   };
 
   const submit = () => {
     if (!activeProject) { toast.error("Select a project"); return; }
     if (!phaseId) { toast.error("Select a phase"); return; }
     if (!date) { toast.error("Date is required"); return; }
+    if (logMode === "general") {
+      if (generalActualRowCount <= 0 && generalActualCostTotal <= 0) {
+        toast.error("Add at least one general actual row for the day");
+        return;
+      }
+      const autoName = `${currentPhase?.name || "Phase"} · ${date} · ${generalActualRowCount} actual row${generalActualRowCount === 1 ? "" : "s"}`;
+      const payload = {
+        logType: "general-actual",
+        name: autoName,
+        assignee: user?.name || "TPM",
+        hours: 0,
+        cost: generalActualCostTotal,
+        tasksDone: generalActualRowCount,
+        successfulTasks: generalActualRowCount,
+        failedTasks: 0,
+        trajectories: 0,
+        successTrajectories: 0,
+        failedTrajectories: 0,
+        date,
+        notes,
+        evidence: "",
+        modelId: "",
+        modelName: "",
+        inputTokens: 0,
+        outputTokens: 0,
+        modelUsage: [],
+        successfulRows: [],
+        failedRows: [],
+        generalActualHeaders,
+        generalActualRows: populatedGeneralActualRows,
+      };
+
+      if (isEdit) {
+        updatePhaseTask(activeProject.id, phase?.id || phaseId, editingLog.id, payload);
+        toast.success("General actual log updated", { description: `${activeProject.name} · ${currentPhase?.name || phaseId}` });
+      } else {
+        logPhaseTask({ projectId: activeProject.id, phaseId, ...payload });
+        toast.success("General actual logged", {
+          description: `${activeProject.name} · ${currentPhase?.name || phaseId} · ${fmtCurrency(generalActualCostTotal, { compact: false })}`,
+        });
+        reset();
+      }
+      onOpenChange(false);
+      return;
+    }
+
     if (derivedSuccessfulTasks <= 0 && derivedFailedTasks <= 0 && costTotal <= 0) {
       toast.error("Add at least one successful or failed task row for the day");
       return;
@@ -464,6 +650,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
     const autoName = `${currentPhase?.name || "Phase"} · ${date} · ${derivedSuccessfulTasks} success · ${derivedFailedTasks} failed`;
     const payload = {
+      logType: "model-usage",
       name: autoName,
       assignee: user?.name || "TPM",
       hours: 0,
@@ -484,6 +671,8 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
       modelUsage,
       successfulRows: populatedSuccessRows,
       failedRows: populatedFailedRows,
+      generalActualHeaders: [],
+      generalActualRows: [],
     };
 
     if (isEdit) {
@@ -510,7 +699,10 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             <div>
               <DialogTitle className="font-display text-lg text-white">{isEdit ? "Edit daily task log" : "Log daily task"}</DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
-                {activeProject?.name ? `${activeProject.name} · ` : ""}capture detailed successful and failed task rows, model cost, and token usage
+                {activeProject?.name ? `${activeProject.name} · ` : ""}
+                {logMode === "general"
+                  ? "capture phase-wise general actuals from a CSV upload or manual table"
+                  : "capture detailed successful and failed task rows, model cost, and token usage"}
               </DialogDescription>
             </div>
           </div>
@@ -558,7 +750,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             </Field>
           )}
 
-          {phaseTotalTasks > 0 && (
+          {logMode !== "general" && phaseTotalTasks > 0 && (
             <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3" data-testid="task-progress">
               <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1.5">
                 <span className="flex items-center gap-1"><ListChecks className="w-3 h-3 text-fuchsia-300" /> Phase progress</span>
@@ -586,6 +778,39 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
               />
             </div>
           </Field>
+
+          {hasGeneralBudget && (
+            <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3" data-testid="task-log-mode-toggle">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Logging mode</div>
+                  <div className="text-[11px] text-zinc-400 mt-1">
+                    This project has a general budget. You can keep logging model usage, or upload/manual-log phase actuals against that general budget.
+                  </div>
+                </div>
+                <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                  <button
+                    type="button"
+                    onClick={() => setLogMode("model")}
+                    data-testid="task-mode-model"
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium ${logMode === "model" ? "bg-fuchsia-500 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]" : "text-zinc-400 hover:text-zinc-100"}`}
+                  >
+                    Model usage
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLogMode("general")}
+                    data-testid="task-mode-general"
+                    className={`px-3 py-1.5 rounded-md text-xs font-medium ${logMode === "general" ? "bg-fuchsia-500 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]" : "text-zinc-400 hover:text-zinc-100"}`}
+                  >
+                    General actuals
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: logMode === "general" ? "none" : undefined }}>
 
           <TaskSheetSection
             title="Successful task log"
@@ -761,6 +986,24 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             </div>
           )}
 
+          </div>
+
+          {logMode === "general" && (
+            <GeneralActualSection
+              headers={generalActualHeaders}
+              rows={generalActualRows}
+              importMeta={generalImportMeta}
+              onFileImport={importGeneralActualFile}
+              onAddRow={addGeneralActualRow}
+              onUpdateRow={updateGeneralActualRow}
+              onRemoveRow={removeGeneralActualRow}
+              rowCount={generalActualRowCount}
+              costTotal={generalActualCostTotal}
+              templateMode={generalBudgetTable.isTableMode ? "Custom table" : "General budget"}
+              phaseSummaries={generalBudgetTable.phaseTotals}
+            />
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Field label="Allocated / day">
               <div className={`${summaryInp} ${approvedDailyAllocation > 0 ? "text-white" : "text-zinc-500"}`} data-testid="task-day-allocated">
@@ -768,7 +1011,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
               </div>
             </Field>
             <Field label="Logged today">
-              <div className={`${summaryInp} text-fuchsia-300`} data-testid="task-day-logged">{fmtCurrency(costTotal, { compact: false })}</div>
+              <div className={`${summaryInp} text-fuchsia-300`} data-testid="task-day-logged">{fmtCurrency(effectiveCostTotal, { compact: false })}</div>
             </Field>
             <Field label={dailyAllocationVariance >= 0 ? "Remaining vs day" : "Exceeded vs day"}>
               <div
@@ -804,12 +1047,21 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
 
           <div className="rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-3 flex items-start gap-2 text-[11px] text-zinc-300">
             <Coins className="w-3.5 h-3.5 text-fuchsia-300 flex-shrink-0 mt-0.5" />
-            Logged totals roll into the non-CFO dashboards as owned consumption, while CFO keeps the actual-vs-approved finance view. Day allocation above uses the same approved-daily-budget comparison surfaced in the consumption dashboards.
+            {logMode === "general"
+              ? "General actual logs roll into the project actuals for this project and surface through the CFO finance view by phase and by project."
+              : "Logged totals roll into the non-CFO dashboards as owned consumption, while CFO keeps the actual-vs-approved finance view. Day allocation above uses the same approved-daily-budget comparison surfaced in the consumption dashboards."}
           </div>
-          <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 flex items-start gap-2 text-[11px] text-amber-100">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
-            If you leave the successful / failed task totals blank, the log automatically uses the uploaded task quantities for that day. Numeric task cells are summed; named task rows count as one task each.
-          </div>
+          {logMode === "model" ? (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 flex items-start gap-2 text-[11px] text-amber-100">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
+              If you leave the successful / failed task totals blank, the log automatically uses the uploaded task quantities for that day. Numeric task cells are summed; named task rows count as one task each.
+            </div>
+          ) : (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 flex items-start gap-2 text-[11px] text-amber-100">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
+              Upload the phase sheet with your chosen header columns plus a cost column, or add the rows manually. Each row counts as one logged actual entry for this phase.
+            </div>
+          )}
         </div>
 
         <DialogFooter>
@@ -1035,5 +1287,153 @@ const TaskSheetSection = ({
     </div>
   );
 };
+
+const GeneralActualSection = ({
+  headers,
+  rows,
+  importMeta,
+  onFileImport,
+  onAddRow,
+  onUpdateRow,
+  onRemoveRow,
+  rowCount,
+  costTotal,
+  templateMode,
+  phaseSummaries = [],
+}) => (
+  <div className="space-y-4" data-testid="general-actual-section">
+    <div className="rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-4">
+      <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
+        <div>
+          <div className="text-sm font-semibold text-white flex items-center gap-2">
+            <FileText className="w-4 h-4 text-fuchsia-300" />
+            General actual log
+          </div>
+          <div className="text-[11px] text-zinc-400 mt-1 max-w-3xl">
+            Upload the phase-wise CSV / Excel sheet or add manual rows. The cost column is summed into this phase&apos;s actuals and sent through the same approval flow downstream.
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          onClick={onAddRow}
+          data-testid="general-actual-add-row"
+          className="h-8 rounded-md border text-xs gap-1 bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border-fuchsia-500/25 text-fuchsia-300"
+        >
+          <Plus className="w-3 h-3" /> Add row
+        </Button>
+      </div>
+
+      <div className="grid gap-2 md:grid-cols-[1fr_auto] mb-3">
+        <label
+          className="h-11 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 text-sm text-zinc-200 flex items-center gap-2 cursor-pointer hover:bg-white/[0.06]"
+          data-testid="general-actual-upload-label"
+        >
+          <Upload className="w-4 h-4 text-fuchsia-300" />
+          Upload Excel / CSV
+          <input
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onFileImport(file);
+              e.target.value = "";
+            }}
+            data-testid="general-actual-upload"
+            className="hidden"
+          />
+        </label>
+        <div className="text-[11px] text-zinc-500 self-center">
+          Current template: {templateMode} · expected columns: {headers.join(", ")} + Cost.
+        </div>
+      </div>
+
+      {importMeta && (
+        <div className="mb-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[11px] text-zinc-300" data-testid="general-actual-import-meta">
+          Imported <span className="text-white font-medium">{importMeta.fileName}</span>
+          {importMeta.sheetName ? <span> · Sheet: {importMeta.sheetName}</span> : null}
+          <span> · {importMeta.rowCount} row{importMeta.rowCount === 1 ? "" : "s"} loaded</span>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[720px] text-sm">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+              {headers.map((header) => (
+                <th key={header} className="text-left py-2 px-3">{header}</th>
+              ))}
+              <th className="text-right py-2 px-3">Cost ($)</th>
+              <th className="w-10" />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="border-b border-white/5 last:border-b-0">
+                {headers.map((header) => (
+                  <td key={`${row.id}-${header}`} className="py-2 px-3">
+                    <input
+                      value={row.cells?.[header] || ""}
+                      onChange={(e) => onUpdateRow(row.id, header, e.target.value)}
+                      data-testid={`general-actual-cell-${row.id}-${header}`}
+                      className={rowInp}
+                    />
+                  </td>
+                ))}
+                <td className="py-2 px-3">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={displayDraftNumber(row.estCost)}
+                    onChange={(e) => onUpdateRow(row.id, "estCost", e.target.value)}
+                    data-testid={`general-actual-cost-${row.id}`}
+                    className={`${rowInp} text-right tabular`}
+                  />
+                </td>
+                <td className="py-2 px-3">
+                  <button
+                    type="button"
+                    onClick={() => onRemoveRow(row.id)}
+                    data-testid={`general-actual-remove-${row.id}`}
+                    className="w-7 h-7 rounded-md hover:bg-red-500/20 text-zinc-500 hover:text-red-300 flex items-center justify-center"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <Field label="Rows logged">
+        <div className={`${summaryInp} text-zinc-100`} data-testid="general-actual-row-count">{rowCount.toLocaleString()}</div>
+      </Field>
+      <Field label="Phase actual">
+        <div className={`${summaryInp} text-fuchsia-300`} data-testid="general-actual-total-cost">{fmtCurrency(costTotal, { compact: false })}</div>
+      </Field>
+      <Field label="Template columns">
+        <div className={`${summaryInp} text-zinc-200`} data-testid="general-actual-header-count">{headers.length.toLocaleString()}</div>
+      </Field>
+      <Field label="Budget source">
+        <div className={`${summaryInp} text-zinc-200`} data-testid="general-actual-template-mode">{templateMode}</div>
+      </Field>
+    </div>
+
+    {phaseSummaries.length > 0 && (
+      <div className="flex flex-wrap gap-2">
+        {phaseSummaries.map((entry) => (
+          <div key={entry.phaseId} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+            <div className="text-zinc-500">{entry.phaseName}</div>
+            <div className="text-white font-semibold tabular">{fmtCurrency(entry.total, { compact: false })}</div>
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+);
 
 export default TpmTaskLogDialog;

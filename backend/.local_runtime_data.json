@@ -1,0 +1,1302 @@
+{
+  "app_state": {
+    "buffers": {
+      "demo-rnd-foundry": 8,
+      "demo-prod-orbit": 12,
+      "demo-prod-lattice": 10
+    },
+    "bufferPool": {
+      "total": 12000,
+      "available": 7100,
+      "policyPct": 10,
+      "history": [
+        {
+          "id": "buffer-history-1",
+          "date": "2026-06-24T11:00:00.000Z",
+          "project": "Orbit Support Console",
+          "action": "Allocated",
+          "amount": 2400,
+          "by": "CFO Admin",
+          "reason": "5% hidden reserve for rollout risk"
+        }
+      ],
+      "alerts": [
+        {
+          "id": "buffer-alert-1",
+          "level": "warning",
+          "title": "Lattice Vision Rollout is above 75% of its visible budget.",
+          "detail": "Keep the hidden reserve unchanged until the scale-phase request is resolved."
+        }
+      ],
+      "projectConsumed": {
+        "demo-rnd-foundry": 420,
+        "demo-prod-orbit": 880,
+        "demo-prod-lattice": 1600
+      }
+    },
+    "recoveries": {},
+    "customModels": [],
+    "customProjects": [],
+    "taskLogs": {
+      "demo-rnd-foundry::demo-rnd-testing": [
+        {
+          "id": "log-rnd-1",
+          "date": "2026-06-05",
+          "createdAt": "2026-06-05T11:30:00.000Z",
+          "tasksDone": 48,
+          "successfulTasks": 48,
+          "failedTasks": 4,
+          "trajectories": 144,
+          "successTrajectories": 144,
+          "failedTrajectories": 12,
+          "cost": 1120,
+          "inputTokens": 680000,
+          "outputTokens": 166000,
+          "modelUsage": [
+            {
+              "id": "mu-rnd-1",
+              "modelId": "anthropic.claude-sonnet-5",
+              "modelName": "Claude Sonnet 5",
+              "tasksDone": 48,
+              "cost": 1120,
+              "inputTokens": 680000,
+              "outputTokens": 166000
+            }
+          ],
+          "approvalStatus": "approved"
+        },
+        {
+          "id": "log-rnd-2",
+          "date": "2026-06-09",
+          "createdAt": "2026-06-09T15:10:00.000Z",
+          "tasksDone": 36,
+          "successfulTasks": 36,
+          "failedTasks": 2,
+          "trajectories": 108,
+          "successTrajectories": 108,
+          "failedTrajectories": 6,
+          "cost": 980,
+          "inputTokens": 512000,
+          "outputTokens": 138000,
+          "modelUsage": [
+            {
+              "id": "mu-rnd-2",
+              "modelId": "anthropic.claude-sonnet-5",
+              "modelName": "Claude Sonnet 5",
+              "tasksDone": 36,
+              "cost": 980,
+              "inputTokens": 512000,
+              "outputTokens": 138000
+            }
+          ],
+          "approvalStatus": "approved"
+        }
+      ],
+      "demo-rnd-foundry::demo-rnd-sample-1": [
+        {
+          "id": "log-rnd-3",
+          "date": "2026-06-18",
+          "createdAt": "2026-06-18T10:00:00.000Z",
+          "tasksDone": 22,
+          "successfulTasks": 22,
+          "failedTasks": 1,
+          "trajectories": 44,
+          "successTrajectories": 44,
+          "failedTrajectories": 2,
+          "cost": 740,
+          "inputTokens": 240000,
+          "outputTokens": 76000,
+          "modelUsage": [
+            {
+              "id": "mu-rnd-3",
+              "modelId": "moonshot.kimi-1-5-vision",
+              "modelName": "Kimi 1.5 Vision",
+              "tasksDone": 12,
+              "cost": 420,
+              "inputTokens": 122000,
+              "outputTokens": 32000
+            },
+            {
+              "id": "mu-rnd-4",
+              "modelId": "anthropic.claude-sonnet-5",
+              "modelName": "Claude Sonnet 5",
+              "tasksDone": 10,
+              "cost": 320,
+              "inputTokens": 118000,
+              "outputTokens": 44000
+            }
+          ],
+          "approvalStatus": "approved"
+        }
+      ],
+      "demo-prod-orbit::demo-prod-discovery": [
+        {
+          "id": "log-orbit-1",
+          "date": "2026-06-04",
+          "createdAt": "2026-06-04T14:00:00.000Z",
+          "tasksDone": 52,
+          "successfulTasks": 52,
+          "failedTasks": 3,
+          "trajectories": 104,
+          "successTrajectories": 104,
+          "failedTrajectories": 6,
+          "cost": 2860,
+          "inputTokens": 920000,
+          "outputTokens": 286000,
+          "modelUsage": [
+            {
+              "id": "mu-orbit-1",
+              "modelId": "openai.gpt-4o",
+              "modelName": "GPT-4o",
+              "tasksDone": 35,
+              "cost": 1880,
+              "inputTokens": 620000,
+              "outputTokens": 180000
+            },
+            {
+              "id": "mu-orbit-2",
+              "modelId": "google.gemini-2-5-pro",
+              "modelName": "Gemini 2.5 Pro",
+              "tasksDone": 17,
+              "cost": 980,
+              "inputTokens": 300000,
+              "outputTokens": 106000
+            }
+          ],
+          "approvalStatus": "approved"
+        }
+      ],
+      "demo-prod-orbit::demo-prod-build": [
+        {
+          "id": "log-orbit-2",
+          "date": "2026-06-14",
+          "createdAt": "2026-06-14T18:20:00.000Z",
+          "tasksDone": 110,
+          "successfulTasks": 110,
+          "failedTasks": 6,
+          "trajectories": 330,
+          "successTrajectories": 330,
+          "failedTrajectories": 18,
+          "cost": 6120,
+          "inputTokens": 1820000,
+          "outputTokens": 560000,
+          "modelUsage": [
+            {
+              "id": "mu-orbit-3",
+              "modelId": "openai.gpt-4o",
+              "modelName": "GPT-4o",
+              "tasksDone": 82,
+              "cost": 4440,
+              "inputTokens": 1280000,
+              "outputTokens": 400000
+            },
+            {
+              "id": "mu-orbit-4",
+              "modelId": "google.gemini-2-5-pro",
+              "modelName": "Gemini 2.5 Pro",
+              "tasksDone": 28,
+              "cost": 1680,
+              "inputTokens": 540000,
+              "outputTokens": 160000
+            }
+          ],
+          "approvalStatus": "approved"
+        },
+        {
+          "id": "log-orbit-3",
+          "date": "2026-06-20",
+          "createdAt": "2026-06-20T16:10:00.000Z",
+          "tasksDone": 86,
+          "successfulTasks": 86,
+          "failedTasks": 5,
+          "trajectories": 258,
+          "successTrajectories": 258,
+          "failedTrajectories": 15,
+          "cost": 4740,
+          "inputTokens": 1360000,
+          "outputTokens": 438000,
+          "modelUsage": [
+            {
+              "id": "mu-orbit-5",
+              "modelId": "openai.gpt-4o",
+              "modelName": "GPT-4o",
+              "tasksDone": 64,
+              "cost": 3540,
+              "inputTokens": 980000,
+              "outputTokens": 316000
+            },
+            {
+              "id": "mu-orbit-6",
+              "modelId": "google.gemini-2-5-pro",
+              "modelName": "Gemini 2.5 Pro",
+              "tasksDone": 22,
+              "cost": 1200,
+              "inputTokens": 380000,
+              "outputTokens": 122000
+            }
+          ],
+          "approvalStatus": "approved"
+        }
+      ],
+      "demo-prod-orbit::demo-prod-qa": [
+        {
+          "id": "log-orbit-4",
+          "date": "2026-06-27",
+          "createdAt": "2026-06-27T12:15:00.000Z",
+          "tasksDone": 44,
+          "successfulTasks": 44,
+          "failedTasks": 1,
+          "trajectories": 88,
+          "successTrajectories": 88,
+          "failedTrajectories": 2,
+          "cost": 2180,
+          "inputTokens": 640000,
+          "outputTokens": 188000,
+          "modelUsage": [
+            {
+              "id": "mu-orbit-7",
+              "modelId": "openai.gpt-4o",
+              "modelName": "GPT-4o",
+              "tasksDone": 44,
+              "cost": 2180,
+              "inputTokens": 640000,
+              "outputTokens": 188000
+            }
+          ],
+          "approvalStatus": "approved"
+        }
+      ],
+      "demo-prod-lattice::demo-lattice-enable": [
+        {
+          "id": "log-lattice-1",
+          "date": "2026-06-09",
+          "createdAt": "2026-06-09T10:40:00.000Z",
+          "tasksDone": 38,
+          "successfulTasks": 38,
+          "failedTasks": 2,
+          "trajectories": 76,
+          "successTrajectories": 76,
+          "failedTrajectories": 4,
+          "cost": 2980,
+          "inputTokens": 480000,
+          "outputTokens": 122000,
+          "modelUsage": [
+            {
+              "id": "mu-lattice-1",
+              "modelId": "moonshot.kimi-1-5-vision",
+              "modelName": "Kimi 1.5 Vision",
+              "tasksDone": 38,
+              "cost": 2980,
+              "inputTokens": 480000,
+              "outputTokens": 122000
+            }
+          ],
+          "approvalStatus": "approved"
+        }
+      ],
+      "demo-prod-lattice::demo-lattice-scale": [
+        {
+          "id": "log-lattice-2",
+          "date": "2026-06-18",
+          "createdAt": "2026-06-18T18:05:00.000Z",
+          "tasksDone": 76,
+          "successfulTasks": 76,
+          "failedTasks": 5,
+          "trajectories": 228,
+          "successTrajectories": 228,
+          "failedTrajectories": 15,
+          "cost": 6640,
+          "inputTokens": 830000,
+          "outputTokens": 242000,
+          "modelUsage": [
+            {
+              "id": "mu-lattice-2",
+              "modelId": "moonshot.kimi-1-5-vision",
+              "modelName": "Kimi 1.5 Vision",
+              "tasksDone": 76,
+              "cost": 6640,
+              "inputTokens": 830000,
+              "outputTokens": 242000
+            }
+          ],
+          "approvalStatus": "approved"
+        },
+        {
+          "id": "log-lattice-3",
+          "date": "2026-06-26",
+          "createdAt": "2026-06-26T17:00:00.000Z",
+          "tasksDone": 64,
+          "successfulTasks": 64,
+          "failedTasks": 4,
+          "trajectories": 192,
+          "successTrajectories": 192,
+          "failedTrajectories": 12,
+          "cost": 5420,
+          "inputTokens": 720000,
+          "outputTokens": 210000,
+          "modelUsage": [
+            {
+              "id": "mu-lattice-3",
+              "modelId": "moonshot.kimi-1-5-vision",
+              "modelName": "Kimi 1.5 Vision",
+              "tasksDone": 64,
+              "cost": 5420,
+              "inputTokens": 720000,
+              "outputTokens": 210000
+            }
+          ],
+          "approvalStatus": "approved"
+        }
+      ]
+    },
+    "topupRequests": [
+      {
+        "id": "tur-demo-orbit-build",
+        "projectId": "demo-prod-orbit",
+        "projectName": "Orbit Support Console",
+        "phaseId": "demo-prod-build",
+        "phaseName": "Build",
+        "amount": 5400,
+        "baseAmount": 5400,
+        "bufferPct": 0,
+        "bufferAmount": 0,
+        "reason": "Additional routing capacity and one month of shared subscriptions are needed to finish the escalated launch scope.",
+        "urgency": "High",
+        "requester": "TPM Lead",
+        "requesterRole": "TPM",
+        "requestedAt": "2026-06-21T10:30:00.000Z",
+        "sampleIteration": null,
+        "status": "pending-cfo",
+        "ctoDecision": {
+          "amount": 5400,
+          "comment": "Approved as requested",
+          "at": "2026-06-22T08:15:00.000Z",
+          "decision": "approve"
+        },
+        "cfoDecision": null,
+        "breakdown": {
+          "total": 5400,
+          "models": {
+            "amount": 3100,
+            "optionLabel": "GPT-4o \u00b7 OpenAI | Gemini 2.5 Pro \u00b7 Google",
+            "note": "Overflow inference traffic | Long-context regression set",
+            "entries": [
+              {
+                "id": "tur-orbit-model-1",
+                "optionId": "openai.gpt-4o",
+                "optionLabel": "GPT-4o \u00b7 OpenAI",
+                "provider": "OpenAI",
+                "note": "Overflow inference traffic",
+                "amount": 2200
+              },
+              {
+                "id": "tur-orbit-model-2",
+                "optionId": "google.gemini-2-5-pro",
+                "optionLabel": "Gemini 2.5 Pro \u00b7 Google",
+                "provider": "GCP",
+                "note": "Long-context regression set",
+                "amount": 900
+              }
+            ]
+          },
+          "infra": {
+            "amount": 1700,
+            "optionLabel": "shared-routing \u00b7 Hosted routing \u00b7 0 vCPU \u00b7 0 GiB",
+            "note": "Fallback routing pool",
+            "entries": [
+              {
+                "id": "tur-orbit-infra-1",
+                "optionId": "shared-routing",
+                "optionLabel": "shared-routing \u00b7 Hosted routing \u00b7 0 vCPU \u00b7 0 GiB",
+                "provider": "OpenRouter",
+                "note": "Fallback routing pool",
+                "amount": 1700
+              }
+            ]
+          },
+          "subs": {
+            "amount": 600,
+            "optionLabel": "ChatGPT Team \u00b7 $300/month",
+            "note": "Additional enablement seats",
+            "entries": [
+              {
+                "id": "tur-orbit-sub-1",
+                "optionId": "chatgpt-team",
+                "optionLabel": "ChatGPT Team \u00b7 $300/month",
+                "note": "Additional enablement seats",
+                "amount": 600,
+                "billingUnit": "per month"
+              }
+            ],
+            "billingUnit": "per month"
+          }
+        },
+        "history": [
+          {
+            "at": "2026-06-21T10:30:00.000Z",
+            "actor": "TPM Lead \u00b7 TPM",
+            "action": "Submitted budget change request",
+            "detail": "Build \u00b7 $5,400"
+          },
+          {
+            "at": "2026-06-22T08:15:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "CTO approved",
+            "detail": "Forwarded to CFO at $5,400"
+          }
+        ]
+      },
+      {
+        "id": "tur-demo-nexa-sample",
+        "projectId": "demo-rnd-foundry",
+        "projectName": "Nexa Copilot Foundry",
+        "phaseId": "demo-rnd-sample-1",
+        "phaseName": "Sample 1",
+        "amount": 1800,
+        "baseAmount": 1800,
+        "bufferPct": 0,
+        "bufferAmount": 0,
+        "reason": "Extended sample validation required a short Moonshot vision pass and extra QA subscription time.",
+        "urgency": "Normal",
+        "requester": "R&D Lead",
+        "requesterRole": "R&D",
+        "requestedAt": "2026-06-15T07:45:00.000Z",
+        "sampleIteration": 1,
+        "status": "approved",
+        "ctoDecision": {
+          "amount": 1650,
+          "comment": "Trimmed to the validated sample scope",
+          "at": "2026-06-15T12:30:00.000Z",
+          "decision": "partial"
+        },
+        "cfoDecision": {
+          "amount": 1650,
+          "comment": "Approved at CTO-modified amount",
+          "at": "2026-06-16T09:10:00.000Z",
+          "decision": "partial"
+        },
+        "breakdown": {
+          "total": 1800,
+          "models": {
+            "amount": 900,
+            "optionLabel": "Kimi 1.5 Vision \u00b7 Moonshot AI",
+            "note": "Visual edge-case review",
+            "entries": [
+              {
+                "id": "tur-nexa-model-1",
+                "optionId": "moonshot.kimi-1-5-vision",
+                "optionLabel": "Kimi 1.5 Vision \u00b7 Moonshot AI",
+                "provider": "Moonshot",
+                "note": "Visual edge-case review",
+                "amount": 900
+              }
+            ]
+          },
+          "infra": {
+            "amount": 500,
+            "optionLabel": "kimi-vision-cluster \u00b7 Vision inference \u00b7 0 vCPU \u00b7 0 GiB",
+            "note": "Short-lived sampling cluster",
+            "entries": [
+              {
+                "id": "tur-nexa-infra-1",
+                "optionId": "kimi-vision-cluster",
+                "optionLabel": "kimi-vision-cluster \u00b7 Vision inference \u00b7 0 vCPU \u00b7 0 GiB",
+                "provider": "Moonshot",
+                "note": "Short-lived sampling cluster",
+                "amount": 500
+              }
+            ]
+          },
+          "subs": {
+            "amount": 40,
+            "optionLabel": "Cursor Pro \u00b7 $40/month",
+            "note": "Prompt editor seat",
+            "entries": [
+              {
+                "id": "tur-nexa-sub-1",
+                "optionId": "cursor-pro",
+                "optionLabel": "Cursor Pro \u00b7 $40/month",
+                "note": "Prompt editor seat",
+                "amount": 40,
+                "billingUnit": "per month"
+              }
+            ],
+            "billingUnit": "per month"
+          }
+        },
+        "history": [
+          {
+            "at": "2026-06-15T07:45:00.000Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Submitted budget change request",
+            "detail": "Sample 1 \u00b7 $1,800"
+          },
+          {
+            "at": "2026-06-15T12:30:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "CTO partial approval",
+            "detail": "Forwarded to CFO at $1,650"
+          },
+          {
+            "at": "2026-06-16T09:10:00.000Z",
+            "actor": "CFO Admin \u00b7 CFO",
+            "action": "CFO partial approval",
+            "detail": "Baseline updated by $1,650"
+          }
+        ]
+      }
+    ],
+    "budgets": [
+      {
+        "id": "budget-demo-nexa-testing",
+        "projectId": "demo-rnd-foundry",
+        "budgetType": "Testing",
+        "status": "approved",
+        "submittedAt": "2026-06-03T08:00:00.000Z",
+        "submittedBy": "R&D Lead",
+        "totalTasks": 220,
+        "totalTrajectories": 660,
+        "totals": {
+          "total": 9200,
+          "models": 3400,
+          "infra": 2800,
+          "subs": 0,
+          "general": 3000
+        },
+        "phases": [
+          {
+            "id": "demo-rnd-testing",
+            "name": "Testing",
+            "start": "2026-06-03",
+            "end": "2026-06-11",
+            "budget": 9200,
+            "tasks": 220,
+            "trajectories": 3
+          }
+        ]
+      },
+      {
+        "id": "budget-demo-nexa-sample",
+        "projectId": "demo-rnd-foundry",
+        "budgetType": "RnD",
+        "status": "approved",
+        "submittedAt": "2026-06-12T08:30:00.000Z",
+        "submittedBy": "R&D Lead",
+        "totalTasks": 140,
+        "totalTrajectories": 280,
+        "totals": {
+          "total": 6400,
+          "models": 1800,
+          "infra": 1700,
+          "subs": 40,
+          "general": 2860
+        },
+        "phases": [
+          {
+            "id": "demo-rnd-sample-1",
+            "name": "Sample 1",
+            "start": "2026-06-12",
+            "end": "2026-06-28",
+            "budget": 6400,
+            "tasks": 140,
+            "trajectories": 2
+          }
+        ],
+        "sampleIteration": 1
+      },
+      {
+        "id": "budget-demo-orbit-prod",
+        "projectId": "demo-prod-orbit",
+        "budgetType": "Production",
+        "status": "approved",
+        "submittedAt": "2026-06-01T07:30:00.000Z",
+        "submittedBy": "TPM Lead",
+        "totalTasks": 760,
+        "totalTrajectories": 2020,
+        "totals": {
+          "total": 48000,
+          "models": 23600,
+          "infra": 12400,
+          "subs": 1890,
+          "general": 10110
+        },
+        "phases": [
+          {
+            "id": "demo-prod-discovery",
+            "name": "Discovery",
+            "start": "2026-06-01",
+            "end": "2026-06-07",
+            "budget": 12000,
+            "tasks": 120,
+            "trajectories": 2
+          },
+          {
+            "id": "demo-prod-build",
+            "name": "Build",
+            "start": "2026-06-08",
+            "end": "2026-06-22",
+            "budget": 22000,
+            "tasks": 420,
+            "trajectories": 3
+          },
+          {
+            "id": "demo-prod-qa",
+            "name": "QA",
+            "start": "2026-06-23",
+            "end": "2026-06-30",
+            "budget": 14000,
+            "tasks": 220,
+            "trajectories": 2
+          }
+        ]
+      },
+      {
+        "id": "budget-demo-lattice-prod",
+        "projectId": "demo-prod-lattice",
+        "budgetType": "Production",
+        "status": "approved",
+        "submittedAt": "2026-06-05T07:45:00.000Z",
+        "submittedBy": "TPM Lead",
+        "totalTasks": 400,
+        "totalTrajectories": 1110,
+        "totals": {
+          "total": 36000,
+          "models": 12400,
+          "infra": 13400,
+          "subs": 105,
+          "general": 10095
+        },
+        "phases": [
+          {
+            "id": "demo-lattice-enable",
+            "name": "Enablement",
+            "start": "2026-06-05",
+            "end": "2026-06-12",
+            "budget": 9000,
+            "tasks": 90,
+            "trajectories": 2
+          },
+          {
+            "id": "demo-lattice-scale",
+            "name": "Scale",
+            "start": "2026-06-13",
+            "end": "2026-06-30",
+            "budget": 27000,
+            "tasks": 310,
+            "trajectories": 3
+          }
+        ]
+      }
+    ],
+    "batchDeliveries": [
+      {
+        "id": "batch-demo-nexa-1",
+        "projectId": "demo-rnd-foundry",
+        "phaseId": "demo-rnd-sample-1",
+        "sampleIteration": 1,
+        "stage": "rnd-review",
+        "status": "approved",
+        "submittedAt": "2026-06-14T16:00:00.000Z",
+        "actualRecovered": 0,
+        "proposedAmount": 0
+      }
+    ],
+    "budgetReviews": [
+      {
+        "id": "review-demo-orbit-cfo",
+        "projectId": "demo-prod-orbit",
+        "projectName": "Orbit Support Console",
+        "client": "Orbit Retail",
+        "tpm": "TPM Lead",
+        "submittedAt": "2026-06-24T09:00:00.000Z",
+        "urgency": "High",
+        "stage": "CFO Review",
+        "status": "forwarded-cfo",
+        "type": "Production budget",
+        "teamType": "Technical",
+        "requestedBudget": 52000,
+        "currentBudget": 48000,
+        "recommendedBudget": 50000,
+        "bufferPct": 12,
+        "recoveryType": "Client-billable",
+        "timeline": "2026-06-24 \u2192 2026-07-12",
+        "tasks": 780,
+        "phases": 3,
+        "linesFlagged": 0,
+        "variance": 4000,
+        "aiCost": 24800,
+        "infraCost": 13200,
+        "subsCost": 2100,
+        "miscCost": 9900,
+        "justification": "Production expansion budget for escalated retailer launch scope.",
+        "items": {},
+        "requestedPhases": [],
+        "baselineSnapshot": {
+          "approvedBudget": 48000,
+          "estimatedBudget": 51200,
+          "totalTasks": 760,
+          "phases": [
+            {
+              "id": "demo-prod-discovery",
+              "name": "Discovery",
+              "dates": "2026-06-01 \u2192 2026-06-07",
+              "start": "2026-06-01",
+              "end": "2026-06-07",
+              "estimated": 12000,
+              "actual": 9500,
+              "totalTasks": 120,
+              "tasks": 120,
+              "trajectoriesPerTask": 2,
+              "health": "healthy"
+            },
+            {
+              "id": "demo-prod-build",
+              "name": "Build",
+              "dates": "2026-06-08 \u2192 2026-06-22",
+              "start": "2026-06-08",
+              "end": "2026-06-22",
+              "estimated": 22000,
+              "actual": 15000,
+              "totalTasks": 420,
+              "tasks": 420,
+              "trajectoriesPerTask": 3,
+              "health": "watch"
+            },
+            {
+              "id": "demo-prod-qa",
+              "name": "QA",
+              "dates": "2026-06-23 \u2192 2026-06-30",
+              "start": "2026-06-23",
+              "end": "2026-06-30",
+              "estimated": 14000,
+              "actual": 6200,
+              "totalTasks": 220,
+              "tasks": 220,
+              "trajectoriesPerTask": 2,
+              "health": "healthy"
+            }
+          ],
+          "budgetItems": {
+            "models": [
+              {
+                "id": "prod-model-1",
+                "modelId": "openai.gpt-4o",
+                "provider": "OpenAI",
+                "usageTag": "Agent responses",
+                "estCost": 18200
+              },
+              {
+                "id": "prod-model-2",
+                "modelId": "google.gemini-2-5-pro",
+                "provider": "GCP",
+                "usageTag": "Long-context validation",
+                "estCost": 5400
+              }
+            ],
+            "infra": [
+              {
+                "id": "prod-infra-1",
+                "provider": "AWS",
+                "instance": "g5.2xlarge",
+                "estCost": 9800
+              },
+              {
+                "id": "prod-infra-2",
+                "provider": "OpenAI",
+                "instance": "priority-processing",
+                "estCost": 2600
+              }
+            ],
+            "subs": [
+              {
+                "id": "prod-sub-1",
+                "subscription": "ChatGPT Team",
+                "seats": 6,
+                "estCost": 1800
+              },
+              {
+                "id": "prod-sub-2",
+                "subscription": "Figma Organization",
+                "seats": 2,
+                "estCost": 90
+              }
+            ],
+            "misc": [
+              {
+                "id": "prod-misc-1",
+                "label": "Prompt QA coverage",
+                "estCost": 10310
+              }
+            ]
+          },
+          "status": "Production active",
+          "type": "Production",
+          "workflowStage": "production-active",
+          "readyForTpmBudget": true,
+          "pendingBudgetSubmission": null
+        },
+        "budgetType": "Production",
+        "sampleIteration": 1,
+        "sourceDeliveryId": null,
+        "sourceBudgetId": "budget-demo-orbit-prod",
+        "requesterRole": "TPM",
+        "ctoModified": false,
+        "history": [
+          {
+            "at": "2026-06-24T09:00:00.000Z",
+            "actor": "TPM Lead \u00b7 TPM",
+            "action": "Submitted budget request",
+            "detail": "Production \u00b7 Technical \u00b7 $52,000"
+          },
+          {
+            "at": "2026-06-24T16:20:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "Approved by CTO and forwarded to CFO",
+            "detail": "Forwarded at $52,000"
+          }
+        ]
+      },
+      {
+        "id": "review-demo-nexa-returned",
+        "projectId": "demo-rnd-foundry",
+        "projectName": "Nexa Copilot Foundry",
+        "client": "Nexa Health",
+        "tpm": "R&D Lead",
+        "submittedAt": "2026-06-10T08:15:00.000Z",
+        "urgency": "Normal",
+        "stage": "CTO Review",
+        "status": "returned-to-tpm",
+        "type": "Sample budget",
+        "teamType": "R&D",
+        "requestedBudget": 6800,
+        "currentBudget": 6400,
+        "recommendedBudget": 6600,
+        "bufferPct": 8,
+        "recoveryType": "Internal",
+        "timeline": "2026-06-12 \u2192 2026-06-28",
+        "tasks": 140,
+        "phases": 1,
+        "linesFlagged": 1,
+        "variance": 400,
+        "aiCost": 1900,
+        "infraCost": 1750,
+        "subsCost": 40,
+        "miscCost": 3110,
+        "justification": "Returned sample budget after line-rate review.",
+        "items": {},
+        "requestedPhases": [],
+        "baselineSnapshot": {
+          "approvedBudget": 6400,
+          "estimatedBudget": 16800,
+          "totalTasks": 140,
+          "phases": [
+            {
+              "id": "demo-rnd-testing",
+              "name": "Testing",
+              "dates": "2026-06-03 \u2192 2026-06-11",
+              "start": "2026-06-03",
+              "end": "2026-06-11",
+              "estimated": 9200,
+              "actual": 4100,
+              "totalTasks": 220,
+              "tasks": 220,
+              "trajectoriesPerTask": 3,
+              "health": "healthy"
+            },
+            {
+              "id": "demo-rnd-sample-1",
+              "name": "Sample 1",
+              "dates": "2026-06-12 \u2192 2026-06-28",
+              "start": "2026-06-12",
+              "end": "2026-06-28",
+              "estimated": 6400,
+              "actual": 2300,
+              "totalTasks": 140,
+              "tasks": 140,
+              "trajectoriesPerTask": 2,
+              "health": "watch"
+            }
+          ],
+          "budgetItems": {
+            "models": [
+              {
+                "id": "rnd-model-1",
+                "modelId": "anthropic.claude-sonnet-5",
+                "provider": "AWS",
+                "usageTag": "Evaluation runs",
+                "estCost": 5200
+              }
+            ],
+            "infra": [
+              {
+                "id": "rnd-infra-1",
+                "provider": "AWS",
+                "instance": "g5.2xlarge",
+                "estCost": 4300
+              }
+            ],
+            "subs": [
+              {
+                "id": "rnd-sub-1",
+                "subscription": "Cursor Pro",
+                "seats": 3,
+                "estCost": 120
+              }
+            ],
+            "misc": [
+              {
+                "id": "rnd-misc-1",
+                "label": "Annotator support",
+                "estCost": 5980
+              }
+            ]
+          },
+          "status": "Sampling active",
+          "type": "R&D",
+          "workflowStage": "sample-active",
+          "readyForTpmBudget": false,
+          "pendingBudgetSubmission": null
+        },
+        "budgetType": "RnD",
+        "sampleIteration": 1,
+        "sourceDeliveryId": "batch-demo-nexa-1",
+        "sourceBudgetId": "budget-demo-nexa-sample",
+        "requesterRole": "R&D",
+        "returnedTo": "R&D",
+        "ctoComment": "Keep the same Moonshot cluster but reduce general support padding.",
+        "ctoAt": "2026-06-10T14:10:00.000Z",
+        "ctoModified": true,
+        "history": [
+          {
+            "at": "2026-06-10T08:15:00.000Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Submitted budget request",
+            "detail": "Sample \u00b7 R&D \u00b7 $6,800"
+          },
+          {
+            "at": "2026-06-10T14:10:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "Returned to R&D",
+            "detail": "Keep the same Moonshot cluster but reduce general support padding."
+          }
+        ]
+      }
+    ],
+    "changeRequests": [
+      {
+        "id": "cr-demo-lattice-scale",
+        "projectId": "demo-prod-lattice",
+        "projectName": "Lattice Vision Rollout",
+        "type": "Budget change",
+        "amount": 6200,
+        "currentBudget": 36000,
+        "requestedBudget": 42200,
+        "requester": "TPM Lead",
+        "requesterRole": "TPM",
+        "urgency": "High",
+        "stage": "CTO Review",
+        "status": "pending",
+        "createdAt": "2026-06-25T11:05:00.000Z",
+        "reason": "Scale phase needs larger GCP GPU coverage and OpenRouter fallback to meet the inspection backlog.",
+        "expectedTasks": "410",
+        "timelineDelta": "Extend by 4 days",
+        "affectedPhase": "Scale",
+        "breakdown": {
+          "models": {
+            "amount": 2200,
+            "optionLabel": "Kimi 1.5 Vision \u00b7 Moonshot AI",
+            "note": "Longer vision context window",
+            "entries": [
+              {
+                "id": "cr-lattice-model-1",
+                "optionId": "moonshot.kimi-1-5-vision",
+                "optionLabel": "Kimi 1.5 Vision \u00b7 Moonshot AI",
+                "provider": "Moonshot",
+                "note": "Longer vision context window",
+                "amount": 2200
+              }
+            ]
+          },
+          "infra": {
+            "amount": 3700,
+            "optionLabel": "a2-highgpu-1g \u00b7 GPU \u00b7 12 vCPU \u00b7 85 GiB | priority-routing \u00b7 Priority routing \u00b7 0 vCPU \u00b7 0 GiB",
+            "note": "Higher parallel image throughput | Fallback during traffic spikes",
+            "entries": [
+              {
+                "id": "cr-lattice-infra-1",
+                "optionId": "a2-highgpu-1g",
+                "optionLabel": "a2-highgpu-1g \u00b7 GPU \u00b7 12 vCPU \u00b7 85 GiB",
+                "provider": "GCP",
+                "note": "Higher parallel image throughput",
+                "amount": 3100
+              },
+              {
+                "id": "cr-lattice-infra-2",
+                "optionId": "priority-routing",
+                "optionLabel": "priority-routing \u00b7 Priority routing \u00b7 0 vCPU \u00b7 0 GiB",
+                "provider": "OpenRouter",
+                "note": "Fallback during traffic spikes",
+                "amount": 600
+              }
+            ]
+          },
+          "subs": {
+            "amount": 300,
+            "optionLabel": "GitHub Enterprise \u00b7 $21/month",
+            "note": "Temporary contractor seats",
+            "entries": [
+              {
+                "id": "cr-lattice-sub-1",
+                "optionId": "github-enterprise",
+                "optionLabel": "GitHub Enterprise \u00b7 $21/month",
+                "note": "Temporary contractor seats",
+                "amount": 300,
+                "billingUnit": "per month"
+              }
+            ],
+            "billingUnit": "per month"
+          }
+        },
+        "history": [
+          {
+            "at": "2026-06-25T11:05:00.000Z",
+            "actor": "TPM Lead \u00b7 TPM",
+            "action": "Submitted change request",
+            "detail": "$6,200 \u00b7 Extend by 4 days"
+          }
+        ]
+      },
+      {
+        "id": "cr-demo-nexa-approved",
+        "projectId": "demo-rnd-foundry",
+        "projectName": "Nexa Copilot Foundry",
+        "type": "Scope / timeline change",
+        "amount": 900,
+        "currentBudget": 15600,
+        "requestedBudget": 16500,
+        "requester": "R&D Lead",
+        "requesterRole": "R&D",
+        "urgency": "Normal",
+        "stage": "Approved",
+        "status": "approved",
+        "createdAt": "2026-06-18T08:20:00.000Z",
+        "reason": "Added one QA acceptance pass before R&D handoff.",
+        "expectedTasks": "155",
+        "timelineDelta": "Add 2 days",
+        "affectedPhase": "Sample 1",
+        "breakdown": {
+          "models": {
+            "amount": 300,
+            "optionLabel": "Claude Sonnet 5 \u00b7 Anthropic",
+            "note": "Acceptance reruns",
+            "entries": [
+              {
+                "id": "cr-nexa-model-1",
+                "optionId": "anthropic.claude-sonnet-5",
+                "optionLabel": "Claude Sonnet 5 \u00b7 Anthropic",
+                "provider": "AWS",
+                "note": "Acceptance reruns",
+                "amount": 300
+              }
+            ]
+          },
+          "infra": {
+            "amount": 400,
+            "optionLabel": "g5.2xlarge \u00b7 GPU \u00b7 8 vCPU \u00b7 32 GiB",
+            "note": "Short QA replay window",
+            "entries": [
+              {
+                "id": "cr-nexa-infra-1",
+                "optionId": "g5.2xlarge",
+                "optionLabel": "g5.2xlarge \u00b7 GPU \u00b7 8 vCPU \u00b7 32 GiB",
+                "provider": "AWS",
+                "note": "Short QA replay window",
+                "amount": 400
+              }
+            ]
+          },
+          "subs": {
+            "amount": 200,
+            "optionLabel": "Cursor Pro \u00b7 $40/month",
+            "note": "One extra seat",
+            "entries": [
+              {
+                "id": "cr-nexa-sub-1",
+                "optionId": "cursor-pro",
+                "optionLabel": "Cursor Pro \u00b7 $40/month",
+                "note": "One extra seat",
+                "amount": 200,
+                "billingUnit": "per month"
+              }
+            ],
+            "billingUnit": "per month"
+          }
+        },
+        "ctoDecision": {
+          "decision": "approve",
+          "amount": 900,
+          "comment": "",
+          "at": "2026-06-18T12:00:00.000Z",
+          "by": "CTO Admin"
+        },
+        "cfoDecision": {
+          "decision": "approve",
+          "amount": 900,
+          "comment": "",
+          "at": "2026-06-19T09:00:00.000Z",
+          "by": "CFO Admin"
+        },
+        "history": [
+          {
+            "at": "2026-06-18T08:20:00.000Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Submitted change request",
+            "detail": "$900 \u00b7 Add 2 days"
+          },
+          {
+            "at": "2026-06-18T12:00:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "CTO approved",
+            "detail": "Forwarded to CFO at $900"
+          },
+          {
+            "at": "2026-06-19T09:00:00.000Z",
+            "actor": "CFO Admin \u00b7 CFO",
+            "action": "CFO approved",
+            "detail": "Approved at $900"
+          }
+        ]
+      }
+    ],
+    "teamRemovals": {},
+    "modelKeyRecords": [],
+    "itProvisioningRequests": [],
+    "itMonthlyActuals": {
+      "demo-prod-orbit": {
+        "monthKey": "2026-06",
+        "updatedAt": "2026-06-30T18:00:00.000Z",
+        "modelActual": 12460,
+        "infraActual": 9460,
+        "subsActual": 1890,
+        "monthEndActual": 23810,
+        "dailyActuals": [
+          {
+            "date": "2026-06-25",
+            "modelActual": 620,
+            "infraActual": 340,
+            "subsActual": 90
+          },
+          {
+            "date": "2026-06-26",
+            "modelActual": 680,
+            "infraActual": 360,
+            "subsActual": 90
+          },
+          {
+            "date": "2026-06-27",
+            "modelActual": 710,
+            "infraActual": 380,
+            "subsActual": 90
+          },
+          {
+            "date": "2026-06-28",
+            "modelActual": 690,
+            "infraActual": 360,
+            "subsActual": 90
+          },
+          {
+            "date": "2026-06-29",
+            "modelActual": 720,
+            "infraActual": 390,
+            "subsActual": 90
+          },
+          {
+            "date": "2026-06-30",
+            "modelActual": 760,
+            "infraActual": 420,
+            "subsActual": 90
+          }
+        ],
+        "modelUsage": [
+          {
+            "id": "it-orbit-model-1",
+            "modelId": "openai.gpt-4o",
+            "modelName": "GPT-4o",
+            "cost": 8120,
+            "inputTokens": 2400000,
+            "outputTokens": 710000
+          },
+          {
+            "id": "it-orbit-model-2",
+            "modelId": "google.gemini-2-5-pro",
+            "modelName": "Gemini 2.5 Pro",
+            "cost": 4340,
+            "inputTokens": 1220000,
+            "outputTokens": 388000
+          }
+        ],
+        "note": "Month-end actuals loaded from vendor invoices.",
+        "updatedBy": "IT Admin"
+      },
+      "demo-prod-lattice": {
+        "monthKey": "2026-06",
+        "updatedAt": "2026-06-30T18:10:00.000Z",
+        "modelActual": 11120,
+        "infraActual": 11880,
+        "subsActual": 105,
+        "monthEndActual": 23105,
+        "dailyActuals": [
+          {
+            "date": "2026-06-25",
+            "modelActual": 540,
+            "infraActual": 520,
+            "subsActual": 5
+          },
+          {
+            "date": "2026-06-26",
+            "modelActual": 610,
+            "infraActual": 610,
+            "subsActual": 5
+          },
+          {
+            "date": "2026-06-27",
+            "modelActual": 640,
+            "infraActual": 650,
+            "subsActual": 5
+          },
+          {
+            "date": "2026-06-28",
+            "modelActual": 620,
+            "infraActual": 640,
+            "subsActual": 5
+          },
+          {
+            "date": "2026-06-29",
+            "modelActual": 670,
+            "infraActual": 700,
+            "subsActual": 5
+          },
+          {
+            "date": "2026-06-30",
+            "modelActual": 720,
+            "infraActual": 760,
+            "subsActual": 5
+          }
+        ],
+        "modelUsage": [
+          {
+            "id": "it-lattice-model-1",
+            "modelId": "moonshot.kimi-1-5-vision",
+            "modelName": "Kimi 1.5 Vision",
+            "cost": 11120,
+            "inputTokens": 2050000,
+            "outputTokens": 574000
+          }
+        ],
+        "note": "Vendor and cloud-invoice actuals synchronized.",
+        "updatedBy": "IT Admin"
+      }
+    }
+  },
+  "app_state_updated_at": "2026-07-15T11:24:29.130199+00:00"
+}

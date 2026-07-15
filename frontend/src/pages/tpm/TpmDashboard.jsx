@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { NOTIFICATIONS, APPROVALS, THRESHOLDS } from "../../data/mockData";
-import { CHANGE_REQUESTS } from "../../data/mockTpm";
 import { Link } from "react-router-dom";
 import {
   FolderKanban, ShieldCheck, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
@@ -11,7 +10,6 @@ import {
 import { Button } from "../../components/ui/button";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell } from "recharts";
 import RequestBudgetDialog from "../../components/RequestBudgetDialog";
-import ChangeRequestDialog from "./ChangeRequestDialog";
 import ProjectsTable from "../../components/dashboard/ProjectsTable";
 import {
   buildExecutionProjectView,
@@ -73,9 +71,8 @@ const Panel = ({ title, subtitle, right, children, testid }) => (
 );
 
 const TpmDashboard = () => {
-  const { user, visibleProjects, budgetReviews, role, taskLogs, budgets } = useApp();
+  const { user, visibleProjects, budgetReviews, role, taskLogs, budgets, changeRequests } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
-  const [crOpen, setCrOpen] = useState(false);
   const isRnd = role === "R&D";
   const executionLane = isRnd ? "rnd" : "production";
   const usageOptions = useMemo(() => ({ lane: executionLane }), [executionLane]);
@@ -91,6 +88,10 @@ const TpmDashboard = () => {
       .filter((project) => (isRnd ? isProjectInRndLane(project) : isProjectInTpmLane(project)))
       .map((project) => buildExecutionProjectView(project, budgets, executionLane)),
     [visibleProjects, budgets, executionLane, isRnd]
+  );
+  const underRndProjects = useMemo(
+    () => (isRnd ? [] : visibleProjects.filter((project) => isProjectInRndLane(project))),
+    [visibleProjects, isRnd]
   );
   const projectUsage = useMemo(
     () => dashboardProjects.map((project) => ({ project, usage: summarizeLoggedProject(project, taskLogs, usageOptions) })),
@@ -160,8 +161,6 @@ const TpmDashboard = () => {
     name: project.name.split(" ")[0],
     Completion: usage.targetTasks > 0 ? Math.round((usage.loggedTasks / usage.targetTasks) * 100) : 0,
   }));
-  const modelSnapshot = modelPie.slice(0, 4);
-
   const upcomingProject = dashboardProjects[0] || null;
   const upcomingPhase = upcomingProject?.phases?.find((ph) => ph.health !== "healthy") || upcomingProject?.phases?.[0];
   const pendingActions = APPROVALS.filter((a) => a.requester === user?.name).slice(0, 3);
@@ -180,19 +179,12 @@ const TpmDashboard = () => {
             Welcome back, {user?.name?.split(" ")[0]}
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
-            {dashboardProjects.length} project{dashboardProjects.length === 1 ? "" : "s"} assigned to you · June 2026
+            {dashboardProjects.length} active project{dashboardProjects.length === 1 ? "" : "s"}
+            {!isRnd && underRndProjects.length > 0 ? ` · ${underRndProjects.length} under R&D currently` : ""}
+            {" · June 2026"}
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            onClick={() => setCrOpen(true)}
-            variant="outline"
-            className="h-9 rounded-lg border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 gap-2"
-            data-testid="btn-open-cr"
-          >
-            <GitPullRequest className="w-4 h-4" />
-            Raise change request
-          </Button>
           <Link to="/budget-builder" className="inline-flex items-center gap-2 h-9 px-3 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white text-sm font-medium shadow-[0_0_20px_rgba(232,25,184,0.35)]" data-testid="btn-open-budget-builder">
             <Plus className="w-4 h-4" />
             Build budget
@@ -208,7 +200,7 @@ const TpmDashboard = () => {
         <KpiCard testid="kpi-today-consumption" label="Log today's consumption" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Calendar} tone="magenta" sublabel="Tap to submit" to="/consumption" />
         <KpiCard testid="kpi-logged" label="Logged spend" value={fmtCurrency(logged, { compact: false })} icon={Activity} tone="magenta" sublabel="Owned usage only" />
         <KpiCard testid="kpi-remaining" label="Total remaining" value={fmtCurrency(remaining)} icon={Wallet} tone={remaining > 0 ? "positive" : "negative"} />
-        <KpiCard testid="kpi-pending-cr" label="Pending change requests" value={String(CHANGE_REQUESTS.filter((c) => c.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
+        <KpiCard testid="kpi-pending-cr" label="Pending change requests" value={String(changeRequests.filter((request) => request.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
         <KpiCard testid="kpi-health" label="Budget health" value={health} icon={Heart} tone={health === "Green" ? "positive" : health === "Amber" ? "warning" : "negative"} sublabel={fmtPct(util)} />
         <KpiCard testid="kpi-burn-rate" label="Burn rate" value={fmtCurrency(burnRate, { compact: false })} icon={Flame} sublabel="Logged avg / day" />
         {!isRnd && (
@@ -296,38 +288,42 @@ const TpmDashboard = () => {
           </div>
         </Panel>
 
-        <Panel testid="chart-infra" title="Task completion by project" subtitle="logged tasks vs target tasks">
-          <div className="h-[240px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={completionByProject}>
-                <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
-                <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => `${v}%`} />
-                <Bar dataKey="Completion" fill="#3B82F6" radius={[4,4,0,0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Panel>
+        <div className={isRnd ? "lg:col-span-2" : ""}>
+          <Panel testid="chart-infra" title="Task completion by project" subtitle="logged tasks vs target tasks">
+            <div className="h-[240px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={completionByProject}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
+                  <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => `${v}%`} />
+                  <Bar dataKey="Completion" fill="#3B82F6" radius={[4,4,0,0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Panel>
+        </div>
 
-        <Panel testid="chart-subs" title="Model usage snapshot" subtitle="tasks, cost, and token consumption">
-          <div className="space-y-2.5">
-            {modelSnapshot.length === 0 && (
-              <div className="text-xs text-zinc-500">No model logs yet. Once tasks are logged with model details, the snapshot appears here.</div>
-            )}
-            {modelSnapshot.map((model) => (
-              <div key={model.name} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-zinc-200">{model.name}</span>
-                  <span className="text-sm font-semibold text-white tabular">{fmtCurrency(model.value, { compact: false })}</span>
+        {!isRnd && (
+          <Panel testid="chart-subs" title="Model usage snapshot" subtitle="tasks, cost, and token consumption">
+            <div className="space-y-2.5">
+              {modelPie.slice(0, 4).length === 0 && (
+                <div className="text-xs text-zinc-500">No model logs yet. Once tasks are logged with model details, the snapshot appears here.</div>
+              )}
+              {modelPie.slice(0, 4).map((model) => (
+                <div key={model.name} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-zinc-200">{model.name}</span>
+                    <span className="text-sm font-semibold text-white tabular">{fmtCurrency(model.value, { compact: false })}</span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-zinc-500">
+                    {model.tasks.toLocaleString()} tasks · {(model.inputTokens + model.outputTokens).toLocaleString()} total tokens
+                  </div>
                 </div>
-                <div className="mt-1 text-[11px] text-zinc-500">
-                  {model.tasks.toLocaleString()} tasks · {(model.inputTokens + model.outputTokens).toLocaleString()} total tokens
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
+              ))}
+            </div>
+          </Panel>
+        )}
       </div>
 
       {/* Returned budgets — edit & resubmit */}
@@ -368,6 +364,63 @@ const TpmDashboard = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {!isRnd && (
+        <Panel
+          testid="widget-under-rnd-projects"
+          title="Projects under R&D currently"
+          subtitle="Assigned TPMs can track kickoff context here. These become budgetable after R&D sample acceptance."
+          right={underRndProjects.length > 0 ? (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">
+              {underRndProjects.length} waiting
+            </span>
+          ) : null}
+        >
+          {underRndProjects.length === 0 ? (
+            <div className="text-xs text-zinc-500">No assigned projects are waiting in the R&D lane right now.</div>
+          ) : (
+            <div className="space-y-2.5">
+              {underRndProjects.map((project) => {
+                const kickoffGoal = project.goal || project.kickoffMail?.goal || "";
+                const kickoffRecipients = project.kickoffMail?.recipients || project.teamMembers || [];
+                const requirementsCount = project.kickoffMail?.requirements?.length || project.docs?.length || 0;
+                return (
+                  <Link
+                    key={project.id}
+                    to={`/projects/${project.id}`}
+                    data-testid={`under-rnd-project-${project.id}`}
+                    className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-3 hover:border-sky-500/30 hover:bg-white/[0.04] transition-all group"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-sky-500/10 border border-sky-500/20 flex items-center justify-center flex-shrink-0">
+                      <Clock3 className="w-4 h-4 text-sky-300" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-white truncate">{project.name}</div>
+                          <div className="text-[11px] text-zinc-500 truncate">{project.client || project.clientProjectName || "Client project"}</div>
+                        </div>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30 flex-shrink-0">
+                          Under R&amp;D currently
+                        </span>
+                      </div>
+                      {kickoffGoal && (
+                        <div className="mt-2 text-xs text-zinc-300 line-clamp-2">
+                          <span className="text-sky-300 font-semibold">Project Goal:</span> {kickoffGoal}
+                        </div>
+                      )}
+                      <div className="mt-2 text-[11px] text-zinc-500">
+                        {kickoffRecipients.length} kickoff recipient{kickoffRecipients.length === 1 ? "" : "s"} · {requirementsCount} requirement{requirementsCount === 1 ? "" : "s"}
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-sky-300 flex-shrink-0" />
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
       )}
 
       {/* Projects table with expandable phase drawer (log daily task / raise top-up per phase) */}
@@ -428,7 +481,6 @@ const TpmDashboard = () => {
       )}
 
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
-      <ChangeRequestDialog open={crOpen} onOpenChange={setCrOpen} />
     </div>
   );
 };

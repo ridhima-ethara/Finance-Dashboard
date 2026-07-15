@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { fmtCurrency } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
+import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
 import { useApp } from "../../context/AppContext";
 import {
   ArrowLeft,
@@ -97,6 +98,7 @@ const ApprovalDetail = () => {
       { key: "models", title: "Models", icon: Cpu, color: "fuchsia", lines: buildLines(items.models || [], "Model allocation", "Submitted model allocation"), fallbackValue: Number(review.aiCost || 0) },
       { key: "infra", title: "Infrastructure", icon: Server, color: "sky", lines: buildLines(items.infra || [], "Infrastructure allocation", "Submitted infra allocation"), fallbackValue: Number(review.infraCost || 0) },
       { key: "subs", title: "Subscriptions", icon: CreditCard, color: "amber", lines: buildLines(items.subs || [], "Subscription allocation", "Submitted subscription allocation"), fallbackValue: Number(review.subsCost || 0) },
+      { key: "misc", title: "General", icon: Flag, color: "emerald", lines: buildLines(items.misc || [], "General request", "Submitted general allocation"), fallbackValue: Number(review.miscCost || 0) },
     ];
     return sections.map((section) => ({
       ...section,
@@ -270,6 +272,13 @@ const ApprovalDetail = () => {
             </div>
           </div>
 
+          <GeneralBudgetTableCard
+            lines={review.items?.misc || []}
+            title="General budget table"
+            subtitle="Phase-wise general budget rows submitted for CFO review."
+            testid="approval-general-budget-table"
+          />
+
           <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3">
             <Sparkles className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-zinc-200 leading-relaxed">
@@ -426,8 +435,22 @@ const Field = ({ label, value }) => (
 );
 
 const Section = ({ title, icon: Icon, color, total, children }) => {
-  const bg = color === "fuchsia" ? "bg-fuchsia-500/[0.06] border-fuchsia-500/20" : color === "sky" ? "bg-sky-500/[0.06] border-sky-500/20" : "bg-amber-500/[0.06] border-amber-500/20";
-  const tx = color === "fuchsia" ? "text-fuchsia-200" : color === "sky" ? "text-sky-200" : "text-amber-200";
+  const bg =
+    color === "fuchsia"
+      ? "bg-fuchsia-500/[0.06] border-fuchsia-500/20"
+      : color === "sky"
+        ? "bg-sky-500/[0.06] border-sky-500/20"
+        : color === "emerald"
+          ? "bg-emerald-500/[0.06] border-emerald-500/20"
+          : "bg-amber-500/[0.06] border-amber-500/20";
+  const tx =
+    color === "fuchsia"
+      ? "text-fuchsia-200"
+      : color === "sky"
+        ? "text-sky-200"
+        : color === "emerald"
+          ? "text-emerald-200"
+          : "text-amber-200";
   return (
     <div className="mb-3">
       <div className={`flex items-center justify-between px-3 py-2 rounded-t-lg border ${bg}`}>

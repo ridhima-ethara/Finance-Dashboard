@@ -91,7 +91,7 @@ const Buffer = () => {
           Contingency buffer <Lock className="w-5 h-5 text-fuchsia-300" />
         </h1>
         <p className="text-sm text-zinc-400 mt-1">
-          Hidden safety cushion. Not visible to TPM, PL, or CTO. Used for over-runs and emergency top-ups.
+          Hidden safety cushion. Not visible to TPM, PL, or CTO. Used for over-runs and emergency budget changes.
         </p>
       </div>
 

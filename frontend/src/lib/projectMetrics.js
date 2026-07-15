@@ -1,6 +1,8 @@
+import { getGeneralActualRowsCostTotal, isGeneralActualLog } from "./generalBudget";
+
 const TRACK_LABELS = {
   Testing: "Testing",
-  RnD: "R&D",
+  RnD: "Sample",
   Rework: "Rework",
   Production: "Production",
 };
@@ -26,8 +28,8 @@ const TPM_WORKFLOW_STAGES = new Set([
 export const normalizeBudgetType = (budgetType = "") => {
   const value = String(budgetType || "").trim().toLowerCase();
   if (value === "testing") return "Testing";
-  if (value === "rnd" || value === "r&d") return "RnD";
-  if (value === "sample" || value === "rework") return "Rework";
+  if (value === "rnd" || value === "r&d" || value === "sample" || value === "sampling") return "RnD";
+  if (value === "rework") return "Rework";
   if (value === "production") return "Production";
   return budgetType || "Budget";
 };
@@ -69,6 +71,9 @@ const getDetailedTaskRows = (log = {}) => [
 ];
 
 export const getTaskLogRecordedCost = (log) => {
+  if (isGeneralActualLog(log) && Array.isArray(log?.generalActualRows)) {
+    return getGeneralActualRowsCostTotal(log.generalActualRows);
+  }
   const detailedRows = getDetailedTaskRows(log);
   if (detailedRows.length) {
     return detailedRows.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);

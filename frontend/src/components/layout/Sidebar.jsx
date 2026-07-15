@@ -6,15 +6,12 @@ import {
   FolderKanban,
   Receipt,
   ShieldCheck,
-  ArrowUpRightSquare,
   History,
   Settings,
-  KeyRound,
   LogOut,
   Calendar,
   ClipboardCheck,
   GitPullRequest,
-  Zap,
   FileText,
   Bell,
   Activity,
@@ -29,7 +26,6 @@ const NAV_CTO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/budget-reviews", label: "Budget Reviews", icon: ClipboardCheck, testid: "nav-budget-reviews" },
-  { to: "/ai-cost", label: "AI Cost Analytics", icon: Zap, testid: "nav-ai-cost" },
   { to: "/change-requests", label: "Change Requests", icon: GitPullRequest, testid: "nav-change-requests" },
   { to: "/audit", label: "Audit Log", icon: ScrollText, testid: "nav-audit" },
 ];
@@ -44,7 +40,6 @@ const NAV_CFO = [
   { to: "/buffer", label: "Contingency Buffer", icon: ShieldCheck, testid: "nav-buffer" },
   { to: "/recovery", label: "Client Recovery", icon: Receipt, testid: "nav-recovery" },
   { to: "/batch-deliveries", label: "Batch Deliveries", icon: PackageCheck, testid: "nav-batch-deliveries" },
-  { to: "/ai-cost", label: "AI Cost Analytics", icon: Zap, testid: "nav-ai-cost" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/audit", label: "Audit Log", icon: History, testid: "nav-audit" },
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
@@ -55,10 +50,7 @@ const NAV_TPM = [
   { to: "/projects", label: "My Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/budget-builder", label: "Budget Builder", icon: ClipboardCheck, testid: "nav-budget-builder" },
   { to: "/consumption", label: "Daily Consumption", icon: Calendar, testid: "nav-consumption" },
-  { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
   { to: "/approvals", label: "My Requests", icon: ShieldCheck, testid: "nav-approvals" },
-  { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
-  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
 ];
 
 const NAV_PL = [
@@ -66,9 +58,7 @@ const NAV_PL = [
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/daily", label: "Daily", icon: Calendar, testid: "nav-daily" },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
-  { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
-  { to: "/ai-cost", label: "AI Cost", icon: Zap, testid: "nav-ai-cost" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
 ];
@@ -76,7 +66,6 @@ const NAV_PL = [
 const NAV_IT = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
-  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
 ];
 

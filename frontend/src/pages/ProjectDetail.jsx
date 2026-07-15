@@ -1,18 +1,30 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { fmtCurrency, fmtPct, fmtDate, healthColor } from "../lib/format";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Button } from "../components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "../components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../components/ui/alert-dialog";
 import {
   ArrowLeft, Lock, ArrowUpRightSquare, Users, Wallet, ListChecks, PackageCheck, ScrollText,
   Search, Plus, ChevronRight, User as UserIcon, Circle, CheckCircle2, Clock3, XCircle, Percent,
-  Trash2, Pencil, FileText, Layers, MessageSquare, Shield, Mail,
+  Trash2, Pencil, FileText, Layers, MessageSquare, Shield, Mail, KeyRound, Eye, EyeOff, Copy,
+  Archive,
 } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { isTpmView } from "../lib/roles";
 import { toast } from "sonner";
-import { TEAM } from "../data/mockUsers";
+import { PROJECT_MEMBER_DIRECTORY, findProjectDirectoryMember, normalizeDirectoryRole } from "../data/employeeDirectory";
 import { getPhaseTasks } from "../data/mockTpm";
 import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
@@ -35,7 +47,7 @@ const seedTeam = (project) => {
     }));
   }
   const explicitMembers = (project.rndMembers || [])
-    .map((name) => TEAM.find((member) => member.name === name) || { name, role: "R&D", email: `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` });
+    .map((name) => findProjectDirectoryMember({ name }) || { name, role: "R&D", email: `${name.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` });
   const roster = [
     ...(project.tpm ? [{ name: project.tpm, role: "TPM", email: `${project.tpm.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` }] : []),
     ...(project.pl ? [{ name: project.pl, role: "Project Lead", email: `${project.pl.toLowerCase().replace(/\s+/g, ".")}@ethara.ai` }] : []),
@@ -79,13 +91,18 @@ const ProjectDetail = () => {
   const {
     projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
     removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask, taskLogs, changeRequests,
+    modelKeyRecords, itProvisioningRequests, provisionModelKeys,
+    addProjectTeamMembers, updateProjectCoreMembers, archiveProject, deleteProject,
   } = useApp();
   const p = projects.find((x) => x.id === id);
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
+  const isCto = role === "CTO";
+  const isIT = role === "IT";
   const isRnd = role === "R&D";
   const isRndProject = p?.type === "R&D";
   const isExecutionOwner = isTPM || isRnd;
+  const canManageTeam = isExecutionOwner || isCto;
 
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
@@ -94,6 +111,18 @@ const ProjectDetail = () => {
   const [editingLog, setEditingLog] = useState(null);
   const [teamSearch, setTeamSearch] = useState("");
   const [selectedPhaseId, setSelectedPhaseId] = useState(() => p?.phases?.[0]?.id || "");
+  const [revealedProjectKeys, setRevealedProjectKeys] = useState({});
+  const [activeProvisionRequest, setActiveProvisionRequest] = useState(null);
+  const [memberDrawerOpen, setMemberDrawerOpen] = useState(false);
+  const [memberNameQuery, setMemberNameQuery] = useState("");
+  const [memberEmailQuery, setMemberEmailQuery] = useState("");
+  const [memberDesignationFilter, setMemberDesignationFilter] = useState("All");
+  const [selectedMemberEmails, setSelectedMemberEmails] = useState([]);
+  const [coreDrawerOpen, setCoreDrawerOpen] = useState(false);
+  const [coreTpmSelection, setCoreTpmSelection] = useState("");
+  const [coreRndSelection, setCoreRndSelection] = useState("");
+  const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const team = useMemo(() => {
     const removedTeamIds = teamRemovals[p?.id] || [];
@@ -101,6 +130,79 @@ const ProjectDetail = () => {
   }, [p, teamRemovals]);
   const filteredTeam = team.filter((m) =>
     !teamSearch.trim() || m.name.toLowerCase().includes(teamSearch.toLowerCase()) || m.email.toLowerCase().includes(teamSearch.toLowerCase())
+  );
+  const availableTeamDirectory = useMemo(() => {
+    const takenEmails = new Set(team.map((member) => String(member.email || "").trim().toLowerCase()).filter(Boolean));
+    const takenNames = new Set(team.map((member) => String(member.name || "").trim().toLowerCase()).filter(Boolean));
+    const seen = new Set();
+    return PROJECT_MEMBER_DIRECTORY
+      .map((member) => ({
+        selectionId: String(member.email || member.name || member.id || "").trim().toLowerCase(),
+        name: member.name,
+        email: member.email,
+        role: normalizeDirectoryRole(member.role),
+        title: member.designation || member.title || "",
+        department: member.department || "",
+      }))
+      .filter((member) => member.selectionId && String(member.email || "").trim().toLowerCase().endsWith("@ethara.ai"))
+      .filter((member) => !["Finance", "COO", "IT", "CTO", "CFO"].includes(member.role))
+      .filter((member) => !takenEmails.has(member.email.toLowerCase()) && !takenNames.has(member.name.toLowerCase()))
+      .filter((member) => {
+        if (seen.has(member.selectionId)) return false;
+        seen.add(member.selectionId);
+        return true;
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [team]);
+  const designationOptions = useMemo(
+    () => ["All", ...Array.from(new Set(availableTeamDirectory.map((member) => member.role))).sort((left, right) => left.localeCompare(right))],
+    [availableTeamDirectory]
+  );
+  const filteredDirectoryMembers = useMemo(() => (
+    availableTeamDirectory.filter((member) => {
+      const matchesName = !memberNameQuery.trim() || member.name.toLowerCase().includes(memberNameQuery.toLowerCase());
+      const matchesEmail = !memberEmailQuery.trim() || member.email.toLowerCase().includes(memberEmailQuery.toLowerCase());
+      const matchesDesignation = memberDesignationFilter === "All" || member.role === memberDesignationFilter;
+      return matchesName && matchesEmail && matchesDesignation;
+    })
+  ), [availableTeamDirectory, memberNameQuery, memberEmailQuery, memberDesignationFilter]);
+  const coreMemberDirectory = useMemo(() => {
+    const seen = new Set();
+    return [
+      ...team,
+      ...(p?.kickoffMail?.recipients || []),
+      ...availableTeamDirectory,
+      ...(p?.tpm ? [{ name: p.tpm, role: "TPM" }] : []),
+      ...(p?.rnd ? [{ name: p.rnd, role: "R&D" }] : []),
+      ...PROJECT_MEMBER_DIRECTORY,
+    ]
+      .map((member) => {
+        const email = member.email || `${String(member.name || "").toLowerCase().replace(/\s+/g, ".")}@ethara.ai`;
+        return {
+          selectionId: normalizeMemberSelectionId(email || member.name || member.id),
+          name: member.name,
+          email,
+          role: normalizeDirectoryRole(member.role),
+          title: member.designation || member.title || "",
+          department: member.department || "",
+        };
+      })
+      .filter((member) => member.selectionId && member.name && member.email?.toLowerCase().endsWith("@ethara.ai"))
+      .filter((member) => !["Finance", "COO", "IT", "CTO", "CFO"].includes(member.role))
+      .filter((member) => {
+        if (seen.has(member.selectionId)) return false;
+        seen.add(member.selectionId);
+        return true;
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [availableTeamDirectory, p?.kickoffMail?.recipients, p?.rnd, p?.tpm, team]);
+  const coreTpmOptions = useMemo(
+    () => coreMemberDirectory.filter((member) => member.role === "TPM" || member.name === p?.tpm),
+    [coreMemberDirectory, p?.tpm]
+  );
+  const coreRndOptions = useMemo(
+    () => coreMemberDirectory.filter((member) => ["R&D", "Engineer"].includes(member.role) || member.name === p?.rnd),
+    [coreMemberDirectory, p?.rnd]
   );
 
   // Aggregate all TPM logs across all phases for the Tasks tab
@@ -123,6 +225,18 @@ const ProjectDetail = () => {
     [budgetReviews, id]
   );
   const budgetTracks = useMemo(() => buildBudgetTracks(p, budgets), [p, budgets]);
+  const projectModelKeys = useMemo(
+    () => modelKeyRecords
+      .filter((entry) => entry.project === id)
+      .sort((left, right) => new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime()),
+    [modelKeyRecords, id]
+  );
+  const projectProvisioningRequests = useMemo(
+    () => itProvisioningRequests
+      .filter((request) => request.projectId === id)
+      .sort((left, right) => new Date(right.approvedAt || 0).getTime() - new Date(left.approvedAt || 0).getTime()),
+    [itProvisioningRequests, id]
+  );
   const hasRndWorkflowTracks = useMemo(
     () => budgetTracks.entries.some((entry) => ["Testing", "RnD", "Rework"].includes(normalizeBudgetType(entry.budgetType))),
     [budgetTracks]
@@ -153,7 +267,41 @@ const ProjectDetail = () => {
     () => (selectedPhase ? projectBatches.find((batch) => batch.phaseId === selectedPhase.id) || null : null),
     [selectedPhase, projectBatches]
   );
-  const batchPhases = useMemo(() => (role === "R&D" ? (p?.phases || []).slice(0, 1) : (p?.phases || [])), [p?.phases, role]);
+  const currentRndTrackKey = useMemo(() => {
+    if (!isRndProject) return null;
+    const currentStage = p?.workflowStage
+      || (p?.pendingBudgetSubmission
+        ? "budget-pending"
+        : p?.type === "Production" && Number(p?.approvedBudget || 0) > 0
+          ? "production-active"
+          : Number(p?.approvedBudget || 0) > 0
+            ? "sample-active"
+            : "awaiting-testing-budget");
+    if (["testing-budget-pending", "testing-active", "awaiting-rnd-budget"].includes(currentStage)) return "Testing";
+    if (["awaiting-rework-budget", "rework-budget-pending"].includes(currentStage)) return "Rework";
+    if (["rnd-budget-pending", "sample-active", "sample-rejected", "tpm-budget-ready"].includes(currentStage)) return "RnD";
+    const lastBudgetType = normalizeBudgetType(p?.lastBudgetSubmission?.budgetType || "");
+    if (["Testing", "RnD", "Rework"].includes(lastBudgetType)) return lastBudgetType;
+    return budgetTracks.ordered.find((track) => ["Testing", "RnD", "Rework"].includes(track.key))?.key || null;
+  }, [budgetTracks, isRndProject, p?.approvedBudget, p?.lastBudgetSubmission?.budgetType, p?.pendingBudgetSubmission, p?.type, p?.workflowStage]);
+  const batchPhases = useMemo(() => {
+    const phases = p?.phases || [];
+    if (!isRndProject) return phases;
+    const trackedPhaseIds = new Set(
+      (((currentRndTrackKey ? budgetTracks.grouped?.[currentRndTrackKey]?.[0]?.phases : []) || []))
+        .map((phase) => phase.id)
+        .filter(Boolean)
+    );
+    if (!trackedPhaseIds.size) return phases.slice(0, 1);
+    const filtered = phases.filter((phase) => trackedPhaseIds.has(phase.id));
+    return filtered.length ? filtered : phases.slice(0, 1);
+  }, [budgetTracks, currentRndTrackKey, isRndProject, p?.phases]);
+  const visibleTaskLogs = useMemo(() => {
+    if (!isRndProject) return allLogs;
+    const visiblePhaseIds = new Set(batchPhases.map((phase) => phase.id));
+    if (!visiblePhaseIds.size) return allLogs;
+    return allLogs.filter((log) => visiblePhaseIds.has(log.phaseId));
+  }, [allLogs, batchPhases, isRndProject]);
   const activeBatchPhaseId = useMemo(() => {
     const editable = batchPhases.find((phase) => {
       const delivery = projectBatches.find((entry) => entry.phaseId === phase.id);
@@ -177,8 +325,35 @@ const ProjectDetail = () => {
   const tpmExecutionUnlocked = isTPM && !hasPendingBudgetSubmission && workflowStage === "production-active";
   const executionUnlocked = rndExecutionUnlocked || tpmExecutionUnlocked;
   const canManageExecution = isExecutionOwner && executionUnlocked;
+  const taskLogTargetPhase = useMemo(
+    () => batchPhases.find((phase) => phase.id === activeBatchPhaseId) || batchPhases[0] || null,
+    [activeBatchPhaseId, batchPhases]
+  );
+  const isTaskLogDisabled = !canManageExecution || !activeBatchPhaseId;
   const canRequestTopup = canManageExecution;
   const approvalLockMessage = getWorkflowLockMessage({ project: p, workflowStage, latestBudgetReviewMeta, role });
+  const taskLogDisabledReason = !activeBatchPhaseId && batchPhases.length
+    ? "Tasks for this batch have already been submitted."
+    : !canManageExecution
+      ? approvalLockMessage
+      : "";
+  const canRevealProjectKeys = isCFO || isIT;
+  const projectAllocatedMembers = useMemo(
+    () => new Set(projectModelKeys.flatMap((entry) => (entry.members || []).map((member) => member.id))).size,
+    [projectModelKeys]
+  );
+  const pendingProvisioningCount = useMemo(
+    () => projectProvisioningRequests.filter((request) => request.status === "pending-it").length,
+    [projectProvisioningRequests]
+  );
+
+  useEffect(() => {
+    if (!activeProvisionRequest) return;
+    const refreshed = projectProvisioningRequests.find((request) => request.id === activeProvisionRequest.id);
+    if (!refreshed || refreshed.status !== "pending-it") {
+      setActiveProvisionRequest(null);
+    }
+  }, [activeProvisionRequest, projectProvisioningRequests]);
 
   if (!p) {
     return (
@@ -201,6 +376,84 @@ const ProjectDetail = () => {
     ? new Date(p.kickoffMail.sentAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
     : null;
 
+  const toggleProjectKeyReveal = (keyId) => {
+    if (!canRevealProjectKeys) {
+      toast.error("Access denied", { description: `Only CFO or IT can reveal keys. You are signed in as ${role}.` });
+      return;
+    }
+    setRevealedProjectKeys((current) => ({ ...current, [keyId]: !current[keyId] }));
+  };
+
+  const copyProjectKey = (entry) => {
+    if (!canRevealProjectKeys) {
+      toast.error("Access denied");
+      return;
+    }
+    navigator.clipboard?.writeText(entry.fullKey);
+    toast.success("Key copied", { description: `${entry.provider} · ${entry.model}` });
+  };
+  const handleMemberDrawerChange = (open) => {
+    setMemberDrawerOpen(open);
+    if (!open) {
+      setMemberNameQuery("");
+      setMemberEmailQuery("");
+      setMemberDesignationFilter("All");
+      setSelectedMemberEmails([]);
+    }
+  };
+  const toggleDirectoryMember = (selectionId) => {
+    setSelectedMemberEmails((current) => (
+      current.includes(selectionId)
+        ? current.filter((entry) => entry !== selectionId)
+        : [...current, selectionId]
+    ));
+  };
+  const addSelectedMembersToProject = () => {
+    if (!selectedMemberEmails.length) {
+      toast.error("Select at least one member to add");
+      return;
+    }
+    const members = availableTeamDirectory
+      .filter((member) => selectedMemberEmails.includes(member.selectionId))
+      .map((member) => ({ name: member.name, email: member.email, role: member.role }));
+    addProjectTeamMembers(p.id, members, "Project Team");
+    toast.success("Project members added", {
+      description: `${members.length} member${members.length === 1 ? "" : "s"} added to ${p.name}`,
+    });
+    handleMemberDrawerChange(false);
+  };
+  const openCoreMembersDrawer = () => {
+    setCoreTpmSelection(findMemberSelectionId(coreTpmOptions, p?.tpm));
+    setCoreRndSelection(findMemberSelectionId(coreRndOptions, p?.rnd));
+    setCoreDrawerOpen(true);
+  };
+  const saveCoreMembers = () => {
+    const nextTpm = coreTpmOptions.find((member) => member.selectionId === coreTpmSelection);
+    const nextRnd = coreRndOptions.find((member) => member.selectionId === coreRndSelection);
+    updateProjectCoreMembers(p.id, {
+      tpmName: nextTpm?.name || p.tpm,
+      tpmEmail: nextTpm?.email || "",
+      rndLeadName: nextRnd?.name || p.rnd,
+      rndLeadEmail: nextRnd?.email || "",
+    });
+    toast.success("Core members updated", {
+      description: `${p.name} now maps to ${nextTpm?.name || p.tpm || "Unassigned"} as TPM and ${nextRnd?.name || p.rnd || "Unassigned"} as R&D Lead.`,
+    });
+    setCoreDrawerOpen(false);
+  };
+  const handleArchiveProject = () => {
+    archiveProject(p.id);
+    setArchiveDialogOpen(false);
+    toast.success("Project archived", { description: `${p.name} was removed from active dashboards.` });
+    nav("/projects");
+  };
+  const handleDeleteProject = () => {
+    deleteProject(p.id);
+    setDeleteDialogOpen(false);
+    toast.success("Project deleted", { description: `${p.name} was removed from the active workspace.` });
+    nav("/projects");
+  };
+
   return (
     <div className="space-y-6" data-testid={`page-project-${p.id}`}>
       {/* Header */}
@@ -222,9 +475,43 @@ const ProjectDetail = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isCto && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={openCoreMembersDrawer}
+                  data-testid="btn-edit-core-members"
+                  className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08] gap-2"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  Edit core members
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setArchiveDialogOpen(true)}
+                  data-testid="btn-archive-project"
+                  className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08] gap-2"
+                >
+                  <Archive className="w-3.5 h-3.5" />
+                  Archive
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setDeleteDialogOpen(true)}
+                  data-testid="btn-delete-project"
+                  className="h-9 rounded-lg border-red-500/30 bg-red-500/[0.06] text-red-200 hover:bg-red-500/[0.12] gap-2"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Delete
+                </Button>
+              </>
+            )}
             {canRequestTopup && (
               <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-request-topup">
-                <ArrowUpRightSquare className="w-3.5 h-3.5" /> Request top-up
+                <ArrowUpRightSquare className="w-3.5 h-3.5" /> Request budget change
               </Button>
             )}
             {isCFO && (
@@ -274,6 +561,7 @@ const ProjectDetail = () => {
       <Tabs defaultValue="team" className="w-full">
         <TabsList className="bg-transparent p-0 gap-4 border-b border-white/10 rounded-none h-auto w-full justify-start" data-testid="project-tabs">
           <TabTrigger value="team" icon={Users} label="Team" testid="tab-team" />
+          <TabTrigger value="models" icon={KeyRound} label="Models" testid="tab-models" />
           <TabTrigger value="budget" icon={Wallet} label="Budget" testid="tab-budget" />
           <TabTrigger value="tasks" icon={ListChecks} label="Tasks" testid="tab-tasks" />
           <TabTrigger value="batch" icon={PackageCheck} label="Batch" testid="tab-batch" />
@@ -294,10 +582,10 @@ const ProjectDetail = () => {
                   className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                 />
               </div>
-              {isTPM && role !== "R&D" && (
+              {canManageTeam && (
                 <Button
                   size="sm"
-                  onClick={() => nav(`/budget-builder?projectId=${p.id}`)}
+                  onClick={() => handleMemberDrawerChange(true)}
                   data-testid="btn-add-member"
                   className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
                 >
@@ -341,28 +629,32 @@ const ProjectDetail = () => {
                       </span>
                     </td>
                     <td className="py-3 px-5 text-right text-zinc-500">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <button className="w-7 h-7 rounded-md hover:bg-white/[0.06] inline-flex items-center justify-center" title="Actions" data-testid={`team-actions-${m.id}`}>
-                            <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
-                            <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
-                            <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
-                          </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44 border-white/10 bg-[#12121A] text-zinc-200">
-                          <DropdownMenuItem
-                            onClick={() => {
-                              removeProjectTeamMember(p.id, m.id);
-                              toast.success("Team member removed", { description: `${m.name} removed from ${p.name}` });
-                            }}
-                            className="focus:bg-red-500/10 focus:text-red-300"
-                            data-testid={`team-remove-${m.id}`}
-                          >
-                            <Trash2 className="w-3.5 h-3.5 text-red-300" />
-                            Remove member
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {canManageTeam ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <button className="w-7 h-7 rounded-md hover:bg-white/[0.06] inline-flex items-center justify-center" title="Actions" data-testid={`team-actions-${m.id}`}>
+                              <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
+                              <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
+                              <span className="inline-block w-1 h-1 rounded-full bg-current mx-0.5" />
+                            </button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44 border-white/10 bg-[#12121A] text-zinc-200">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                removeProjectTeamMember(p.id, m.id);
+                                toast.success("Team member removed", { description: `${m.name} removed from ${p.name}` });
+                              }}
+                              className="focus:bg-red-500/10 focus:text-red-300"
+                              data-testid={`team-remove-${m.id}`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5 text-red-300" />
+                              Remove member
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : (
+                        <span className="text-[11px] text-zinc-600">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -372,6 +664,351 @@ const ProjectDetail = () => {
               Showing <span className="text-zinc-300 tabular">1-{filteredTeam.length}</span> of <span className="text-zinc-300 tabular">{team.length}</span> members
             </div>
           </div>
+          <Sheet open={memberDrawerOpen} onOpenChange={handleMemberDrawerChange}>
+            <SheetContent side="right" className="w-full sm:max-w-xl bg-[#12121A] border-white/10 text-zinc-100 p-0" data-testid="team-add-member-drawer">
+              <SheetHeader className="px-6 py-5 border-b border-white/5">
+                <SheetTitle className="font-display text-xl text-white">Add members to {p.name}</SheetTitle>
+                <SheetDescription className="text-xs text-zinc-400">
+                  Members are managed here after kickoff. Search by name, email, and designation, then select who should join this project.
+                </SheetDescription>
+              </SheetHeader>
+
+              <div className="px-6 py-5 space-y-4 overflow-y-auto">
+                <div className="grid grid-cols-1 gap-3">
+                  <Field label="Member name">
+                    <input
+                      value={memberNameQuery}
+                      onChange={(e) => setMemberNameQuery(e.target.value)}
+                      placeholder="Search by member name"
+                      data-testid="team-drawer-name"
+                      className={ipStyle}
+                    />
+                  </Field>
+                  <Field label="Email">
+                    <input
+                      value={memberEmailQuery}
+                      onChange={(e) => setMemberEmailQuery(e.target.value)}
+                      placeholder="Search by email"
+                      data-testid="team-drawer-email"
+                      className={ipStyle}
+                    />
+                  </Field>
+                  <Field label="Designation">
+                    <select
+                      value={memberDesignationFilter}
+                      onChange={(e) => setMemberDesignationFilter(e.target.value)}
+                      data-testid="team-drawer-designation"
+                      className={ipStyle}
+                    >
+                      {designationOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+
+                <div className="rounded-2xl border border-white/5 bg-white/[0.02] overflow-hidden">
+                  <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between gap-3">
+                    <div className="text-[11px] text-zinc-400">
+                      {filteredDirectoryMembers.length} available member{filteredDirectoryMembers.length === 1 ? "" : "s"}
+                    </div>
+                    <div className="text-[11px] font-semibold text-fuchsia-300">
+                      {selectedMemberEmails.length} selected
+                    </div>
+                  </div>
+                  <div className="max-h-[420px] overflow-y-auto">
+                    {filteredDirectoryMembers.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-xs text-zinc-500">
+                        No available members match these filters.
+                      </div>
+                    ) : (
+                      filteredDirectoryMembers.map((member) => {
+                        const isSelected = selectedMemberEmails.includes(member.selectionId);
+                        return (
+                          <button
+                            key={member.selectionId}
+                            type="button"
+                            onClick={() => toggleDirectoryMember(member.selectionId)}
+                            data-testid={`team-drawer-member-${member.selectionId.replace(/[^a-z0-9]+/g, "-")}`}
+                            className={`w-full px-4 py-3 border-b border-white/5 last:border-b-0 text-left transition-colors ${
+                              isSelected ? "bg-fuchsia-500/10" : "hover:bg-white/[0.03]"
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="text-sm font-medium text-white">{member.name}</div>
+                                <div className="text-[11px] text-zinc-500 mt-1">{member.email}</div>
+                                {(member.title || member.department) && (
+                                  <div className="text-[10px] text-zinc-600 mt-1">
+                                    {[member.title, member.department].filter(Boolean).join(" · ")}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
+                                  {member.role}
+                                </span>
+                                <span className={`text-[10px] font-semibold ${isSelected ? "text-fuchsia-300" : "text-zinc-500"}`}>
+                                  {isSelected ? "Selected" : "Select"}
+                                </span>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <SheetFooter className="px-6 py-4 border-t border-white/5 bg-[#12121A]">
+                <Button
+                  variant="outline"
+                  onClick={() => handleMemberDrawerChange(false)}
+                  className="border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={addSelectedMembersToProject}
+                  data-testid="team-drawer-submit"
+                  className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white"
+                >
+                  Add selected members
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+          <Sheet open={coreDrawerOpen} onOpenChange={setCoreDrawerOpen}>
+            <SheetContent side="right" className="w-full sm:max-w-lg bg-[#12121A] border-white/10 text-zinc-100 p-0" data-testid="project-core-members-drawer">
+              <SheetHeader className="px-6 py-5 border-b border-white/5">
+                <SheetTitle className="font-display text-xl text-white">Edit core members</SheetTitle>
+                <SheetDescription className="text-xs text-zinc-400">
+                  Update the project owner mapping without recreating the project. Team access and kickoff recipients stay aligned to the latest core members.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="px-6 py-5 space-y-4">
+                <Field label="TPM">
+                  <select
+                    value={coreTpmSelection}
+                    onChange={(e) => setCoreTpmSelection(e.target.value)}
+                    data-testid="core-member-tpm"
+                    className={ipStyle}
+                  >
+                    {coreTpmOptions.length === 0 && <option value="">No TPM members available</option>}
+                    {coreTpmOptions.map((member) => (
+                      <option key={member.selectionId} value={member.selectionId}>
+                        {member.name} · {member.email}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="R&D Lead">
+                  <select
+                    value={coreRndSelection}
+                    onChange={(e) => setCoreRndSelection(e.target.value)}
+                    data-testid="core-member-rnd"
+                    className={ipStyle}
+                  >
+                    {coreRndOptions.length === 0 && <option value="">No R&D members available</option>}
+                    {coreRndOptions.map((member) => (
+                      <option key={member.selectionId} value={member.selectionId}>
+                        {member.name} · {member.email}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <SheetFooter className="px-6 py-4 border-t border-white/5 bg-[#12121A]">
+                <Button
+                  variant="outline"
+                  onClick={() => setCoreDrawerOpen(false)}
+                  className="border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={saveCoreMembers}
+                  data-testid="core-member-save"
+                  className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white"
+                >
+                  Save core members
+                </Button>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+        </TabsContent>
+
+        {/* ---- Models ---- */}
+        <TabsContent value="models" className="mt-6 space-y-4" data-testid="models-panel">
+          <div>
+            <h2 className="font-display font-semibold text-xl text-white">Models &amp; keys</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              Project-specific model access lives here. IT provisioning, allocated members, and the project key map are kept inside this project instead of a separate dashboard module.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <ProjectKeyStat label="Allocated keys" value={String(projectModelKeys.length)} />
+            <ProjectKeyStat label="Active keys" value={String(projectModelKeys.filter((entry) => entry.status === "active").length)} />
+            <ProjectKeyStat label="Pending IT" value={String(pendingProvisioningCount)} />
+            <ProjectKeyStat label="Members mapped" value={String(projectAllocatedMembers)} />
+          </div>
+
+          {projectProvisioningRequests.length > 0 && (
+            <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="project-provisioning-panel">
+              <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <div className="font-display font-semibold text-[15px] text-white">IT provisioning status</div>
+                  <div className="text-xs text-zinc-500 mt-0.5">
+                    CFO-approved asks that need model access allocation are tracked here at project level.
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {projectProvisioningRequests.map((request) => {
+                  const requestedModels = (request.requestedModels || []).map((line) => line.label).filter(Boolean);
+                  const requestedMembers = (request.members || []).map((member) => `${member.name} · ${member.role}`);
+                  const statusMeta = getProjectProvisioningStatusMeta(request.status);
+                  return (
+                    <div key={request.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+                      <div className="flex items-start justify-between gap-3 flex-wrap">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="text-sm font-semibold text-white">{request.budgetType} model access</div>
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${statusMeta.cls}`}>
+                              <statusMeta.Icon className="w-3 h-3" />
+                              {statusMeta.label}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-[11px] text-zinc-500">
+                            Approved {fmtDate(request.approvedAt)} · {fmtCurrency(request.approvedAmount || 0, { compact: false })}
+                          </div>
+                        </div>
+                        {isIT && request.status === "pending-it" && (
+                          <Button
+                            size="sm"
+                            onClick={() => setActiveProvisionRequest(request)}
+                            data-testid={`project-provision-${request.id}`}
+                            className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs"
+                          >
+                            Provision now
+                          </Button>
+                        )}
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-1 xl:grid-cols-2 gap-3">
+                        <ProvisionList
+                          title="Requested models"
+                          items={requestedModels}
+                          empty="No model lines were captured on this approval."
+                        />
+                        <ProvisionList
+                          title="Allocated members"
+                          items={requestedMembers}
+                          empty="No members were mapped on this approval."
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-[#12121A] rounded-2xl border border-white/5 overflow-hidden" data-testid="project-model-keys-table">
+            <div className="p-5 border-b border-white/5">
+              <div className="font-display font-semibold text-[15px] text-white">Allocated model keys</div>
+              <div className="text-xs text-zinc-500 mt-0.5">
+                Members see the project-specific allocations here. CFO and IT can reveal or copy the full key values.
+              </div>
+            </div>
+
+            {projectModelKeys.length === 0 ? (
+              <div className="px-5 py-10 text-center text-sm text-zinc-500">
+                No model keys have been provisioned for this project yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.02]">
+                      <th className="text-left py-3 px-5">Provider · Model</th>
+                      <th className="text-left py-3 px-2">Type</th>
+                      <th className="text-left py-3 px-2">Env</th>
+                      <th className="text-left py-3 px-2">Key</th>
+                      <th className="text-left py-3 px-2">Allocated members</th>
+                      <th className="text-left py-3 px-2">Created</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectModelKeys.map((entry) => (
+                      <tr
+                        key={entry.id}
+                        data-testid={`project-key-row-${entry.id}`}
+                        className={`border-b border-white/5 last:border-0 hover:bg-white/[0.03] ${entry.status === "revoked" ? "opacity-50" : ""}`}
+                      >
+                        <td className="py-3 px-5">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full" style={{ background: providerColor[entry.provider] || "#E619B8" }} />
+                            <div>
+                              <div className="text-sm text-zinc-100">{entry.provider}</div>
+                              <div className="text-[11px] text-zinc-500">{entry.model}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-3 px-2">
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${typeChip(entry.type)}`}>{entry.type}</span>
+                        </td>
+                        <td className="py-3 px-2">
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${envChip(entry.env)}`}>{entry.env}</span>
+                        </td>
+                        <td className="py-3 px-2 font-mono text-xs text-zinc-300 tabular">
+                          <div className="flex items-center gap-1">
+                            <span data-testid={`project-key-value-${entry.id}`}>{revealedProjectKeys[entry.id] ? entry.fullKey : entry.maskedKey}</span>
+                            <button
+                              data-testid={`project-btn-reveal-${entry.id}`}
+                              onClick={() => toggleProjectKeyReveal(entry.id)}
+                              className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
+                            >
+                              {revealedProjectKeys[entry.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              data-testid={`project-btn-copy-${entry.id}`}
+                              onClick={() => copyProjectKey(entry)}
+                              className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                        <td className="py-3 px-2">
+                          <div className="flex flex-wrap gap-1">
+                            {(entry.members || []).length === 0 && <span className="text-[10px] text-zinc-500">No members mapped</span>}
+                            {(entry.members || []).map((member) => (
+                              <span key={member.id} className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-zinc-400">
+                                {member.name}
+                              </span>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="py-3 px-2 text-[11px] text-zinc-500 tabular">{fmtDate(entry.createdAt)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {!canRevealProjectKeys && projectModelKeys.length > 0 && (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 flex items-start gap-3 text-xs text-amber-200">
+              <Shield className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
+              <div>
+                Keys are masked. Only <span className="font-semibold">CFO</span> and <span className="font-semibold">IT</span> can reveal or copy full key values.
+              </div>
+            </div>
+          )}
         </TabsContent>
 
         {/* ---- Budget ---- */}
@@ -383,7 +1020,7 @@ const ProjectDetail = () => {
             const utilPct = cap > 0 ? Math.round((spent / cap) * 100) : 0;
             const remainingPct = cap > 0 ? Math.round((remaining / cap) * 100) : 0;
             const budgetCount = showRndBudgetTracks ? Math.max(budgetTracks.entries.length, 1) : ((p.phases || []).length || 1);
-            const burnRate = Number(isCFO ? (p.burnRate || 0) : (projectUsage.runRate || 0));
+            const burnRate = Number(isCFO ? (p.cfoBurnRate || p.burnRate || 0) : (projectUsage.runRate || 0));
             const runwayDays = burnRate > 0 && remaining > 0 ? Math.floor(remaining / burnRate) : 0;
             const spendLabel = isCFO ? "Actual / Cap" : "Logged / Cap";
             const totalSpendLabel = isCFO ? "Total Actual" : "Total Logged";
@@ -492,11 +1129,11 @@ const ProjectDetail = () => {
                       testid="budget-kpi-last-proposed"
                       label="Last Proposed Budget"
                       value={fmtCurrency(latestBudgetEntry?.total || 0, { compact: false })}
-                      sub={latestBudgetEntry ? `${formatBudgetTypeLabel(latestBudgetEntry.budgetType)} · ${new Date(latestBudgetEntry.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "No budget submission yet"}
+                      sub={latestBudgetEntry ? `${formatBudgetTabLabel(latestBudgetEntry.budgetType)} · ${new Date(latestBudgetEntry.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "No budget submission yet"}
                     />
                     <MiniKpi
                       testid="budget-kpi-topups-total"
-                      label="Top-ups Logged"
+                      label="Budget Changes Logged"
                       value={fmtCurrency(totalTopupAmount, { compact: false })}
                       sub={`${projectTopups.length} request${projectTopups.length === 1 ? "" : "s"}`}
                     />
@@ -510,7 +1147,7 @@ const ProjectDetail = () => {
                       testid="budget-kpi-current-envelope"
                       label="Current Budget Envelope"
                       value={fmtCurrency(currentBudgetEnvelope, { compact: false })}
-                      sub="Budget + top-ups + changes"
+                      sub="Budget + budget changes + change requests"
                       accent="text-fuchsia-300"
                     />
                   </div>
@@ -519,8 +1156,8 @@ const ProjectDetail = () => {
                 {showRndBudgetTracks ? (
                   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="rnd-budget-tracks">
                     <div className="mb-3">
-                      <div className="font-display font-semibold text-[15px] text-white">Testing, R&amp;D, and rework budget tracks</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">Testing estimates stay tracked separately from the later R&amp;D ask, so both submission records remain visible through approval.</div>
+                    <div className="font-display font-semibold text-[15px] text-white">Testing, Sample, and Rework budget tracks</div>
+                    <div className="text-xs text-zinc-500 mt-0.5">Each R&amp;D budget track stays in sequence. Testing closes first, then Sample or Rework becomes the active execution step.</div>
                     </div>
                     {!executionUnlocked && isExecutionOwner && (
                       <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
@@ -528,13 +1165,14 @@ const ProjectDetail = () => {
                       </div>
                     )}
                     {budgetTracks.ordered.length === 0 ? (
-                      <div className="text-xs text-zinc-500 py-6 text-center">No Testing, R&amp;D, or Rework budget has been submitted yet.</div>
+                      <div className="text-xs text-zinc-500 py-6 text-center">No Testing, Sample, or Rework budget has been submitted yet.</div>
                     ) : (
-                      <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                      <div className="space-y-3">
                         {budgetTracks.ordered.map((track) => (
                           <BudgetTrackCard
                             key={track.key}
                             track={track}
+                            deliveries={projectBatches}
                             topupCount={projectTopups.length}
                             changeCount={projectChangeRequests.length}
                           />
@@ -547,7 +1185,7 @@ const ProjectDetail = () => {
                     <div className="mb-3">
                       <div className="font-display font-semibold text-[15px] text-white">{isTPM ? "Budget records by phase" : "Burn per phase"}</div>
                       <div className="text-xs text-zinc-500 mt-0.5">
-                        {isTPM ? "Phase budget, logged progress, requested models, top-ups, changes, and the latest ask are connected here." : "Batch-level breakdown of tasks, burn, approval, and feedback."}
+                        {isTPM ? "Phase budget, logged progress, requested models, budget changes, change requests, and the latest ask are connected here." : "Batch-level breakdown of tasks, burn, approval, and feedback."}
                       </div>
                     </div>
                     {(p.phases || []).length === 0 ? (
@@ -572,8 +1210,12 @@ const ProjectDetail = () => {
                               {(p.phases || []).map((ph) => {
                                 const plannedTasks = Number(ph.totalTasks || ph.tasks || 0);
                                 const phaseLogs = getPhaseLogs(p.id, ph.id);
+                                const generalActualCost = phaseLogs.reduce(
+                                  (sum, log) => sum + (String(log?.logType || "").trim() === "general-actual" ? getTaskLogRecordedCost(log) : 0),
+                                  0
+                                );
                                 const burn = isCFO
-                                  ? Number(ph.actual || 0)
+                                  ? Number(ph.actual || 0) + generalActualCost
                                   : phaseLogs.reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0);
                                 const est = Number(ph.estimated || 0);
                                 const apprPct = est > 0 ? Math.round((burn / est) * 100) : 0;
@@ -590,7 +1232,7 @@ const ProjectDetail = () => {
                                   ...phaseChanges.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
                                   ...getPhaseTasks(p.id, ph.id).map((task) => task.model).filter(Boolean),
                                 ]);
-                                const requestSummary = `${phaseTopups.length} top-up${phaseTopups.length === 1 ? "" : "s"} · ${phaseChanges.length} change${phaseChanges.length === 1 ? "" : "s"}`;
+                                const requestSummary = `${phaseTopups.length} budget change${phaseTopups.length === 1 ? "" : "s"} · ${phaseChanges.length} scope change${phaseChanges.length === 1 ? "" : "s"}`;
                                 return (
                                   <tr
                                     key={ph.id}
@@ -640,7 +1282,7 @@ const ProjectDetail = () => {
                                 <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Phase request drill-down</div>
                                 <div className="mt-1 font-display text-lg font-semibold text-white">{selectedPhase.name}</div>
                                 <div className="text-xs text-zinc-500 mt-0.5">
-                                  Budget requests, top-ups, changes, and logged tasks for this phase.
+                                  Budget requests, budget changes, change requests, and logged tasks for this phase.
                                 </div>
                               </div>
                               <Link to={`/projects/${p.id}/phase/${selectedPhase.id}`} className="text-xs text-fuchsia-300 hover:text-fuchsia-200 inline-flex items-center gap-1">
@@ -658,7 +1300,7 @@ const ProjectDetail = () => {
                                 return (
                                   <>
                                     <MiniKpi label="Base budget" value={fmtCurrency(phaseBudget.base, { compact: false })} sub="Submitted phase budget" />
-                                    <MiniKpi label="Current total" value={fmtCurrency(phaseBudget.currentTotal, { compact: false })} sub={`Top-ups ${fmtCurrency(phaseBudget.topupsTotal, { compact: false })} · Changes ${fmtCurrency(phaseBudget.changesTotal, { compact: false })}`} accent="text-fuchsia-300" />
+                                    <MiniKpi label="Current total" value={fmtCurrency(phaseBudget.currentTotal, { compact: false })} sub={`Budget changes ${fmtCurrency(phaseBudget.topupsTotal, { compact: false })} · Change requests ${fmtCurrency(phaseBudget.changesTotal, { compact: false })}`} accent="text-fuchsia-300" />
                                     <MiniKpi label="Progress" value={`${selectedProgress}%`} sub={`${selectedPhaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0)} of ${Number(selectedPhase.totalTasks || selectedPhase.tasks || 0) || 0} tasks`} />
                                   </>
                                 );
@@ -696,9 +1338,9 @@ const ProjectDetail = () => {
                               </RequestSummaryCard>
 
                               <RequestSummaryCard
-                                title={`Top-ups (${selectedPhaseTopups.length})`}
+                                title={`Budget changes (${selectedPhaseTopups.length})`}
                                 icon={ArrowUpRightSquare}
-                                empty="No top-up requests mapped to this phase."
+                                empty="No budget change requests mapped to this phase."
                                 testid={`phase-topup-requests-${selectedPhase.id}`}
                               >
                                 {selectedPhaseTopups.map((request) => (
@@ -796,21 +1438,21 @@ const ProjectDetail = () => {
                   </div>
                 )}
 
-                {/* Top-up requests (kept — accessible from within the specific project) */}
+                {/* Budget change requests (kept — accessible from within the specific project) */}
                 <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <ArrowUpRightSquare className="w-4 h-4 text-fuchsia-300" />
-                        <div className="font-display font-semibold text-[15px] text-white">Top-up requests</div>
+                        <div className="font-display font-semibold text-[15px] text-white">Budget change requests</div>
                       </div>
                     {canRequestTopup && (
                       <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1" data-testid="btn-raise-topup-project">
-                        <Plus className="w-3 h-3" /> Raise top-up
+                        <Plus className="w-3 h-3" /> Raise budget change
                       </Button>
                     )}
                   </div>
                   {projectTopups.length === 0 ? (
-                    <div className="text-xs text-zinc-500 py-4 text-center">No top-ups raised for this project.</div>
+                    <div className="text-xs text-zinc-500 py-4 text-center">No budget change requests raised for this project.</div>
                   ) : (
                     <div className="space-y-2">
                       {projectTopups.map((request) => (
@@ -831,7 +1473,7 @@ const ProjectDetail = () => {
               <div>
                 <div className="font-display font-semibold text-[15px] text-white flex items-center gap-2">
                   <ListChecks className="w-4 h-4 text-fuchsia-300" /> Daily task log
-                  <span className="text-xs text-zinc-500 font-normal">({allLogs.length})</span>
+                  <span className="text-xs text-zinc-500 font-normal">({visibleTaskLogs.length})</span>
                 </div>
                 <div className="text-xs text-zinc-500 mt-0.5">
                   {isExecutionOwner
@@ -839,12 +1481,18 @@ const ProjectDetail = () => {
                     : "Logged by the owning execution team · visible to CTO & CFO"}
                 </div>
               </div>
-              {canManageExecution && p.phases?.[0] && (
+              {isExecutionOwner && taskLogTargetPhase && (
                 <Button
                   size="sm"
-                  onClick={() => { setEditingLog(null); setTaskLogPhase(selectedPhase || p.phases[0]); }}
+                  disabled={isTaskLogDisabled}
+                  title={taskLogDisabledReason}
+                  onClick={() => { setEditingLog(null); setTaskLogPhase(taskLogTargetPhase); }}
                   data-testid="btn-log-task"
-                  className="h-8 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+                  className={`h-8 rounded-lg gap-1.5 ${
+                    isTaskLogDisabled
+                      ? "bg-white/[0.04] text-zinc-500 border border-white/10 shadow-none"
+                      : "bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+                  }`}
                 >
                   <Plus className="w-3.5 h-3.5" /> Log task
                 </Button>
@@ -856,7 +1504,7 @@ const ProjectDetail = () => {
               </div>
             )}
 
-            {allLogs.length === 0 ? (
+            {visibleTaskLogs.length === 0 ? (
               <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-xs text-zinc-500">
                 {!executionUnlocked && isExecutionOwner
                   ? "No task logging yet. This project unlocks once the current budget is approved."
@@ -867,9 +1515,9 @@ const ProjectDetail = () => {
             ) : (
               <>
               {/* Phase-wise progress bars */}
-              {(p.phases || []).some((ph) => Number(ph.totalTasks || ph.tasks || 0) > 0) && (
+              {batchPhases.some((ph) => Number(ph.totalTasks || ph.tasks || 0) > 0) && (
                 <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-2" data-testid="phase-progress-grid">
-                  {(p.phases || []).map((ph) => {
+                  {batchPhases.map((ph) => {
                     const planned = Number(ph.totalTasks || ph.tasks || 0);
                     if (planned <= 0) return null;
                     const logs = getPhaseLogs(p.id, ph.id);
@@ -899,13 +1547,13 @@ const ProjectDetail = () => {
                       <th className="text-right py-2 px-3">Tasks</th>
                       <th className="text-right py-2 px-3">Trajectories</th>
                       <th className="text-right py-2 px-3">Est. cost</th>
-                      <th className="text-left py-2 px-3">Approval status</th>
+                      <th className="text-left py-2 px-3">{isRndProject ? "Status" : "Approval status"}</th>
                       <th className="text-left py-2 px-3">Date</th>
                       {isTPM && <th className="text-right py-2 px-3">Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {allLogs.map((l) => {
+                    {visibleTaskLogs.map((l) => {
                       const editable = isTaskEditable(l);
                       const delivery = projectBatches.find((batch) => batch.phaseId === l.phaseId) || null;
                       const approval = getTaskApprovalState(l, delivery);
@@ -1032,7 +1680,11 @@ const ProjectDetail = () => {
               const changesForPhase = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
               const logs = getPhaseLogs(p.id, ph.id);
               const loggedCost = logs.reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0);
-              const phaseSpend = isCFO ? Number(ph.actual || 0) : loggedCost;
+              const generalActualCost = logs.reduce(
+                (sum, log) => sum + (String(log?.logType || "").trim() === "general-actual" ? getTaskLogRecordedCost(log) : 0),
+                0
+              );
+              const phaseSpend = isCFO ? Number(ph.actual || 0) + generalActualCost : loggedCost;
               const variance = Number(ph.estimated || 0) - phaseSpend;
               const util = ph.estimated ? Math.round((phaseSpend / ph.estimated) * 100) : 0;
               const hc = healthColor(ph.health);
@@ -1120,7 +1772,7 @@ const ProjectDetail = () => {
                           data-testid={`btn-topup-${ph.id}`}
                           className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1"
                         >
-                          <ArrowUpRightSquare className="w-3 h-3" /> Top-up
+                          <ArrowUpRightSquare className="w-3 h-3" /> Budget change
                         </Button>
                         <Button
                           size="sm"
@@ -1146,9 +1798,9 @@ const ProjectDetail = () => {
 
                   <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
                     <RequestSummaryCard
-                      title={`Top-up requests (${topupsForPhase.length})`}
+                      title={`Budget change requests (${topupsForPhase.length})`}
                       icon={ArrowUpRightSquare}
-                      empty="No top-up requests for this phase."
+                      empty="No budget change requests for this phase."
                       testid={`sub-topups-${ph.id}`}
                     >
                       {topupsForPhase.map((request) => (
@@ -1252,7 +1904,7 @@ const ProjectDetail = () => {
                                     : "text-amber-300"
                               }`}>
                                 {delivery.status === "testing-submitted"
-                                  ? "Testing submitted · raise the R&D budget"
+                                  ? "Testing submitted · raise the Sample budget"
                                   : delivery.status === "sample-approved"
                                     ? "Accepted and handed to TPM"
                                     : delivery.status === "sample-rejected"
@@ -1408,6 +2060,56 @@ const ProjectDetail = () => {
         phase={taskLogPhase}
         editingLog={editingLog}
       />
+      <ProjectProvisionKeysDialog
+        open={!!activeProvisionRequest}
+        onOpenChange={(open) => !open && setActiveProvisionRequest(null)}
+        request={activeProvisionRequest}
+        onSubmit={(requestId, payload) => {
+          provisionModelKeys(requestId, payload);
+          toast.success("Keys provisioned", { description: `${activeProvisionRequest?.projectName} is now visible in this project.` });
+          setActiveProvisionRequest(null);
+        }}
+      />
+      <AlertDialog open={archiveDialogOpen} onOpenChange={setArchiveDialogOpen}>
+        <AlertDialogContent className="bg-[#12121A] border-white/10 text-zinc-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive {p.name}?</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              This hides the project from active dashboards and project lists while preserving its audit history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleArchiveProject}
+              className="bg-amber-500 hover:bg-amber-600 text-black"
+              data-testid="confirm-archive-project"
+            >
+              Archive project
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="bg-[#12121A] border-white/10 text-zinc-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {p.name} from the active workspace?</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              Use this for projects created by mistake. The project is removed from active views so the workspace is not left with unused shells.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteProject}
+              className="bg-red-500 hover:bg-red-600 text-white"
+              data-testid="confirm-delete-project"
+            >
+              Delete project
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
@@ -1451,47 +2153,125 @@ const CompactSetupStat = ({ title, value, meta, icon: Icon }) => (
   </div>
 );
 
-const sumBudgetLinesTotal = (lines = []) =>
-  (Array.isArray(lines) ? lines : []).reduce((sum, line) => sum + Number(line?.estCost || line?.amount || 0), 0);
+const ipStyle = "w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40";
 
-const BudgetTrackCard = ({ track, topupCount, changeCount }) => {
+const Field = ({ label, children }) => (
+  <label className="block space-y-1.5">
+    <span className="text-[11px] uppercase tracking-widest font-semibold text-zinc-500">{label}</span>
+    {children}
+  </label>
+);
+
+const normalizeMemberSelectionId = (value = "") => String(value || "").trim().toLowerCase();
+
+const findMemberSelectionId = (members = [], name = "") => {
+  const normalizedName = String(name || "").trim().toLowerCase();
+  if (!normalizedName) return members[0]?.selectionId || "";
+  return members.find((member) => String(member.name || "").trim().toLowerCase() === normalizedName)?.selectionId
+    || members[0]?.selectionId
+    || "";
+};
+
+const envChip = (env) =>
+  env === "production"
+    ? "bg-fuchsia-500/10 border-fuchsia-500/30 text-fuchsia-300"
+    : "bg-sky-500/10 border-sky-500/30 text-sky-300";
+
+const typeChip = (type) =>
+  type === "R&D"
+    ? "bg-violet-500/10 border-violet-500/30 text-violet-300"
+    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300";
+
+const providerColor = {
+  Anthropic: "#E619B8",
+  OpenAI: "#10B981",
+  Google: "#3B82F6",
+  xAI: "#F59E0B",
+  Amazon: "#F59E0B",
+  Meta: "#94A3B8",
+  Mistral: "#22C55E",
+  Cohere: "#38BDF8",
+};
+
+const buildProvisionLines = (request) =>
+  (request?.requestedModels?.length ? request.requestedModels : [{ id: `${request?.id}-fallback`, label: "Project access", provider: "Anthropic" }]).map((line) => ({
+    id: line.id,
+    label: line.label,
+    provider: line.provider || "Anthropic",
+    env: request?.budgetType === "Production" ? "production" : "testing",
+    fullKey: "",
+    memberIds: (request?.members || []).map((member) => member.id),
+  }));
+
+const getProjectProvisioningStatusMeta = (status) => (
+  status === "completed"
+    ? { label: "Provisioned", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 }
+    : { label: "Pending IT", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 }
+);
+
+const ProjectKeyStat = ({ label, value }) => (
+  <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4">
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className="mt-2 font-display text-2xl font-semibold tabular text-white">{value}</div>
+  </div>
+);
+
+const BudgetTrackCard = ({ track, deliveries = [], topupCount, changeCount }) => {
   const latest = track.latest || {};
-  const modelTotal = sumBudgetLinesTotal(latest.items?.models);
-  const infraTotal = sumBudgetLinesTotal(latest.items?.infra);
-  const subsTotal = sumBudgetLinesTotal(latest.items?.subs);
   const status = getBudgetReviewMeta(latest.status);
+  const trackLabel = formatBudgetTabLabel(track.key || latest.budgetType || track.label);
+  const raisedFrom = latest.submittedRole || latest.requesterRole || "";
+  const teamType = latest.teamType || "";
+  const sourceDelivery = latest.sourceDeliveryId
+    ? deliveries.find((delivery) => delivery.id === latest.sourceDeliveryId)
+    : track.key === "Testing"
+      ? deliveries
+        .filter((delivery) => delivery.status === "testing-submitted")
+        .sort((left, right) => new Date(right.deliveredAt || 0).getTime() - new Date(left.deliveredAt || 0).getTime())[0]
+      : null;
+  const trackedTasks = Number(sourceDelivery?.rnd?.taskCount || latest.totalTasks || 0);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">{track.label}</div>
-          <div className="mt-1 text-lg font-display font-semibold text-white">{fmtCurrency(latest.total || 0, { compact: false })}</div>
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_repeat(5,minmax(0,0.7fr))] gap-3 items-center">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">{trackLabel}</span>
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${status.cls}`}>
+              <status.Icon className="w-3 h-3" />
+              {status.label}
+            </span>
+            {raisedFrom && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border border-sky-500/30 bg-sky-500/10 text-sky-200">
+                Raised from {raisedFrom}
+              </span>
+            )}
+            {teamType && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border border-white/10 bg-white/[0.04] text-zinc-300">
+                {teamType} team
+              </span>
+            )}
+          </div>
         </div>
-        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${status.cls}`}>
-          <status.Icon className="w-3 h-3" />
-          {status.label}
-        </span>
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-2">
-        <MiniKpi label="Tasks" value={Number(latest.totalTasks || 0).toLocaleString()} />
-        <MiniKpi label="Trajectories" value={Number(latest.totalTrajectories || 0).toLocaleString()} />
-        <MiniKpi label="Models" value={fmtCurrency(modelTotal, { compact: false })} />
-        <MiniKpi label="Infra" value={fmtCurrency(infraTotal, { compact: false })} />
-        <MiniKpi label="Subs" value={fmtCurrency(subsTotal, { compact: false })} />
-        <MiniKpi label="Requests" value={`${topupCount} top-ups · ${changeCount} changes`} />
-      </div>
-
-      <div className="mt-3 pt-3 border-t border-white/5 text-[11px] text-zinc-500 flex items-center justify-between gap-3">
-        <span>Latest submit</span>
-        <span className="text-zinc-200 font-medium">
-          {latest.submittedAt ? new Date(latest.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
-        </span>
+        <BudgetTrackMetric label="Budget" value={fmtCurrency(latest.total || 0, { compact: false })} />
+        <BudgetTrackMetric label="Tracked task" value={trackedTasks.toLocaleString()} />
+        <BudgetTrackMetric label="Trajectories" value={Number(latest.totalTrajectories || 0).toLocaleString()} />
+        <BudgetTrackMetric label="Requests" value={`${topupCount} / ${changeCount}`} />
+        <BudgetTrackMetric
+          label="Latest submit"
+          value={latest.submittedAt ? new Date(latest.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+        />
       </div>
     </div>
   );
 };
+
+const BudgetTrackMetric = ({ label, value }) => (
+  <div className="min-w-0">
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className="mt-1 text-sm text-white font-semibold tabular">{value}</div>
+  </div>
+);
 
 // KPI card used in the Budget tab redesign (Spent/Cap + smaller stat cells)
 const MiniKpi = ({ label, value, sub, accent = "text-white", testid }) => (
@@ -1567,6 +2347,152 @@ const TopupBreakdownPill = ({ label, value }) => (
   </div>
 );
 
+const ProvisionList = ({ title, items, empty }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3">
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">{title}</div>
+    {items.length === 0 ? (
+      <div className="text-[11px] text-zinc-500">{empty}</div>
+    ) : (
+      <div className="space-y-1">
+        {items.map((item) => (
+          <div key={item} className="text-[11px] text-zinc-200">{item}</div>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const ProjectProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) => {
+  const [lines, setLines] = useState(() => buildProvisionLines(request));
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (!open) return;
+    setLines(buildProvisionLines(request));
+    setNote("");
+  }, [open, request]);
+
+  if (!request) return null;
+
+  const updateLine = (id, key, value) => {
+    setLines((current) => current.map((line) => (
+      line.id === id ? { ...line, [key]: value } : line
+    )));
+  };
+
+  const toggleMember = (lineId, memberId) => {
+    setLines((current) => current.map((line) => {
+      if (line.id !== lineId) return line;
+      const memberIds = line.memberIds.includes(memberId)
+        ? line.memberIds.filter((id) => id !== memberId)
+        : [...line.memberIds, memberId];
+      return { ...line, memberIds };
+    }));
+  };
+
+  const submit = () => {
+    if (lines.some((line) => !String(line.fullKey || "").trim())) {
+      toast.error("Add a key value for every requested model line");
+      return;
+    }
+    if (lines.some((line) => line.memberIds.length === 0)) {
+      toast.error("Allocate each key to at least one member");
+      return;
+    }
+    onSubmit(request.id, { lines, note });
+  };
+
+  return (
+    <div
+      className={`${open ? "fixed" : "hidden"} inset-0 z-50 bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center`}
+      data-testid="project-provision-keys-dialog"
+    >
+      <div className="w-full max-w-[760px] max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#12121A] text-zinc-100 p-6">
+        <div className="mb-4">
+          <div className="font-display text-white text-xl font-semibold">Provision model keys</div>
+          <div className="text-xs text-zinc-400 mt-1">
+            {request.projectName} · approved {new Date(request.approvedAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · allocate keys to project members.
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          {lines.map((line) => (
+            <div key={line.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-sm font-semibold text-white">{line.label}</div>
+                  <div className="text-[11px] text-zinc-500 mt-1">{line.provider}</div>
+                </div>
+                <select
+                  value={line.env}
+                  onChange={(e) => updateLine(line.id, "env", e.target.value)}
+                  className="h-9 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100"
+                >
+                  <option value="testing">testing</option>
+                  <option value="production">production</option>
+                </select>
+              </div>
+
+              <div className="mt-3">
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Key value</div>
+                <input
+                  value={line.fullKey}
+                  onChange={(e) => updateLine(line.id, "fullKey", e.target.value)}
+                  placeholder="Paste the provisioned key"
+                  data-testid={`project-provision-key-${line.id}`}
+                  className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                />
+              </div>
+
+              <div className="mt-3">
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Allocate to members</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {(request.members || []).map((member) => {
+                    const isSelected = line.memberIds.includes(member.id);
+                    return (
+                      <button
+                        key={member.id}
+                        type="button"
+                        onClick={() => toggleMember(line.id, member.id)}
+                        data-testid={`project-provision-member-${line.id}-${member.id}`}
+                        className={`px-2 py-1 rounded-md text-[11px] font-medium border transition-colors ${
+                          isSelected ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-200" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
+                        }`}
+                      >
+                        {member.name} · {member.role}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">IT note</div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder="Optional note about provisioning, scope, or handoff"
+              className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center justify-end gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)} className="border-white/10 bg-white/[0.04] text-zinc-300 hover:bg-white/[0.08]">
+            Cancel
+          </Button>
+          <Button onClick={submit} className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Save provisioning
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PhaseMetric = ({ label, value, tone = "neutral" }) => {
   const tones = { emerald: "text-emerald-300", magenta: "text-fuchsia-300", warning: "text-amber-300", red: "text-red-300", neutral: "text-white" };
   return (
@@ -1608,6 +2534,7 @@ const changeRequestStatusMap = {
 
 const taskApprovalStatusMap = {
   logged: { label: "Logged", cls: "bg-white/[0.04] text-zinc-300 border-white/10", Icon: FileText },
+  "testing-submitted": { label: "Testing submitted", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: PackageCheck },
   "pending-cfo": { label: "Pending approval", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   partial: { label: "Partially approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
@@ -1650,7 +2577,7 @@ const buildProjectBudgetRequests = ({ projectId, submittedBudgets, liveBudgetRev
 
   const reviews = Array.from(mergedReviews.values()).map((review) => ({
     id: `review-${review.id}`,
-    title: review.type || "Budget review",
+    title: replaceBudgetTabLabelText(review.type || "Budget review"),
     amount: Number(review.modifiedTotal || review.requestedBudget || review.currentBudget || 0),
     status:
       review.status === "forwarded-cfo" ? "pending-cfo"
@@ -1666,12 +2593,23 @@ const buildProjectBudgetRequests = ({ projectId, submittedBudgets, liveBudgetRev
   return [...submitted, ...reviews];
 };
 
+const formatBudgetTabLabel = (budgetType = "") => (
+  normalizeBudgetType(budgetType) === "RnD"
+    ? "Sample"
+    : formatBudgetTypeLabel(budgetType)
+);
+
+const replaceBudgetTabLabelText = (value = "") => String(value || "")
+  .replace(/\bSampling\b/g, "Sample")
+  .replace(/\bR&D\b/g, "Sample");
+
 const formatSubmittedBudgetTitle = (budgetType, resubmitOfReviewId, sampleIteration = 1) => {
+  const normalizedBudgetType = normalizeBudgetType(budgetType);
   const base =
-    budgetType === "Testing" ? "Testing budget"
-      : budgetType === "Sample" || budgetType === "Rework" ? `Rework${sampleIteration > 1 ? ` ${sampleIteration}` : ""} budget`
-        : budgetType === "RnD" ? "R&D budget"
-          : budgetType === "Production" ? "Production budget"
+    normalizedBudgetType === "Testing" ? "Testing budget"
+      : normalizedBudgetType === "Rework" ? `Rework${sampleIteration > 1 ? ` ${sampleIteration}` : ""} budget`
+        : normalizedBudgetType === "RnD" ? "Sample budget"
+          : normalizedBudgetType === "Production" ? "Production budget"
             : "Budget request";
   return resubmitOfReviewId ? `Resubmitted ${base}` : base;
 };
@@ -1699,25 +2637,25 @@ const getDeliverButtonLabel = (isRndProject, delivery, project) => {
   if (delivery?.status === "changes-requested") return "Deliver revised sample";
   if (isRndProject) {
     if (delivery) return "Submitted";
-    return normalizeBudgetType(project?.lastBudgetSubmission?.budgetType) === "Testing" ? "Submit testing sample" : "Submit batch";
+    return normalizeBudgetType(project?.lastBudgetSubmission?.budgetType) === "Testing" ? "Submit testing batch" : "Submit batch";
   }
   return delivery ? "Delivered" : "Deliver batch";
 };
 
 const getWorkflowLockMessage = ({ project, workflowStage, latestBudgetReviewMeta, role }) => {
   const pendingType = normalizeBudgetType(project?.pendingBudgetSubmission?.budgetType || "");
-  const pendingLabel = pendingType ? formatBudgetTypeLabel(pendingType) : "Budget";
+  const pendingLabel = pendingType ? formatBudgetTabLabel(pendingType) : "Budget";
   const pendingStage = project?.pendingBudgetSubmission?.stage || latestBudgetReviewMeta?.label || "";
 
   if (project?.pendingBudgetSubmission) {
     const approver = pendingStage === "pending-cfo" || pendingStage === "Pending · CFO" ? "CFO" : "CTO and CFO";
-    return `${pendingLabel} request is awaiting ${approver} approval. Tasks, top-ups, and delivery unlock after approval.`;
+    return `${pendingLabel} request is awaiting ${approver} approval. Tasks, budget changes, and delivery unlock after approval.`;
   }
   if (workflowStage === "awaiting-testing-budget") {
     return "Raise the testing budget first. Execution unlocks after CTO and CFO approve it.";
   }
   if (workflowStage === "awaiting-rnd-budget") {
-    return "Testing sample has been submitted. Raise the R&D budget to continue to the next sample build.";
+    return "Testing sample has been submitted. Raise the Sample budget to continue to the next sample build.";
   }
   if (workflowStage === "awaiting-rework-budget") {
     return "This sample needs rework. Raise the next sample budget to continue.";
@@ -1731,7 +2669,7 @@ const getWorkflowLockMessage = ({ project, workflowStage, latestBudgetReviewMeta
     return "This sample was rejected. Raise a fresh budget only if the project is continuing.";
   }
   return latestBudgetReviewMeta
-    ? `Budget is ${latestBudgetReviewMeta.label.toLowerCase()}. Tasks, top-ups, and batch delivery unlock after CFO approval.`
+    ? `Budget is ${latestBudgetReviewMeta.label.toLowerCase()}. Tasks, budget changes, and batch delivery unlock after CFO approval.`
     : "Submit a budget and wait for CFO approval to unlock tasks and batch delivery.";
 };
 
@@ -1741,6 +2679,7 @@ const getChangeRequestMeta = (request) => changeRequestStatusMap[request.stage] 
 const getTaskApprovalState = (log, delivery) => {
   if (log?.approvalStatus && taskApprovalStatusMap[log.approvalStatus]) return taskApprovalStatusMap[log.approvalStatus];
   if (!delivery) return taskApprovalStatusMap.logged;
+  if (delivery.status === "testing-submitted") return taskApprovalStatusMap["testing-submitted"];
   if (delivery.status === "non-recoverable") return taskApprovalStatusMap["non-recoverable"];
   if (delivery.actualRecovered === 0) return taskApprovalStatusMap.rejected;
   if (delivery.actualRecovered != null && delivery.actualRecovered >= delivery.proposedAmount) return taskApprovalStatusMap.approved;
@@ -1783,6 +2722,9 @@ const summarizePhaseBudget = (phase, topups = [], changes = []) => {
 };
 
 const getTaskLogRecordedCost = (log) => {
+  if (String(log?.logType || "").trim() === "general-actual" && Array.isArray(log?.generalActualRows)) {
+    return log.generalActualRows.reduce((sum, entry) => sum + Number(entry.estCost || entry.amount || entry.cost || 0), 0);
+  }
   if (Array.isArray(log?.successfulRows) || Array.isArray(log?.failedRows)) {
     return [
       ...(Array.isArray(log?.successfulRows) ? log.successfulRows : []),

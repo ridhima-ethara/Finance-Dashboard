@@ -33,7 +33,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
   const [expanded, setExpanded] = useState({ "crowley-gen": true });
   const [drawer, setDrawer] = useState(null); // { project, phase }
   const nav = useNavigate();
-  const { scope, visibleProjects, role, taskLogs, budgets, topupRequests } = useApp();
+  const { visibleProjects, role, taskLogs, budgets, topupRequests, changeRequests } = useApp();
   const isRnd = role === "R&D";
   const isCfo = role === "CFO";
   const ownerLabel = role === "CFO" ? "TPM" : "PL";
@@ -41,7 +41,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
 
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
-  const projects = (projectsOverride || visibleProjects).filter((p) => scope === "all" || p.type === scope);
+  const projects = projectsOverride || visibleProjects;
   const projectMetrics = useMemo(
     () => Object.fromEntries(projects.map((project) => [project.id, summarizeLoggedProject(project, taskLogs, usageOptions)])),
     [projects, taskLogs, usageOptions]
@@ -73,7 +73,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
             Projects — budget by project
           </div>
           <div className="text-xs text-zinc-500 mt-0.5">
-            {projects.length} projects · {fmtCurrency(totals.actual)} of {fmtCurrency(totals.approved)}{isCfo ? " actuals visible" : " logged consumption visible only"}{isRnd ? " · expand a row for Testing / R&D / Rework" : ""}
+            {projects.length} projects · {fmtCurrency(totals.actual)} of {fmtCurrency(totals.approved)}{isCfo ? " actuals visible" : " logged consumption visible only"}{isRnd ? " · expand a row for phase list and detail view" : ""}
           </div>
         </div>
         <div className="text-xs px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-zinc-400 tabular">
@@ -116,6 +116,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
               const displayUtil = isCfo ? Number(p.cfoUtilization || p.utilization || 0) : logged.utilization;
               const displayRunRate = isCfo ? Number(p.cfoBurnRate || 0) : logged.runRate;
               const isOpen = !!expanded[p.id];
+              const projectDetailTrack = getLaneBudgetTrack(p, budgets, logLane) || projectTracks[p.id]?.ordered?.[0]?.latest || null;
               return (
                 <Fragment key={p.id}>
                   <tr
@@ -186,51 +187,98 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
                       <td colSpan={11} className="px-6 py-5">
                         {isRnd ? (
                           <div className="space-y-3">
-                            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
-                              Testing / R&amp;D / Rework
+                            <div className="rounded-xl border border-white/10 bg-[#12121A] overflow-hidden">
+                              <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-white/5">
+                                <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+                                  Phase list
+                                </div>
+                                <div className="text-[11px] text-zinc-500">
+                                  Allocated vs consumed with request visibility
+                                </div>
+                              </div>
+                              {(p.phases || []).length === 0 ? (
+                                <div className="px-4 py-6 text-center text-xs text-zinc-500">
+                                  No phases defined for this project yet.
+                                </div>
+                              ) : (
+                                <table className="w-full">
+                                  <thead>
+                                    <tr className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold border-b border-white/5 bg-white/[0.02]">
+                                      <th className="text-left py-2.5 px-4">Phase</th>
+                                      <th className="text-right py-2.5 px-4">Allocated</th>
+                                      <th className="text-right py-2.5 px-4">Consumed</th>
+                                      <th className="text-right py-2.5 px-4">Remaining</th>
+                                      <th className="text-right py-2.5 px-4">Tasks</th>
+                                      <th className="text-left py-2.5 px-4">Requests</th>
+                                      <th className="text-right py-2.5 px-4"></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {p.phases.map((ph) => {
+                                      const phaseLogs = filterLogsByLane(p, taskLogs[`${p.id}::${ph.id}`] || [], logLane);
+                                      const phaseConsumed = phaseLogs.reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0);
+                                      const phaseTasksDone = phaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0);
+                                      const phaseTopups = topupRequests.filter((request) => request.projectId === p.id && request.phaseId === ph.id);
+                                      const phaseChangeRequests = changeRequests.filter((request) => (
+                                        request.projectId === p.id
+                                          && (
+                                            request.phaseId === ph.id
+                                            || (request.affectedPhase || "").toLowerCase().includes(ph.name.toLowerCase())
+                                          )
+                                      ));
+                                      const trackPhase = projectDetailTrack?.phases?.find((entry) => entry.id === ph.id || entry.name === ph.name) || null;
+                                      const allocated = Number(trackPhase?.budget || ph.estimated || 0);
+                                      const budgetChangeValue = phaseTopups.reduce((sum, request) => sum + Number(request.cfoDecision?.amount || request.amount || 0), 0);
+                                      const changeRequestValue = phaseChangeRequests.reduce((sum, request) => sum + Number(request.finalDecision?.amount || request.amount || 0), 0);
+                                      const currentTotal = allocated + budgetChangeValue + changeRequestValue;
+                                      const remaining = currentTotal - phaseConsumed;
+
+                                      return (
+                                        <tr key={ph.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                                          <td className="py-3 px-4">
+                                            <div className="text-sm font-medium text-white">{ph.name}</div>
+                                            <div className="text-[11px] text-zinc-500">{ph.dates}</div>
+                                          </td>
+                                          <td className="py-3 px-4 text-right">
+                                            <div className="tabular text-sm font-semibold text-white">{fmtCurrency(allocated, { compact: false })}</div>
+                                            {(budgetChangeValue > 0 || changeRequestValue > 0) && (
+                                              <div className="text-[10px] text-zinc-500">Current {fmtCurrency(currentTotal, { compact: false })}</div>
+                                            )}
+                                          </td>
+                                          <td className="py-3 px-4 text-right tabular text-sm font-semibold text-fuchsia-300">
+                                            {fmtCurrency(phaseConsumed, { compact: false })}
+                                          </td>
+                                          <td className={`py-3 px-4 text-right tabular text-sm font-semibold ${remaining < 0 ? "text-red-300" : "text-emerald-300"}`}>
+                                            {fmtCurrency(remaining, { compact: false })}
+                                          </td>
+                                          <td className="py-3 px-4 text-right">
+                                            <div className="tabular text-sm font-semibold text-white">{phaseTasksDone.toLocaleString()}</div>
+                                            <div className="text-[10px] text-zinc-500">tasks logged</div>
+                                          </td>
+                                          <td className="py-3 px-4">
+                                            <div className="text-[11px] text-zinc-300">
+                                              {phaseTopups.length} budget change{phaseTopups.length === 1 ? "" : "s"} · {phaseChangeRequests.length} change request{phaseChangeRequests.length === 1 ? "" : "s"}
+                                            </div>
+                                            <div className="text-[10px] text-zinc-500">
+                                              +{fmtCurrency(budgetChangeValue + changeRequestValue, { compact: false })}
+                                            </div>
+                                          </td>
+                                          <td className="py-3 px-4 text-right">
+                                            <button
+                                              onClick={() => setDrawer({ project: p, phase: ph, logLane })}
+                                              className="text-xs text-fuchsia-400 hover:text-fuchsia-300 font-medium"
+                                              data-testid={`phase-view-${p.id}-${ph.id}`}
+                                            >
+                                              View details →
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              )}
                             </div>
-                            {projectTracks[p.id]?.ordered?.length ? (
-                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-                                {projectTracks[p.id].ordered.map((track) => {
-                                  const relatedTopups = topupRequests.filter((request) => request.projectId === p.id);
-                                  return (
-                                    <div key={track.key} className="rounded-xl border border-white/10 bg-[#12121A] p-4">
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div>
-                                          <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">{track.label}</div>
-                                          <div className="mt-1 text-lg font-display font-semibold text-white">{fmtCurrency(track.latest.total, { compact: false })}</div>
-                                        </div>
-                                        <span className="text-[10px] px-2 py-0.5 rounded-md border border-white/10 bg-white/[0.03] text-zinc-300">
-                                          {track.latest.status}
-                                        </span>
-                                      </div>
-                                      <div className="mt-3 space-y-1.5 text-[11px] text-zinc-400">
-                                        <div className="flex items-center justify-between">
-                                          <span>Target tasks</span>
-                                          <span className="text-white font-semibold tabular">{track.latest.totalTasks.toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                          <span>Trajectories</span>
-                                          <span className="text-white font-semibold tabular">{track.latest.totalTrajectories.toLocaleString()}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                          <span>Top-ups tracked</span>
-                                          <span className="text-white font-semibold tabular">{relatedTopups.length}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                          <span>Latest submit</span>
-                                          <span className="text-white font-semibold">{new Date(track.latest.submittedAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center text-xs text-zinc-500">
-                                No Testing, R&amp;D, or Rework budget has been submitted for this project yet.
-                              </div>
-                            )}
                           </div>
                         ) : (
                           <>
@@ -385,6 +433,12 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         || (request.affectedPhase || "").toLowerCase().includes(phase.name.toLowerCase())
       )
   ));
+  const budgetChangeValue = phaseTopups.reduce((sum, request) => sum + Number(request.cfoDecision?.amount || request.amount || 0), 0);
+  const changeRequestValue = phaseChangeRequests.reduce((sum, request) => sum + Number(request.finalDecision?.amount || request.amount || 0), 0);
+  const currentBudgetTotal = submittedPhaseBudget + budgetChangeValue + changeRequestValue;
+  const remainingBudget = currentBudgetTotal - displaySpend;
+  const budgetLabel = isCFO ? "Budget" : "Allocated";
+  const spendLabel = isCFO ? "Actual" : "Consumed";
 
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
@@ -431,7 +485,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
             data-testid="drawer-btn-topup"
             className="h-9 rounded-lg border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20 gap-1.5"
           >
-            <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise top-up
+            <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise budget change
           </Button>
           <Button
             onClick={() => setDeliverOpen(true)}
@@ -479,9 +533,10 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-4">
-        <DrawerStat label="Budget" value={fmtCurrency(phase.estimated)} />
-        <DrawerStat label={isCFO ? "Actual" : "Logged"} value={fmtCurrency(displaySpend)} tone="magenta" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+        <DrawerStat label={budgetLabel} value={fmtCurrency(submittedPhaseBudget, { compact: false })} />
+        <DrawerStat label={spendLabel} value={fmtCurrency(displaySpend, { compact: false })} tone="magenta" />
+        <DrawerStat label="Remaining" value={fmtCurrency(remainingBudget, { compact: false })} tone={remainingBudget < 0 ? "negative" : "positive"} />
         <DrawerStat label="Utilization" value={fmtPct(utilization)} tone={utilization >= 100 ? "negative" : utilization >= 85 ? "warning" : "positive"} />
         <DrawerStat label="Tasks done" value={`${loggedTasks}/${targetTasks}`} />
         <DrawerStat label="Input tokens" value={loggedInputTokens.toLocaleString()} />
@@ -506,12 +561,43 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4" data-testid="drawer-budget-related-detail">
           <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Budget-related detail</div>
           <div className="mt-3 space-y-2 text-sm">
-            <BudgetActivityRow label="Phase budget" value={fmtCurrency(submittedPhaseBudget, { compact: false })} />
+            <BudgetActivityRow label="Allocated budget" value={fmtCurrency(submittedPhaseBudget, { compact: false })} />
+            <BudgetActivityRow label="Current total" value={fmtCurrency(currentBudgetTotal, { compact: false })} />
+            <BudgetActivityRow label="Consumed amount" value={fmtCurrency(displaySpend, { compact: false })} />
+            <BudgetActivityRow label="Remaining balance" value={fmtCurrency(remainingBudget, { compact: false })} />
             <BudgetActivityRow label="Actual / trajectory" value={(loggedTrajectories || targetTrajectories) > 0 ? fmtCurrency(actualPerTrajectory, { compact: false }) : "—"} />
-            <BudgetActivityRow label="Top-up requests" value={`${phaseTopups.length} · ${fmtCurrency(phaseTopups.reduce((sum, request) => sum + Number(request.cfoDecision?.amount || request.amount || 0), 0), { compact: false })}`} />
-            <BudgetActivityRow label="Change requests" value={`${phaseChangeRequests.length} · ${fmtCurrency(phaseChangeRequests.reduce((sum, request) => sum + Number(request.finalDecision?.amount || request.amount || 0), 0), { compact: false })}`} />
+            <BudgetActivityRow label="Budget change value" value={`${phaseTopups.length} · ${fmtCurrency(budgetChangeValue, { compact: false })}`} />
+            <BudgetActivityRow label="Change request value" value={`${phaseChangeRequests.length} · ${fmtCurrency(changeRequestValue, { compact: false })}`} />
             <BudgetActivityRow label="Delivery status" value={delivery ? delivery.status.replace(/-/g, " ") : "Not delivered"} />
           </div>
+        </div>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Budget changes ({phaseTopups.length})</div>
+          {phaseTopups.length === 0 ? (
+            <div className="mt-3 text-[11px] text-zinc-500">No budget change requests for this phase.</div>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {phaseTopups.map((request) => (
+                <TopupRequestCard key={request.id} request={request} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Change requests ({phaseChangeRequests.length})</div>
+          {phaseChangeRequests.length === 0 ? (
+            <div className="mt-3 text-[11px] text-zinc-500">No change requests for this phase.</div>
+          ) : (
+            <div className="mt-3 space-y-2">
+              {phaseChangeRequests.map((request) => (
+                <ChangeRequestCard key={request.id} request={request} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -624,6 +710,44 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         phase={phase}
       />
     </>
+  );
+};
+
+const getChangeRequestStatusMeta = (request) => {
+  const label = String(request?.finalDecision?.outcome || request?.stage || "Open");
+  if (/approved/i.test(label)) return { label, cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" };
+  if (/reject/i.test(label)) return { label, cls: "bg-red-500/15 text-red-300 border-red-500/30" };
+  if (/return/i.test(label)) return { label, cls: "bg-amber-500/15 text-amber-300 border-amber-500/30" };
+  return { label, cls: "bg-sky-500/15 text-sky-300 border-sky-500/30" };
+};
+
+const ChangeRequestCard = ({ request }) => {
+  const status = getChangeRequestStatusMeta(request);
+  const approvedAmount = Number(request?.finalDecision?.amount || request?.amount || 0);
+
+  return (
+    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-[11px] text-white font-medium">{request.type || "Change request"}</div>
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
+              {status.label}
+            </span>
+          </div>
+          <div className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{request.reason || "No reason provided."}</div>
+          {request.affectedPhase && (
+            <div className="mt-2 text-[10px] text-zinc-400">Phase · {request.affectedPhase}</div>
+          )}
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-[10px] text-zinc-500">
+            {new Date(request.createdAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </div>
+          <div className="mt-1 text-[11px] font-semibold tabular text-white">{fmtCurrency(approvedAmount, { compact: false })}</div>
+        </div>
+      </div>
+    </div>
   );
 };
 
