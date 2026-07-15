@@ -383,7 +383,7 @@ const MonthlyForecast = () => {
               <span className="text-fuchsia-200 font-semibold">AI insight: </span>
               Base forecast projects <span className="text-white font-semibold tabular">{fmtCurrency(projectedBase)}</span> in the third forward month, a{" "}
               <span className="text-white font-semibold tabular">{growthPct}%</span> lift over the current logged month.
-              Pessimistic spend ({fmtCurrency(projectedPessimistic)}) would require top-ups; consider keeping a{" "}
+              Pessimistic spend ({fmtCurrency(projectedPessimistic)}) would require budget changes; consider keeping a{" "}
               <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(extraBuffer)}</span> contingency available.
             </span>
           ) : (

@@ -4,8 +4,8 @@ import { useApp } from "../../context/AppContext";
 import { summarizeLoggedProject } from "../../lib/projectMetrics";
 
 const AmountAtRisk = () => {
-  const { projects, taskLogs } = useApp();
-  const portfolio = projects.reduce((acc, project) => {
+  const { visibleProjects, taskLogs } = useApp();
+  const portfolio = visibleProjects.reduce((acc, project) => {
     const usage = summarizeLoggedProject(project, taskLogs);
     const spend = Number(project.cfoActualSpend || project.actualSpend || usage.loggedSpend || 0);
     const approved = Number(project.approvedBudget || 0);
@@ -22,11 +22,11 @@ const AmountAtRisk = () => {
     healthScore: 0,
     accuracy: 0,
   });
-  const projectCount = projects.length || 1;
+  const projectCount = visibleProjects.length || 1;
   const metrics = {
     ...portfolio,
-    healthScore: projects.length ? Math.round(portfolio.healthScore / projectCount) : 0,
-    accuracy: projects.length ? Math.round(portfolio.accuracy / projectCount) : 0,
+    healthScore: visibleProjects.length ? Math.round(portfolio.healthScore / projectCount) : 0,
+    accuracy: visibleProjects.length ? Math.round(portfolio.accuracy / projectCount) : 0,
   };
 
   return (

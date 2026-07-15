@@ -24,11 +24,36 @@ import CtoDashboard from "./cto/CtoDashboard";
 import { fmtCurrency, fmtPct } from "../lib/format";
 import { summarizeLoggedProject } from "../lib/projectMetrics";
 import ItDashboard from "./it/ItDashboard";
+import { toast } from "sonner";
+
+const escapeCsv = (value) => {
+  if (value === null || value === undefined) return "";
+  const text = String(value);
+  if (text.includes(",") || text.includes('"') || text.includes("\n")) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+};
+
+const downloadCsv = (filename, rows) => {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const lines = [headers.join(",")];
+  rows.forEach((row) => {
+    lines.push(headers.map((header) => escapeCsv(row[header])).join(","));
+  });
+  const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
 
 const Dashboard = () => {
   const {
     role,
-    scope,
     visibleProjects,
     batchDeliveries,
     topupRequests,
@@ -36,8 +61,13 @@ const Dashboard = () => {
     changeRequests,
     bufferOverview,
     projects,
+    taskLogs,
+    itMonthlyActuals,
+    refreshAppData,
   } = useApp();
   const [requestOpen, setRequestOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const isPL = role === "PL";
   const isCTO = role === "CTO";
   const isCFO = role === "CFO";
@@ -56,15 +86,68 @@ const Dashboard = () => {
 
   const pendingBudgetApprovals = budgetReviews.filter((review) => review.status === "forwarded-cfo").length;
   const pendingCRs = changeRequests.filter((request) => request.stage === "CFO Review").length;
-  const highRisk = projects.filter((project) => project.utilization >= 90).length;
-  const overBudget = projects.filter((project) => project.utilization >= 100).length;
+  const highRisk = visibleProjects.filter((project) => project.utilization >= 90).length;
+  const overBudget = visibleProjects.filter((project) => project.utilization >= 100).length;
   const bufferUtil = bufferOverview.total > 0 ? Math.round((bufferOverview.consumed / bufferOverview.total) * 100) : 0;
   const pendingTopups = topupRequests.filter((request) => request.status === "pending-cfo").length;
   const pendingReviews = pendingBudgetApprovals + pendingTopups + pendingCRs;
-  const outstandingRecovery = projects
+  const outstandingRecovery = visibleProjects
     .filter((project) => project.recoverableFromClient)
     .reduce((sum, project) => sum + Math.max(0, Number(project.cfoActualSpend || project.actualSpend || 0) - Number(project.recoveredAmount || 0)), 0);
 
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    refreshAppData();
+    toast.success("Dashboard refreshed", {
+      description: "Latest saved finance data has been reloaded.",
+    });
+    setTimeout(() => setIsRefreshing(false), 250);
+  };
+
+  const handleExport = () => {
+    setIsExporting(true);
+    const rows = visibleProjects.map((project) => {
+      const usage = summarizeLoggedProject(project, taskLogs);
+      const actualSpend = Number(project.cfoActualSpend || project.actualSpend || usage.loggedSpend || 0);
+      const approvedBudget = Number(project.approvedBudget || 0);
+      const remaining = Number(project.cfoRemaining ?? (approvedBudget - actualSpend));
+      const utilization = Number(project.cfoUtilization ?? (approvedBudget > 0 ? Math.round((actualSpend / approvedBudget) * 100) : 0));
+      const modelActual = Number(project.itActuals?.modelActual || itMonthlyActuals?.[project.id]?.modelActual || 0);
+      const infraActual = Number(project.itActuals?.infraActual || itMonthlyActuals?.[project.id]?.infraActual || 0);
+      const subsActual = Number(project.itActuals?.subsActual || itMonthlyActuals?.[project.id]?.subsActual || 0);
+      return {
+        Project: project.name,
+        Client: project.client || project.clientProjectName || "",
+        Type: project.type || "",
+        Status: project.status || "",
+        ApprovedBudget: approvedBudget,
+        ActualSpend: actualSpend,
+        Remaining: remaining,
+        UtilizationPct: utilization,
+        BufferPct: Number(project.buffer || 0),
+        RecoveredAmount: Number(project.recoveredAmount || 0),
+        TopModel: project.cfoTopModel || project.topModel || "",
+        ModelActual: modelActual,
+        InfraActual: infraActual,
+        SubsActual: subsActual,
+      };
+    });
+
+    if (!rows.length) {
+      toast.error("Nothing to export", {
+        description: "No visible CFO projects are available in the current view.",
+      });
+      setIsExporting(false);
+      return;
+    }
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`cfo_dashboard_${stamp}.csv`, rows);
+    toast.success("Dashboard exported", {
+      description: `${rows.length} project row${rows.length === 1 ? "" : "s"} downloaded as CSV.`,
+    });
+    setTimeout(() => setIsExporting(false), 250);
+  };
 
   return (
     <div className="space-y-6" data-testid="page-dashboard">
@@ -80,7 +163,6 @@ const Dashboard = () => {
           </h1>
           <p className="text-sm text-zinc-400 mt-1">
             Real-time budget, forecast &amp; burn across all AI engagements · June 2026
-            {scope !== "all" && <span className="ml-2 text-fuchsia-300">· scope: {scope}</span>}
             {(isTpmView(role) || role === "PL") && (
               <span className="ml-2 text-sky-300">· showing {visibleProjects.length} project{visibleProjects.length === 1 ? "" : "s"} you {isTpmView(role) ? "requested" : "lead"}</span>
             )}
@@ -101,20 +183,24 @@ const Dashboard = () => {
           <Button
             variant="outline"
             size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
             className="h-9 rounded-lg gap-2 border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200"
             data-testid="btn-refresh"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            Refresh
+            {isRefreshing ? "Refreshing..." : "Refresh"}
           </Button>
           <Button
             variant="outline"
             size="sm"
+            onClick={handleExport}
+            disabled={isExporting}
             className="h-9 rounded-lg gap-2 border-white/10 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200"
             data-testid="btn-export"
           >
             <Download className="w-3.5 h-3.5" />
-            Export
+            {isExporting ? "Exporting..." : "Export"}
           </Button>
         </div>
       </div>
@@ -181,7 +267,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* CFO alert strip — approval queue, top-ups, recovery, buffer, batch deliveries */}
+      {/* CFO alert strip — approval queue, budget changes, recovery, buffer, batch deliveries */}
       {isCFO && (
         <div className="grid grid-cols-1 md:grid-cols-5 gap-3" data-testid="cfo-alert-strip">
           <Link to="/approval-queue?status=Pending" data-testid="cfo-tile-queue" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.10] transition-colors p-4 flex items-center gap-3">
@@ -199,7 +285,7 @@ const Dashboard = () => {
               <ArrowUpRightSquare className="w-4 h-4 text-amber-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Pending top-ups</div>
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Pending budget changes</div>
               <div className="text-white font-display font-semibold text-xl tabular">{pendingTopups}</div>
             </div>
             <ChevronRight className="w-4 h-4 text-amber-300" />

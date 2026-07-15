@@ -1,10 +1,30 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { USERS, ROLES, PROJECTS } from "../data/mockData";
-import { TEAM } from "../data/mockUsers";
 import { BEDROCK_MODELS } from "../data/mockCatalog";
 import { BUFFER } from "../data/mockCfo";
+import {
+  DEMO_BATCH_DELIVERIES,
+  DEMO_BUDGET_REVIEWS,
+  DEMO_BUDGETS,
+  DEMO_BUFFER_POOL,
+  DEMO_BUFFERS,
+  DEMO_CHANGE_REQUESTS,
+  DEMO_IT_MONTHLY_ACTUALS,
+  DEMO_MODEL_KEYS,
+  DEMO_TASK_LOGS,
+  DEMO_TEAM_REMOVALS,
+  DEMO_TOPUP_REQUESTS,
+} from "../data/demoState";
 import { formatBudgetTypeLabel, normalizeBudgetType, summarizeItProjectActuals } from "../lib/projectMetrics";
 import { buildCustomModelId } from "../lib/modelCatalog";
+import { getCtoForwardLabel, hasCtoModifiedBudgetReview } from "../lib/budgetReview";
+import {
+  getGeneralActualRowsCostTotal,
+  getGeneralActualRowsCount,
+  isGeneralActualLog,
+  normalizeGeneralActualRows,
+} from "../lib/generalBudget";
+import { findProjectDirectoryMember } from "../data/employeeDirectory";
 
 // ---- Shared backend workspace sync ------------------------------------------------
 // The app now persists all workspace state to a real backend (MongoDB via FastAPI)
@@ -176,12 +196,15 @@ const resolveMemberNameFromEmail = (email = "") => {
 const findDirectoryMember = ({ name, email }) => {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (normalizedEmail) {
-    const matchByEmail = [...TEAM, ...USERS].find((member) => String(member?.email || "").trim().toLowerCase() === normalizedEmail);
+    const matchByEmail = findProjectDirectoryMember({ email: normalizedEmail })
+      || USERS.find((member) => String(member?.email || "").trim().toLowerCase() === normalizedEmail);
     if (matchByEmail) return matchByEmail;
   }
   const normalizedName = String(name || "").trim().toLowerCase();
   if (normalizedName) {
-    return [...TEAM, ...USERS].find((member) => String(member?.name || "").trim().toLowerCase() === normalizedName) || null;
+    return findProjectDirectoryMember({ name: normalizedName })
+      || USERS.find((member) => String(member?.name || "").trim().toLowerCase() === normalizedName)
+      || null;
   }
   return null;
 };
@@ -385,13 +408,14 @@ const cloneBudgetItems = (items = {}) => ({
   models: cloneLines(items.models || []),
   infra: cloneLines(items.infra || []),
   subs: cloneLines(items.subs || []),
+  misc: cloneLines(items.misc || []),
 });
 
 const sumBudgetLines = (lines = []) =>
   (Array.isArray(lines) ? lines : []).reduce((sum, line) => sum + Number(line?.estCost || line?.amount || 0), 0);
 
 const sumBudgetItems = (items = {}) =>
-  sumBudgetLines(items.models) + sumBudgetLines(items.infra) + sumBudgetLines(items.subs);
+  sumBudgetLines(items.models) + sumBudgetLines(items.infra) + sumBudgetLines(items.subs) + sumBudgetLines(items.misc);
 
 const clonePhases = (phases = []) => phases.map((phase) => ({ ...phase }));
 
@@ -432,7 +456,7 @@ const getPendingWorkflowMeta = (budgetType = "") => {
     return { stage: "testing-budget-pending", status: "Testing budget pending approval" };
   }
   if (normalized === "RnD") {
-    return { stage: "rnd-budget-pending", status: "R&D budget pending approval" };
+    return { stage: "rnd-budget-pending", status: "Sample budget pending approval" };
   }
   if (normalized === "Rework") {
     return { stage: "rework-budget-pending", status: "Rework budget pending approval" };
@@ -449,7 +473,7 @@ const getApprovedWorkflowMeta = (budgetType = "") => {
     return { stage: "testing-active", status: "Testing budget approved", type: "R&D", readyForTpmBudget: false };
   }
   if (normalized === "RnD") {
-    return { stage: "sample-active", status: "R&D budget approved", type: "R&D", readyForTpmBudget: false };
+    return { stage: "sample-active", status: "Sample budget approved", type: "R&D", readyForTpmBudget: false };
   }
   if (normalized === "Rework") {
     return { stage: "sample-active", status: "Rework budget approved", type: "R&D", readyForTpmBudget: false };
@@ -546,9 +570,10 @@ const scaleBudgetItemsToAmount = (items = {}, approvedAmount = 0) => {
     ...cloneLines(items.models || []).map((line) => ({ bucket: "models", line })),
     ...cloneLines(items.infra || []).map((line) => ({ bucket: "infra", line })),
     ...cloneLines(items.subs || []).map((line) => ({ bucket: "subs", line })),
+    ...cloneLines(items.misc || []).map((line) => ({ bucket: "misc", line })),
   ];
   let running = 0;
-  const scaledBuckets = { models: [], infra: [], subs: [] };
+  const scaledBuckets = { models: [], infra: [], subs: [], misc: [] };
   allLines.forEach(({ bucket, line }, index) => {
     const sourceValue = Number(line?.estCost || line?.amount || 0);
     const scaled =
@@ -590,6 +615,7 @@ const buildBudgetReviewRecord = ({
     stage: "CTO Review",
     status: "pending-cto",
     type: `${formatBudgetTypeLabel(normalizedBudgetType)} budget`,
+    teamType: payload.teamType || "",
     requestedBudget: reviewTotal,
     currentBudget: Number(baselineSnapshot?.approvedBudget || 0),
     recommendedBudget: reviewTotal,
@@ -603,8 +629,8 @@ const buildBudgetReviewRecord = ({
     aiCost: Number(payload.totals?.models || 0),
     infraCost: Number(payload.totals?.infra || 0),
     subsCost: Number(payload.totals?.subs || 0),
-    miscCost: 0,
-    justification: `${formatBudgetTypeLabel(normalizedBudgetType)} budget submitted by ${actorName || "team"} · ${Number(payload.totalTasks || 0).toLocaleString()} tasks${Number(payload.totalTrajectories || 0) ? ` · ${Number(payload.totalTrajectories || 0).toLocaleString()} trajectories` : ""}`,
+    miscCost: Number(payload.totals?.general || payload.totals?.misc || 0),
+    justification: `${formatBudgetTypeLabel(normalizedBudgetType)} budget submitted by ${actorName || "team"}${payload.teamType ? ` · ${payload.teamType} team` : ""} · ${Number(payload.totalTasks || 0).toLocaleString()} tasks${Number(payload.totalTrajectories || 0) ? ` · ${Number(payload.totalTrajectories || 0).toLocaleString()} trajectories` : ""}`,
     items: cloneBudgetItems(payload.items || {}),
     requestedPhases,
     baselineSnapshot,
@@ -619,7 +645,7 @@ const buildBudgetReviewRecord = ({
         at: entry.submittedAt,
         actor: `${actorName || "TPM"} · ${actorRole || "TPM"}`,
         action: reviewAction,
-        detail: `${formatBudgetTypeLabel(normalizedBudgetType)} · $${reviewTotal.toLocaleString()}`,
+        detail: `${formatBudgetTypeLabel(normalizedBudgetType)}${payload.teamType ? ` · ${payload.teamType}` : ""} · $${reviewTotal.toLocaleString()}`,
       },
     ],
   };
@@ -680,6 +706,19 @@ const buildProjectBaselineFromSnapshot = (projectEntry, snapshot = null) => {
   };
 };
 
+const normalizeBudgetReviewRecord = (review = {}) => {
+  const ctoModified = hasCtoModifiedBudgetReview(review);
+  return {
+    ...review,
+    ctoModified,
+    history: (Array.isArray(review.history) ? review.history : []).map((entry) => (
+      entry?.action === "Modified & forwarded to CFO" && !ctoModified
+        ? { ...entry, action: "Approved by CTO and forwarded to CFO" }
+        : entry
+    )),
+  };
+};
+
 export const AppProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
     try {
@@ -693,28 +732,21 @@ export const AppProvider = ({ children }) => {
   const [notifOpen, setNotifOpen] = useState(false);
   const [scope, setScope] = useState("all");
 
-  const [buffers, setBuffers] = useState(() => readJSON(BUFFERS_KEY, {}));
-  const [bufferPool, setBufferPool] = useState(() => readJSON(BUFFER_POOL_KEY, {
-    total: BUFFER.total,
-    available: BUFFER.available,
-    policyPct: BUFFER.policyPct,
-    history: BUFFER.history,
-    alerts: BUFFER.alerts,
-    projectConsumed: Object.fromEntries(BUFFER.perProject.map((entry) => [entry.id, entry.consumed])),
-  }));
+  const [buffers, setBuffers] = useState(() => readJSON(BUFFERS_KEY, DEMO_BUFFERS));
+  const [bufferPool, setBufferPool] = useState(() => readJSON(BUFFER_POOL_KEY, DEMO_BUFFER_POOL));
   const [recoveries, setRecoveries] = useState(() => readJSON(RECOVERY_KEY, {}));
   const [customModels, setCustomModels] = useState(() => dedupeModels(readJSON(CUSTOM_MODELS_KEY, [])));
   const [customProjects, setCustomProjects] = useState(() => readJSON(CUSTOM_PROJECTS_KEY, []));
-  const [taskLogs, setTaskLogs] = useState(() => readJSON(TASK_LOGS_KEY, {}));
-  const [topupRequests, setTopupRequests] = useState(() => readJSON(TOPUP_REQ_KEY, []));
-  const [budgets, setBudgets] = useState(() => readJSON(BUDGETS_KEY, []));
-  const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, []));
-  const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, []));
-  const [changeRequests, setChangeRequests] = useState(() => readJSON(CHANGE_REQUESTS_KEY, []).map(normalizeChangeRequest));
-  const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, {}));
-  const [modelKeyRecords, setModelKeyRecords] = useState(() => readJSON(MODEL_KEYS_KEY, []));
+  const [taskLogs, setTaskLogs] = useState(() => readJSON(TASK_LOGS_KEY, DEMO_TASK_LOGS));
+  const [topupRequests, setTopupRequests] = useState(() => readJSON(TOPUP_REQ_KEY, DEMO_TOPUP_REQUESTS));
+  const [budgets, setBudgets] = useState(() => readJSON(BUDGETS_KEY, DEMO_BUDGETS));
+  const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, DEMO_BATCH_DELIVERIES));
+  const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, DEMO_BUDGET_REVIEWS).map(normalizeBudgetReviewRecord));
+  const [changeRequests, setChangeRequests] = useState(() => readJSON(CHANGE_REQUESTS_KEY, DEMO_CHANGE_REQUESTS).map(normalizeChangeRequest));
+  const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, DEMO_TEAM_REMOVALS));
+  const [modelKeyRecords, setModelKeyRecords] = useState(() => readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS));
   const [itProvisioningRequests, setItProvisioningRequests] = useState(() => readJSON(IT_PROVISIONING_KEY, []));
-  const [itMonthlyActuals, setItMonthlyActuals] = useState(() => readJSON(IT_MONTHLY_ACTUALS_KEY, {}));
+  const [itMonthlyActuals, setItMonthlyActuals] = useState(() => readJSON(IT_MONTHLY_ACTUALS_KEY, DEMO_IT_MONTHLY_ACTUALS));
 
   // Hydration + backend sync bookkeeping
   const [hydrated, setHydrated] = useState(false);
@@ -884,6 +916,21 @@ export const AppProvider = ({ children }) => {
     const res = await fetch(WORKSPACE_ENDPOINT, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) throw new Error(`Workspace fetch failed: ${res.status}`);
     return res.json();
+  };
+
+  // Public helper used by the Dashboard "Refresh" button — re-pulls latest
+  // workspace snapshot from the backend and applies it to local state.
+  const refreshAppData = async () => {
+    try {
+      const remote = await fetchWorkspaceFromBackend();
+      applyWorkspaceSnapshot(remote);
+      lastSavedPayloadRef.current = JSON.stringify(WORKSPACE_SLICE_KEYS.reduce((acc, key) => {
+        acc[key] = remote[key] !== undefined ? remote[key] : null;
+        return acc;
+      }, {}));
+    } catch (err) {
+      console.error("[workspace] refresh failed", err);
+    }
   };
 
   // Initial hydration: pull backend, else migrate localStorage → backend.
@@ -1116,6 +1163,32 @@ export const AppProvider = ({ children }) => {
         finalizedChangesByProject[request.projectId] = (finalizedChangesByProject[request.projectId] || 0) + finalAmount;
       }
     });
+    const latestApprovedBudgetByProject = {};
+    const trackApprovedBudget = (projectId, amount, at) => {
+      if (!projectId || amount <= 0) return;
+      const ts = at ? new Date(at).getTime() : 0;
+      const safeTs = Number.isNaN(ts) ? 0 : ts;
+      const current = latestApprovedBudgetByProject[projectId];
+      if (!current || safeTs >= current.ts) {
+        latestApprovedBudgetByProject[projectId] = { amount, ts: safeTs };
+      }
+    };
+    budgets.forEach((entry) => {
+      if (entry.status !== "approved" && entry.status !== "partial") return;
+      trackApprovedBudget(
+        entry.projectId,
+        Number(entry.approvedAmount || entry.cfoDecision?.amount || entry.totals?.total || 0),
+        entry.cfoDecision?.at || entry.submittedAt
+      );
+    });
+    budgetReviews.forEach((review) => {
+      if (review.status !== "approved" && review.status !== "partial") return;
+      trackApprovedBudget(
+        review.projectId,
+        Number(review.cfoDecision?.amount || review.modifiedTotal || review.requestedBudget || 0),
+        review.cfoDecision?.at || review.submittedAt
+      );
+    });
     const recoveryByProject = {};
     const recoveryWindows = {};
     batchDeliveries
@@ -1131,16 +1204,36 @@ export const AppProvider = ({ children }) => {
           actual: current.actual + actual,
         };
       });
+    const generalActualSpendByProject = {};
+    Object.entries(taskLogs || {}).forEach(([key, logs]) => {
+      const [projectId] = String(key || "").split("::");
+      if (!projectId) return;
+      (Array.isArray(logs) ? logs : []).forEach((log) => {
+        if (!isGeneralActualLog(log)) return;
+        const spend = Array.isArray(log.generalActualRows) && log.generalActualRows.length
+          ? getGeneralActualRowsCostTotal(log.generalActualRows)
+          : Number(log.cost || 0);
+        generalActualSpendByProject[projectId] = (generalActualSpendByProject[projectId] || 0) + spend;
+      });
+    });
     return merged.map((p) => {
       const topupBonus = finalizedByProject[p.id] || 0;
       const changeBonus = finalizedChangesByProject[p.id] || 0;
-      const approvedBudget = p.approvedBudget + topupBonus + changeBonus;
+      const baseApprovedBudget = Math.max(
+        Number(p.approvedBudget || 0),
+        Number(latestApprovedBudgetByProject[p.id]?.amount || 0)
+      );
+      const approvedBudget = baseApprovedBudget + topupBonus + changeBonus;
+      const estimatedBudget = Math.max(Number(p.estimatedBudget || 0), baseApprovedBudget || 0);
+      const generalActualSpend = Number(generalActualSpendByProject[p.id] || 0);
+      const actualSpend = Number(p.actualSpend || 0) + generalActualSpend;
       const recoveredAmount = recoveries[p.id] ?? recoveryByProject[p.id] ?? p.recoveredAmount;
       const itActuals = summarizeItProjectActuals(itMonthlyActuals[p.id] || {});
       const hasItActuals = itActuals.totalActual > 0 || itActuals.dailyActuals.length > 0 || itActuals.modelUsage.length > 0 || itActuals.monthEndActual > 0;
-      const cfoActualSpend = hasItActuals
+      const cfoBaseActualSpend = hasItActuals
         ? (itActuals.monthEndActual > 0 ? itActuals.monthEndActual : itActuals.totalActual)
         : Number(p.actualSpend || 0);
+      const cfoActualSpend = cfoBaseActualSpend + generalActualSpend;
       const cfoRemaining = approvedBudget - cfoActualSpend;
       const cfoUtilization = approvedBudget > 0 ? Math.round((cfoActualSpend / approvedBudget) * 100) : 0;
       const cfoVariance = approvedBudget - cfoActualSpend;
@@ -1155,12 +1248,14 @@ export const AppProvider = ({ children }) => {
       return {
         ...p,
         approvedBudget,
+        estimatedBudget,
         recoveredAmount,
         health: nextHealth,
+        actualSpend,
         topupsTotal: (p.topupsTotal || 0) + topupBonus,
         changeRequestsTotal: (p.changeRequestsTotal || 0) + changeBonus,
-        remaining: approvedBudget - p.actualSpend,
-        utilization: approvedBudget > 0 ? Math.round((p.actualSpend / approvedBudget) * 100) : 0,
+        remaining: approvedBudget - actualSpend,
+        utilization: approvedBudget > 0 ? Math.round((actualSpend / approvedBudget) * 100) : 0,
         itActuals,
         cfoActualSpend,
         cfoRemaining,
@@ -1170,11 +1265,11 @@ export const AppProvider = ({ children }) => {
         cfoTopModel: itActuals.modelUsage[0]?.modelName || p.topModel || "—",
       };
     });
-  }, [buffers, recoveries, customProjects, topupRequests, changeRequests, batchDeliveries, itMonthlyActuals]);
+  }, [buffers, recoveries, customProjects, topupRequests, changeRequests, budgets, budgetReviews, batchDeliveries, itMonthlyActuals, taskLogs]);
 
   const visibleProjects = useMemo(() => {
     if (!user) return [];
-    let list = projects;
+    let list = projects.filter((project) => !project?.archived && !project?.deleted);
     if (user.role === "TPM") {
       list = list.filter((p) =>
         p.tpm === user.name
@@ -1196,10 +1291,8 @@ export const AppProvider = ({ children }) => {
         || (p.teamMembers || []).some((member) => member.name === user.name)
       );
     }
-    if (scope === "R&D") list = list.filter((p) => p.type === "R&D");
-    else if (scope === "Production") list = list.filter((p) => p.type === "Production");
     return list;
-  }, [projects, user, scope]);
+  }, [projects, user]);
 
   const setBuffer = (projectId, pct) => setBuffers((b) => ({ ...b, [projectId]: Number(pct) }));
   const setRecovery = (projectId, amount) => setRecoveries((r) => ({ ...r, [projectId]: Number(amount) }));
@@ -1280,14 +1373,27 @@ export const AppProvider = ({ children }) => {
 
   const addProjectTeamMembers = (projectId, members = [], source = "Budget Builder") => {
     if (!members.length) return;
-    upsertProjectOverride(projectId, (project) => {
-      const incoming = members.map((member, index) => buildTeamMember({
+    const currentProject = projects.find((project) => project.id === projectId);
+    const incoming = members.map((member, index) => {
+      const resolved = buildTeamMember({
         projectId,
         name: member.name,
+        email: member.email,
         role: member.role,
         fallbackStatus: "Added later",
-        index: (project.teamMembers || []).length + index,
-      }));
+        index: (currentProject?.teamMembers || []).length + index,
+      });
+      return { ...resolved, role: member.role || resolved.role };
+    });
+    setTeamRemovals((prev) => {
+      const currentRemoved = prev[projectId] || [];
+      if (!currentRemoved.length) return prev;
+      const incomingIds = new Set(incoming.map((member) => member.id));
+      const nextRemoved = currentRemoved.filter((memberId) => !incomingIds.has(memberId));
+      if (nextRemoved.length === currentRemoved.length) return prev;
+      return { ...prev, [projectId]: nextRemoved };
+    });
+    upsertProjectOverride(projectId, (project) => {
       const teamMembers = mergeTeamMembers(project.teamMembers || [], incoming);
       const rndMembers = Array.from(new Set([
         ...(project.rndMembers || []),
@@ -1322,6 +1428,166 @@ export const AppProvider = ({ children }) => {
       };
     });
   };
+
+  const updateProjectCoreMembers = (projectId, updates = {}, source = "CTO") => {
+    const currentProject = projects.find((project) => project.id === projectId);
+    if (!currentProject) return null;
+
+    const now = new Date().toISOString();
+    const currentTpmName = String(currentProject.tpm || "").trim();
+    const currentRndLeadName = String(currentProject.rnd || "").trim();
+    const nextTpmName = String(updates.tpmName || currentTpmName).trim();
+    const nextTpmEmail = String(updates.tpmEmail || "").trim();
+    const nextRndLeadName = String(updates.rndLeadName || currentRndLeadName).trim();
+    const nextRndLeadEmail = String(updates.rndLeadEmail || "").trim();
+
+    const baseTeam = mergeTeamMembers(
+      currentProject.teamMembers?.length
+        ? currentProject.teamMembers
+        : [
+            currentProject.tpm ? buildTeamMember({ projectId, name: currentProject.tpm, role: "TPM", fallbackStatus: "Online" }) : null,
+            currentProject.pl ? buildTeamMember({ projectId, name: currentProject.pl, role: "Project Lead" }) : null,
+            currentProject.rnd ? buildTeamMember({ projectId, name: currentProject.rnd, role: "R&D" }) : null,
+            ...(currentProject.plMembers || []).map((name, index) => buildTeamMember({ projectId, name, role: "Project Lead", index })),
+            ...(currentProject.qlMembers || []).map((name, index) => buildTeamMember({ projectId, name, role: "Quality Lead", index: index + 10 })),
+            ...(currentProject.rndMembers || []).map((name, index) => buildTeamMember({ projectId, name, role: "R&D", index: index + 20 })),
+          ].filter(Boolean),
+    );
+
+    const replaceCoreMember = (members, { currentName, nextName, nextEmail, role, fallbackStatus = "Pending kickoff" }) => {
+      if (!nextName && !nextEmail) return { members, replacement: null };
+      const replacement = buildTeamMember({
+        projectId,
+        name: nextName,
+        email: nextEmail,
+        role,
+        fallbackStatus,
+        index: members.length,
+      });
+      const currentKeys = new Set(
+        [currentName]
+          .filter(Boolean)
+          .map((value) => String(value).trim().toLowerCase()),
+      );
+      const replacementKeys = new Set(
+        [replacement.id, replacement.email, replacement.name]
+          .filter(Boolean)
+          .map((value) => String(value).trim().toLowerCase()),
+      );
+      const trimmedMembers = members.filter((member) => {
+        const memberKeys = [member.id, member.email, member.name]
+          .filter(Boolean)
+          .map((value) => String(value).trim().toLowerCase());
+        const matchesCurrent = currentKeys.size && memberKeys.some((value) => currentKeys.has(value));
+        const matchesReplacement = memberKeys.some((value) => replacementKeys.has(value));
+        return !matchesCurrent && !matchesReplacement;
+      });
+      return {
+        members: mergeTeamMembers(trimmedMembers, [replacement]),
+        replacement,
+      };
+    };
+
+    const tpmResult = replaceCoreMember(baseTeam, {
+      currentName: currentTpmName,
+      nextName: nextTpmName,
+      nextEmail: nextTpmEmail,
+      role: "TPM",
+      fallbackStatus: "Online",
+    });
+    const rndResult = replaceCoreMember(tpmResult.members, {
+      currentName: currentRndLeadName,
+      nextName: nextRndLeadName,
+      nextEmail: nextRndLeadEmail,
+      role: "R&D",
+      fallbackStatus: "Pending kickoff",
+    });
+    const replacementMembers = [tpmResult.replacement, rndResult.replacement].filter(Boolean);
+
+    setTeamRemovals((prev) => {
+      const removed = prev[projectId] || [];
+      if (!removed.length) return prev;
+      const restoredIds = new Set(replacementMembers.map((member) => member.id));
+      const nextRemoved = removed.filter((memberId) => !restoredIds.has(memberId));
+      if (nextRemoved.length === removed.length) return prev;
+      return { ...prev, [projectId]: nextRemoved };
+    });
+
+    upsertProjectOverride(projectId, (project) => {
+      const teamMembers = rndResult.members;
+      const kickoffRecipients = teamMembers.map((member) => ({
+        id: member.id,
+        name: member.name,
+        role: member.role,
+        email: member.email,
+      }));
+      const rndMembers = Array.from(new Set([
+        ...((project.rndMembers || []).filter((name) => String(name || "").trim().toLowerCase() !== currentRndLeadName.toLowerCase())),
+        ...teamMembers
+          .filter((member) => member.role === "R&D" || member.role === "Engineer")
+          .map((member) => member.name),
+      ]));
+      const auditEntry = {
+        id: `a-${projectId}-${Date.now().toString(36)}-core`,
+        ts: now,
+        actor: `${user?.name || source} · ${user?.role || source}`,
+        action: "Project core members updated",
+        detail: `TPM: ${currentTpmName || "—"} → ${tpmResult.replacement?.name || currentTpmName || "—"} · R&D Lead: ${currentRndLeadName || "—"} → ${rndResult.replacement?.name || currentRndLeadName || "—"}`,
+      };
+      return {
+        ...project,
+        tpm: tpmResult.replacement?.name || currentTpmName,
+        rnd: rndResult.replacement?.name || currentRndLeadName,
+        rndMembers,
+        teamMembers,
+        kickoffMail: project.kickoffMail
+          ? { ...project.kickoffMail, recipients: kickoffRecipients }
+          : {
+              sentAt: now,
+              subject: `${project.name} kickoff`,
+              sentBy: user?.name || source,
+              sentByRole: user?.role || source,
+              recipients: kickoffRecipients,
+              attachmentCount: (project.docs || []).length,
+            },
+        auditLog: [auditEntry, ...(project.auditLog || [])],
+      };
+    });
+
+    return {
+      tpm: tpmResult.replacement?.name || currentTpmName,
+      rndLead: rndResult.replacement?.name || currentRndLeadName,
+    };
+  };
+
+  const archiveProject = (projectId, { mode = "archive", note = "" } = {}) => {
+    const currentProject = projects.find((project) => project.id === projectId);
+    if (!currentProject) return null;
+    const now = new Date().toISOString();
+    const isDelete = mode === "delete";
+    upsertProjectOverride(projectId, (project) => ({
+      ...project,
+      archived: true,
+      deleted: isDelete,
+      archivedMode: isDelete ? "delete" : "archive",
+      archivedAt: now,
+      archivedBy: user?.name || "CTO",
+      status: isDelete ? "Deleted" : "Archived",
+      auditLog: [
+        {
+          id: `a-${projectId}-${Date.now().toString(36)}-${isDelete ? "delete" : "archive"}`,
+          ts: now,
+          actor: `${user?.name || "CTO"} · ${user?.role || "CTO"}`,
+          action: isDelete ? "Project deleted from active workspace" : "Project archived",
+          detail: note || (isDelete ? "Removed from active workspace by CTO" : "Archived from active workspace by CTO"),
+        },
+        ...(project.auditLog || []),
+      ],
+    }));
+    return { id: projectId, mode: isDelete ? "delete" : "archive" };
+  };
+
+  const deleteProject = (projectId, options = {}) => archiveProject(projectId, { ...options, mode: "delete" });
 
   const addProject = (payload) => {
     const id = `p-${Date.now().toString(36)}`;
@@ -1402,6 +1668,13 @@ export const AppProvider = ({ children }) => {
         role: member.role,
         email: member.email,
       })),
+      goal: payload.goal || "",
+      requirements: docs.map((doc) => ({
+        id: doc.id,
+        name: doc.name,
+        kind: doc.kind,
+        url: doc.url || "",
+      })),
       attachmentCount: docs.length,
     };
     const initialWorkflow = isTpmCreatedProject
@@ -1417,6 +1690,17 @@ export const AppProvider = ({ children }) => {
           workflowStage: "awaiting-testing-budget",
           readyForTpmBudget: false,
         };
+    const assignmentSummary = [
+      payload.tpm ? `Assigned TPM: ${payload.tpm}` : null,
+      plMembers.length ? `PL/QL: ${plMembers.join(", ")}` : null,
+      qlMembers.length ? `QL: ${qlMembers.join(", ")}` : null,
+      rndMembers.length ? `R&D: ${rndMembers.join(", ")}` : null,
+    ].filter(Boolean);
+    const kickoffSummary = [
+      payload.startDate ? `Start ${payload.startDate}` : null,
+      payload.goal ? `Project Goal: ${payload.goal}` : null,
+      docs.length ? `${docs.length} attachment${docs.length === 1 ? "" : "s"}` : null,
+    ].filter(Boolean);
     const proj = {
       id,
       name: payload.internalName,
@@ -1424,6 +1708,7 @@ export const AppProvider = ({ children }) => {
       client: payload.clientProjectName || "New Engagement",
       createdBy: payload.createdBy || "CTO",
       createdByRole: payload.createdByRole || "CTO",
+      goal: payload.goal || "",
       pl: plMembers[0] || payload.tpm || tpmMember?.name || "",
       tpm: payload.tpm || tpmMember?.name || "",
       rnd: rndMembers[0] || null,
@@ -1463,7 +1748,7 @@ export const AppProvider = ({ children }) => {
       health: "healthy",
       topModel: "—",
       phases: [],
-      budgetItems: { models: [], infra: [], subs: [] },
+      budgetItems: { models: [], infra: [], subs: [], misc: [] },
       expenses: [],
       budgetHistory: [],
       topupHistory: [],
@@ -1474,7 +1759,7 @@ export const AppProvider = ({ children }) => {
           ts: kickoffAt,
           actor: payload.createdBy || "CTO",
           action: "Project created",
-          detail: `Assigned TPM: ${payload.tpm}${plMembers.length ? ` · PL/QL: ${plMembers.join(", ")}` : ""}${qlMembers.length ? ` · QL: ${qlMembers.join(", ")}` : ""}${rndMembers.length ? ` · R&D: ${rndMembers.join(", ")}` : ""}. Start ${payload.startDate}${docs.length ? ` · ${docs.length} attachment${docs.length === 1 ? "" : "s"}` : ""}`,
+          detail: [...assignmentSummary, ...kickoffSummary].join(" · "),
         },
         {
           id: `a-${id}-2`,
@@ -1521,8 +1806,57 @@ export const AppProvider = ({ children }) => {
     failedTrajectories,
     successfulRows,
     failedRows,
+    logType,
+    generalActualHeaders,
+    generalActualRows,
   }) => {
     const id = `tl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const normalizedLogType = String(logType || "").trim() || "model-usage";
+    if (normalizedLogType === "general-actual") {
+      const normalizedHeaders = Array.isArray(generalActualHeaders) ? generalActualHeaders : [];
+      const normalizedRows = normalizeGeneralActualRows(generalActualRows, normalizedHeaders);
+      const rowCount = getGeneralActualRowsCount(normalizedRows);
+      const totalCost = normalizedRows.length
+        ? getGeneralActualRowsCostTotal(normalizedRows)
+        : Number(cost) || 0;
+      const entry = {
+        id,
+        projectId,
+        phaseId,
+        logType: normalizedLogType,
+        name,
+        assignee,
+        hours: Number(hours) || 0,
+        cost: totalCost,
+        tasksDone: Number(successfulTasks ?? tasksDone) || rowCount,
+        successfulTasks: Number(successfulTasks ?? tasksDone) || rowCount,
+        failedTasks: 0,
+        trajectories: 0,
+        successTrajectories: 0,
+        failedTrajectories: 0,
+        approvalStatus: approvalStatus || "logged",
+        date,
+        notes: notes || "",
+        evidence: evidence || "",
+        modelId: "",
+        modelName: "",
+        inputTokens: 0,
+        outputTokens: 0,
+        successfulRows: [],
+        failedRows: [],
+        modelUsage: [],
+        generalActualHeaders: normalizedHeaders,
+        generalActualRows: normalizedRows,
+        createdAt: new Date().toISOString(),
+        createdBy: user?.name || "TPM",
+      };
+      setTaskLogs((prev) => {
+        const key = taskKey(projectId, phaseId);
+        const list = prev[key] || [];
+        return { ...prev, [key]: [entry, ...list] };
+      });
+      return entry;
+    }
     const normalizedSuccessfulRows = normalizeTaskSheetRows(successfulRows, "success", modelCatalog);
     const normalizedFailedRows = normalizeTaskSheetRows(failedRows, "failed", modelCatalog);
     const normalizedModelUsage = aggregateTaskRowsToModelUsage({
@@ -1551,6 +1885,7 @@ export const AppProvider = ({ children }) => {
       id,
       projectId,
       phaseId,
+      logType: normalizedLogType,
       name,
       assignee,
       hours: Number(hours) || 0,
@@ -1572,6 +1907,8 @@ export const AppProvider = ({ children }) => {
       successfulRows: normalizedSuccessfulRows,
       failedRows: normalizedFailedRows,
       modelUsage: normalizedModelUsage,
+      generalActualHeaders: [],
+      generalActualRows: [],
       createdAt: new Date().toISOString(),
       createdBy: user?.name || "TPM",
     };
@@ -1592,6 +1929,42 @@ export const AppProvider = ({ children }) => {
         [key]: list.map((t) => {
           if (t.id !== logId) return t;
           if (!isTaskEditable(t)) return t;
+          const nextLogType = String(patch.logType || t.logType || "model-usage").trim();
+          if (nextLogType === "general-actual") {
+            const normalizedHeaders = Array.isArray(patch.generalActualHeaders)
+              ? patch.generalActualHeaders
+              : (t.generalActualHeaders || []);
+            const normalizedRows = Array.isArray(patch.generalActualRows)
+              ? normalizeGeneralActualRows(patch.generalActualRows, normalizedHeaders)
+              : (t.generalActualRows || []);
+            const rowCount = getGeneralActualRowsCount(normalizedRows);
+            const totalCost = normalizedRows.length
+              ? getGeneralActualRowsCostTotal(normalizedRows)
+              : Number(patch.cost ?? t.cost ?? 0);
+            return {
+              ...t,
+              ...patch,
+              logType: nextLogType,
+              hours: Number(patch.hours ?? t.hours),
+              cost: totalCost,
+              tasksDone: Number(patch.successfulTasks ?? patch.tasksDone ?? t.successfulTasks ?? t.tasksDone ?? 0) || rowCount,
+              successfulTasks: Number(patch.successfulTasks ?? patch.tasksDone ?? t.successfulTasks ?? t.tasksDone ?? 0) || rowCount,
+              failedTasks: 0,
+              trajectories: 0,
+              successTrajectories: 0,
+              failedTrajectories: 0,
+              approvalStatus: patch.approvalStatus ?? t.approvalStatus ?? "logged",
+              modelId: "",
+              modelName: "",
+              inputTokens: 0,
+              outputTokens: 0,
+              successfulRows: [],
+              failedRows: [],
+              modelUsage: [],
+              generalActualHeaders: normalizedHeaders,
+              generalActualRows: normalizedRows,
+            };
+          }
           const normalizedSuccessfulRows = Array.isArray(patch.successfulRows)
             ? normalizeTaskSheetRows(patch.successfulRows, "success", modelCatalog)
             : (t.successfulRows || []);
@@ -1623,6 +1996,7 @@ export const AppProvider = ({ children }) => {
           return {
             ...t,
             ...patch,
+            logType: nextLogType,
             hours: Number(patch.hours ?? t.hours),
             cost: totalCost,
             tasksDone: Number(patch.successfulTasks ?? patch.tasksDone ?? t.successfulTasks ?? t.tasksDone ?? 0),
@@ -1639,6 +2013,8 @@ export const AppProvider = ({ children }) => {
             successfulRows: normalizedSuccessfulRows,
             failedRows: normalizedFailedRows,
             modelUsage: normalizedModelUsage,
+            generalActualHeaders: [],
+            generalActualRows: [],
           };
         }),
       };
@@ -1714,7 +2090,7 @@ export const AppProvider = ({ children }) => {
         {
           at: new Date().toISOString(),
           actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
-          action: "Submitted top-up request",
+          action: "Submitted budget change request",
           detail: `${phaseName || phaseId} · $${totalAmount.toLocaleString()}${requestedBufferPct > 0 ? ` · ${requestedBufferPct}% buffer` : ""}`,
         },
       ],
@@ -1834,6 +2210,7 @@ export const AppProvider = ({ children }) => {
         id,
         projectId: payload.projectId,
         budgetType: normalizedBudgetType,
+        teamType: payload.teamType || "",
         total: requestedTotal,
         totals: payload.totals,
         totalTasks: Number(payload.totalTasks || 0),
@@ -1862,7 +2239,7 @@ export const AppProvider = ({ children }) => {
         ts: new Date().toISOString(),
         actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
         action: `${formatBudgetTypeLabel(normalizedBudgetType)} budget submitted`,
-        detail: `$${requestedTotal.toLocaleString()} · pending CTO review · ${Number(payload.totalTasks || 0).toLocaleString()} tasks${Number(payload.totalTrajectories || 0) ? ` · ${Number(payload.totalTrajectories || 0).toLocaleString()} trajectories` : ""}`,
+        detail: `$${requestedTotal.toLocaleString()}${payload.teamType ? ` · ${payload.teamType} team` : ""} · pending CTO review · ${Number(payload.totalTasks || 0).toLocaleString()} tasks${Number(payload.totalTrajectories || 0) ? ` · ${Number(payload.totalTrajectories || 0).toLocaleString()} trajectories` : ""}`,
       });
       return {
         ...project,
@@ -1876,6 +2253,7 @@ export const AppProvider = ({ children }) => {
         pendingBudgetSubmission: {
           reviewId,
           budgetType: normalizedBudgetType,
+          teamType: payload.teamType || "",
           submittedAt,
           submittedBy: user?.name || "TPM",
           submittedRole: user?.role || "TPM",
@@ -1983,7 +2361,7 @@ export const AppProvider = ({ children }) => {
       phaseId,
       stage === "rnd-review"
         ? isTestingDelivery
-          ? "pending-cfo"
+          ? "testing-submitted"
           : rndDecision === "accept"
             ? "approved"
             : rndDecision === "reject"
@@ -2005,7 +2383,7 @@ export const AppProvider = ({ children }) => {
               ? "sample-rejected"
               : "awaiting-rework-budget",
         status: isTestingDelivery
-          ? "Awaiting R&D budget"
+          ? "Awaiting Sample budget"
           : rndDecision === "accept"
             ? "Ready for TPM budget"
             : rndDecision === "reject"
@@ -2077,7 +2455,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // ---- Budget Reviews (CTO edits original TPM ask, forwards to CFO for final decision) ----
-  const ctoModifyBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, modifiedPhases, modifiedItems, ctoComment }) => {
+  const ctoModifyBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, modifiedPhases, modifiedItems, ctoComment, itemBased = false, ctoModified = true }) => {
     const phaseTotal = (modifiedPhases || []).reduce((sum, phase) => (
       sum + Number(phase.infra || 0) + Number(phase.model || 0) + Number(phase.subs || 0)
     ), 0);
@@ -2086,12 +2464,16 @@ export const AppProvider = ({ children }) => {
       models: sumBudgetLines(itemSummary.models),
       infra: sumBudgetLines(itemSummary.infra),
       subs: sumBudgetLines(itemSummary.subs),
+      misc: sumBudgetLines(itemSummary.misc),
     };
-    const total = modifiedItems ? (itemTotals.models + itemTotals.infra + itemTotals.subs) : phaseTotal;
+    const total = itemBased
+      ? (itemTotals.models + itemTotals.infra + itemTotals.subs + itemTotals.misc)
+      : (phaseTotal + itemTotals.misc);
     const now = new Date().toISOString();
     setBudgetReviews((arr) => {
       const existingIdx = arr.findIndex((r) => r.id === reviewId);
       const previous = existingIdx >= 0 ? arr[existingIdx] : null;
+      const priorItems = cloneBudgetItems(previous?.items || {});
       const base = {
         ...(previous || {}),
         id: reviewId,
@@ -2102,13 +2484,20 @@ export const AppProvider = ({ children }) => {
         modifiedPhases,
         modifiedItems: modifiedItems ? itemSummary : previous?.modifiedItems,
         modifiedTotal: total,
-        aiCost: modifiedItems ? itemTotals.models : Number(previous?.aiCost || 0),
-        infraCost: modifiedItems ? itemTotals.infra : Number(previous?.infraCost || 0),
-        subsCost: modifiedItems ? itemTotals.subs : Number(previous?.subsCost || 0),
-        items: modifiedItems ? itemSummary : cloneBudgetItems(previous?.items || {}),
+        aiCost: itemBased ? itemTotals.models : (modifiedPhases || []).reduce((sum, phase) => sum + Number(phase.model || 0), 0),
+        infraCost: itemBased ? itemTotals.infra : (modifiedPhases || []).reduce((sum, phase) => sum + Number(phase.infra || 0), 0),
+        subsCost: itemBased ? itemTotals.subs : (modifiedPhases || []).reduce((sum, phase) => sum + Number(phase.subs || 0), 0),
+        miscCost: itemTotals.misc,
+        items: modifiedItems
+          ? {
+              ...(itemBased ? { models: [], infra: [], subs: [], misc: [] } : priorItems),
+              ...itemSummary,
+            }
+          : cloneBudgetItems(previous?.items || {}),
         ctoComment,
         ctoBy: user?.name || "CTO",
         ctoAt: now,
+        ctoModified,
         stage: "CFO Review",
         status: "forwarded-cfo",
         cfoDecision: null,
@@ -2116,9 +2505,9 @@ export const AppProvider = ({ children }) => {
       const historyEntry = {
         at: now,
         actor: `${user?.name || "CTO"} · CTO`,
-        action: "Modified & forwarded to CFO",
+        action: getCtoForwardLabel({ ...base, ctoModified }),
         detail: modifiedItems
-          ? `Total ${total} · ${itemSummary.models.length + itemSummary.infra.length + itemSummary.subs.length} line item${itemSummary.models.length + itemSummary.infra.length + itemSummary.subs.length === 1 ? "" : "s"}`
+          ? `Total ${total} · ${itemSummary.models.length + itemSummary.infra.length + itemSummary.subs.length + itemSummary.misc.length} line item${itemSummary.models.length + itemSummary.infra.length + itemSummary.subs.length + itemSummary.misc.length === 1 ? "" : "s"}`
           : `Total ${total} · ${modifiedPhases.length} phase${modifiedPhases.length === 1 ? "" : "s"}`,
       };
       if (existingIdx >= 0) {
@@ -2211,7 +2600,7 @@ export const AppProvider = ({ children }) => {
         ctoComment,
         ctoBy: user?.name || "CTO",
         ctoAt: now,
-        stage: "CTO Review",
+        stage: "Returned",
         status: "returned-to-tpm",
         cfoDecision: null,
       };
@@ -2742,6 +3131,9 @@ export const AppProvider = ({ children }) => {
     teamRemovals,
     removeProjectTeamMember,
     addProjectTeamMembers,
+    updateProjectCoreMembers,
+    archiveProject,
+    deleteProject,
     setBuffer,
     applyBufferAction,
     setRecovery,
@@ -2780,6 +3172,7 @@ export const AppProvider = ({ children }) => {
     provisionModelKeys,
     itMonthlyActuals,
     saveItMonthlyActual,
+    refreshAppData,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

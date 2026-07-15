@@ -480,10 +480,10 @@ const ItDashboard = () => {
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <div>
             <div className="font-display font-semibold text-[15px] text-white">Pending IT actions</div>
-            <div className="text-xs text-zinc-500 mt-0.5">Open a request in Model Keys to add the key values and assign them to members.</div>
+            <div className="text-xs text-zinc-500 mt-0.5">Open the project Models tab to add the key values and assign them to members.</div>
           </div>
-          <Link to="/keys" className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium">
-            Open Model Keys <ChevronRight className="w-3 h-3" />
+          <Link to="/projects" className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium">
+            Open Projects <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
         <div className="space-y-3">
@@ -507,6 +507,14 @@ const ItDashboard = () => {
                 <Mini label="Models" value={String(request.requestedModels?.length || 0)} />
                 <Mini label="Infra lines" value={String(request.requestedInfra?.length || 0)} />
                 <Mini label="Members" value={String(request.members?.length || 0)} icon={Users} />
+              </div>
+              <div className="mt-3 flex justify-end">
+                <Link
+                  to={`/projects/${request.projectId}`}
+                  className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium"
+                >
+                  Open project <ChevronRight className="w-3 h-3" />
+                </Link>
               </div>
             </div>
           ))}

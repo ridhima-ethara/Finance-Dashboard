@@ -103,8 +103,8 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
     });
 
     if (isTestingBudget) {
-      toast.success("Testing sample submitted", {
-        description: `${project.name} · ${phase.name} · CTO can now review the testing submission before the next R&D budget`,
+      toast.success("Testing batch submitted", {
+        description: `${project.name} · ${phase.name} · testing is complete and the Sample budget step is next`,
       });
       onOpenChange(false);
       nav(`/budget-builder?projectId=${project.id}&budgetType=RnD&phaseId=${phase.id}&sampleIteration=1&sourceDeliveryId=${delivery.id}`);
@@ -137,11 +137,11 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
             </div>
             <div>
               <DialogTitle className="font-display text-lg text-white">
-                {isRnd ? (isTestingBudget ? "R&D · Submit testing sample" : "R&D · Review batch") : "Deliver batch"}
+                {isRnd ? (isTestingBudget ? "R&D · Submit testing batch" : "R&D · Review batch") : "Deliver batch"}
               </DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
                 {project?.name} · {phase?.name} · {isRnd
-                  ? (isTestingBudget ? "testing is complete; submit it and continue to the next R&D budget ask" : "confirm the estimate before it goes forward")
+                  ? (isTestingBudget ? "testing is complete; submit it and move to the next Sample budget step" : "confirm the estimate before it goes forward")
                   : "notifies CFO to record actual recovery"}
               </DialogDescription>
             </div>
@@ -313,7 +313,7 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
               <MessageSquare className="w-3.5 h-3.5 text-fuchsia-300 flex-shrink-0 mt-0.5" />
               <div className="text-xs text-zinc-300 leading-relaxed">
                 {isTestingBudget
-                  ? <>Submitting this testing batch closes the testing cycle and opens the next <span className="text-fuchsia-200 font-semibold">R&amp;D budget request</span> for the sample build.</>
+                  ? <>Submitting this testing batch closes testing and moves the project to the next <span className="text-fuchsia-200 font-semibold">Sample budget request</span> step.</>
                   : rndDecision === "accept"
                     ? <>If the sample is accepted, the <span className="text-emerald-300 font-semibold">TPM can start the next production budget step</span>.</>
                     : rndDecision === "reject"
@@ -338,7 +338,7 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
             data-testid="deliver-submit"
           >
             <Send className="w-3.5 h-3.5" /> {isRnd
-              ? (isTestingBudget ? "Submit testing sample" : "Submit review")
+              ? (isTestingBudget ? "Submit testing batch" : "Submit review")
               : recoveryType === "recoverable" ? "Deliver & notify CFO" : "Submit non-recoverable delivery"}
           </Button>
         </DialogFooter>

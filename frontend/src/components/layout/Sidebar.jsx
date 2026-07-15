@@ -7,15 +7,12 @@ import {
   FolderKanban,
   Receipt,
   ShieldCheck,
-  ArrowUpRightSquare,
   History,
   Settings,
-  KeyRound,
   LogOut,
   Calendar,
   ClipboardCheck,
   GitPullRequest,
-  Zap,
   FileText,
   Bell,
   Activity,
@@ -59,8 +56,6 @@ const NAV_TPM = [
   { to: "/budget-builder", label: "Budget Builder", icon: ClipboardCheck, testid: "nav-budget-builder" },
   { to: "/consumption", label: "Daily Consumption", icon: Calendar, testid: "nav-consumption" },
   { to: "/approvals", label: "My Requests", icon: ShieldCheck, testid: "nav-approvals" },
-  { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
-  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
 ];
 
 const NAV_PL = [
@@ -68,7 +63,6 @@ const NAV_PL = [
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/daily", label: "Daily", icon: Calendar, testid: "nav-daily" },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
-  { to: "/topups", label: "Top-ups", icon: ArrowUpRightSquare, testid: "nav-topups" },
   { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
@@ -77,7 +71,6 @@ const NAV_PL = [
 const NAV_IT = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
-  { to: "/keys", label: "Model Keys", icon: KeyRound, testid: "nav-keys" },
   { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
 ];
 

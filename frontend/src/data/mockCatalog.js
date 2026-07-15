@@ -1,42 +1,36 @@
 // Static catalogs for BudgetBuilder dropdowns — EC2 instance types + AWS Bedrock foundation models.
 // Kept static because they are AWS SKU lists, not user data.
 
-// Popular EC2 instance types (compute-optimized, memory, GPU) with indicative on-demand $/hour (us-east-1).
+export const PLATFORM_PROVIDERS = ["AWS", "OpenAI", "OpenRouter", "GCP", "Moonshot"];
+
+// Popular infra instance types with indicative on-demand $/hour mocks.
 export const EC2_INSTANCES = [
-  // General purpose
-  { code: "t3.medium", family: "General purpose", vCPU: 2, memoryGiB: 4, hourly: 0.0416 },
-  { code: "t3.large", family: "General purpose", vCPU: 2, memoryGiB: 8, hourly: 0.0832 },
-  { code: "t3.xlarge", family: "General purpose", vCPU: 4, memoryGiB: 16, hourly: 0.1664 },
-  { code: "m5.large", family: "General purpose", vCPU: 2, memoryGiB: 8, hourly: 0.096 },
-  { code: "m5.xlarge", family: "General purpose", vCPU: 4, memoryGiB: 16, hourly: 0.192 },
-  { code: "m5.2xlarge", family: "General purpose", vCPU: 8, memoryGiB: 32, hourly: 0.384 },
-  { code: "m6i.large", family: "General purpose", vCPU: 2, memoryGiB: 8, hourly: 0.096 },
-  { code: "m6i.2xlarge", family: "General purpose", vCPU: 8, memoryGiB: 32, hourly: 0.384 },
-  // Compute optimized
-  { code: "c5.large", family: "Compute optimized", vCPU: 2, memoryGiB: 4, hourly: 0.085 },
-  { code: "c5.xlarge", family: "Compute optimized", vCPU: 4, memoryGiB: 8, hourly: 0.17 },
-  { code: "c5.2xlarge", family: "Compute optimized", vCPU: 8, memoryGiB: 16, hourly: 0.34 },
-  { code: "c5.4xlarge", family: "Compute optimized", vCPU: 16, memoryGiB: 32, hourly: 0.68 },
-  { code: "c6i.xlarge", family: "Compute optimized", vCPU: 4, memoryGiB: 8, hourly: 0.17 },
-  // Memory optimized
-  { code: "r5.large", family: "Memory optimized", vCPU: 2, memoryGiB: 16, hourly: 0.126 },
-  { code: "r5.xlarge", family: "Memory optimized", vCPU: 4, memoryGiB: 32, hourly: 0.252 },
-  { code: "r5.2xlarge", family: "Memory optimized", vCPU: 8, memoryGiB: 64, hourly: 0.504 },
-  // GPU / accelerated
-  { code: "g4dn.xlarge", family: "GPU", vCPU: 4, memoryGiB: 16, hourly: 0.526, gpu: "1x NVIDIA T4" },
-  { code: "g4dn.2xlarge", family: "GPU", vCPU: 8, memoryGiB: 32, hourly: 0.752, gpu: "1x NVIDIA T4" },
-  { code: "g5.xlarge", family: "GPU", vCPU: 4, memoryGiB: 16, hourly: 1.006, gpu: "1x NVIDIA A10G" },
-  { code: "g5.2xlarge", family: "GPU", vCPU: 8, memoryGiB: 32, hourly: 1.212, gpu: "1x NVIDIA A10G" },
-  { code: "g5.4xlarge", family: "GPU", vCPU: 16, memoryGiB: 64, hourly: 1.624, gpu: "1x NVIDIA A10G" },
-  { code: "g5.12xlarge", family: "GPU", vCPU: 48, memoryGiB: 192, hourly: 5.672, gpu: "4x NVIDIA A10G" },
-  { code: "p3.2xlarge", family: "GPU", vCPU: 8, memoryGiB: 61, hourly: 3.06, gpu: "1x NVIDIA V100" },
-  { code: "p3.8xlarge", family: "GPU", vCPU: 32, memoryGiB: 244, hourly: 12.24, gpu: "4x NVIDIA V100" },
-  { code: "p4d.24xlarge", family: "GPU", vCPU: 96, memoryGiB: 1152, hourly: 32.77, gpu: "8x NVIDIA A100" },
-  { code: "p5.48xlarge", family: "GPU", vCPU: 192, memoryGiB: 2048, hourly: 98.32, gpu: "8x NVIDIA H100" },
-  // Inferentia
-  { code: "inf1.xlarge", family: "AWS Inferentia", vCPU: 4, memoryGiB: 8, hourly: 0.362, gpu: "1x AWS Inferentia" },
-  { code: "inf2.xlarge", family: "AWS Inferentia", vCPU: 4, memoryGiB: 16, hourly: 0.758, gpu: "1x AWS Inferentia2" },
-  { code: "trn1.2xlarge", family: "AWS Trainium", vCPU: 8, memoryGiB: 32, hourly: 1.343, gpu: "1x AWS Trainium" },
+  // AWS
+  { provider: "AWS", code: "t3.medium", family: "General purpose", vCPU: 2, memoryGiB: 4, hourly: 0.0416 },
+  { provider: "AWS", code: "t3.large", family: "General purpose", vCPU: 2, memoryGiB: 8, hourly: 0.0832 },
+  { provider: "AWS", code: "m5.xlarge", family: "General purpose", vCPU: 4, memoryGiB: 16, hourly: 0.192 },
+  { provider: "AWS", code: "c6i.xlarge", family: "Compute optimized", vCPU: 4, memoryGiB: 8, hourly: 0.17 },
+  { provider: "AWS", code: "r5.2xlarge", family: "Memory optimized", vCPU: 8, memoryGiB: 64, hourly: 0.504 },
+  { provider: "AWS", code: "g5.2xlarge", family: "GPU", vCPU: 8, memoryGiB: 32, hourly: 1.212, gpu: "1x NVIDIA A10G" },
+  { provider: "AWS", code: "trn1.2xlarge", family: "AWS Trainium", vCPU: 8, memoryGiB: 32, hourly: 1.343, gpu: "1x AWS Trainium" },
+  // GCP
+  { provider: "GCP", code: "e2-standard-4", family: "General purpose", vCPU: 4, memoryGiB: 16, hourly: 0.134 },
+  { provider: "GCP", code: "n2-standard-8", family: "General purpose", vCPU: 8, memoryGiB: 32, hourly: 0.379 },
+  { provider: "GCP", code: "c3-standard-8", family: "Compute optimized", vCPU: 8, memoryGiB: 32, hourly: 0.42 },
+  { provider: "GCP", code: "a2-highgpu-1g", family: "GPU", vCPU: 12, memoryGiB: 85, hourly: 3.67, gpu: "1x NVIDIA A100" },
+  { provider: "GCP", code: "g2-standard-8", family: "GPU", vCPU: 8, memoryGiB: 32, hourly: 1.18, gpu: "1x NVIDIA L4" },
+  // OpenAI
+  { provider: "OpenAI", code: "priority-processing", family: "Hosted API throughput", vCPU: 0, memoryGiB: 0, hourly: 1.85 },
+  { provider: "OpenAI", code: "reserved-capacity", family: "Dedicated capacity", vCPU: 0, memoryGiB: 0, hourly: 4.75 },
+  { provider: "OpenAI", code: "batch-processing", family: "Background inference", vCPU: 0, memoryGiB: 0, hourly: 0.92 },
+  // OpenRouter
+  { provider: "OpenRouter", code: "shared-routing", family: "Hosted routing", vCPU: 0, memoryGiB: 0, hourly: 0.78 },
+  { provider: "OpenRouter", code: "priority-routing", family: "Priority routing", vCPU: 0, memoryGiB: 0, hourly: 1.46 },
+  { provider: "OpenRouter", code: "dedicated-routing-cluster", family: "Dedicated routing", vCPU: 0, memoryGiB: 0, hourly: 3.24 },
+  // Moonshot
+  { provider: "Moonshot", code: "kimi-standard-cluster", family: "Hosted inference", vCPU: 0, memoryGiB: 0, hourly: 0.88 },
+  { provider: "Moonshot", code: "kimi-long-context-cluster", family: "Long-context inference", vCPU: 0, memoryGiB: 0, hourly: 1.52 },
+  { provider: "Moonshot", code: "kimi-vision-cluster", family: "Vision inference", vCPU: 0, memoryGiB: 0, hourly: 1.94 },
 ];
 
 // Foundation model catalog used across budgeting, task logging, IT provisioning, and top-up flows.

@@ -13,7 +13,7 @@ import { NOTIFICATIONS } from "../../data/mockData";
 import { initials } from "../../lib/format";
 
 const TopBar = () => {
-  const { user, setNotifOpen, logout, scope, setScope } = useApp();
+  const { user, setNotifOpen, logout } = useApp();
   const nav = useNavigate();
   const unread = NOTIFICATIONS.filter((n) => !n.read).length;
   if (!user) return null;
@@ -28,27 +28,6 @@ const TopBar = () => {
           className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 focus:border-fuchsia-500/40 tabular"
         />
       </div>
-
-      {/* R&D vs Ops scope filter */}
-      <div className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1" data-testid="scope-filter">
-        {[
-          { v: "all", l: "All" },
-          { v: "R&D", l: "R&D" },
-          { v: "Production", l: "Production" },
-        ].map((o) => (
-          <button
-            key={o.v}
-            onClick={() => setScope(o.v)}
-            data-testid={`scope-${o.v.toLowerCase().replace(/&/g, "").replace(/\s+/g, "")}`}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-              scope === o.v ? "bg-fuchsia-500/15 text-fuchsia-300" : "text-zinc-400 hover:text-zinc-100"
-            }`}
-          >
-            {o.l}
-          </button>
-        ))}
-      </div>
-
       <div className="flex items-center gap-2">
         <button
           data-testid="btn-notifications"

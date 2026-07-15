@@ -82,11 +82,11 @@ const buildAlerts = ({ projects, topupRequests, budgetReviews, changeRequests })
     alerts.push({
       id: "alert-topups",
       severity: "high",
-      type: "Top-up queue",
-      title: `${pendingTopups.length} ${pendingTopups.length === 1 ? "top-up request is" : "top-up requests are"} awaiting approval`,
+      type: "Budget change queue",
+      title: `${pendingTopups.length} ${pendingTopups.length === 1 ? "budget change request is" : "budget change requests are"} awaiting approval`,
       desc: `${fmtCurrency(totalRequested)} requested across active project phases`,
       project: pendingTopups[0]?.projectName || "Projects",
-      action: "Open top-ups",
+      action: "Open budget changes",
       actionLink: "/approval-queue?type=Top-up",
       ts: formatStamp(pendingTopups[0]?.requestedAt),
     });

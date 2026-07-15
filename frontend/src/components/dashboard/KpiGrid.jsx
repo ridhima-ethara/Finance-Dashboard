@@ -57,8 +57,8 @@ const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", icon: Icon, 
 };
 
 const KpiGrid = () => {
-  const { role, projects, budgetReviews, topupRequests, changeRequests, taskLogs } = useApp();
-  const summary = projects.reduce((acc, project) => {
+  const { role, visibleProjects, budgetReviews, topupRequests, changeRequests, taskLogs } = useApp();
+  const summary = visibleProjects.reduce((acc, project) => {
     const usage = summarizeLoggedProject(project, taskLogs);
     const spend = Number(project.cfoActualSpend || project.actualSpend || usage.loggedSpend || 0);
     acc.approvedBudget += Number(project.approvedBudget || 0);

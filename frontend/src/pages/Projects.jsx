@@ -15,7 +15,7 @@ const Projects = () => {
   const [requestOpen, setRequestOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
-  const { role, scope, visibleProjects, budgetReviews } = useApp();
+  const { role, visibleProjects, budgetReviews } = useApp();
   const isPL = role === "PL";
   const isCTO = role === "CTO";
   const isTPM = isTpmView(role);
@@ -36,7 +36,6 @@ const Projects = () => {
   }, [budgetReviews]);
 
   const filtered = visibleProjects.filter((p) => {
-    if (scope !== "all" && p.type !== scope) return false;
     if (filter === "over" && p.utilization < 100) return false;
     if (filter === "watch" && !(p.utilization >= 85 && p.utilization < 100)) return false;
     if (filter === "healthy" && p.utilization >= 85) return false;
@@ -141,6 +140,11 @@ const Projects = () => {
                     }`}>
                       {p.type}
                     </span>
+                    {budgetState.actionRequired && isCTO && (
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-orange-500/10 border-orange-500/30 text-orange-200">
+                        Action Required
+                      </span>
+                    )}
                     {isLocked && (
                       <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-500/30 text-amber-300">
                         Pending approval
@@ -230,6 +234,7 @@ const getProjectBudgetCardState = (project, review) => {
       label: "Returned",
       amount: Number(review.requestedBudget || review.modifiedTotal || 0),
       valueClass: "text-amber-300",
+      actionRequired: true,
     };
   }
 

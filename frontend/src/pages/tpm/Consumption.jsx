@@ -92,6 +92,7 @@ const Consumption = () => {
   );
   const projectIds = dashboardProjects.map((project) => project.id);
   const heatmap = useMemo(() => ({ dates: heatDates, rows: projectIds }), [heatDates, projectIds]);
+  const selectedRangeDays = Math.max(heatDates.length, 1);
   const actualMap = useMemo(() => (
     new Map(itActualRows.map((row) => [`${row.projectId}::${row.date}`, row]))
   ), [itActualRows]);
@@ -128,7 +129,8 @@ const Consumption = () => {
   const perProject = dashboardProjects.map((project) => {
     const entries = scopedDailyRows.filter((row) => row.projectId === project.id);
     const logged = entries.reduce((sum, row) => sum + Number(row.spent || 0), 0);
-    const allocated = entries.reduce((sum, row) => sum + Number(row.approvedDaily || 0), 0);
+    const approvedDaily = Math.round(Number(project.approvedBudget || 0) / 30);
+    const allocated = approvedDaily * selectedRangeDays;
     return {
       name: project.name,
       allocated,
@@ -203,7 +205,7 @@ const Consumption = () => {
         <Stat label="Tasks logged" value={String(totals.tasks || 0)} icon={ListChecks} tone="magenta" testid="stat-tasks" />
         <Stat label="Trajectories" value={String(totals.trajectories || 0)} icon={GitBranch} tone="magenta" testid="stat-traj" />
         <Stat label="Logged cost" value={fmtCurrency(totals.cost || 0, { compact: false })} icon={DollarSign} tone="magenta" testid="stat-cost" />
-        <Stat label="Projects active" value={String(todayRows.length || 0)} icon={Activity} testid="stat-logged" />
+        <Stat label="Projects active" value={String(dashboardProjects.length || 0)} icon={Activity} testid="stat-logged" />
       </div>
 
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="heatmap">
