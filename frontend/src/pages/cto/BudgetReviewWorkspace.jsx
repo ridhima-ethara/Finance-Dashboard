@@ -6,6 +6,7 @@ import { Button } from "../../components/ui/button";
 import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
 import { useApp } from "../../context/AppContext";
 import { areBudgetItemsEqual, areBudgetPhasesEqual } from "../../lib/budgetReview";
+import { buildProjectBudgetBuilderHref } from "../../lib/projectBudgetRoute";
 import {
   ArrowLeft,
   X,
@@ -116,10 +117,11 @@ const BudgetReviewWorkspace = () => {
     );
   const resubmitHref = (() => {
     if (!canReviseReturnedReview || !review) return "";
-    const next = new URLSearchParams({ edit: review.id, projectId: review.projectId });
-    if (review.budgetType) next.set("budgetType", review.budgetType);
-    if (review.sampleIteration) next.set("sampleIteration", String(review.sampleIteration));
-    return `/budget-builder?${next.toString()}`;
+    return buildProjectBudgetBuilderHref(review.projectId, {
+      edit: review.id,
+      budgetType: review.budgetType,
+      sampleIteration: review.sampleIteration,
+    });
   })();
 
   if (!review || !project) {

@@ -5,7 +5,7 @@ import { NOTIFICATIONS, APPROVALS, THRESHOLDS } from "../../data/mockData";
 import { Link } from "react-router-dom";
 import {
   FolderKanban, ShieldCheck, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
-  Plus, Bell, Sparkles, ChevronRight, AlertTriangle, Calendar, Undo2, Edit3,
+  Bell, Sparkles, ChevronRight, AlertTriangle, Calendar, Undo2, Edit3,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell } from "recharts";
@@ -20,6 +20,7 @@ import {
   isProjectInTpmLane,
   summarizeLoggedProject,
 } from "../../lib/projectMetrics";
+import { buildProjectBudgetBuilderHref } from "../../lib/projectBudgetRoute";
 
 const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid, to }) => {
   const toneMap = {
@@ -184,12 +185,6 @@ const TpmDashboard = () => {
             {" · June 2026"}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link to="/budget-builder" className="inline-flex items-center gap-2 h-9 px-3 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white text-sm font-medium shadow-[0_0_20px_rgba(232,25,184,0.35)]" data-testid="btn-open-budget-builder">
-            <Plus className="w-4 h-4" />
-            Build budget
-          </Link>
-        </div>
       </div>
 
       {/* KPI Grid */}
@@ -345,7 +340,11 @@ const TpmDashboard = () => {
             {myReturnedBudgets.map((r) => (
               <Link
                 key={r.id}
-                to={`/budget-builder?edit=${r.id}`}
+                to={buildProjectBudgetBuilderHref(r.projectId, {
+                  edit: r.id,
+                  budgetType: r.budgetType,
+                  sampleIteration: r.sampleIteration,
+                })}
                 data-testid={`returned-budget-${r.id}`}
                 className="flex items-start gap-3 p-3 rounded-lg border border-white/5 hover:border-amber-500/30 bg-white/[0.02] hover:bg-white/[0.04] transition-all group"
               >

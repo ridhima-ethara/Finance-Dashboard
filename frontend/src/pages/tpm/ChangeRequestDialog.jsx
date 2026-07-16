@@ -93,7 +93,7 @@ const sumEnabledLineAmounts = (section) => (
 const joinLineLabels = (lines = []) => lines.map((line) => line.optionLabel).filter(Boolean).join(" | ");
 const joinLineNotes = (lines = []) => lines.map((line) => String(line.note || "").trim()).filter(Boolean).join(" | ");
 
-const ChangeRequestDialog = ({ open, onOpenChange }) => {
+const ChangeRequestDialog = ({ open, onOpenChange, projectId: lockedProjectId = "" }) => {
   const { visibleProjects, createChangeRequest, modelCatalog, addCustomModel } = useApp();
   const modelOptions = useMemo(() => modelCatalog.map((model) => ({
     value: model.id,
@@ -110,7 +110,7 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
     []
   );
 
-  const [project, setProject] = useState(visibleProjects[0]?.id || "");
+  const [project, setProject] = useState(lockedProjectId || visibleProjects[0]?.id || "");
   const [reason, setReason] = useState("");
   const [expectedTasks, setExpectedTasks] = useState("");
   const [timeline, setTimeline] = useState("");
@@ -124,14 +124,19 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
   const wasOpenRef = useRef(false);
 
   useEffect(() => {
+    if (lockedProjectId) {
+      setProject(lockedProjectId);
+      return;
+    }
     if (!visibleProjects.some((entry) => entry.id === project)) {
       setProject(visibleProjects[0]?.id || "");
     }
-  }, [project, visibleProjects]);
+  }, [lockedProjectId, project, visibleProjects]);
 
   useEffect(() => {
     const openedNow = open && !wasOpenRef.current;
     if (openedNow) {
+      setProject(lockedProjectId || visibleProjects[0]?.id || "");
       setReason("");
       setExpectedTasks("");
       setTimeline("");
@@ -144,7 +149,7 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
       setSubs(buildSectionState(buildSubscriptionLine));
     }
     wasOpenRef.current = open;
-  }, [infraProviderOptions, modelOptions, modelProviderOptions, open]);
+  }, [infraProviderOptions, lockedProjectId, modelOptions, modelProviderOptions, open, visibleProjects]);
 
   const modelsAmount = sumEnabledLineAmounts(models);
   const infraAmount = sumEnabledLineAmounts(infra);
@@ -308,14 +313,20 @@ const ChangeRequestDialog = ({ open, onOpenChange }) => {
 
         <div className="space-y-4 py-2">
           <Field label="Project">
-            <select value={project} onChange={(event) => setProject(event.target.value)} data-testid="cr-project" className={selectCls}>
-              {visibleProjects.length === 0 && <option value="">— No projects available —</option>}
-              {visibleProjects.map((entry) => (
-                <option key={entry.id} value={entry.id} className="bg-[#12121A]">
-                  {entry.name}{entry.client ? ` · ${entry.client}` : ""}
-                </option>
-              ))}
-            </select>
+            {lockedProjectId ? (
+              <div className="w-full h-10 px-3 rounded-lg bg-white/[0.02] border border-white/10 text-sm text-zinc-100 flex items-center" data-testid="cr-project-locked">
+                {(visibleProjects.find((entry) => entry.id === lockedProjectId)?.name || "Selected project")}
+              </div>
+            ) : (
+              <select value={project} onChange={(event) => setProject(event.target.value)} data-testid="cr-project" className={selectCls}>
+                {visibleProjects.length === 0 && <option value="">— No projects available —</option>}
+                {visibleProjects.map((entry) => (
+                  <option key={entry.id} value={entry.id} className="bg-[#12121A]">
+                    {entry.name}{entry.client ? ` · ${entry.client}` : ""}
+                  </option>
+                ))}
+              </select>
+            )}
           </Field>
 
           <div>

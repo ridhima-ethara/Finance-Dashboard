@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { fmtCurrency, fmtPct, fmtDate, healthColor } from "../lib/format";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Button } from "../components/ui/button";
@@ -29,9 +29,12 @@ import { getPhaseTasks } from "../data/mockTpm";
 import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
 import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
+import BudgetBuilder from "./tpm/BudgetBuilder";
+import ChangeRequestDialog from "./tpm/ChangeRequestDialog";
 import { DAILY_ACTIVITY } from "../data/mockAi";
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
 import { buildBudgetTracks, formatBudgetTypeLabel, normalizeBudgetType, summarizeLoggedProject } from "../lib/projectMetrics";
+import { buildProjectBudgetBuilderHref } from "../lib/projectBudgetRoute";
 
 // Deterministic seed of team members per project — uses project id hash for stability.
 const seedTeam = (project) => {
@@ -88,6 +91,7 @@ const statusMap = {
 const ProjectDetail = () => {
   const { id } = useParams();
   const nav = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const {
     projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
     removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask, taskLogs, changeRequests,
@@ -106,6 +110,7 @@ const ProjectDetail = () => {
 
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
+  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
   const [deliverPhase, setDeliverPhase] = useState(null); // {project, phase} or null
   const [taskLogPhase, setTaskLogPhase] = useState(null); // phase for log dialog
   const [editingLog, setEditingLog] = useState(null);
@@ -337,6 +342,38 @@ const ProjectDetail = () => {
     : !canManageExecution
       ? approvalLockMessage
       : "";
+  const requestedTab = searchParams.get("tab");
+  const budgetBuilderOpen = searchParams.get("builder") === "1";
+  const activeProjectTab = budgetBuilderOpen
+    ? "budget"
+    : ["team", "models", "budget", "tasks", "batch", "logs"].includes(requestedTab)
+      ? requestedTab
+      : "team";
+  const latestTestingDelivery = useMemo(
+    () => projectBatches
+      .filter((delivery) => normalizeBudgetType(delivery?.budgetType) === "Testing")
+      .sort((left, right) => new Date(right.deliveredAt || right.createdAt || 0).getTime() - new Date(left.deliveredAt || left.createdAt || 0).getTime())[0] || null,
+    [projectBatches]
+  );
+  const returnedBudgetReview = latestBudgetReview?.status === "returned-to-tpm" ? latestBudgetReview : null;
+  const canOpenChangeRequest = isExecutionOwner && executionUnlocked && Number(p?.approvedBudget || 0) > 0;
+  const canOpenBudgetBuilder = isRnd
+    ? isExecutionOwner && !hasPendingBudgetSubmission
+    : isExecutionOwner && !hasPendingBudgetSubmission && !canOpenChangeRequest;
+  const projectBudgetBuilderHref = useMemo(() => {
+    if (returnedBudgetReview?.id) {
+      return buildProjectBudgetBuilderHref(p.id, { edit: returnedBudgetReview.id });
+    }
+    if (isRnd && workflowStage === "awaiting-rework-budget") {
+      return buildProjectBudgetBuilderHref(p.id, { budgetType: "Rework" });
+    }
+    if (isRnd) {
+      return buildProjectBudgetBuilderHref(p.id, {
+        sourceDeliveryId: latestTestingDelivery?.id || undefined,
+      });
+    }
+    return buildProjectBudgetBuilderHref(p.id);
+  }, [isRnd, latestTestingDelivery?.id, p.id, returnedBudgetReview?.id, workflowStage]);
   const canRevealProjectKeys = isCFO || isIT;
   const projectAllocatedMembers = useMemo(
     () => new Set(projectModelKeys.flatMap((entry) => (entry.members || []).map((member) => member.id))).size,
@@ -453,6 +490,29 @@ const ProjectDetail = () => {
     toast.success("Project deleted", { description: `${p.name} was removed from the active workspace.` });
     nav("/projects");
   };
+  const updateProjectSearchParams = (mutate) => {
+    const next = new URLSearchParams(searchParams);
+    mutate(next);
+    setSearchParams(next, { replace: true });
+  };
+  const handleProjectTabChange = (nextTab) => {
+    updateProjectSearchParams((params) => {
+      if (nextTab === "team") {
+        params.delete("tab");
+      } else {
+        params.set("tab", nextTab);
+      }
+      if (nextTab !== "budget") {
+        ["builder", "edit", "budgetType", "phaseId", "sampleIteration", "sourceDeliveryId"].forEach((key) => params.delete(key));
+      }
+    });
+  };
+  const handleBudgetBuilderCompleted = () => {
+    updateProjectSearchParams((params) => {
+      params.set("tab", "budget");
+      ["builder", "edit", "budgetType", "phaseId", "sampleIteration", "sourceDeliveryId"].forEach((key) => params.delete(key));
+    });
+  };
 
   return (
     <div className="space-y-6" data-testid={`page-project-${p.id}`}>
@@ -509,9 +569,15 @@ const ProjectDetail = () => {
                 </Button>
               </>
             )}
-            {canRequestTopup && (
-              <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-request-topup">
-                <ArrowUpRightSquare className="w-3.5 h-3.5" /> Request budget change
+            {canOpenBudgetBuilder && (
+              <Button size="sm" onClick={() => nav(projectBudgetBuilderHref)} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-build-budget">
+                <ArrowUpRightSquare className="w-3.5 h-3.5" /> Build Budget
+              </Button>
+            )}
+
+            {canOpenChangeRequest && (
+              <Button size="sm" onClick={() => setChangeRequestOpen(true)} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-open-change-request">
+                <ArrowUpRightSquare className="w-3.5 h-3.5" /> Change request
               </Button>
             )}
             {isCFO && (
@@ -558,7 +624,7 @@ const ProjectDetail = () => {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="team" className="w-full">
+      <Tabs value={activeProjectTab} onValueChange={handleProjectTabChange} className="w-full">
         <TabsList className="bg-transparent p-0 gap-4 border-b border-white/10 rounded-none h-auto w-full justify-start" data-testid="project-tabs">
           <TabTrigger value="team" icon={Users} label="Team" testid="tab-team" />
           <TabTrigger value="models" icon={KeyRound} label="Models" testid="tab-models" />
@@ -1013,7 +1079,13 @@ const ProjectDetail = () => {
 
         {/* ---- Budget ---- */}
         <TabsContent value="budget" className="mt-6 space-y-4" data-testid="budget-panel">
-          {(() => {
+          {budgetBuilderOpen ? (
+            <BudgetBuilder
+              embeddedProjectId={p.id}
+              onSubmitted={handleBudgetBuilderCompleted}
+              onClose={handleBudgetBuilderCompleted}
+            />
+          ) : (() => {
             const spent = Number(isCFO ? p.cfoActualSpend || p.actualSpend || 0 : projectUsage.loggedSpend || 0);
             const cap = Number(p.approvedBudget || 0);
             const remaining = Number(isCFO ? (p.cfoRemaining || p.remaining || (cap - spent)) : (projectUsage.remainingBudget || (cap - spent)));
@@ -1157,7 +1229,7 @@ const ProjectDetail = () => {
                   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="rnd-budget-tracks">
                     <div className="mb-3">
                     <div className="font-display font-semibold text-[15px] text-white">Testing, Sample, and Rework budget tracks</div>
-                    <div className="text-xs text-zinc-500 mt-0.5">Each R&amp;D budget track stays in sequence. Testing closes first, then Sample or Rework becomes the active execution step.</div>
+                    <div className="text-xs text-zinc-500 mt-0.5">Raise the required R&amp;D budget track directly from this project whenever Testing, Sample, or Rework work needs to be budgeted.</div>
                     </div>
                     {!executionUnlocked && isExecutionOwner && (
                       <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
@@ -1338,9 +1410,9 @@ const ProjectDetail = () => {
                               </RequestSummaryCard>
 
                               <RequestSummaryCard
-                                title={`Budget changes (${selectedPhaseTopups.length})`}
+                                title={`Change requests (${selectedPhaseTopups.length})`}
                                 icon={ArrowUpRightSquare}
-                                empty="No budget change requests mapped to this phase."
+                                empty="No change requests mapped to this phase."
                                 testid={`phase-topup-requests-${selectedPhase.id}`}
                               >
                                 {selectedPhaseTopups.map((request) => (
@@ -1443,16 +1515,16 @@ const ProjectDetail = () => {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <ArrowUpRightSquare className="w-4 h-4 text-fuchsia-300" />
-                        <div className="font-display font-semibold text-[15px] text-white">Budget change requests</div>
+                        <div className="font-display font-semibold text-[15px] text-white">Change requests</div>
                       </div>
                     {canRequestTopup && (
                       <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1" data-testid="btn-raise-topup-project">
-                        <Plus className="w-3 h-3" /> Raise budget change
+                        <Plus className="w-3 h-3" /> Raise change request
                       </Button>
                     )}
                   </div>
                   {projectTopups.length === 0 ? (
-                    <div className="text-xs text-zinc-500 py-4 text-center">No budget change requests raised for this project.</div>
+                    <div className="text-xs text-zinc-500 py-4 text-center">No change requests raised for this project.</div>
                   ) : (
                     <div className="space-y-2">
                       {projectTopups.map((request) => (
@@ -1798,9 +1870,9 @@ const ProjectDetail = () => {
 
                   <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
                     <RequestSummaryCard
-                      title={`Budget change requests (${topupsForPhase.length})`}
+                      title={`Change requests (${topupsForPhase.length})`}
                       icon={ArrowUpRightSquare}
-                      empty="No budget change requests for this phase."
+                      empty="No change requests for this phase."
                       testid={`sub-topups-${ph.id}`}
                     >
                       {topupsForPhase.map((request) => (
@@ -1925,7 +1997,12 @@ const ProjectDetail = () => {
                           )}
                           {delivery.stage === "rnd-review" && delivery.status === "changes-requested" && (
                             <Link
-                              to={`/budget-builder?projectId=${p.id}&budgetType=Rework&phaseId=${ph.id}&sampleIteration=${Number(delivery.sampleIteration || 1) + 1}&sourceDeliveryId=${delivery.id}`}
+                              to={buildProjectBudgetBuilderHref(p.id, {
+                                budgetType: "Rework",
+                                phaseId: ph.id,
+                                sampleIteration: Number(delivery.sampleIteration || 1) + 1,
+                                sourceDeliveryId: delivery.id,
+                              })}
                               className="inline-flex items-center gap-1 text-[11px] text-fuchsia-300 hover:text-fuchsia-200 font-medium pt-1"
                             >
                               Raise rework budget <ChevronRight className="w-3 h-3" />
@@ -2047,6 +2124,7 @@ const ProjectDetail = () => {
       </Tabs>
 
       <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} project={p} defaultPhaseId={topupPhaseId} />
+      <ChangeRequestDialog open={changeRequestOpen} onOpenChange={setChangeRequestOpen} projectId={p.id} />
       <DeliverBatchDialog
         open={!!deliverPhase}
         onOpenChange={(o) => !o && setDeliverPhase(null)}
@@ -2652,10 +2730,10 @@ const getWorkflowLockMessage = ({ project, workflowStage, latestBudgetReviewMeta
     return `${pendingLabel} request is awaiting ${approver} approval. Tasks, budget changes, and delivery unlock after approval.`;
   }
   if (workflowStage === "awaiting-testing-budget") {
-    return "Raise the testing budget first. Execution unlocks after CTO and CFO approve it.";
+    return "Raise the required R&D budget. Testing or Sample can be submitted directly, and execution unlocks after CTO and CFO approve it.";
   }
   if (workflowStage === "awaiting-rnd-budget") {
-    return "Testing sample has been submitted. Raise the Sample budget to continue to the next sample build.";
+    return "Raise the required R&D budget track directly from this project. Testing, Sample, and Rework can be submitted as needed.";
   }
   if (workflowStage === "awaiting-rework-budget") {
     return "This sample needs rework. Raise the next sample budget to continue.";

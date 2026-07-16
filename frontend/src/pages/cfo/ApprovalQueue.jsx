@@ -76,7 +76,7 @@ const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
       href: `/topup-requests/${r.id}`,
       requestId: `TUR/2026/00${seq}`,
       type: "Top-up",
-      title: `${r.phaseName} budget change`,
+      title: `${r.phaseName} change request`,
       project: r.projectName,
       subLabel: r.phaseName,
       raisedBy: r.requester,

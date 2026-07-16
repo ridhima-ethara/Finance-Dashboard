@@ -36,7 +36,125 @@
     },
     "recoveries": {},
     "customModels": [],
-    "customProjects": [],
+    "customProjects": [
+      {
+        "id": "p-mrn5rhge",
+        "name": "as",
+        "clientProjectName": "subom",
+        "client": "subom",
+        "createdBy": "R&D Lead",
+        "createdByRole": "R&D",
+        "goal": "asd",
+        "pl": "Anjali Bhagoria",
+        "tpm": "Anjali Bhagoria",
+        "rnd": null,
+        "rndMembers": [],
+        "plMembers": [],
+        "qlMembers": [
+          "Adarsh Raghuwanshi"
+        ],
+        "docUrl": "",
+        "docs": [],
+        "teamMembers": [
+          {
+            "id": "emp-0126",
+            "name": "Anjali Bhagoria",
+            "role": "TPM",
+            "email": "anjali.bhagoria@ethara.ai",
+            "status": "Online",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0041",
+            "name": "Adarsh Raghuwanshi",
+            "role": "Quality Lead",
+            "email": "adarsh.raghuwanshi@ethara.ai",
+            "status": "Pending kickoff",
+            "tasksDone": 0
+          }
+        ],
+        "kickoffMail": {
+          "sentAt": "2026-07-16T06:58:55.646Z",
+          "subject": "as kickoff",
+          "sentBy": "R&D Lead",
+          "sentByRole": "R&D",
+          "recipients": [
+            {
+              "id": "emp-0126",
+              "name": "Anjali Bhagoria",
+              "role": "TPM",
+              "email": "anjali.bhagoria@ethara.ai"
+            },
+            {
+              "id": "emp-0041",
+              "name": "Adarsh Raghuwanshi",
+              "role": "Quality Lead",
+              "email": "adarsh.raghuwanshi@ethara.ai"
+            }
+          ],
+          "goal": "asd",
+          "requirements": [],
+          "attachmentCount": 0
+        },
+        "startDate": "2026-07-16",
+        "estimatedEndDate": "",
+        "status": "Awaiting testing budget",
+        "type": "R&D",
+        "workflowStage": "awaiting-testing-budget",
+        "readyForTpmBudget": false,
+        "pendingBudgetSubmission": null,
+        "buffer": 10,
+        "recoverableFromClient": false,
+        "recoveredAmount": 0,
+        "approvedBudget": 0,
+        "estimatedBudget": 0,
+        "actualSpend": 0,
+        "remaining": 0,
+        "variance": 0,
+        "utilization": 0,
+        "burnRate": 0,
+        "forecast": 0,
+        "infrastructureCost": 0,
+        "aiModelCost": 0,
+        "employeeCost": 0,
+        "purchaseCost": 0,
+        "reimbursements": 0,
+        "dinnerExpenses": 0,
+        "miscExpenses": 0,
+        "topupsTotal": 0,
+        "health": "healthy",
+        "topModel": "\u2014",
+        "phases": [],
+        "budgetItems": {
+          "models": [],
+          "infra": [],
+          "subs": [],
+          "misc": []
+        },
+        "expenses": [],
+        "budgetHistory": [],
+        "topupHistory": [],
+        "budgetTrackHistory": [],
+        "auditLog": [
+          {
+            "id": "a-p-mrn5rhge-1",
+            "ts": "2026-07-16T06:58:55.646Z",
+            "actor": "R&D Lead",
+            "action": "Project created",
+            "detail": "Assigned TPM: Anjali Bhagoria \u00b7 QL: Adarsh Raghuwanshi \u00b7 Start 2026-07-16 \u00b7 Project Goal: asd"
+          },
+          {
+            "id": "a-p-mrn5rhge-2",
+            "ts": "2026-07-16T06:58:55.646Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Kickoff mail sent",
+            "detail": "2 recipients \u00b7 anjali.bhagoria@ethara.ai, adarsh.raghuwanshi@ethara.ai"
+          }
+        ],
+        "comments": [],
+        "__custom": true
+      }
+    ],
     "taskLogs": {
       "demo-rnd-foundry::demo-rnd-testing": [
         {
@@ -1298,5 +1416,5 @@
       }
     }
   },
-  "app_state_updated_at": "2026-07-15T11:24:29.130199+00:00"
+  "app_state_updated_at": "2026-07-16T06:58:56.260235+00:00"
 }

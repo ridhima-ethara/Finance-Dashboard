@@ -124,7 +124,7 @@ const PhaseWorkspace = () => {
                 className="h-9 rounded-lg border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20 gap-2"
                 data-testid="btn-raise-topup-phase"
               >
-                <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise budget change
+            <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise change request
               </Button>
             </>
           )}

@@ -56,9 +56,9 @@ const Topups = () => {
       <div>
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
           <ArrowUpRightSquare className="w-3 h-3" />
-          {isCFO ? "CFO · Budget change approvals" : "Budget change requests"}
+          {isCFO ? "CFO · Change request approvals" : "Change requests"}
         </div>
-        <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Budget change requests</h1>
+        <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Change requests</h1>
         <p className="text-sm text-zinc-400 mt-1">
           Live request list with model, infra, and subscription asks. Open a request to review the full approval view.
         </p>
@@ -74,7 +74,7 @@ const Topups = () => {
       <div className="space-y-3">
         {requests.length === 0 && (
           <div className="bg-[#12121A] rounded-2xl border border-dashed border-white/10 p-10 text-center text-xs text-zinc-500">
-            No budget change requests available in this view yet.
+            No change requests available in this view yet.
           </div>
         )}
 

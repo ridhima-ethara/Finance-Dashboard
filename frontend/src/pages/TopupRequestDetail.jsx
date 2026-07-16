@@ -67,7 +67,7 @@ const TopupRequestDetail = () => {
   if (!req) {
     return (
       <div className="text-sm text-zinc-400">
-        Budget change request not found. <button onClick={() => nav(backHref)} className="text-fuchsia-300 underline">Back</button>
+        Change request not found. <button onClick={() => nav(backHref)} className="text-fuchsia-300 underline">Back</button>
       </div>
     );
   }
@@ -140,7 +140,7 @@ const TopupRequestDetail = () => {
       return;
     }
     ctoDecideTopup(req.id, { comment, decision: "reject" });
-    toast.error("Budget change rejected by CTO");
+    toast.error("Change request rejected by CTO");
   };
 
   const doCfoApprove = () => {
@@ -167,7 +167,7 @@ const TopupRequestDetail = () => {
       return;
     }
     cfoDecideTopup(req.id, { comment, decision: "reject" });
-    toast.error("Budget change rejected by CFO");
+    toast.error("Change request rejected by CFO");
   };
 
   const ctoDone = !!req.ctoDecision;
@@ -190,7 +190,7 @@ const TopupRequestDetail = () => {
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="font-display font-semibold text-3xl tracking-tight text-white">{req.projectName}</h1>
         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/30">
-          Budget change request
+          Change request
         </span>
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${stage.cls}`}>
           {stage.label}
@@ -282,7 +282,7 @@ const TopupRequestDetail = () => {
             ))}
             {!hasBreakdown && (
               <div className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
-                This request predates line-item capture, so only the total budget change amount is available.
+                This request predates line-item capture, so only the total change amount is available.
               </div>
             )}
             {Number(req.baseAmount || 0) > 0 && (

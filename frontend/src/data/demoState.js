@@ -465,7 +465,7 @@ export const DEMO_NOTIFICATIONS = [
   {
     id: "notif-1",
     type: "warning",
-    title: "Orbit budget change is awaiting CFO review",
+    title: "Orbit change request is awaiting CFO review",
     detail: "Build phase requested +$5,400 with OpenAI capacity and shared-routing uplift.",
     read: false,
   },
@@ -576,7 +576,7 @@ export const DEMO_TOPUP_REQUESTS = [
       {
         at: "2026-06-21T10:30:00.000Z",
         actor: "TPM Lead · TPM",
-        action: "Submitted budget change request",
+        action: "Submitted change request",
         detail: "Build · $5,400",
       },
       {
@@ -643,7 +643,7 @@ export const DEMO_TOPUP_REQUESTS = [
       {
         at: "2026-06-15T07:45:00.000Z",
         actor: "R&D Lead · R&D",
-        action: "Submitted budget change request",
+        action: "Submitted change request",
         detail: "Sample 1 · $1,800",
       },
       {

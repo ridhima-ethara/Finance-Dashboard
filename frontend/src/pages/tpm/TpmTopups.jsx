@@ -54,15 +54,15 @@ const TpmTopups = () => {
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
             <ArrowUpRightSquare className="w-3 h-3" /> TPM Portal
           </div>
-          <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">My budget change requests</h1>
-          <p className="text-sm text-zinc-400 mt-1">Phase-wise budget changes · CTO reviews first, CFO finalizes</p>
+          <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">My change requests</h1>
+          <p className="text-sm text-zinc-400 mt-1">Phase-wise change requests with model, infra, subscription, or budget asks · CTO reviews first, CFO finalizes</p>
         </div>
         <Button
           onClick={() => setOpenDialog(true)}
           className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
           data-testid="btn-new-topup"
         >
-          <Plus className="w-4 h-4" /> Raise budget change
+          <Plus className="w-4 h-4" /> Raise change request
         </Button>
       </div>
 
@@ -97,13 +97,13 @@ const TpmTopups = () => {
         {filtered.length === 0 && (
           <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center">
             <ArrowUpRightSquare className="w-8 h-8 mx-auto text-zinc-600 mb-3" />
-            <div className="text-sm text-zinc-300 font-medium">No budget change requests yet</div>
-            <div className="text-xs text-zinc-500 mt-1">Raise a budget change when a phase needs more budget than currently approved.</div>
+            <div className="text-sm text-zinc-300 font-medium">No change requests yet</div>
+            <div className="text-xs text-zinc-500 mt-1">Raise a change request when a phase needs a model, infra, subscription, or budget update.</div>
             <Button
               onClick={() => setOpenDialog(true)}
               className="mt-4 h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2"
             >
-              <Plus className="w-3.5 h-3.5" /> Raise your first budget change
+              <Plus className="w-3.5 h-3.5" /> Raise your first change request
             </Button>
           </div>
         )}

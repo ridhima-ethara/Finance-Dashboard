@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
 import { normalizeBudgetType } from "../lib/projectMetrics";
+import { buildProjectBudgetBuilderHref } from "../lib/projectBudgetRoute";
 
 // Deliver batch dialog.
 //   TPM view : proposed recoverable amount + client comment (no Client representative field).
@@ -107,7 +108,12 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
         description: `${project.name} · ${phase.name} · testing is complete and the Sample budget step is next`,
       });
       onOpenChange(false);
-      nav(`/budget-builder?projectId=${project.id}&budgetType=RnD&phaseId=${phase.id}&sampleIteration=1&sourceDeliveryId=${delivery.id}`);
+      nav(buildProjectBudgetBuilderHref(project.id, {
+        budgetType: "RnD",
+        phaseId: phase.id,
+        sampleIteration: 1,
+        sourceDeliveryId: delivery.id,
+      }));
       return;
     }
 
@@ -123,7 +129,12 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase }) => {
     }
     onOpenChange(false);
     if (rndDecision === "changes") {
-      nav(`/budget-builder?projectId=${project.id}&budgetType=Rework&phaseId=${phase.id}&sampleIteration=${nextSampleIteration + 1}&sourceDeliveryId=${delivery.id}`);
+      nav(buildProjectBudgetBuilderHref(project.id, {
+        budgetType: "Rework",
+        phaseId: phase.id,
+        sampleIteration: nextSampleIteration + 1,
+        sourceDeliveryId: delivery.id,
+      }));
     }
   };
 
