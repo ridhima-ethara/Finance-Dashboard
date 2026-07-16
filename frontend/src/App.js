@@ -16,6 +16,7 @@ import Login from "./pages/Login";
 import Daily from "./pages/Daily";
 import PhaseWorkspace from "./pages/tpm/PhaseWorkspace";
 import Consumption from "./pages/tpm/Consumption";
+import BudgetBuilder from "./pages/tpm/BudgetBuilder";
 import BudgetReviews from "./pages/cto/BudgetReviews";
 import BudgetReviewWorkspace from "./pages/cto/BudgetReviewWorkspace";
 import ChangeRequests from "./pages/cto/ChangeRequests";
@@ -72,7 +73,7 @@ function App() {
               <Route path="/tasks" element={<Tasks />} />
               <Route path="/keys" element={<Navigate to="/projects" replace />} />
               <Route path="/daily" element={<Daily />} />
-              <Route path="/budget-builder" element={<Navigate to="/projects" replace />} />
+              <Route path="/budget-builder" element={<BudgetBuilder />} />
               <Route path="/projects/:id/phase/:phaseId" element={<PhaseWorkspace />} />
               <Route path="/ai-cost" element={<Navigate to="/projects" replace />} />
               <Route path="/consumption" element={<Consumption />} />

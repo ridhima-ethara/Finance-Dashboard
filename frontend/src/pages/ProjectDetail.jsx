@@ -29,7 +29,6 @@ import { getPhaseTasks } from "../data/mockTpm";
 import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
 import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
-import BudgetBuilder from "./tpm/BudgetBuilder";
 import ChangeRequestDialog from "./tpm/ChangeRequestDialog";
 import { DAILY_ACTIVITY } from "../data/mockAi";
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
@@ -343,12 +342,9 @@ const ProjectDetail = () => {
       ? approvalLockMessage
       : "";
   const requestedTab = searchParams.get("tab");
-  const budgetBuilderOpen = searchParams.get("builder") === "1";
-  const activeProjectTab = budgetBuilderOpen
-    ? "budget"
-    : ["team", "models", "budget", "tasks", "batch", "logs"].includes(requestedTab)
-      ? requestedTab
-      : "team";
+  const activeProjectTab = ["team", "models", "budget", "tasks", "batch", "logs"].includes(requestedTab)
+    ? requestedTab
+    : "team";
   const latestTestingDelivery = useMemo(
     () => projectBatches
       .filter((delivery) => normalizeBudgetType(delivery?.budgetType) === "Testing")
@@ -502,15 +498,6 @@ const ProjectDetail = () => {
       } else {
         params.set("tab", nextTab);
       }
-      if (nextTab !== "budget") {
-        ["builder", "edit", "budgetType", "phaseId", "sampleIteration", "sourceDeliveryId"].forEach((key) => params.delete(key));
-      }
-    });
-  };
-  const handleBudgetBuilderCompleted = () => {
-    updateProjectSearchParams((params) => {
-      params.set("tab", "budget");
-      ["builder", "edit", "budgetType", "phaseId", "sampleIteration", "sourceDeliveryId"].forEach((key) => params.delete(key));
     });
   };
 
@@ -1079,13 +1066,7 @@ const ProjectDetail = () => {
 
         {/* ---- Budget ---- */}
         <TabsContent value="budget" className="mt-6 space-y-4" data-testid="budget-panel">
-          {budgetBuilderOpen ? (
-            <BudgetBuilder
-              embeddedProjectId={p.id}
-              onSubmitted={handleBudgetBuilderCompleted}
-              onClose={handleBudgetBuilderCompleted}
-            />
-          ) : (() => {
+          {(() => {
             const spent = Number(isCFO ? p.cfoActualSpend || p.actualSpend || 0 : projectUsage.loggedSpend || 0);
             const cap = Number(p.approvedBudget || 0);
             const remaining = Number(isCFO ? (p.cfoRemaining || p.remaining || (cap - spent)) : (projectUsage.remainingBudget || (cap - spent)));
