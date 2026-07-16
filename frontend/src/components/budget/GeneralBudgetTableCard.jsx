@@ -1,7 +1,17 @@
 import { useMemo } from "react";
 import { FileText } from "lucide-react";
 import { fmtCurrency } from "../../lib/format";
-import { parseGeneralBudgetTable } from "../../lib/generalBudget";
+import { isGeneralBudgetCostHeader, parseGeneralBudgetTable } from "../../lib/generalBudget";
+
+const formatCostCell = (value) => {
+  const normalized = String(value ?? "")
+    .replace(/[$,%\s]/g, "")
+    .replace(/,/g, "")
+    .trim();
+  if (!normalized) return "—";
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? fmtCurrency(parsed, { compact: false }) : "—";
+};
 
 const GeneralBudgetTableCard = ({
   lines = [],
@@ -44,18 +54,27 @@ const GeneralBudgetTableCard = ({
             <tr className="border-b border-white/5 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
               <th className="py-2 px-3 text-left">Phase</th>
               {table.headers.map((header) => (
-                <th key={header} className="py-2 px-3 text-left">{header}</th>
+                <th key={header} className={`py-2 px-3 ${isGeneralBudgetCostHeader(header) ? "text-right" : "text-left"}`}>{header}</th>
               ))}
-              <th className="py-2 px-3 text-right">Cost ($)</th>
+              <th className="py-2 px-3 text-right">Total ($)</th>
             </tr>
           </thead>
           <tbody>
             {table.rows.map((row) => (
               <tr key={row.id} className="border-b border-white/5 last:border-b-0">
                 <td className="py-3 px-3 text-white font-medium">{row.phaseName || "Unassigned"}</td>
-                {table.headers.map((header) => (
-                  <td key={`${row.id}-${header}`} className="py-3 px-3 text-zinc-300">{row.cells?.[header] || "—"}</td>
-                ))}
+                {table.headers.map((header) => {
+                  const cellValue = row.cells?.[header] ?? "";
+                  const isCostColumn = isGeneralBudgetCostHeader(header);
+                  return (
+                    <td
+                      key={`${row.id}-${header}`}
+                      className={`py-3 px-3 ${isCostColumn ? "text-right font-medium tabular text-zinc-200" : "text-zinc-300"}`}
+                    >
+                      {isCostColumn ? formatCostCell(cellValue) : (cellValue || "—")}
+                    </td>
+                  );
+                })}
                 <td className="py-3 px-3 text-right text-white font-semibold tabular">{fmtCurrency(row.estCost, { compact: false })}</td>
               </tr>
             ))}

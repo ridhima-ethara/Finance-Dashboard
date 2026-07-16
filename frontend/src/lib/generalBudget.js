@@ -29,6 +29,10 @@ const uniqueLabels = (headers = []) => {
 export const GENERAL_BUDGET_TABLE_MODE = "custom-table";
 export const DEFAULT_GENERAL_BUDGET_HEADERS = ["Line item", "Details"];
 export const getGeneralBudgetColumnCellKey = (index = 0) => `__col_${index}`;
+export const isGeneralBudgetCostHeader = (header = "") => {
+  const key = normalizeHeaderKey(header);
+  return key === "cost" || key === "amount" || key === "budget" || key.startsWith("costsection");
+};
 
 const readGeneralBudgetCellValue = (row = {}, header = "", index = 0) => String(
   row?.cells?.[getGeneralBudgetColumnCellKey(index)]
@@ -42,6 +46,21 @@ const readGeneralBudgetCellValue = (row = {}, header = "", index = 0) => String(
 export const normalizeGeneralBudgetHeaders = (headers = DEFAULT_GENERAL_BUDGET_HEADERS) => {
   const source = Array.isArray(headers) && headers.length ? headers : DEFAULT_GENERAL_BUDGET_HEADERS;
   return uniqueLabels(source.map((header) => String(header || "").trim()).filter(Boolean));
+};
+
+export const getGeneralBudgetCostHeaders = (headers = DEFAULT_GENERAL_BUDGET_HEADERS) => (
+  normalizeGeneralBudgetHeaders(headers).filter(isGeneralBudgetCostHeader)
+);
+
+export const calculateGeneralBudgetRowTotal = (row = {}, headers = DEFAULT_GENERAL_BUDGET_HEADERS) => {
+  const safeHeaders = normalizeGeneralBudgetHeaders(headers);
+  const hasCostSections = safeHeaders.some(isGeneralBudgetCostHeader);
+  if (!hasCostSections) return Number(row?.estCost || row?.amount || 0);
+  return Math.round(safeHeaders.reduce((sum, header, index) => (
+    isGeneralBudgetCostHeader(header)
+      ? sum + parseNumericCell(readGeneralBudgetCellValue(row, header, index))
+      : sum
+  ), 0) * 100) / 100;
 };
 
 export const buildEmptyGeneralBudgetTableRow = ({ phaseId = "", phaseName = "", headers = DEFAULT_GENERAL_BUDGET_HEADERS } = {}) => {
@@ -60,12 +79,8 @@ export const buildEmptyGeneralBudgetTableRow = ({ phaseId = "", phaseName = "", 
 
 export const normalizeGeneralBudgetRows = (rows = [], headers = DEFAULT_GENERAL_BUDGET_HEADERS) => {
   const safeHeaders = normalizeGeneralBudgetHeaders(headers);
-  return (Array.isArray(rows) ? rows : []).map((row) => ({
-    id: row?.id || createRowId("gb"),
-    phaseId: String(row?.phaseId || "").trim(),
-    phaseName: String(row?.phaseName || "").trim(),
-    estCost: Number(row?.estCost || row?.amount || 0),
-    cells: Object.fromEntries(
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const cells = Object.fromEntries(
       safeHeaders.flatMap((header, index) => {
         const value = readGeneralBudgetCellValue(row, header, index);
         return [
@@ -73,18 +88,28 @@ export const normalizeGeneralBudgetRows = (rows = [], headers = DEFAULT_GENERAL_
           [getGeneralBudgetColumnCellKey(index), value],
         ];
       })
-    ),
-  }));
+    );
+    const normalizedRow = {
+      id: row?.id || createRowId("gb"),
+      phaseId: String(row?.phaseId || "").trim(),
+      phaseName: String(row?.phaseName || "").trim(),
+      cells,
+    };
+    return {
+      ...normalizedRow,
+      estCost: calculateGeneralBudgetRowTotal({ ...row, ...normalizedRow }, safeHeaders),
+    };
+  });
 };
 
-export const sumGeneralBudgetRows = (rows = []) => (
-  (Array.isArray(rows) ? rows : []).reduce((sum, row) => sum + Number(row?.estCost || row?.amount || 0), 0)
+export const sumGeneralBudgetRows = (rows = [], headers = DEFAULT_GENERAL_BUDGET_HEADERS) => (
+  normalizeGeneralBudgetRows(rows, headers).reduce((sum, row) => sum + Number(row?.estCost || 0), 0)
 );
 
-export const sumGeneralBudgetRowsByPhase = (rows = []) => (
-  (Array.isArray(rows) ? rows : []).reduce((acc, row) => {
+export const sumGeneralBudgetRowsByPhase = (rows = [], headers = DEFAULT_GENERAL_BUDGET_HEADERS) => (
+  normalizeGeneralBudgetRows(rows, headers).reduce((acc, row) => {
     const phaseId = String(row?.phaseId || "").trim() || "unassigned";
-    acc[phaseId] = (acc[phaseId] || 0) + Number(row?.estCost || row?.amount || 0);
+    acc[phaseId] = (acc[phaseId] || 0) + Number(row?.estCost || 0);
     return acc;
   }, {})
 );
@@ -103,20 +128,41 @@ export const serializeGeneralBudgetTableRows = (rows = [], headers = DEFAULT_GEN
     .map((row, index) => {
       const phaseMeta = phaseMap.get(row.phaseId) || {};
       const phaseName = row.phaseName || phaseMeta.name || "";
-      const cellValues = safeHeaders.map((header, cellIndex) => readGeneralBudgetCellValue(row, header, cellIndex)).filter(Boolean);
-      const label = cellValues[0] || `${phaseName || "General"} row ${index + 1}`;
-      const detail = [phaseName, ...cellValues.slice(1)].filter(Boolean).join(" · ");
-      const amount = Number(row.estCost || 0);
+      const descriptorValues = safeHeaders
+        .map((header, cellIndex) => (
+          isGeneralBudgetCostHeader(header)
+            ? null
+            : readGeneralBudgetCellValue(row, header, cellIndex)
+        ))
+        .filter(Boolean);
+      const costSections = safeHeaders
+        .map((header, cellIndex) => (
+          isGeneralBudgetCostHeader(header)
+            ? {
+                header,
+                amount: parseNumericCell(readGeneralBudgetCellValue(row, header, cellIndex)),
+              }
+            : null
+        ))
+        .filter(Boolean);
+      const label = descriptorValues[0] || `${phaseName || "General"} row ${index + 1}`;
+      const detail = [phaseName, ...descriptorValues.slice(1)].filter(Boolean).join(" · ");
+      const costSummary = costSections
+        .filter((entry) => entry.amount > 0)
+        .map((entry) => `${entry.header}: ${entry.amount}`)
+        .join(" · ");
+      const amount = calculateGeneralBudgetRowTotal(row, safeHeaders);
       return {
         id: row.id || createRowId("gb"),
         label,
         optionLabel: label,
-        note: detail || "General budget table row",
+        note: [detail, costSummary].filter(Boolean).join(" · ") || "General budget table row",
         detail,
         estCost: amount,
         amount,
         phaseId: row.phaseId || phaseMeta.id || "",
         phaseName,
+        costSections,
         tableMode: GENERAL_BUDGET_TABLE_MODE,
         tableHeaders: safeHeaders,
         tableCells: Object.fromEntries(
@@ -139,6 +185,7 @@ export const parseGeneralBudgetTable = (lines = []) => {
   }
 
   const headers = normalizeGeneralBudgetHeaders(tableLines.find((line) => Array.isArray(line?.tableHeaders) && line.tableHeaders.length)?.tableHeaders);
+  const costHeaders = headers.filter(isGeneralBudgetCostHeader);
   const rows = normalizeGeneralBudgetRows(tableLines.map((line) => ({
     id: line.id,
     phaseId: line.phaseId,
@@ -157,9 +204,11 @@ export const parseGeneralBudgetTable = (lines = []) => {
   return {
     isTableMode: true,
     headers,
+    costHeaders,
+    hasCostSections: costHeaders.length > 0,
     rows,
     phaseTotals: Object.values(totalsByPhase),
-    total: sumGeneralBudgetRows(rows),
+    total: sumGeneralBudgetRows(rows, headers),
   };
 };
 

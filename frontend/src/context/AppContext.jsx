@@ -17,7 +17,7 @@ import {
 } from "../data/demoState";
 import { formatBudgetTypeLabel, normalizeBudgetType, summarizeItProjectActuals } from "../lib/projectMetrics";
 import { buildCustomModelId } from "../lib/modelCatalog";
-import { getCtoForwardLabel, hasCtoModifiedBudgetReview } from "../lib/budgetReview";
+import { areBudgetItemsEqual, getCtoForwardLabel, hasCtoModifiedBudgetReview } from "../lib/budgetReview";
 import {
   getGeneralActualRowsCostTotal,
   getGeneralActualRowsCount,
@@ -398,6 +398,32 @@ const sumBudgetLines = (lines = []) =>
 
 const sumBudgetItems = (items = {}) =>
   sumBudgetLines(items.models) + sumBudgetLines(items.infra) + sumBudgetLines(items.subs) + sumBudgetLines(items.misc);
+
+const formatBudgetMoney = (value = 0) =>
+  `$${Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const buildBudgetItemsChangeSummary = (items = {}) => {
+  const lineItems = cloneBudgetItems(items);
+  const totals = {
+    models: sumBudgetLines(lineItems.models),
+    infra: sumBudgetLines(lineItems.infra),
+    subs: sumBudgetLines(lineItems.subs),
+    misc: sumBudgetLines(lineItems.misc),
+  };
+  const total = totals.models + totals.infra + totals.subs + totals.misc;
+  const lineCount = lineItems.models.length + lineItems.infra.length + lineItems.subs.length + lineItems.misc.length;
+  const parts = [
+    totals.models > 0 ? `Models ${formatBudgetMoney(totals.models)}` : "",
+    totals.infra > 0 ? `Infrastructure ${formatBudgetMoney(totals.infra)}` : "",
+    totals.subs > 0 ? `Subscriptions ${formatBudgetMoney(totals.subs)}` : "",
+    totals.misc > 0 ? `General ${formatBudgetMoney(totals.misc)}` : "",
+  ].filter(Boolean);
+  return [
+    `Total ${formatBudgetMoney(total)}`,
+    ...parts,
+    lineCount > 0 ? `${lineCount} line item${lineCount === 1 ? "" : "s"}` : "",
+  ].filter(Boolean).join(" · ");
+};
 
 const clonePhases = (phases = []) => phases.map((phase) => ({ ...phase }));
 
@@ -2288,10 +2314,7 @@ export const AppProvider = ({ children }) => {
   };
 
   // ---- Budget Reviews (CTO edits original TPM ask, forwards to CFO for final decision) ----
-  const ctoModifyBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, modifiedPhases, modifiedItems, ctoComment, itemBased = false, ctoModified = true }) => {
-    const phaseTotal = (modifiedPhases || []).reduce((sum, phase) => (
-      sum + Number(phase.infra || 0) + Number(phase.model || 0) + Number(phase.subs || 0)
-    ), 0);
+  const ctoModifyBudgetReview = ({ reviewId, projectId, projectName, tpm, requestedBudget, modifiedPhases, modifiedItems, ctoComment, ctoModified = true }) => {
     const itemSummary = cloneBudgetItems(modifiedItems || {});
     const itemTotals = {
       models: sumBudgetLines(itemSummary.models),
@@ -2299,14 +2322,12 @@ export const AppProvider = ({ children }) => {
       subs: sumBudgetLines(itemSummary.subs),
       misc: sumBudgetLines(itemSummary.misc),
     };
-    const total = itemBased
-      ? (itemTotals.models + itemTotals.infra + itemTotals.subs + itemTotals.misc)
-      : (phaseTotal + itemTotals.misc);
+    const total = itemTotals.models + itemTotals.infra + itemTotals.subs + itemTotals.misc;
+    const ctoChangeSummary = buildBudgetItemsChangeSummary(itemSummary);
     const now = new Date().toISOString();
     setBudgetReviews((arr) => {
       const existingIdx = arr.findIndex((r) => r.id === reviewId);
       const previous = existingIdx >= 0 ? arr[existingIdx] : null;
-      const priorItems = cloneBudgetItems(previous?.items || {});
       const base = {
         ...(previous || {}),
         id: reviewId,
@@ -2317,17 +2338,15 @@ export const AppProvider = ({ children }) => {
         modifiedPhases,
         modifiedItems: modifiedItems ? itemSummary : previous?.modifiedItems,
         modifiedTotal: total,
-        aiCost: itemBased ? itemTotals.models : (modifiedPhases || []).reduce((sum, phase) => sum + Number(phase.model || 0), 0),
-        infraCost: itemBased ? itemTotals.infra : (modifiedPhases || []).reduce((sum, phase) => sum + Number(phase.infra || 0), 0),
-        subsCost: itemBased ? itemTotals.subs : (modifiedPhases || []).reduce((sum, phase) => sum + Number(phase.subs || 0), 0),
+        aiCost: itemTotals.models,
+        infraCost: itemTotals.infra,
+        subsCost: itemTotals.subs,
         miscCost: itemTotals.misc,
         items: modifiedItems
-          ? {
-              ...(itemBased ? { models: [], infra: [], subs: [], misc: [] } : priorItems),
-              ...itemSummary,
-            }
+          ? cloneBudgetItems(itemSummary)
           : cloneBudgetItems(previous?.items || {}),
         ctoComment,
+        ctoChangeSummary,
         ctoBy: user?.name || "CTO",
         ctoAt: now,
         ctoModified,
@@ -2339,9 +2358,10 @@ export const AppProvider = ({ children }) => {
         at: now,
         actor: `${user?.name || "CTO"} · CTO`,
         action: getCtoForwardLabel({ ...base, ctoModified }),
-        detail: modifiedItems
-          ? `Total ${total} · ${itemSummary.models.length + itemSummary.infra.length + itemSummary.subs.length + itemSummary.misc.length} line item${itemSummary.models.length + itemSummary.infra.length + itemSummary.subs.length + itemSummary.misc.length === 1 ? "" : "s"}`
-          : `Total ${total} · ${modifiedPhases.length} phase${modifiedPhases.length === 1 ? "" : "s"}`,
+        detail: [
+          modifiedItems ? ctoChangeSummary : `Total ${formatBudgetMoney(total)} · ${modifiedPhases.length} phase${modifiedPhases.length === 1 ? "" : "s"}`,
+          ctoComment || "",
+        ].filter(Boolean).join(" · "),
       };
       if (existingIdx >= 0) {
         return arr.map((r, i) => (i === existingIdx ? { ...base, history: [...(previous.history || []), historyEntry] } : r));
@@ -2463,19 +2483,29 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const cfoDecideBudgetReview = (reviewId, { decision, amount, comment, reviewSeed }) => {
+  const cfoDecideBudgetReview = (reviewId, { decision, amount, comment, reviewSeed, modifiedItems }) => {
     const at = new Date().toISOString();
     const baseReview = budgetReviews.find((review) => review.id === reviewId) || reviewSeed;
 
     if (!baseReview) return null;
 
+    const finalItems = cloneBudgetItems(modifiedItems || baseReview.items || {});
+    const finalItemTotals = {
+      models: sumBudgetLines(finalItems.models),
+      infra: sumBudgetLines(finalItems.infra),
+      subs: sumBudgetLines(finalItems.subs),
+      misc: sumBudgetLines(finalItems.misc),
+    };
+    const finalItemTotal = finalItemTotals.models + finalItemTotals.infra + finalItemTotals.subs + finalItemTotals.misc;
+    const cfoModified = !areBudgetItemsEqual(baseReview.items || {}, finalItems);
+    const cfoChangeSummary = buildBudgetItemsChangeSummary(finalItems);
     const requestedTotal = Number(
       baseReview.modifiedTotal
       || baseReview.recommendedBudget
       || baseReview.requestedBudget
       || 0
     );
-    const approvedAmount = Number(amount || requestedTotal || 0);
+    const approvedAmount = Number(amount || finalItemTotal || requestedTotal || 0);
     const statusMap = { approve: "approved", partial: "partial", reject: "rejected", return: "returned" };
     const actionLabel = {
       approve: "CFO approved",
@@ -2487,16 +2517,36 @@ export const AppProvider = ({ children }) => {
       ...baseReview,
       status: statusMap[decision] || "returned",
       stage: decision === "return" ? "CTO Review" : decision === "reject" ? "Rejected" : "Approved",
+      ...(decision === "approve" || decision === "partial"
+        ? {
+            items: cloneBudgetItems(finalItems),
+            aiCost: finalItemTotals.models,
+            infraCost: finalItemTotals.infra,
+            subsCost: finalItemTotals.subs,
+            miscCost: finalItemTotals.misc,
+            cfoModified,
+            cfoChangeSummary,
+          }
+        : {}),
       cfoDecision: {
         decision,
         amount: decision === "reject" ? 0 : approvedAmount,
         comment: comment || "",
         at,
         by: user?.name || "CFO",
+        modified: cfoModified,
+        changeSummary: decision === "approve" || decision === "partial" ? cfoChangeSummary : "",
       },
       history: [
         ...(baseReview.history || []),
-        { at, actor: `${user?.name || "CFO"} · CFO`, action: actionLabel, detail: comment || "" },
+        {
+          at,
+          actor: `${user?.name || "CFO"} · CFO`,
+          action: actionLabel,
+          detail: decision === "approve" || decision === "partial"
+            ? [cfoChangeSummary, comment || ""].filter(Boolean).join(" · ")
+            : (comment || ""),
+        },
       ],
     };
 

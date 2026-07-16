@@ -10,7 +10,6 @@ import {
   ChevronRight,
   Filter,
   Search,
-  Sparkles,
   CheckCircle2,
 } from "lucide-react";
 
@@ -147,6 +146,8 @@ const BudgetReviews = () => {
           const uc = urgencyColor[r.urgency] || urgencyColor.Normal;
           const requesterLabel = r.requesterRole === "R&D" || ["Testing", "RnD", "Rework"].includes(r.budgetType) ? "R&D" : "TPM";
           const status = statusMeta[getStatusGroup(r)];
+          const stageAmount = Number(r.modifiedTotal || r.cfoDecision?.amount || r.recommendedBudget || r.requestedBudget || 0);
+          const stageAmountLabel = getStatusGroup(r) === "sent-to-cfo" ? "Forwarded amount" : "Submitted amount";
           return (
             <Link
               to={`/budget-reviews/${r.id}`}
@@ -164,16 +165,8 @@ const BudgetReviews = () => {
                     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${status.chip}`}>
                       {status.label}
                     </span>
-                    {getStatusGroup(r) === "action-required" && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border bg-orange-500/10 text-orange-200 border-orange-500/30">
-                        Action Required
-                      </span>
-                    )}
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
                       {String(r.type || "").replace(/\bSampling\b/g, "Sample").replace(/\bR&D\b/g, "Sample")}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border border-sky-500/30 bg-sky-500/10 text-sky-200">
-                      Raised from {requesterLabel}
                     </span>
                     {r.teamType && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
@@ -188,7 +181,7 @@ const BudgetReviews = () => {
                   <div className="mt-2 font-display font-semibold text-lg text-white">{r.projectName}</div>
                   <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-3 flex-wrap">
                     <span className="inline-flex items-center gap-1">
-                      <User className="w-3 h-3" /> {requesterLabel}: {r.tpm}
+                      <User className="w-3 h-3" /> Requested by {requesterLabel} · {r.tpm}
                     </span>
                     <span>·</span>
                     <span>{r.client}</span>
@@ -205,30 +198,15 @@ const BudgetReviews = () => {
                 </div>
 
                 <div className="text-right">
-                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Requested</div>
-                  <div className="font-display text-2xl font-semibold text-white tabular">{fmtCurrency(r.requestedBudget, { compact: false })}</div>
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{stageAmountLabel}</div>
+                  <div className="font-display text-2xl font-semibold text-white tabular">{fmtCurrency(stageAmount, { compact: false })}</div>
                   <div className="text-[11px] text-zinc-500 mt-0.5 tabular">
                     vs current {fmtCurrency(r.currentBudget, { compact: false })}
-                  </div>
-                  <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-fuchsia-500/10 border border-fuchsia-500/30 px-2 py-1">
-                    <Sparkles className="w-3 h-3 text-fuchsia-300" />
-                    <span className="text-[10px] uppercase tracking-widest text-fuchsia-300 font-semibold">
-                      {getStatusGroup(r) === "sent-to-cfo" ? "Forwarded amount" : "Submitted amount"}
-                    </span>
-                    <span className="text-xs font-semibold text-fuchsia-200 tabular">
-                      {fmtCurrency(Number(r.modifiedTotal || r.cfoDecision?.amount || r.recommendedBudget || r.requestedBudget || 0), { compact: false })}
-                    </span>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-4 text-[11px] text-zinc-400">
-                  <span>AI cost <span className="text-white font-semibold tabular">{fmtCurrency(r.aiCost, { compact: false })}</span></span>
-                  <span>Infra <span className="text-white font-semibold tabular">{fmtCurrency(r.infraCost, { compact: false })}</span></span>
-                  <span>Subs <span className="text-white font-semibold tabular">{fmtCurrency(r.subsCost, { compact: false })}</span></span>
-                  <span>General <span className="text-white font-semibold tabular">{fmtCurrency(r.miscCost, { compact: false })}</span></span>
-                </div>
+              <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-end">
                 <div className="inline-flex items-center gap-1 text-[11px] text-fuchsia-300 font-medium">
                   Open review workspace <ChevronRight className="w-3 h-3" />
                 </div>
