@@ -856,7 +856,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       onClose();
       return;
     }
-    nav(returnedReview ? "/" : "/projects");
+    nav(projectId ? `/projects/${projectId}?tab=budget` : "/projects");
   };
 
   const stepPill = (n, label, active, done) => (
