@@ -1,78 +1,88 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { Cpu, Filter, Layers, ListChecks, TrendingDown, TrendingUp } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { fmtCurrency } from "../../lib/format";
-import { Cpu, ListChecks, TrendingUp, TrendingDown, Layers, Filter } from "lucide-react";
-import { Link } from "react-router-dom";
+import { buildDeliverableCostMetrics, summarizeLoggedProject } from "../../lib/projectMetrics";
 
-// CFO-facing cost analytics: per-project & per-phase unit economics.
-//   Cost / task       = phase budget / planned tasks
-//   Cost / trajectory = phase budget / (tasks × trajectories/task)
-//   Actual cost / task = sum(log.cost) / sum(log.tasksDone) (from TPM daily logs)
+const getRequestedTaskCount = (project, review) => {
+  const phaseTaskTotal = Array.isArray(project?.phases)
+    ? project.phases.reduce((sum, phase) => sum + Number(phase?.totalTasks || phase?.tasks || 0), 0)
+    : 0;
+
+  return Number(project?.totalTasks || phaseTaskTotal || review?.tasks || 0);
+};
+
 const CostPerTaskView = () => {
   const { projects, taskLogs } = useApp();
-  const [sort, setSort] = useState("costPerTask");
+  const [sort, setSort] = useState("variance");
 
-  const rows = useMemo(() => {
-    const out = [];
-    projects.forEach((p) => {
-      // fetch tasks-per-phase either from custom project (BudgetBuilder) or from BUDGET_REVIEWS fallback
-      const review = BUDGET_REVIEWS.find((r) => r.projectId === p.id);
-      const reviewTasks = Number(review?.tasks || 0);
-      const reviewPhases = Number(review?.phases || (p.phases?.length || 1));
-      const perPhaseTasksFallback = reviewTasks && reviewPhases ? Math.round(reviewTasks / reviewPhases) : 0;
-
-      (p.phases || []).forEach((ph) => {
-        const planned = Number(ph.totalTasks || ph.tasks || perPhaseTasksFallback || 0);
-        const trajPerTask = Number(ph.trajectoriesPerTask || 3);
-        const trajectories = planned * trajPerTask;
-        const budget = Number(ph.estimated || 0);
-        const actual = Number(ph.actual || 0);
-        const key = `${p.id}::${ph.id}`;
-        const logs = taskLogs[key] || [];
-        const loggedTasks = logs.reduce((s, l) => s + (Number(l.tasksDone) || 0), 0);
-        const loggedCost = logs.reduce((s, l) => s + (Number(l.cost) || 0), 0);
-        out.push({
-          projectId: p.id,
-          projectName: p.name,
-          projectType: p.type || "R&D",
-          phaseId: ph.id,
-          phaseName: ph.name,
-          planned,
-          trajPerTask,
-          trajectories,
-          budget,
-          actual,
-          loggedTasks,
-          loggedCost,
-          costPerTask: planned > 0 ? Math.round((budget / planned) * 100) / 100 : 0,
-          costPerTraj: trajectories > 0 ? Math.round((budget / trajectories) * 1000) / 1000 : 0,
-          actualPerTask: loggedTasks > 0 ? Math.round((loggedCost / loggedTasks) * 100) / 100 : 0,
-        });
+  const rows = useMemo(
+    () => projects.map((project) => {
+      const review = BUDGET_REVIEWS.find((entry) => entry.projectId === project.id);
+      const usage = summarizeLoggedProject(project, taskLogs);
+      const totalTaskCount = getRequestedTaskCount(project, review);
+      const totalBudgetRequested = Number(
+        project?.approvedBudget
+        || project?.estimatedBudget
+        || review?.requestedBudget
+        || 0
+      );
+      const metrics = buildDeliverableCostMetrics({
+        totalBudgetRequested,
+        totalTaskCount,
+        completedDeliverables: usage.loggedTasks,
+        totalAmountConsumed: Number(project?.cfoActualSpend || project?.actualSpend || 0),
       });
-    });
-    return out;
-  }, [projects, taskLogs]);
+
+      return {
+        projectId: project.id,
+        projectName: project.name,
+        projectType: project.type || "R&D",
+        totalTaskCount,
+        totalBudgetRequested,
+        ...metrics,
+      };
+    }).filter((row) => (
+      row.totalTaskCount > 0
+      || row.completedDeliverables > 0
+      || row.totalBudgetRequested > 0
+      || row.actualCost > 0
+    )),
+    [projects, taskLogs]
+  );
 
   const filtered = useMemo(() => {
-    let r = rows.filter((x) => x.planned > 0); // only phases with derivable unit economics
-    r = [...r];
-    if (sort === "costPerTask") r.sort((a, b) => b.costPerTask - a.costPerTask);
-    else if (sort === "costPerTraj") r.sort((a, b) => b.costPerTraj - a.costPerTraj);
-    else if (sort === "budget") r.sort((a, b) => b.budget - a.budget);
-    return r;
+    const nextRows = [...rows];
+
+    if (sort === "claimedCost") {
+      nextRows.sort((left, right) => right.claimedCost - left.claimedCost);
+    } else if (sort === "actualCost") {
+      nextRows.sort((left, right) => right.actualCost - left.actualCost);
+    } else if (sort === "perTaskCost") {
+      nextRows.sort((left, right) => right.perTaskCost - left.perTaskCost);
+    } else {
+      nextRows.sort((left, right) => Math.abs(right.variance) - Math.abs(left.variance));
+    }
+
+    return nextRows;
   }, [rows, sort]);
 
   const totals = useMemo(() => {
-    const tasks = filtered.reduce((s, r) => s + r.planned, 0);
-    const traj = filtered.reduce((s, r) => s + r.trajectories, 0);
-    const budget = filtered.reduce((s, r) => s + r.budget, 0);
+    const totalTaskCount = filtered.reduce((sum, row) => sum + row.totalTaskCount, 0);
+    const completedDeliverables = filtered.reduce((sum, row) => sum + row.completedDeliverables, 0);
+    const claimedCost = filtered.reduce((sum, row) => sum + row.claimedCost, 0);
+    const actualCost = filtered.reduce((sum, row) => sum + row.actualCost, 0);
+    const variance = actualCost - claimedCost;
+
     return {
-      tasks,
-      traj,
-      budget,
-      avgPerTask: tasks > 0 ? Math.round((budget / tasks) * 100) / 100 : 0,
-      avgPerTraj: traj > 0 ? Math.round((budget / traj) * 1000) / 1000 : 0,
+      totalTaskCount,
+      completedDeliverables,
+      claimedCost,
+      actualCost,
+      variance,
+      perTaskCost: totalTaskCount > 0 ? claimedCost / totalTaskCount : 0,
     };
   }, [filtered]);
 
@@ -81,40 +91,47 @@ const CostPerTaskView = () => {
       <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
-            <Cpu className="w-3 h-3" /> Unit economics
+            <Cpu className="w-3 h-3" /> Deliverable costing
           </div>
-          <div className="font-display font-semibold text-[15px] text-white mt-1">Cost per task &amp; per trajectory</div>
-          <div className="text-xs text-zinc-500 mt-0.5">Per-phase breakdown across all projects · derived from planned tasks × trajectories</div>
+          <div className="font-display font-semibold text-[15px] text-white mt-1">Claimed vs actual cost</div>
+          <div className="text-xs text-zinc-500 mt-0.5">
+            Per task cost = budget requested / total task count · actuals use IT-filed consumed amounts
+          </div>
         </div>
         <div className="flex items-center gap-1.5">
           <div className="relative">
             <Filter className="w-3 h-3 text-zinc-500 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value)}
+              onChange={(event) => setSort(event.target.value)}
               data-testid="cpt-sort"
               className="pl-6 pr-2 h-8 rounded-md bg-white/[0.04] border border-white/10 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-fuchsia-500/40"
             >
-              <option value="costPerTask">Sort · Cost / task (high → low)</option>
-              <option value="costPerTraj">Sort · Cost / trajectory</option>
-              <option value="budget">Sort · Phase budget</option>
+              <option value="variance">Sort · variance</option>
+              <option value="claimedCost">Sort · claimed cost</option>
+              <option value="actualCost">Sort · actual cost</option>
+              <option value="perTaskCost">Sort · per task cost</option>
             </select>
           </div>
         </div>
       </div>
 
-      {/* Summary strip */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
-        <SummaryCell icon={ListChecks} label="Total tasks" value={totals.tasks.toLocaleString()} testid="cpt-total-tasks" />
-        <SummaryCell icon={Layers} label="Total trajectories" value={totals.traj.toLocaleString()} testid="cpt-total-traj" />
-        <SummaryCell label="Portfolio budget" value={fmtCurrency(totals.budget, { compact: false })} accent="text-white" testid="cpt-total-budget" />
-        <SummaryCell label="Avg cost / task" value={fmtCurrency(totals.avgPerTask, { compact: false })} accent="text-fuchsia-300" testid="cpt-avg-per-task" />
-        <SummaryCell label="Avg cost / trajectory" value={`$${totals.avgPerTraj.toFixed(3)}`} accent="text-fuchsia-300" testid="cpt-avg-per-traj" />
+        <SummaryCell icon={ListChecks} label="Total tasks" value={totals.totalTaskCount.toLocaleString()} testid="cpt-total-tasks" />
+        <SummaryCell icon={Layers} label="Delivered" value={totals.completedDeliverables.toLocaleString()} testid="cpt-total-delivered" />
+        <SummaryCell label="Claimed cost" value={fmtCurrency(totals.claimedCost, { compact: false })} accent="text-fuchsia-300" testid="cpt-total-claimed" />
+        <SummaryCell label="Actual cost" value={fmtCurrency(totals.actualCost, { compact: false })} accent="text-white" testid="cpt-total-actual" />
+        <SummaryCell
+          label="Variance"
+          value={fmtCurrency(totals.variance, { compact: false })}
+          accent={totals.variance > 0 ? "text-red-300" : totals.variance < 0 ? "text-emerald-300" : "text-white"}
+          testid="cpt-total-variance"
+        />
       </div>
 
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] p-8 text-center text-xs text-zinc-500">
-          No phases are available yet.
+          No deliverable costing data is available yet.
         </div>
       ) : (
         <div className="overflow-x-auto">
@@ -122,43 +139,63 @@ const CostPerTaskView = () => {
             <thead>
               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
                 <th className="text-left py-2 px-3">Project</th>
-                <th className="text-left py-2 px-3">Phase</th>
-                <th className="text-right py-2 px-3">Planned tasks</th>
-                <th className="text-right py-2 px-3">Trajectories</th>
-                <th className="text-right py-2 px-3">Phase budget</th>
-                <th className="text-right py-2 px-3">Cost / task</th>
-                <th className="text-right py-2 px-3">Cost / trajectory</th>
+                <th className="text-right py-2 px-3">Budget</th>
+                <th className="text-right py-2 px-3">Total tasks</th>
+                <th className="text-right py-2 px-3">Delivered</th>
+                <th className="text-right py-2 px-3">Per task cost</th>
+                <th className="text-right py-2 px-3">Claimed cost</th>
+                <th className="text-right py-2 px-3">Actual cost</th>
                 <th className="text-right py-2 px-3">Actual / task</th>
                 <th className="text-right py-2 px-3">Variance</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r) => {
-                const variance = r.actualPerTask > 0 ? r.actualPerTask - r.costPerTask : null;
-                const varPct = r.costPerTask > 0 && variance !== null ? Math.round((variance / r.costPerTask) * 100) : null;
-                const varUp = variance !== null && variance > 0;
+              {filtered.map((row) => {
+                const varianceUp = row.variance > 0;
+                const varianceDown = row.variance < 0;
+
                 return (
-                  <tr key={`${r.projectId}-${r.phaseId}`} data-testid={`cpt-row-${r.projectId}-${r.phaseId}`} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                  <tr
+                    key={row.projectId}
+                    data-testid={`cpt-row-${row.projectId}`}
+                    className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]"
+                  >
                     <td className="py-2.5 px-3">
-                      <Link to={`/projects/${r.projectId}`} className="text-white font-medium hover:text-fuchsia-300">
-                        {r.projectName}
+                      <Link to={`/projects/${row.projectId}`} className="text-white font-medium hover:text-fuchsia-300">
+                        {row.projectName}
                       </Link>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">{row.projectType}</div>
                     </td>
-                    <td className="py-2.5 px-3 text-xs text-fuchsia-300">{r.phaseName}</td>
-                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">{r.planned.toLocaleString() || "—"}</td>
-                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">{r.trajectories.toLocaleString() || "—"}</td>
-                    <td className="py-2.5 px-3 text-right tabular text-white font-semibold">{fmtCurrency(r.budget, { compact: false })}</td>
-                    <td className="py-2.5 px-3 text-right tabular text-fuchsia-300 font-semibold">{r.planned > 0 ? fmtCurrency(r.costPerTask, { compact: false }) : "—"}</td>
-                    <td className="py-2.5 px-3 text-right tabular text-fuchsia-300">{r.trajectories > 0 ? `$${r.costPerTraj.toFixed(3)}` : "—"}</td>
-                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">{r.actualPerTask > 0 ? fmtCurrency(r.actualPerTask, { compact: false }) : "—"}</td>
+                    <td className="py-2.5 px-3 text-right tabular text-white font-semibold">
+                      {fmtCurrency(row.totalBudgetRequested, { compact: false })}
+                    </td>
+                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">
+                      {row.totalTaskCount.toLocaleString() || "—"}
+                    </td>
+                    <td className="py-2.5 px-3 text-right tabular text-fuchsia-300 font-semibold">
+                      {row.completedDeliverables.toLocaleString() || "—"}
+                    </td>
+                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">
+                      {row.perTaskCost > 0 ? fmtCurrency(row.perTaskCost, { compact: false }) : "—"}
+                    </td>
+                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">
+                      {row.claimedCost > 0 ? fmtCurrency(row.claimedCost, { compact: false }) : "—"}
+                    </td>
+                    <td className="py-2.5 px-3 text-right tabular text-white font-semibold">
+                      {row.actualCost > 0 ? fmtCurrency(row.actualCost, { compact: false }) : "—"}
+                    </td>
+                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">
+                      {row.actualPerTaskCost > 0 ? fmtCurrency(row.actualPerTaskCost, { compact: false }) : "—"}
+                    </td>
                     <td className="py-2.5 px-3 text-right tabular">
-                      {variance === null ? (
-                        <span className="text-zinc-600 text-[11px]">no logs</span>
-                      ) : (
-                        <span className={`inline-flex items-center gap-1 font-semibold ${varUp ? "text-red-300" : "text-emerald-300"}`}>
-                          {varUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                          {varUp ? "+" : ""}{varPct}%
+                      {varianceUp || varianceDown ? (
+                        <span className={`inline-flex items-center gap-1 font-semibold ${varianceUp ? "text-red-300" : "text-emerald-300"}`}>
+                          {varianceUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                          {row.variance > 0 ? "+" : ""}
+                          {fmtCurrency(row.variance, { compact: false })}
                         </span>
+                      ) : (
+                        <span className="text-zinc-500">On target</span>
                       )}
                     </td>
                   </tr>

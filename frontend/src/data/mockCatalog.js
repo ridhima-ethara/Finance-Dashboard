@@ -1,7 +1,7 @@
 // Static catalogs for BudgetBuilder dropdowns — EC2 instance types + AWS Bedrock foundation models.
 // Kept static because they are AWS SKU lists, not user data.
 
-export const PLATFORM_PROVIDERS = ["AWS", "OpenAI", "OpenRouter", "GCP", "Moonshot"];
+export const PLATFORM_PROVIDERS = ["AWS", "Azure", "OpenAI", "OpenRouter", "AIML APIs", "GCP", "Moonshot"];
 
 // Popular infra instance types with indicative on-demand $/hour mocks.
 export const EC2_INSTANCES = [
@@ -13,12 +13,20 @@ export const EC2_INSTANCES = [
   { provider: "AWS", code: "r5.2xlarge", family: "Memory optimized", vCPU: 8, memoryGiB: 64, hourly: 0.504 },
   { provider: "AWS", code: "g5.2xlarge", family: "GPU", vCPU: 8, memoryGiB: 32, hourly: 1.212, gpu: "1x NVIDIA A10G" },
   { provider: "AWS", code: "trn1.2xlarge", family: "AWS Trainium", vCPU: 8, memoryGiB: 32, hourly: 1.343, gpu: "1x AWS Trainium" },
+  // Azure
+  { provider: "Azure", code: "Standard_D8s_v5", family: "General purpose", vCPU: 8, memoryGiB: 32, hourly: 0.384 },
+  { provider: "Azure", code: "Standard_F16s_v2", family: "Compute optimized", vCPU: 16, memoryGiB: 32, hourly: 0.756 },
+  { provider: "Azure", code: "Standard_NC4as_T4_v3", family: "GPU", vCPU: 4, memoryGiB: 28, hourly: 0.72, gpu: "1x NVIDIA T4" },
   // GCP
   { provider: "GCP", code: "e2-standard-4", family: "General purpose", vCPU: 4, memoryGiB: 16, hourly: 0.134 },
   { provider: "GCP", code: "n2-standard-8", family: "General purpose", vCPU: 8, memoryGiB: 32, hourly: 0.379 },
   { provider: "GCP", code: "c3-standard-8", family: "Compute optimized", vCPU: 8, memoryGiB: 32, hourly: 0.42 },
   { provider: "GCP", code: "a2-highgpu-1g", family: "GPU", vCPU: 12, memoryGiB: 85, hourly: 3.67, gpu: "1x NVIDIA A100" },
   { provider: "GCP", code: "g2-standard-8", family: "GPU", vCPU: 8, memoryGiB: 32, hourly: 1.18, gpu: "1x NVIDIA L4" },
+  // AIML APIs
+  { provider: "AIML APIs", code: "shared-inference-endpoint", family: "Hosted inference", vCPU: 0, memoryGiB: 0, hourly: 0.68 },
+  { provider: "AIML APIs", code: "priority-inference-endpoint", family: "Priority inference", vCPU: 0, memoryGiB: 0, hourly: 1.24 },
+  { provider: "AIML APIs", code: "dedicated-inference-pool", family: "Dedicated inference", vCPU: 0, memoryGiB: 0, hourly: 2.92 },
   // OpenAI
   { provider: "OpenAI", code: "priority-processing", family: "Hosted API throughput", vCPU: 0, memoryGiB: 0, hourly: 1.85 },
   { provider: "OpenAI", code: "reserved-capacity", family: "Dedicated capacity", vCPU: 0, memoryGiB: 0, hourly: 4.75 },
@@ -32,6 +40,16 @@ export const EC2_INSTANCES = [
   { provider: "Moonshot", code: "kimi-long-context-cluster", family: "Long-context inference", vCPU: 0, memoryGiB: 0, hourly: 1.52 },
   { provider: "Moonshot", code: "kimi-vision-cluster", family: "Vision inference", vCPU: 0, memoryGiB: 0, hourly: 1.94 },
 ];
+
+export const INFRA_STORAGE_TYPES = {
+  AWS: ["gp3 SSD", "io2 SSD", "st1 HDD", "sc1 HDD", "EFS"],
+  Azure: ["Premium SSD v2", "Standard SSD", "Standard HDD", "Ultra Disk", "Azure Files"],
+  GCP: ["Balanced PD", "SSD PD", "Standard PD", "Hyperdisk Balanced", "Filestore"],
+  OpenAI: ["Managed file storage", "Vector store", "Prompt cache"],
+  OpenRouter: ["Route cache", "Managed file storage", "Object storage"],
+  "AIML APIs": ["Managed dataset", "Prompt cache", "Object storage"],
+  Moonshot: ["Long-context cache", "Managed file storage", "Object storage"],
+};
 
 // Foundation model catalog used across budgeting, task logging, IT provisioning, and top-up flows.
 // Pricing values are indicative per-1K token mocks for workspace calculations.
@@ -110,6 +128,14 @@ export const BEDROCK_MODELS = [
   { id: "openai.gpt-4-1", name: "GPT-4.1", provider: "OpenAI", modality: "Chat", pricePer1kIn: 0.002, pricePer1kOut: 0.008 },
   { id: "openai.gpt-4-1-mini", name: "GPT-4.1 Mini", provider: "OpenAI", modality: "Chat", pricePer1kIn: 0.0004, pricePer1kOut: 0.0016 },
   { id: "openai.o3-mini", name: "o3-mini", provider: "OpenAI", modality: "Reasoning", pricePer1kIn: 0.0011, pricePer1kOut: 0.0044 },
+  // Azure
+  { id: "azure.gpt-4o", name: "Azure GPT-4o", provider: "Azure", modality: "Multimodal", pricePer1kIn: 0.0052, pricePer1kOut: 0.0156 },
+  { id: "azure.gpt-4-1", name: "Azure GPT-4.1", provider: "Azure", modality: "Chat", pricePer1kIn: 0.0022, pricePer1kOut: 0.0088 },
+  { id: "azure.o3-mini", name: "Azure o3-mini", provider: "Azure", modality: "Reasoning", pricePer1kIn: 0.0012, pricePer1kOut: 0.0048 },
+  // AIML APIs
+  { id: "aimlapis.deepseek-r1", name: "AIML API · DeepSeek R1", provider: "AIML APIs", modality: "Reasoning", pricePer1kIn: 0.0013, pricePer1kOut: 0.0052 },
+  { id: "aimlapis.claude-sonnet-4", name: "AIML API · Claude Sonnet 4", provider: "AIML APIs", modality: "Chat", pricePer1kIn: 0.0028, pricePer1kOut: 0.014 },
+  { id: "aimlapis.llama-4-maverick", name: "AIML API · Llama 4 Maverick", provider: "AIML APIs", modality: "Multimodal", pricePer1kIn: 0.0019, pricePer1kOut: 0.0076 },
   // Google
   { id: "google.gemma-4-31b", name: "Gemma 4 31B", provider: "Google", modality: "Chat", pricePer1kIn: 0.0015, pricePer1kOut: 0.006 },
   { id: "google.gemma-4-26b-a4b", name: "Gemma 4 26B-A4B", provider: "Google", modality: "Chat", pricePer1kIn: 0.0012, pricePer1kOut: 0.0048 },

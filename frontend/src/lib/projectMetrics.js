@@ -39,6 +39,71 @@ export const formatBudgetTypeLabel = (budgetType = "") =>
 
 export const getProjectPhaseIds = (project) => (project?.phases || []).map((phase) => phase.id);
 
+export const hasSubmittedPhaseDelivery = (projectId, phaseId, batchDeliveries = []) =>
+  (Array.isArray(batchDeliveries) ? batchDeliveries : []).some((delivery) => (
+    delivery?.projectId === projectId && delivery?.phaseId === phaseId
+  ));
+
+export const buildProjectPhaseGate = (project, batchDeliveries = []) => {
+  const phases = Array.isArray(project?.phases) ? project.phases : [];
+  const phaseGate = {};
+
+  phases.forEach((phase, index) => {
+    const previousPhase = index > 0 ? phases[index - 1] : null;
+    const batchNumber = index + 1;
+    const previousBatchNumber = previousPhase ? index : null;
+    const previousSubmitted = previousPhase
+      ? hasSubmittedPhaseDelivery(project?.id, previousPhase.id, batchDeliveries)
+      : true;
+
+    phaseGate[phase.id] = {
+      phaseId: phase.id,
+      phaseName: phase.name || `Phase ${index + 1}`,
+      batchNumber,
+      batchLabel: `Batch ${batchNumber}`,
+      previousPhaseId: previousPhase?.id || null,
+      previousPhaseName: previousPhase?.name || "",
+      previousBatchNumber,
+      previousBatchLabel: previousBatchNumber ? `Batch ${previousBatchNumber}` : "",
+      isSubmitted: hasSubmittedPhaseDelivery(project?.id, phase.id, batchDeliveries),
+      isUnlocked: previousSubmitted,
+      isLocked: !previousSubmitted,
+    };
+  });
+
+  return phaseGate;
+};
+
+export const buildDeliverableCostMetrics = ({
+  totalBudgetRequested = 0,
+  totalTaskCount = 0,
+  completedDeliverables = 0,
+  totalAmountConsumed = 0,
+} = {}) => {
+  const budgetRequested = Number(totalBudgetRequested || 0);
+  const taskCount = Number(totalTaskCount || 0);
+  const deliveredCount = Number(completedDeliverables || 0);
+  const actualCost = Number(totalAmountConsumed || 0);
+  const perTaskCost = taskCount > 0 ? budgetRequested / taskCount : 0;
+  const claimedCost = deliveredCount > 0 ? deliveredCount * perTaskCost : 0;
+  const actualPerTaskCost = deliveredCount > 0 ? actualCost / deliveredCount : 0;
+  const variance = actualCost - claimedCost;
+  const variancePct = claimedCost > 0 ? Math.round((variance / claimedCost) * 100) : 0;
+
+  return {
+    totalBudgetRequested: budgetRequested,
+    totalTaskCount: taskCount,
+    completedDeliverables: deliveredCount,
+    totalAmountConsumed: actualCost,
+    perTaskCost,
+    claimedCost,
+    actualCost,
+    actualPerTaskCost,
+    variance,
+    variancePct,
+  };
+};
+
 const getSheetRows = (log = {}, key) =>
   (Array.isArray(log?.[key]) ? log[key] : [])
     .map((entry) => ({
@@ -285,6 +350,7 @@ export const normalizeItModelUsageRows = (rows = []) =>
       id: entry?.id || `it-model-${index + 1}`,
       modelId: entry?.modelId || "",
       modelName: entry?.modelName || entry?.label || "",
+      provider: entry?.provider || "",
       cost: Number(entry?.cost || 0),
       inputTokens: Number(entry?.inputTokens || 0),
       outputTokens: Number(entry?.outputTokens || 0),

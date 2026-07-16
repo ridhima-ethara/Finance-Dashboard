@@ -19,6 +19,7 @@ const serializeLine = (line = {}) => ({
   family: toText(line.meta?.family),
   note: toText(line.note || line.detail),
   amount: toAmount(line.estCost || line.amount),
+  seats: Math.round(Number(line.seats || 0)),
   members: normalizeMembers(line.members),
 });
 

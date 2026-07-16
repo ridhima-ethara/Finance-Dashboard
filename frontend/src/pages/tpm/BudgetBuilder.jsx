@@ -3,21 +3,31 @@ import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import { Button } from "../../components/ui/button";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../../components/ui/accordion";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from "../../components/ui/dropdown-menu";
 import { toast } from "sonner";
 import {
   ArrowLeft, Plus, Trash2, Send, Sparkles, ClipboardCheck, Cpu, Server, CreditCard,
   CheckCircle2, ChevronRight, UserPlus, MessageSquareWarning, FileText,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { EC2_INSTANCES, BEDROCK_MODELS, PLATFORM_PROVIDERS, SUBSCRIPTION_CATALOG } from "../../data/mockCatalog";
+import {
+  EC2_INSTANCES,
+  BEDROCK_MODELS,
+  INFRA_STORAGE_TYPES,
+  PLATFORM_PROVIDERS,
+  SUBSCRIPTION_CATALOG,
+} from "../../data/mockCatalog";
 import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { isProjectInTpmLane, normalizeBudgetType } from "../../lib/projectMetrics";
 import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../../lib/modelCatalog";
 import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
 import {
+  calculateGeneralBudgetRowTotal,
   DEFAULT_GENERAL_BUDGET_HEADERS,
   buildEmptyGeneralBudgetTableRow,
+  getGeneralBudgetCostHeaders,
   getGeneralBudgetColumnCellKey,
+  isGeneralBudgetCostHeader,
   isGeneralBudgetTableLine,
   normalizeGeneralBudgetHeaders,
   normalizeGeneralBudgetRows,
@@ -60,7 +70,22 @@ const getInstancesForProvider = (provider = "") => {
   const filtered = EC2_INSTANCES.filter((instance) => getInfraProvider(instance) === provider);
   return filtered.length ? filtered : EC2_INSTANCES;
 };
+const getStorageTypesForProvider = (provider = "") => {
+  const options = INFRA_STORAGE_TYPES[provider];
+  return Array.isArray(options) && options.length ? options : ["Standard SSD"];
+};
+const getDefaultStorageType = (provider = "") => getStorageTypesForProvider(provider)[0] || "Standard SSD";
+const normalizeStorageTypeForProvider = (provider = "", storageType = "") => {
+  const options = getStorageTypesForProvider(provider);
+  return options.includes(storageType) ? storageType : getDefaultStorageType(provider);
+};
 const getDailyRateFromMonthly = (monthlyAmount = 0) => Number(monthlyAmount || 0) / 30;
+const getInfraInstanceCount = (value = 1) => Math.max(1, Number(value || 1));
+const getPerInstanceStorage = (value = 100) => Math.max(0, Number(value || 0));
+const getInfraTotalDailyRate = ({ monthlyCost = 0, instanceCount = 1 } = {}) =>
+  Math.round(getDailyRateFromMonthly(monthlyCost) * getInfraInstanceCount(instanceCount) * 100) / 100;
+const calculateInfraEstimate = ({ monthlyCost = 0, instanceCount = 1, days = 0 } = {}) =>
+  Math.round(getInfraTotalDailyRate({ monthlyCost, instanceCount }) * Number(days || 0) * 100) / 100;
 const getInclusiveDayCount = (start = "", end = "") => {
   if (!start || !end) return 0;
   const startTs = new Date(`${start}T00:00:00`).getTime();
@@ -90,15 +115,19 @@ const emptyModelItem = (modelCatalog = BEDROCK_MODELS, totalTrajectories = 0) =>
     estCost: Math.round(costPerTask * totalTrajectories * 100) / 100,
   };
 };
-const emptyInfraItem = () => {
+const emptyInfraItem = (days = 30) => {
   const inst = EC2_INSTANCES[0];
   const monthly = Math.round(inst.hourly * HOURS_PER_MONTH * 100) / 100;
+  const provider = getInfraProvider(inst);
   return {
     id: uid(),
-    provider: getInfraProvider(inst),
+    provider,
     instance: inst.code,
+    instanceCount: 1,
     monthlyCost: monthly,
-    estCost: monthly,
+    storageType: getDefaultStorageType(provider),
+    perInstanceStorage: 100,
+    estCost: calculateInfraEstimate({ monthlyCost: monthly, instanceCount: 1, days }),
   };
 };
 const emptySubItem = () => {
@@ -301,11 +330,20 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       ? reviewItems.infra.map((line) => {
           const meta = EC2_INSTANCES.find((entry) => entry.code === (line.instance || line.meta?.code)) || line.meta || EC2_INSTANCES[0];
           const monthlyCost = Number(line.monthlyCost || line.meta?.monthlyCost || line.estCost || line.amount || 0);
+          const provider = line.provider || line.meta?.provider || getInfraProvider(meta);
           return {
             id: line.id || uid(),
-            provider: line.provider || line.meta?.provider || getInfraProvider(meta),
+            provider,
             instance: line.instance || meta?.code || EC2_INSTANCES[0].code,
+            instanceCount: getInfraInstanceCount(line.instanceCount || line.meta?.instanceCount || 1),
             monthlyCost,
+            storageType: normalizeStorageTypeForProvider(
+              provider,
+              line.storageType || line.meta?.storageType || ""
+            ),
+            perInstanceStorage: getPerInstanceStorage(
+              line.perInstanceStorage || line.meta?.perInstanceStorage || 100
+            ),
             estCost: Number(line.estCost || line.amount || monthlyCost || 0),
           };
         })
@@ -426,11 +464,20 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     setInfra(testingInfraLines.map((line, index) => {
       const meta = EC2_INSTANCES.find((entry) => entry.code === (line.instance || line.meta?.code)) || line.meta || EC2_INSTANCES[0];
       const monthlyCost = Number(line.monthlyCost || line.meta?.monthlyCost || line.estCost || line.amount || 0);
+      const provider = line.provider || line.meta?.provider || getInfraProvider(meta);
       return {
         id: line.id || `prefill-infra-${index + 1}`,
-        provider: line.provider || line.meta?.provider || getInfraProvider(meta),
+        provider,
         instance: line.instance || meta?.code || EC2_INSTANCES[0].code,
+        instanceCount: getInfraInstanceCount(line.instanceCount || line.meta?.instanceCount || 1),
         monthlyCost,
+        storageType: normalizeStorageTypeForProvider(
+          provider,
+          line.storageType || line.meta?.storageType || ""
+        ),
+        perInstanceStorage: getPerInstanceStorage(
+          line.perInstanceStorage || line.meta?.perInstanceStorage || 100
+        ),
         estCost: Number(line.estCost || line.amount || monthlyCost || 0),
       };
     }));
@@ -480,11 +527,15 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       const providerInstances = getInstancesForProvider(provider);
       const meta = providerInstances.find((instance) => instance.code === row.instance) || providerInstances[0] || EC2_INSTANCES[0];
       const monthlyCost = Number(row.monthlyCost || 0);
+      const instanceCount = getInfraInstanceCount(row.instanceCount || 1);
       return {
         ...row,
         provider,
         instance: meta.code,
-        estCost: Math.round(getDailyRateFromMonthly(monthlyCost) * budgetDurationDays * 100) / 100,
+        instanceCount,
+        storageType: normalizeStorageTypeForProvider(provider, row.storageType || ""),
+        perInstanceStorage: getPerInstanceStorage(row.perInstanceStorage || 100),
+        estCost: calculateInfraEstimate({ monthlyCost, instanceCount, days: budgetDurationDays }),
       };
     }));
     setSubs((rows) => rows.map((row) => ({
@@ -512,6 +563,11 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     () => serializeGeneralBudgetTableRows(generalTableRows, generalTableHeaders, generalPhaseOptions),
     [generalTableRows, generalTableHeaders, generalPhaseOptions]
   );
+  const generalCostSectionHeaders = useMemo(
+    () => getGeneralBudgetCostHeaders(generalTableHeaders),
+    [generalTableHeaders]
+  );
+  const hasGeneralCostSections = generalCostSectionHeaders.length > 0;
   const generalPhaseTotals = useMemo(() => {
     const totalsByPhase = generalTablePreviewLines.reduce((acc, row) => {
       const phaseId = row.phaseId || generalPhaseOptions[0]?.id || "p1";
@@ -527,9 +583,9 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     const m = selectedTypes.models ? models.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
     const i = selectedTypes.infra ? infra.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
     const su = selectedTypes.subs ? subs.reduce((s, x) => s + Number(x.estCost || 0), 0) : 0;
-    const g = selectedTypes.general ? sumGeneralBudgetRows(generalTableRows) : 0;
+    const g = selectedTypes.general ? sumGeneralBudgetRows(generalTableRows, generalTableHeaders) : 0;
     return { models: m, infra: i, subs: su, general: g, total: m + i + su + g };
-  }, [models, infra, subs, generalTableRows, selectedTypes]);
+  }, [models, infra, subs, generalTableHeaders, generalTableRows, selectedTypes]);
 
   const updateRow = (setter) => (id, key, v) => setter((rows) => rows.map((r) => (r.id === id ? { ...r, [key]: v } : r)));
   const removeRow = (setter) => (id) => setter((r) => r.filter((x) => x.id !== id));
@@ -586,20 +642,29 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     setInfra((rows) => rows.map((r) => {
       if (r.id !== id) return r;
       const next = { ...r, [key]: v };
+      if (key === "instanceCount") next.instanceCount = getInfraInstanceCount(v);
+      if (key === "perInstanceStorage") next.perInstanceStorage = getPerInstanceStorage(v);
+      if (key === "storageType") {
+        next.storageType = normalizeStorageTypeForProvider(next.provider || "", String(v || ""));
+      }
       if (key === "provider") {
         const providerInstances = getInstancesForProvider(next.provider);
         const meta = providerInstances[0] || EC2_INSTANCES[0];
         next.instance = meta.code;
         next.monthlyCost = Math.round(meta.hourly * HOURS_PER_MONTH * 100) / 100;
+        next.storageType = normalizeStorageTypeForProvider(next.provider, next.storageType || "");
       }
-      if (["instance", "monthlyCost", "provider"].includes(key)) {
-        if (key === "instance") {
-          const inst = EC2_INSTANCES.find((x) => x.code === next.instance) || EC2_INSTANCES[0];
-          next.provider = getInfraProvider(inst);
-          next.monthlyCost = Math.round(inst.hourly * HOURS_PER_MONTH * 100) / 100;
-        }
-        next.estCost = Math.round(getDailyRateFromMonthly(next.monthlyCost) * budgetDurationDays * 100) / 100;
+      if (key === "instance") {
+        const inst = EC2_INSTANCES.find((x) => x.code === next.instance) || EC2_INSTANCES[0];
+        next.provider = getInfraProvider(inst);
+        next.monthlyCost = Math.round(inst.hourly * HOURS_PER_MONTH * 100) / 100;
+        next.storageType = normalizeStorageTypeForProvider(next.provider, next.storageType || "");
       }
+      next.estCost = calculateInfraEstimate({
+        monthlyCost: Number(next.monthlyCost || 0),
+        instanceCount: getInfraInstanceCount(next.instanceCount || 1),
+        days: budgetDurationDays,
+      });
       return next;
     }));
   };
@@ -630,18 +695,24 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
         : row
     )));
   };
-  const remapGeneralTableRows = (rows, previousHeaders, nextHeaders) => rows.map((row) => ({
-    ...row,
-    cells: Object.fromEntries(nextHeaders.flatMap((header, index) => {
-      const previousHeader = previousHeaders[index];
-      const stableKey = getGeneralBudgetColumnCellKey(index);
-      const value = row.cells?.[stableKey] ?? (previousHeader ? (row.cells?.[previousHeader] || "") : "");
-      return [
-        [header, value],
-        [stableKey, value],
-      ];
-    })),
-  }));
+  const remapGeneralTableRows = (rows, previousHeaders, nextHeaders) => rows.map((row) => {
+    const nextRow = {
+      ...row,
+      cells: Object.fromEntries(nextHeaders.flatMap((header, index) => {
+        const previousHeader = previousHeaders[index];
+        const stableKey = getGeneralBudgetColumnCellKey(index);
+        const value = row.cells?.[stableKey] ?? (previousHeader ? (row.cells?.[previousHeader] || "") : "");
+        return [
+          [header, value],
+          [stableKey, value],
+        ];
+      })),
+    };
+    return {
+      ...nextRow,
+      estCost: calculateGeneralBudgetRowTotal(nextRow, nextHeaders),
+    };
+  });
   const applyGeneralTableHeaders = (nextHeadersInput) => {
     setGeneralTableHeaders((currentHeaders) => {
       const nextHeaders = normalizeGeneralBudgetHeaders(nextHeadersInput);
@@ -656,6 +727,9 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       setGeneralTableRows((rows) => remapGeneralTableRows(rows, currentHeaders, nextHeaders));
       return nextHeaders;
     });
+  };
+  const addGeneralCostSection = () => {
+    applyGeneralTableHeaders([...generalTableHeaders, `Cost section ${generalCostSectionHeaders.length + 1}`]);
   };
   const addGeneralTableRow = () => {
     const defaultPhase = generalPhaseOptions[0] || {};
@@ -682,13 +756,17 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       if (key === "estCost") {
         return { ...row, estCost: Number(value) || 0 };
       }
+      const nextRow = {
+          ...row,
+          cells: {
+            ...row.cells,
+            ...(columnIndex >= 0 ? { [getGeneralBudgetColumnCellKey(columnIndex)]: value } : {}),
+            [key]: value,
+          },
+      };
       return {
-        ...row,
-        cells: {
-          ...row.cells,
-          ...(columnIndex >= 0 ? { [getGeneralBudgetColumnCellKey(columnIndex)]: value } : {}),
-          [key]: value,
-        },
+        ...nextRow,
+        estCost: calculateGeneralBudgetRowTotal(nextRow, generalTableHeaders),
       };
     }));
   };
@@ -823,7 +901,13 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
           ...i,
           provider: i.provider || getInfraProvider(meta),
           days: budgetDurationDays,
-          meta: withInfraProvider(meta),
+          meta: {
+            ...withInfraProvider(meta),
+            monthlyCost: Number(i.monthlyCost || 0),
+            instanceCount: getInfraInstanceCount(i.instanceCount || 1),
+            storageType: normalizeStorageTypeForProvider(i.provider || getInfraProvider(meta), i.storageType || ""),
+            perInstanceStorage: getPerInstanceStorage(i.perInstanceStorage || 100),
+          },
         };
       }) : [],
       subs: selectedTypes.subs ? subs.map((entry) => ({ ...entry, days: budgetDurationDays })) : [],
@@ -951,10 +1035,23 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                 </select>
               </Field>
             ) : (
-              <Field label="Budget type">
-                <div className="h-10 px-3 rounded-lg bg-white/[0.02] border border-white/10 text-sm text-zinc-100 flex items-center">
-                  Production
-                </div>
+              <Field label="Budget type" hint={!isRnd ? "Choose R&D budget to switch this request into the R&D budget flow." : undefined}>
+                <select
+                  value="Production"
+                  onChange={(e) => {
+                    if (e.target.value === "RnD") {
+                      setTeamType("R&D");
+                      setBudgetType("Testing");
+                      return;
+                    }
+                    setBudgetType("Production");
+                  }}
+                  data-testid="bb-budget-type"
+                  className={ipStyle}
+                >
+                  <option value="Production">Production</option>
+                  {!isRnd && <option value="RnD">R&D budget</option>}
+                </select>
               </Field>
             )}
           </div>
@@ -1245,9 +1342,9 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-fuchsia-300" />
                   <div className="text-sm font-semibold text-white">Infrastructure · monthly spend</div>
-                  <span className="text-[11px] text-zinc-500">· provider first, daily cost and total days shown alongside</span>
+                  <span className="text-[11px] text-zinc-500">· provider, instance count, storage type, and total cost kept in one clean card</span>
                 </div>
-                <Button size="sm" onClick={() => setInfra((r) => [...r, emptyInfraItem()])} data-testid="bb-add-infra" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
+                <Button size="sm" onClick={() => setInfra((r) => [...r, emptyInfraItem(budgetDurationDays)])} data-testid="bb-add-infra" className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1">
                   <Plus className="w-3 h-3" /> Add instance
                 </Button>
               </div>
@@ -1258,20 +1355,53 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                 {infra.map((r) => {
                   const provider = r.provider || infraProviderOptions[0] || getInfraProvider(EC2_INSTANCES[0]);
                   const providerInstances = getInstancesForProvider(provider);
-                  const perDay = Math.round(getDailyRateFromMonthly(r.monthlyCost) * 100) / 100;
+                  const storageOptions = getStorageTypesForProvider(provider);
+                  const perDay = getInfraTotalDailyRate({
+                    monthlyCost: Number(r.monthlyCost || 0),
+                    instanceCount: getInfraInstanceCount(r.instanceCount || 1),
+                  });
                   return (
-                    <div key={r.id} data-testid={`bb-row-infra-${r.id}`} className="grid grid-cols-[.85fr_1.55fr_1fr_.7fr_.9fr_.9fr_28px] gap-2 items-center py-1">
-                      <select value={provider} onChange={(e) => updateInfraRow(r.id, "provider", e.target.value)} data-testid={`bb-infra-provider-${r.id}`} className={rowInp}>
-                        {infraProviderOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                      </select>
-                      <select value={r.instance} onChange={(e) => updateInfraRow(r.id, "instance", e.target.value)} data-testid={`bb-infra-select-${r.id}`} className={rowInp}>
-                        {providerInstances.map((i) => <option key={i.code} value={i.code}>{i.code} · {i.family} · {i.vCPU} vCPU · {i.memoryGiB} GiB</option>)}
-                      </select>
-                      <input type="number" min="0" step="10" value={r.monthlyCost} onChange={(e) => updateInfraRow(r.id, "monthlyCost", e.target.value)} data-testid={`bb-infra-monthly-${r.id}`} className={rowInp + " tabular text-right"} />
-                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{budgetDurationDays.toLocaleString()}</div>
-                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 tabular text-right leading-8">${perDay.toLocaleString()}</div>
-                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
-                      <RemoveBtn onClick={() => removeRow(setInfra)(r.id)} testid={`bb-infra-remove-${r.id}`} />
+                    <div key={r.id} data-testid={`bb-row-infra-${r.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                      <div className="grid grid-cols-1 md:grid-cols-[.85fr_1.6fr_.9fr_.7fr_28px] gap-2 items-end">
+                        <CompactField label="Provider">
+                          <select value={provider} onChange={(e) => updateInfraRow(r.id, "provider", e.target.value)} data-testid={`bb-infra-provider-${r.id}`} className={`${rowInp} w-full`}>
+                            {infraProviderOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </CompactField>
+                        <CompactField label="Infra instance">
+                          <select value={r.instance} onChange={(e) => updateInfraRow(r.id, "instance", e.target.value)} data-testid={`bb-infra-select-${r.id}`} className={`${rowInp} w-full`}>
+                            {providerInstances.map((i) => <option key={i.code} value={i.code}>{i.code} · {i.family} · {i.vCPU} vCPU · {i.memoryGiB} GiB</option>)}
+                          </select>
+                        </CompactField>
+                        <CompactField label="Monthly cost / instance ($)">
+                          <input type="number" min="0" step="10" value={r.monthlyCost} onChange={(e) => updateInfraRow(r.id, "monthlyCost", e.target.value)} data-testid={`bb-infra-monthly-${r.id}`} className={`${rowInp} w-full tabular text-right`} />
+                        </CompactField>
+                        <CompactField label="No. of instances">
+                          <input type="number" min="1" step="1" value={r.instanceCount || 1} onChange={(e) => updateInfraRow(r.id, "instanceCount", e.target.value)} data-testid={`bb-infra-count-${r.id}`} className={`${rowInp} w-full tabular text-right`} />
+                        </CompactField>
+                        <div className="flex items-end justify-end h-full">
+                          <RemoveBtn onClick={() => removeRow(setInfra)(r.id)} testid={`bb-infra-remove-${r.id}`} />
+                        </div>
+                      </div>
+                      <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_.65fr_.8fr_.85fr] gap-2 items-end">
+                        <CompactField label="Storage type">
+                          <select value={normalizeStorageTypeForProvider(provider, r.storageType || "")} onChange={(e) => updateInfraRow(r.id, "storageType", e.target.value)} data-testid={`bb-infra-storage-type-${r.id}`} className={`${rowInp} w-full`}>
+                            {storageOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                          </select>
+                        </CompactField>
+                        <CompactField label="Per instance storage (GB)">
+                          <input type="number" min="0" step="10" value={r.perInstanceStorage ?? 100} onChange={(e) => updateInfraRow(r.id, "perInstanceStorage", e.target.value)} data-testid={`bb-infra-storage-size-${r.id}`} className={`${rowInp} w-full tabular text-right`} />
+                        </CompactField>
+                        <CompactField label="Days">
+                          <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{budgetDurationDays.toLocaleString()}</div>
+                        </CompactField>
+                        <CompactField label="≈ $/day">
+                          <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 tabular text-right leading-8">{fmtCurrency(perDay, { compact: false })}</div>
+                        </CompactField>
+                        <CompactField label="Est. cost">
+                          <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
+                        </CompactField>
+                      </div>
                     </div>
                   );
                 })}
@@ -1299,17 +1429,18 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                 </Button>
               </div>
               <div className="space-y-3">
-                <div className="grid grid-cols-[1.4fr_.8fr_.6fr_.8fr_.9fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
+                <div className="grid grid-cols-[1.25fr_.78fr_.55fr_.72fr_.9fr_1.35fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
                   <span>Subscription</span>
                   <span className="text-right">Price / seat / month ($)</span>
                   <span className="text-right">Seats</span>
                   <span className="text-right">Days</span>
                   <span className="text-right">Est. cost</span>
+                  <span>Members</span>
                   <span />
                 </div>
                 {subs.map((r) => (
-                  <div key={r.id} data-testid={`bb-row-sub-${r.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
-                    <div className="grid grid-cols-[1.4fr_.8fr_.6fr_.8fr_.9fr_28px] gap-2 items-center">
+                  <div key={r.id} data-testid={`bb-row-sub-${r.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                    <div className="grid grid-cols-[1.25fr_.78fr_.55fr_.72fr_.9fr_1.35fr_28px] gap-2 items-start">
                       <select value={r.subscription} onChange={(e) => updateSubRow(r.id, "subscription", e.target.value)} data-testid={`bb-sub-select-${r.id}`} className={rowInp}>
                         {SUBSCRIPTION_CATALOG.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                       </select>
@@ -1317,42 +1448,65 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                       <input type="number" min="1" value={r.seats} onChange={(e) => updateSubRow(r.id, "seats", e.target.value)} className={rowInp + " tabular text-right"} title="Seats" />
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{budgetDurationDays.toLocaleString()}</div>
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
-                      <RemoveBtn onClick={() => removeRow(setSubs)(r.id)} testid={`bb-sub-remove-${r.id}`} />
-                    </div>
-                    <div className="grid grid-cols-[135px_1fr] gap-2 items-start pl-1">
-                      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pt-1.5"><UserPlus className="w-3 h-3 inline mr-1" />Allocated members</div>
                       <div data-testid={`bb-sub-members-${r.id}`}>
                         {subscriptionMemberPool.length === 0 ? (
-                          <div className="text-[11px] text-zinc-500">
+                          <div className="min-h-[72px] rounded-lg border border-dashed border-white/10 bg-white/[0.02] px-3 py-2 text-[11px] text-zinc-500">
                             Add members to this project first. The current project roster will appear here for subscription access selection.
                           </div>
                         ) : (
                           <>
-                            <select
-                              multiple
-                              value={r.members}
-                              onChange={(event) => updateSubMembers(r.id, Array.from(event.target.selectedOptions, (option) => option.value))}
-                              data-testid={`bb-sub-member-select-${r.id}`}
-                              className="min-h-[108px] w-full rounded-lg bg-white/[0.04] border border-white/10 px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:ring-1 focus:ring-fuchsia-500/40"
-                            >
-                              {subscriptionMemberPool.map((member) => (
-                                <option
-                                  key={member.id}
-                                  value={member.name}
-                                  title={member.email ? `${member.name} · ${member.email}` : `${member.name} · ${member.role}`}
-                                  className="bg-[#12121A]"
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  data-testid={`bb-sub-member-trigger-${r.id}`}
+                                  className="w-full min-h-[40px] rounded-lg bg-white/[0.04] border border-white/10 px-3 py-2 text-left text-xs text-zinc-100 hover:bg-white/[0.07] transition-colors"
                                 >
-                                  {member.name} {member.role ? `· ${member.role}` : ""}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="mt-1 text-[11px] text-zinc-500">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="truncate">{r.members.length ? `${r.members.length} member${r.members.length === 1 ? "" : "s"} selected` : "Select members"}</span>
+                                    <span className="text-zinc-500"><UserPlus className="w-3.5 h-3.5" /></span>
+                                  </div>
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent
+                                align="start"
+                                className="w-[320px] max-h-72 overflow-y-auto border border-white/10 bg-[#12121A] text-zinc-100"
+                              >
+                                {subscriptionMemberPool.map((member) => {
+                                  const checked = r.members.includes(member.name);
+                                  const subtitle = member.email || member.role || "Project member";
+                                  return (
+                                    <DropdownMenuCheckboxItem
+                                      key={member.id}
+                                      checked={checked}
+                                      onSelect={(event) => event.preventDefault()}
+                                      onCheckedChange={(nextChecked) => updateSubMembers(
+                                        r.id,
+                                        nextChecked
+                                          ? Array.from(new Set([...r.members, member.name]))
+                                          : r.members.filter((entry) => entry !== member.name)
+                                      )}
+                                      className="items-start gap-2 py-2 text-xs"
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="truncate">{member.name}</div>
+                                        <div className="truncate text-[10px] text-zinc-500">{subtitle}</div>
+                                      </div>
+                                    </DropdownMenuCheckboxItem>
+                                  );
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                            <div className="mt-1 text-[11px] text-zinc-500 leading-relaxed">
                               {r.members.length
                                 ? `Selected: ${r.members.join(", ")}`
                                 : "Choose one or more members to allocate this subscription."}
                             </div>
                           </>
                         )}
+                      </div>
+                      <div className="pt-1">
+                        <RemoveBtn onClick={() => removeRow(setSubs)(r.id)} testid={`bb-sub-remove-${r.id}`} />
                       </div>
                     </div>
                   </div>
@@ -1377,6 +1531,11 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                   <span className="text-[11px] text-zinc-500">· freelancers, external tools, datasets, APIs, licenses, and other operational asks</span>
                 </div>
               </div>
+              {!usesRndWorkflow && (
+                <div className="mb-3 rounded-xl border border-sky-500/20 bg-sky-500/[0.05] px-3 py-2 text-[11px] text-sky-200">
+                  Use the phases created in step 1 for TPM or ops asks. Add one or more cost sections here and each row will auto-sum into the phase total and project total budget.
+                </div>
+              )}
               {generalMode === "requests" ? (
                 <>
                   <div className="flex justify-end mb-3">
@@ -1427,17 +1586,28 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div>
                         <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Table headers</div>
-                        <div className="text-[11px] text-zinc-500 mt-1">Create the columns you need, then add phase-wise rows underneath.</div>
+                        <div className="text-[11px] text-zinc-500 mt-1">Create the columns you need, add cost sections, then add phase-wise rows underneath.</div>
                       </div>
-                      <Button
-                        size="sm"
-                        type="button"
-                        onClick={() => applyGeneralTableHeaders([...generalTableHeaders, `Column ${generalTableHeaders.length + 1}`])}
-                        data-testid="bb-general-add-header"
-                        className="h-8 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 text-xs gap-1"
-                      >
-                        <Plus className="w-3 h-3" /> Add header
-                      </Button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          type="button"
+                          onClick={addGeneralCostSection}
+                          data-testid="bb-general-add-cost-header"
+                          className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1"
+                        >
+                          <Plus className="w-3 h-3" /> Add cost section
+                        </Button>
+                        <Button
+                          size="sm"
+                          type="button"
+                          onClick={() => applyGeneralTableHeaders([...generalTableHeaders, `Column ${generalTableHeaders.length + 1}`])}
+                          data-testid="bb-general-add-header"
+                          className="h-8 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 text-xs gap-1"
+                        >
+                          <Plus className="w-3 h-3" /> Add header
+                        </Button>
+                      </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {generalTableHeaders.map((header, index) => (
@@ -1447,7 +1617,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                             onChange={(e) => updateGeneralTableHeader(index, e.target.value)}
                             onBlur={() => applyGeneralTableHeaders(generalTableHeaders)}
                             data-testid={`bb-general-header-${index}`}
-                            className={`${rowInp} min-w-[150px]`}
+                            className={`${rowInp} min-w-[150px] ${isGeneralBudgetCostHeader(header) ? "tabular text-right" : ""}`}
                           />
                           {generalTableHeaders.length > 1 && (
                             <button
@@ -1476,9 +1646,9 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                         <tr className="border-b border-white/5 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
                           <th className="py-2 px-3 text-left">Phase</th>
                           {generalTableHeaders.map((header) => (
-                            <th key={header} className="py-2 px-3 text-left">{header}</th>
+                            <th key={header} className={`py-2 px-3 ${isGeneralBudgetCostHeader(header) ? "text-right" : "text-left"}`}>{header}</th>
                           ))}
-                          <th className="py-2 px-3 text-right">Cost ($)</th>
+                          <th className="py-2 px-3 text-right">{hasGeneralCostSections ? "Total ($)" : "Cost ($)"}</th>
                           <th className="w-10" />
                         </tr>
                       </thead>
@@ -1500,23 +1670,35 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                             {generalTableHeaders.map((header, index) => (
                               <td key={`${row.id}-${index}`} className="py-2 px-3">
                                 <input
+                                  type={isGeneralBudgetCostHeader(header) ? "number" : "text"}
+                                  min={isGeneralBudgetCostHeader(header) ? "0" : undefined}
+                                  step={isGeneralBudgetCostHeader(header) ? "10" : undefined}
                                   value={row.cells?.[getGeneralBudgetColumnCellKey(index)] ?? row.cells?.[header] ?? ""}
                                   onChange={(e) => updateGeneralTableRow(row.id, header, e.target.value, index)}
                                   data-testid={`bb-general-cell-${row.id}-${header}`}
-                                  className={`${rowInp} w-full`}
+                                  className={`${rowInp} w-full ${isGeneralBudgetCostHeader(header) ? "tabular text-right" : ""}`}
                                 />
                               </td>
                             ))}
                             <td className="py-2 px-3">
-                              <input
-                                type="number"
-                                min="0"
-                                step="10"
-                                value={row.estCost}
-                                onChange={(e) => updateGeneralTableRow(row.id, "estCost", e.target.value)}
-                                data-testid={`bb-general-table-cost-${row.id}`}
-                                className={`${rowInp} w-full tabular text-right`}
-                              />
+                              {hasGeneralCostSections ? (
+                                <div
+                                  data-testid={`bb-general-table-cost-${row.id}`}
+                                  className={`${rowInp} w-full tabular text-right bg-white/[0.02] border-white/5 text-fuchsia-300 flex items-center justify-end`}
+                                >
+                                  {fmtCurrency(row.estCost, { compact: false })}
+                                </div>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="10"
+                                  value={row.estCost}
+                                  onChange={(e) => updateGeneralTableRow(row.id, "estCost", e.target.value)}
+                                  data-testid={`bb-general-table-cost-${row.id}`}
+                                  className={`${rowInp} w-full tabular text-right`}
+                                />
+                              )}
                             </td>
                             <td className="py-2 px-3">
                               <RemoveBtn onClick={() => removeGeneralTableRow(row.id)} testid={`bb-general-table-remove-${row.id}`} />
@@ -1534,6 +1716,14 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                         <div className="text-white font-semibold tabular">{fmtCurrency(entry.total, { compact: false })}</div>
                       </div>
                     ))}
+                    <div className="rounded-lg border border-fuchsia-500/25 bg-fuchsia-500/[0.06] px-3 py-2 text-xs">
+                      <div className="text-zinc-400">General total</div>
+                      <div className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.general, { compact: false })}</div>
+                    </div>
+                    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
+                      <div className="text-zinc-400">Project total budget</div>
+                      <div className="text-white font-semibold tabular">{fmtCurrency(totals.total, { compact: false })}</div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -1598,7 +1788,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                       id: row.id,
                       title: row.instance || "Infra line",
                       subtitle: `${row.provider || "Provider"} · ${budgetDurationDays.toLocaleString()} days`,
-                      detail: `${fmtCurrency(Number(row.monthlyCost || 0), { compact: false })}/month`,
+                      detail: `${Number(row.instanceCount || 1).toLocaleString()} instance${Number(row.instanceCount || 1) === 1 ? "" : "s"} · ${row.storageType || "Storage"} · ${Number(row.perInstanceStorage || 0).toLocaleString()} GB / instance · ${fmtCurrency(Number(row.monthlyCost || 0), { compact: false })}/month each`,
                       amount: Number(row.estCost || 0),
                     })),
                   } : null,
@@ -1685,6 +1875,13 @@ const Field = ({ label, hint, children }) => (
       <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
       {hint && <div className="text-[10px] text-zinc-600">{hint}</div>}
     </div>
+    {children}
+  </div>
+);
+
+const CompactField = ({ label, children }) => (
+  <div>
+    <div className="mb-1 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
     {children}
   </div>
 );

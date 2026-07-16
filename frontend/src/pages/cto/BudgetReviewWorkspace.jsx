@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { fmtCurrency, fmtPct } from "../../lib/format";
+import { fmtCurrency } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
@@ -139,12 +139,6 @@ const BudgetReviewWorkspace = () => {
     ...p,
     total: Number(p.infra || 0) + Number(p.model || 0) + Number(p.subs || 0),
   }));
-  const phaseBasedTotals = {
-    total: phaseTotals.reduce((s, p) => s + p.total, 0),
-    infra: phaseTotals.reduce((s, p) => s + Number(p.infra || 0), 0),
-    model: phaseTotals.reduce((s, p) => s + Number(p.model || 0), 0),
-    subs: phaseTotals.reduce((s, p) => s + Number(p.subs || 0), 0),
-  };
   const itemBasedTotals = {
     total: sumLineItems(modifiedItems.models) + sumLineItems(modifiedItems.infra) + sumLineItems(modifiedItems.subs) + sumLineItems(modifiedItems.misc),
     model: sumLineItems(modifiedItems.models),
@@ -152,29 +146,103 @@ const BudgetReviewWorkspace = () => {
     subs: sumLineItems(modifiedItems.subs),
     misc: sumLineItems(modifiedItems.misc),
   };
-  const modifiedTotal = isRndReview ? itemBasedTotals.total : phaseBasedTotals.total + itemBasedTotals.misc;
-  const modifiedInfra = isRndReview ? itemBasedTotals.infra : phaseBasedTotals.infra;
-  const modifiedModel = isRndReview ? itemBasedTotals.model : phaseBasedTotals.model;
-  const modifiedSubs = isRndReview ? itemBasedTotals.subs : phaseBasedTotals.subs;
+  const modifiedTotal = itemBasedTotals.total;
+  const modifiedInfra = itemBasedTotals.infra;
+  const modifiedModel = itemBasedTotals.model;
+  const modifiedSubs = itemBasedTotals.subs;
   const modifiedGeneral = itemBasedTotals.misc;
   const modifiedDeltaVsRequested = modifiedTotal - requestedBudget;
 
-  const updateCell = (phaseId, key, val) => {
-    setModifiedPhases((rows) => rows.map((r) => (r.id === phaseId ? { ...r, [key]: Number(val) || 0 } : r)));
-  };
-  const updateItemCost = (bucket, itemId, val) => {
+  const updateItem = (bucket, itemId, updater) => {
     setModifiedItems((items) => ({
       ...items,
       [bucket]: (items[bucket] || []).map((line) => (
-        line.id === itemId
-          ? {
-              ...line,
-              estCost: Number(val) || 0,
-              amount: Number(val) || 0,
-            }
-          : line
+        line.id === itemId ? updater(line) : line
       )),
     }));
+  };
+  const updateItemCost = (bucket, itemId, val) => {
+    updateItem(bucket, itemId, (line) => ({
+      ...line,
+      estCost: Number(val) || 0,
+      amount: Number(val) || 0,
+    }));
+  };
+  const updateItemTitle = (bucket, itemId, val) => {
+    const nextValue = String(val || "");
+    updateItem(bucket, itemId, (line) => {
+      if (bucket === "models") {
+        return {
+          ...line,
+          label: nextValue,
+          modelName: nextValue,
+          meta: { ...(line.meta || {}), name: nextValue },
+        };
+      }
+      if (bucket === "infra") {
+        return {
+          ...line,
+          label: nextValue,
+          optionLabel: nextValue,
+          instance: nextValue,
+          meta: { ...(line.meta || {}), code: nextValue },
+        };
+      }
+      if (bucket === "subs") {
+        return {
+          ...line,
+          label: nextValue,
+          optionLabel: nextValue,
+          subscription: nextValue,
+        };
+      }
+      return {
+        ...line,
+        label: nextValue,
+        optionLabel: nextValue,
+      };
+    });
+  };
+  const updateItemDetail = (bucket, itemId, val) => {
+    const nextValue = String(val || "");
+    updateItem(bucket, itemId, (line) => {
+      if (bucket === "models") {
+        return {
+          ...line,
+          provider: nextValue,
+          meta: { ...(line.meta || {}), provider: nextValue },
+        };
+      }
+      if (bucket === "infra") {
+        return {
+          ...line,
+          provider: nextValue,
+          meta: { ...(line.meta || {}), family: nextValue },
+        };
+      }
+      return {
+        ...line,
+        note: nextValue,
+        detail: nextValue,
+      };
+    });
+  };
+  const updateSubscriptionSeats = (itemId, val) => {
+    updateItem("subs", itemId, (line) => ({
+      ...line,
+      seats: Math.max(0, Number(val) || 0),
+    }));
+  };
+  const getEditableTitleValue = (bucket, line) => {
+    if (bucket === "models") return line.meta?.name || line.modelName || line.label || "";
+    if (bucket === "infra") return line.meta?.code || line.instance || line.optionLabel || line.label || "";
+    if (bucket === "subs") return line.subscription || line.optionLabel || line.label || "";
+    return line.optionLabel || line.label || "";
+  };
+  const getEditableDetailValue = (bucket, line) => {
+    if (bucket === "models") return line.meta?.provider || line.provider || "";
+    if (bucket === "infra") return line.meta?.family || line.provider || "";
+    return line.note || line.detail || "";
   };
   const resetToOriginal = () => {
     setModifiedPhases(buildInitialPhases());
@@ -182,7 +250,6 @@ const BudgetReviewWorkspace = () => {
   };
 
   const effectiveAmount = isEditing ? modifiedTotal : amount;
-  const delta = effectiveAmount - currentBudget;
   const savings = requestedBudget - effectiveAmount;
   const modifiedPhasePayload = isRndReview
     ? [{
@@ -198,6 +265,7 @@ const BudgetReviewWorkspace = () => {
       key: "models",
       label: "Models",
       lineLabel: "Model",
+      detailLabel: "Provider",
       color: "text-fuchsia-300",
       lines: modifiedItems.models,
       fallback: "No model line submitted.",
@@ -208,6 +276,7 @@ const BudgetReviewWorkspace = () => {
       key: "infra",
       label: "Infrastructure",
       lineLabel: "Infrastructure",
+      detailLabel: "Provider / Family",
       color: "text-sky-300",
       lines: modifiedItems.infra,
       fallback: "No infrastructure line submitted.",
@@ -218,6 +287,7 @@ const BudgetReviewWorkspace = () => {
       key: "subs",
       label: "Subscriptions",
       lineLabel: "Subscription",
+      detailLabel: "Members",
       color: "text-emerald-300",
       lines: modifiedItems.subs,
       fallback: "No subscription line submitted.",
@@ -228,6 +298,7 @@ const BudgetReviewWorkspace = () => {
       key: "misc",
       label: "General",
       lineLabel: "General request",
+      detailLabel: "Note",
       color: "text-amber-300",
       lines: modifiedItems.misc,
       fallback: "No general request line submitted.",
@@ -249,15 +320,56 @@ const BudgetReviewWorkspace = () => {
             <thead>
               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
                 <th className="text-left py-2 px-3">{section.lineLabel || (section.label.endsWith("s") ? section.label.slice(0, -1) : section.label)} line</th>
-                <th className="text-left py-2 px-3">Detail</th>
+                <th className="text-left py-2 px-3">{section.detailLabel || "Detail"}</th>
+                {section.key === "subs" && <th className="text-right py-2 px-3">Count</th>}
                 <th className="text-right py-2 px-3">Cost ($)</th>
               </tr>
             </thead>
             <tbody>
               {section.lines.map((line, index) => (
                 <tr key={line.id || `${section.key}-${index + 1}`} className="border-b border-white/5 last:border-b-0">
-                  <td className="py-2 px-3 text-white font-medium">{section.getTitle(line)}</td>
-                  <td className="py-2 px-3 text-xs text-zinc-500">{section.getDetail(line)}</td>
+                  <td className="py-2 px-3">
+                    {canEdit ? (
+                      <input
+                        type="text"
+                        value={getEditableTitleValue(section.key, line)}
+                        onChange={(e) => updateItemTitle(section.key, line.id, e.target.value)}
+                        disabled={!canEdit}
+                        data-testid={`modify-${section.key}-title-${line.id || index}`}
+                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                      />
+                    ) : (
+                      <div className="text-white font-medium">{section.getTitle(line)}</div>
+                    )}
+                  </td>
+                  <td className="py-2 px-3">
+                    {canEdit && section.key !== "subs" ? (
+                      <input
+                        type="text"
+                        value={getEditableDetailValue(section.key, line)}
+                        onChange={(e) => updateItemDetail(section.key, line.id, e.target.value)}
+                        disabled={!canEdit}
+                        data-testid={`modify-${section.key}-detail-${line.id || index}`}
+                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                      />
+                    ) : (
+                      <div className="text-xs text-zinc-500">{section.getDetail(line)}</div>
+                    )}
+                  </td>
+                  {section.key === "subs" && (
+                    <td className="py-2 px-3">
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={Number(line.seats || 0)}
+                        onChange={(e) => updateSubscriptionSeats(line.id, e.target.value)}
+                        disabled={!canEdit}
+                        data-testid={`modify-subs-seats-${line.id || index}`}
+                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                      />
+                    </td>
+                  )}
                   <td className="py-2 px-3">
                     <input
                       type="number"
@@ -293,7 +405,7 @@ const BudgetReviewWorkspace = () => {
       modifiedPhases: modifiedPhasePayload,
       modifiedItems: cloneReviewItems(modifiedItems),
       ctoComment: comment,
-      itemBased: isRndReview,
+      itemBased: true,
       ctoModified,
     });
     toast.success("Approved & forwarded to CFO", {
@@ -336,9 +448,8 @@ const BudgetReviewWorkspace = () => {
   };
 
   const overviewFields = [
-    { label: "Client", value: review.client },
-    { label: "Requester", value: `${isRndReview ? "R&D" : "TPM"} · ${review.tpm}` },
-    { label: "Raised from", value: isRndReview ? "R&D" : "TPM" },
+    { label: "Client project name", value: review.client || project.clientProjectName || project.client || "—" },
+    { label: "Requested by", value: `${isRndReview ? "R&D" : "TPM"} · ${review.tpm}` },
     { label: "Team type", value: review.teamType || "—" },
     { label: "Timeline", value: review.timeline },
     ...(!isTestingBudget(review?.budgetType) ? [{ label: "Tasks", value: String(review.tasks) }] : []),
@@ -353,7 +464,7 @@ const BudgetReviewWorkspace = () => {
           ))}
         </div>
       </Panel>
-      <Panel testid="overview-justification" title={`Justification from ${isRndReview ? "R&D" : "TPM"}`}>
+      <Panel testid="overview-justification" title="Justification">
         <div className="text-sm text-zinc-200 leading-relaxed">{review.justification}</div>
       </Panel>
       <Panel testid="overview-breakdown" title="Budget breakdown">
@@ -373,56 +484,11 @@ const BudgetReviewWorkspace = () => {
             </div>
             {isEditing && (
               <div className="mt-4 space-y-4">
-                {isRndReview ? (
-                  itemSections.map(renderItemSection)
-                ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                        <th className="text-left py-2 px-3">Phase</th>
-                        <th className="text-right py-2 px-3">Infra ($)</th>
-                        <th className="text-right py-2 px-3">Model ($)</th>
-                        <th className="text-right py-2 px-3">Subs ($)</th>
-                        <th className="text-right py-2 px-3">Phase total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {phaseTotals.map((p) => (
-                        <tr key={p.id} data-testid={`modify-phase-${p.id}`} className="border-b border-white/5">
-                          <td className="py-2 px-3 text-white font-medium">{p.name}</td>
-                          <td className="py-2 px-3">
-                            <input type="number" min="0" step="100" value={p.infra} onChange={(e) => updateCell(p.id, "infra", e.target.value)} disabled={!canEdit} data-testid={`modify-infra-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input type="number" min="0" step="100" value={p.model} onChange={(e) => updateCell(p.id, "model", e.target.value)} disabled={!canEdit} data-testid={`modify-model-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                          </td>
-                          <td className="py-2 px-3">
-                            <input type="number" min="0" step="100" value={p.subs} onChange={(e) => updateCell(p.id, "subs", e.target.value)} disabled={!canEdit} data-testid={`modify-subs-${p.id}`} className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" />
-                          </td>
-                          <td className="py-2 px-3 text-right text-white font-semibold tabular">{fmtCurrency(p.total, { compact: false })}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                    <tfoot>
-                      <tr className="border-t-2 border-fuchsia-500/30">
-                        <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Modified total</td>
-                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedInfra, { compact: false })}</td>
-                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedModel, { compact: false })}</td>
-                        <td className="py-3 px-3 text-right text-zinc-300 tabular">{fmtCurrency(modifiedSubs, { compact: false })}</td>
-                        <td className="py-3 px-3 text-right text-fuchsia-300 font-bold text-lg tabular">{fmtCurrency(phaseBasedTotals.total, { compact: false })}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-                {(modifiedItems.misc.length > 0 || Number(review.miscCost || 0) > 0) && renderItemSection(itemSections.find((section) => section.key === "misc"))}
-              </>
-            )}
-            <div className="flex items-center justify-between text-[11px] flex-wrap gap-2">
-              <div className="text-zinc-500 tabular">
-                {isRndReview ? "R&D" : "TPM"} requested <span className="text-white">{fmtCurrency(requestedBudget, { compact: false })}</span> · your modified ask is{" "}
-                <span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold" : "text-amber-300 font-semibold"}>
+                {itemSections.map(renderItemSection)}
+                <div className="flex items-center justify-between text-[11px] flex-wrap gap-2">
+                  <div className="text-zinc-500 tabular">
+                    {isRndReview ? "R&D" : "TPM"} requested <span className="text-white">{fmtCurrency(requestedBudget, { compact: false })}</span> · your modified ask is{" "}
+                    <span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold" : "text-amber-300 font-semibold"}>
                   {modifiedDeltaVsRequested >= 0 ? "+" : ""}{fmtCurrency(modifiedDeltaVsRequested, { compact: false })}
                 </span> vs request
               </div>
@@ -434,36 +500,6 @@ const BudgetReviewWorkspace = () => {
             </div>
           </div>
         )}
-      </Panel>
-      <Panel testid="overview-comparison" title="Estimated vs business requirement" subtitle="Prior baseline vs current ask">
-        <div className={`grid gap-3 mb-4 ${isEditing ? "grid-cols-1 md:grid-cols-3" : "grid-cols-2"}`}>
-          <CompareBox label="Previous approved" value={currentBudget} />
-          <CompareBox label={`${isRndReview ? "R&D" : "TPM"} requested`} value={requestedBudget} highlight="warning" />
-          {isEditing && <CompareBox label="CTO modified total" value={modifiedTotal} highlight="magenta" />}
-        </div>
-        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-300 leading-relaxed">
-          {isEditing ? (
-            <>
-              <span className="text-fuchsia-200 font-semibold">Updated budget: </span>
-              CFO will receive <span className="text-white font-semibold tabular">{fmtCurrency(modifiedTotal, { compact: false })}</span>,
-              {" "}which is{" "}
-              <span className={delta >= 0 ? "text-amber-300 font-semibold tabular" : "text-emerald-300 font-semibold tabular"}>
-                {delta >= 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })}
-              </span>{" "}
-              vs the current approved baseline and{" "}
-              <span className={modifiedDeltaVsRequested <= 0 ? "text-emerald-300 font-semibold tabular" : "text-amber-300 font-semibold tabular"}>
-                {modifiedDeltaVsRequested >= 0 ? "+" : ""}{fmtCurrency(modifiedDeltaVsRequested, { compact: false })}
-              </span>{" "}
-              vs the submitted request.
-            </>
-          ) : (
-            <>
-              <span className="text-fuchsia-200 font-semibold">Difference: </span>
-              Requested budget is <span className="text-white font-semibold tabular">{fmtCurrency(requestedBudget - currentBudget, { compact: false })}</span>{" "}
-              above the previously approved amount ({fmtPct(Math.round(((requestedBudget - currentBudget) / (currentBudget || 1)) * 100))} increase).
-            </>
-          )}
-        </div>
       </Panel>
       {priorModification && (
         <Panel testid="overview-prior-mod" title="Your previous action" subtitle={`Status: ${priorModification.status?.replace(/-/g, " ")} · Total ${fmtCurrency(priorModification.modifiedTotal, { compact: false })}`}>
@@ -535,17 +571,14 @@ const BudgetReviewWorkspace = () => {
         {/* Sidebar decision panel */}
         <div className="space-y-4">
           <div className="bg-[#12121A] rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.03] p-5 sticky top-4" data-testid="decision-panel">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300 mb-2">
-              {isEditing ? "Modified total (live)" : "Approval amount"}
-            </div>
-            <div className="flex items-baseline gap-2">
-              <span className="font-display text-3xl font-semibold text-white tabular">{fmtCurrency(effectiveAmount, { compact: false })}</span>
-            </div>
-            <div className="mt-1 text-[11px] text-zinc-500 tabular">
-              {delta >= 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })} vs current · {savings > 0 ? `${fmtCurrency(savings, { compact: false })} below request` : savings < 0 ? `${fmtCurrency(-savings, { compact: false })} above request` : "at request"}
-            </div>
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300 mb-2">
+            {isEditing ? "Modified total (live)" : "Approval amount"}
+          </div>
+          <div className="flex items-baseline gap-2">
+            <span className="font-display text-3xl font-semibold text-white tabular">{fmtCurrency(effectiveAmount, { compact: false })}</span>
+          </div>
 
-            {isEditing ? (
+          {isEditing ? (
               <>
                 <div className="mt-3 rounded-lg border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-2 text-[11px] text-zinc-300">
                   Edit the line items in the overview below to change this figure.
@@ -642,16 +675,6 @@ const BreakdownCell = ({ icon: Icon, label, value, color }) => (
     <div className="text-lg font-display font-semibold text-white tabular mt-1">{fmtCurrency(value, { compact: false })}</div>
   </div>
 );
-
-const CompareBox = ({ label, value, highlight }) => {
-  const cls = highlight === "warning" ? "border-amber-500/30" : highlight === "magenta" ? "border-fuchsia-500/30 bg-fuchsia-500/[0.03]" : "border-white/5";
-  return (
-    <div className={`rounded-xl border p-3 ${cls}`}>
-      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
-      <div className="font-display text-xl font-semibold text-white tabular mt-1">{fmtCurrency(value, { compact: false })}</div>
-    </div>
-  );
-};
 
 const Row = ({ label, value, valueColor = "text-white" }) => (
   <div className="flex justify-between">

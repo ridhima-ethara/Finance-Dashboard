@@ -77,7 +77,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
               ? "Returned for changes"
               : getCtoForwardLabel(r),
           amount: r.status === "rejected-by-cto" ? 0 : (r.modifiedTotal ?? r.requestedBudget),
-          comment: r.ctoComment,
+          comment: [r.ctoChangeSummary, r.ctoComment].filter(Boolean).join(" · "),
           at: r.ctoAt,
         });
       }
@@ -86,7 +86,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
           actor: "CFO",
           decision: r.cfoDecision.decision,
           amount: r.cfoDecision.amount,
-          comment: r.cfoDecision.comment,
+          comment: [r.cfoDecision.changeSummary, r.cfoDecision.comment].filter(Boolean).join(" · "),
           at: r.cfoDecision.at,
         });
       }

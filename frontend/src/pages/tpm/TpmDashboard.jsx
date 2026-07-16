@@ -4,8 +4,8 @@ import { fmtCurrency, fmtPct } from "../../lib/format";
 import { NOTIFICATIONS, APPROVALS, THRESHOLDS } from "../../data/mockData";
 import { Link } from "react-router-dom";
 import {
-  FolderKanban, ShieldCheck, Gauge, TrendingUp, Activity, Wallet, GitPullRequest, Heart, Flame, Clock3,
-  Bell, Sparkles, ChevronRight, AlertTriangle, Calendar, Undo2, Edit3,
+  FolderKanban, ShieldCheck, Gauge, TrendingUp, GitPullRequest, Heart, Flame, Clock3,
+  Sparkles, ChevronRight, AlertTriangle, Calendar, Undo2, Edit3,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
 import { ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend, PieChart, Pie, Cell } from "recharts";
@@ -14,15 +14,13 @@ import ProjectsTable from "../../components/dashboard/ProjectsTable";
 import {
   buildExecutionProjectView,
   buildLoggedDailyRows,
-  filterLogsByLane,
-  getTaskLogRecordedCost,
   isProjectInRndLane,
   isProjectInTpmLane,
   summarizeLoggedProject,
 } from "../../lib/projectMetrics";
 import { buildProjectBudgetBuilderHref } from "../../lib/projectBudgetRoute";
 
-const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid, to }) => {
+const KpiCard = ({ label, value, sublabel, details = [], icon: Icon, tone = "neutral", testid, to }) => {
   const toneMap = {
     positive: "text-emerald-300",
     negative: "text-red-300",
@@ -42,6 +40,16 @@ const KpiCard = ({ label, value, sublabel, icon: Icon, tone = "neutral", testid,
       </div>
       <div className="mt-2 font-display font-semibold text-2xl tabular text-white">{value}</div>
       {sublabel && <div className="mt-1 text-[11px] text-zinc-500 tabular">{sublabel}</div>}
+      {details.length > 0 && (
+        <div className="mt-3 border-t border-white/5 pt-3 space-y-1.5">
+          {details.map((detail) => (
+            <div key={detail.label} className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="text-zinc-500">{detail.label}</span>
+              <span className={`font-semibold tabular ${toneMap[detail.tone || "neutral"]}`}>{detail.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
   if (to) {
@@ -109,7 +117,6 @@ const TpmDashboard = () => {
   const remaining = approved - logged;
   const util = approved ? Math.round((logged / approved) * 100) : 0;
   const burnRate = Math.round(projectUsage.reduce((sum, entry) => sum + entry.usage.runRate, 0));
-  const runway = burnRate ? Math.round(remaining / burnRate) : "—";
   const latestDay = dailyRows.reduce((latest, row) => row.date > latest ? row.date : latest, "");
   const today = dailyRows
     .filter((row) => row.date === latestDay)
@@ -162,10 +169,7 @@ const TpmDashboard = () => {
     name: project.name.split(" ")[0],
     Completion: usage.targetTasks > 0 ? Math.round((usage.loggedTasks / usage.targetTasks) * 100) : 0,
   }));
-  const upcomingProject = dashboardProjects[0] || null;
-  const upcomingPhase = upcomingProject?.phases?.find((ph) => ph.health !== "healthy") || upcomingProject?.phases?.[0];
   const pendingActions = APPROVALS.filter((a) => a.requester === user?.name).slice(0, 3);
-  const recentNotifs = NOTIFICATIONS.slice(0, 4);
 
   return (
     <div className="space-y-6" data-testid="page-tpm-dashboard">
@@ -188,19 +192,26 @@ const TpmDashboard = () => {
       </div>
 
       {/* KPI Grid */}
-      <div className={`grid grid-cols-2 md:grid-cols-4 ${isRnd ? "lg:grid-cols-5" : "lg:grid-cols-6"} gap-3`}>
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
         <KpiCard testid="kpi-active-projects" label="Active projects" value={String(dashboardProjects.length)} icon={FolderKanban} tone="magenta" />
         <KpiCard testid="kpi-pending-approvals" label="Pending approvals" value={String(pendingActions.length)} icon={ShieldCheck} tone="warning" />
         <KpiCard testid="kpi-util" label="Budget utilization" value={fmtPct(util)} icon={Gauge} tone={util >= 90 ? "negative" : util >= 75 ? "warning" : "positive"} />
-        <KpiCard testid="kpi-today-consumption" label="Log today's consumption" value={fmtCurrency(today?.spend || 0, { compact: false })} icon={Calendar} tone="magenta" sublabel="Tap to submit" to="/consumption" />
-        <KpiCard testid="kpi-logged" label="Logged spend" value={fmtCurrency(logged, { compact: false })} icon={Activity} tone="magenta" sublabel="Owned usage only" />
-        <KpiCard testid="kpi-remaining" label="Total remaining" value={fmtCurrency(remaining)} icon={Wallet} tone={remaining > 0 ? "positive" : "negative"} />
+        <KpiCard
+          testid="kpi-today-consumption"
+          label="Log today's consumption"
+          value={fmtCurrency(today?.spend || 0, { compact: false })}
+          icon={Calendar}
+          tone="magenta"
+          sublabel="Tap to submit"
+          details={[
+            { label: "Logged spent", value: fmtCurrency(logged, { compact: false }), tone: "magenta" },
+            { label: "Total remaining", value: fmtCurrency(remaining, { compact: false }), tone: remaining > 0 ? "positive" : "negative" },
+          ]}
+          to="/consumption"
+        />
         <KpiCard testid="kpi-pending-cr" label="Pending change requests" value={String(changeRequests.filter((request) => request.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
         <KpiCard testid="kpi-health" label="Budget health" value={health} icon={Heart} tone={health === "Green" ? "positive" : health === "Amber" ? "warning" : "negative"} sublabel={fmtPct(util)} />
         <KpiCard testid="kpi-burn-rate" label="Burn rate" value={fmtCurrency(burnRate, { compact: false })} icon={Flame} sublabel="Logged avg / day" />
-        {!isRnd && (
-          <KpiCard testid="kpi-exhaustion" label="Exhaustion in" value={typeof runway === "number" ? `${runway} days` : runway} icon={Clock3} tone={typeof runway === "number" && runway < 14 ? "negative" : "neutral"} sublabel="At current burn" />
-        )}
         <KpiCard testid="kpi-over" label="Target progress" value={targetTasks > 0 ? `${doneTasks}/${targetTasks}` : `${doneTasks}`} icon={AlertTriangle} tone={doneTasks >= targetTasks && targetTasks > 0 ? "positive" : "warning"} />
       </div>
 
@@ -299,26 +310,6 @@ const TpmDashboard = () => {
           </Panel>
         </div>
 
-        {!isRnd && (
-          <Panel testid="chart-subs" title="Model usage snapshot" subtitle="tasks, cost, and token consumption">
-            <div className="space-y-2.5">
-              {modelPie.slice(0, 4).length === 0 && (
-                <div className="text-xs text-zinc-500">No model logs yet. Once tasks are logged with model details, the snapshot appears here.</div>
-              )}
-              {modelPie.slice(0, 4).map((model) => (
-                <div key={model.name} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-zinc-200">{model.name}</span>
-                    <span className="text-sm font-semibold text-white tabular">{fmtCurrency(model.value, { compact: false })}</span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-zinc-500">
-                    {model.tasks.toLocaleString()} tasks · {(model.inputTokens + model.outputTokens).toLocaleString()} total tokens
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Panel>
-        )}
       </div>
 
       {/* Returned budgets — edit & resubmit */}
@@ -424,60 +415,6 @@ const TpmDashboard = () => {
 
       {/* Projects table with expandable phase drawer (log daily task / raise top-up per phase) */}
       <ProjectsTable projectsOverride={dashboardProjects} usageOptions={usageOptions} />
-
-      {/* Widgets: notifications / upcoming phase (TPM only) */}
-      {!isRnd && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <Panel testid="widget-upcoming-phase" title="Upcoming phase" subtitle={upcomingProject?.name || "No project"}>
-            {upcomingPhase ? (
-              <Link to={`/projects/${upcomingProject.id}/phase/${upcomingPhase.id}`} className="block hover:opacity-90 transition-opacity" data-testid="link-upcoming-phase">
-                <div className="text-sm font-semibold text-white">{upcomingPhase.name}</div>
-                <div className="text-xs text-zinc-500 mt-1">{upcomingPhase.dates}</div>
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <div className="rounded-lg bg-white/[0.03] p-2">
-                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Est.</div>
-                    <div className="text-sm font-semibold text-white tabular">{fmtCurrency(upcomingPhase.estimated)}</div>
-                  </div>
-                  <div className="rounded-lg bg-white/[0.03] p-2">
-                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Logged</div>
-                    <div className="text-sm font-semibold text-white tabular">
-                      {fmtCurrency(
-                        filterLogsByLane(
-                          upcomingProject,
-                          taskLogs[`${upcomingProject.id}::${upcomingPhase.id}`] || [],
-                          executionLane
-                        ).reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0),
-                        { compact: false }
-                      )}
-                    </div>
-                  </div>
-                  <div className="rounded-lg bg-white/[0.03] p-2">
-                    <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Health</div>
-                    <div className="text-sm font-semibold text-white capitalize">{upcomingPhase.health}</div>
-                  </div>
-                </div>
-                <div className="mt-3 inline-flex items-center gap-1 text-[11px] text-fuchsia-300 font-medium">
-                  Open phase workspace <ChevronRight className="w-3 h-3" />
-                </div>
-              </Link>
-            ) : <div className="text-xs text-zinc-500">No upcoming phase.</div>}
-          </Panel>
-
-          <Panel testid="widget-notifications" title="Notifications" subtitle="latest alerts" right={<Bell className="w-4 h-4 text-zinc-500" />}>
-            <div className="space-y-2">
-              {recentNotifs.map((n) => (
-                <div key={n.id} className="flex items-start gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02]">
-                  <div className={`w-1 self-stretch rounded-full ${n.type === "danger" ? "bg-red-400" : n.type === "warning" ? "bg-amber-400" : n.type === "success" ? "bg-emerald-400" : "bg-sky-400"}`} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-semibold text-white">{n.title}</div>
-                    <div className="text-[11px] text-zinc-500 mt-0.5 line-clamp-2">{n.detail}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Panel>
-        </div>
-      )}
 
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
     </div>

@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { fmtCurrency } from "../lib/format";
 import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../lib/modelCatalog";
+import { buildProjectPhaseGate } from "../lib/projectMetrics";
 import {
   DEFAULT_GENERAL_BUDGET_HEADERS,
   getGeneralActualRowsCostTotal,
@@ -240,6 +241,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     visibleProjects,
     budgets,
     budgetReviews,
+    batchDeliveries,
     user,
     modelCatalog,
     addCustomModel,
@@ -254,14 +256,46 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   );
   const projectPhases = useMemo(() => activeProject?.phases || [], [activeProject]);
   const [phaseId, setPhaseId] = useState(phase?.id || projectPhases[0]?.id || "");
+  const phaseGate = useMemo(
+    () => buildProjectPhaseGate(activeProject, batchDeliveries),
+    [activeProject, batchDeliveries]
+  );
+  const firstUnlockedPhaseId = useMemo(
+    () => projectPhases.find((entry) => !phaseGate[entry.id]?.isLocked)?.id || projectPhases[0]?.id || "",
+    [phaseGate, projectPhases]
+  );
 
   useEffect(() => {
     if (!projectPhases.find((entry) => entry.id === phaseId)) {
-      setPhaseId(projectPhases[0]?.id || "");
+      setPhaseId(firstUnlockedPhaseId);
+      return;
     }
-  }, [projectPhases, phaseId]);
+    if (!isEdit && phaseGate[phaseId]?.isLocked) {
+      setPhaseId(firstUnlockedPhaseId);
+    }
+  }, [firstUnlockedPhaseId, isEdit, phaseGate, phaseId, projectPhases]);
 
   const currentPhase = projectPhases.find((entry) => entry.id === phaseId) || phase || null;
+  const currentPhaseState = phaseGate[phaseId] || {
+    isLocked: false,
+    isSubmitted: false,
+    batchLabel: "This batch",
+    previousBatchLabel: "",
+    previousPhaseName: "",
+  };
+  const currentPhaseDelivery = useMemo(
+    () => (activeProject && phaseId
+      ? batchDeliveries.find((delivery) => delivery.projectId === activeProject.id && delivery.phaseId === phaseId) || null
+      : null),
+    [activeProject, batchDeliveries, phaseId]
+  );
+  const isCurrentPhaseLocked = Boolean(currentPhaseState.isLocked);
+  const isCurrentPhaseSubmitted = Boolean(currentPhaseDelivery);
+  const currentPhaseLockMessage = isCurrentPhaseLocked
+    ? `${currentPhaseState.previousBatchLabel || currentPhaseState.previousPhaseName || "The previous batch"} must be submitted before ${currentPhaseState.batchLabel || "this batch"} can be logged.`
+    : isCurrentPhaseSubmitted
+      ? `${currentPhaseState.batchLabel || "This batch"} has already been submitted, so daily task logging is locked.`
+      : "";
 
   const [successfulTasks, setSuccessfulTasks] = useState(toDraftCountString(editingLog?.successfulTasks ?? editingLog?.tasksDone));
   const [failedTasks, setFailedTasks] = useState(toDraftCountString(editingLog?.failedTasks));
@@ -596,6 +630,18 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   const submit = () => {
     if (!activeProject) { toast.error("Select a project"); return; }
     if (!phaseId) { toast.error("Select a phase"); return; }
+    if (isCurrentPhaseLocked) {
+      toast.error("This phase is locked", {
+        description: currentPhaseLockMessage,
+      });
+      return;
+    }
+    if (isCurrentPhaseSubmitted) {
+      toast.error("Batch already submitted", {
+        description: "Daily task logging is locked for phases that have already been submitted.",
+      });
+      return;
+    }
     if (!date) { toast.error("Date is required"); return; }
     if (logMode === "general") {
       if (generalActualRowCount <= 0 && generalActualCostTotal <= 0) {
@@ -740,14 +786,34 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                   className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                 >
                   {projectPhases.length === 0 && <option value="">-- No phases available --</option>}
-                  {projectPhases.map((entry) => (
-                    <option key={entry.id} value={entry.id} className="bg-[#12121A]">
-                      {activeProject?.name ? `${activeProject.name} · ` : ""}{entry.name}{entry.totalTasks ? ` · ${entry.totalTasks} tasks planned` : ""}
-                    </option>
-                  ))}
+                  {projectPhases.map((entry) => {
+                    const phaseMeta = phaseGate[entry.id] || {};
+                    return (
+                      <option
+                        key={entry.id}
+                        value={entry.id}
+                        disabled={Boolean(phaseMeta.isLocked)}
+                        className="bg-[#12121A]"
+                      >
+                        {activeProject?.name ? `${activeProject.name} · ` : ""}
+                        {entry.name}
+                        {phaseMeta.batchLabel ? ` · ${phaseMeta.batchLabel}` : ""}
+                        {entry.totalTasks ? ` · ${entry.totalTasks} tasks planned` : ""}
+                        {phaseMeta.isLocked ? ` · locked until ${phaseMeta.previousBatchLabel || phaseMeta.previousPhaseName || "previous batch"} is submitted` : ""}
+                        {phaseMeta.isSubmitted ? " · submitted" : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </Field>
+          )}
+
+          {currentPhaseLockMessage && (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-3 flex items-start gap-2 text-[11px] text-amber-100">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-300 flex-shrink-0 mt-0.5" />
+              <div>{currentPhaseLockMessage}</div>
+            </div>
           )}
 
           {logMode !== "general" && phaseTotalTasks > 0 && (
@@ -1075,6 +1141,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
           </Button>
           <Button
             onClick={submit}
+            disabled={isCurrentPhaseLocked || isCurrentPhaseSubmitted}
             className="bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
             data-testid="task-log-submit"
           >

@@ -12,7 +12,9 @@ import TopupRequestDialog from "../TopupRequestDialog";
 import DeliverBatchDialog from "../DeliverBatchDialog";
 import { toast } from "sonner";
 import {
+  buildDeliverableCostMetrics,
   buildBudgetTracks,
+  buildProjectPhaseGate,
   filterLogsByLane,
   getLaneBudgetTrack,
   getTaskLogRecordedCost,
@@ -33,9 +35,10 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
   const [expanded, setExpanded] = useState({ "crowley-gen": true });
   const [drawer, setDrawer] = useState(null); // { project, phase }
   const nav = useNavigate();
-  const { visibleProjects, role, taskLogs, budgets, topupRequests, changeRequests } = useApp();
+  const { visibleProjects, role, taskLogs, batchDeliveries, budgets, topupRequests, changeRequests } = useApp();
   const isRnd = role === "R&D";
   const isCfo = role === "CFO";
+  const isTPM = isTpmView(role);
   const ownerLabel = role === "CFO" ? "TPM" : "PL";
   const logLane = usageOptions?.lane || "all";
 
@@ -117,6 +120,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
               const displayRunRate = isCfo ? Number(p.cfoBurnRate || 0) : logged.runRate;
               const isOpen = !!expanded[p.id];
               const projectDetailTrack = getLaneBudgetTrack(p, budgets, logLane) || projectTracks[p.id]?.ordered?.[0]?.latest || null;
+              const phaseGate = buildProjectPhaseGate(p, batchDeliveries);
               return (
                 <Fragment key={p.id}>
                   <tr
@@ -313,9 +317,30 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
                                     const phaseLogged = phaseLogs.reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0);
                                     const phaseTasksDone = phaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0);
                                     const variance = ph.estimated - ph.actual;
+                                    const phaseState = phaseGate[ph.id] || {
+                                      isLocked: false,
+                                      isSubmitted: false,
+                                      batchLabel: "",
+                                      previousBatchLabel: "",
+                                      previousPhaseName: "",
+                                    };
+                                    const isPhaseLocked = isTPM && phaseState.isLocked;
+                                    const phaseStatusLabel = isPhaseLocked
+                                      ? `Locked until ${phaseState.previousBatchLabel || phaseState.previousPhaseName || "previous batch"} is submitted`
+                                      : phaseState.isSubmitted
+                                        ? "Batch submitted"
+                                        : "";
                                     return (
-                                      <tr key={ph.id} className="border-b border-white/5 last:border-0">
-                                        <td className="py-2.5 px-4 text-sm text-zinc-100 font-medium">{ph.name}</td>
+                                      <tr key={ph.id} className={`border-b border-white/5 last:border-0 ${isPhaseLocked ? "bg-white/[0.02] opacity-60" : ""}`}>
+                                        <td className="py-2.5 px-4">
+                                          <div className={`text-sm font-medium ${isPhaseLocked ? "text-zinc-500" : "text-zinc-100"}`}>{ph.name}</div>
+                                          {(phaseState.batchLabel || phaseStatusLabel) && (
+                                            <div className="text-[10px] text-zinc-500 mt-0.5">
+                                              {phaseState.batchLabel || ""}
+                                              {phaseStatusLabel ? ` · ${phaseStatusLabel}` : ""}
+                                            </div>
+                                          )}
+                                        </td>
                                         <td className="py-2.5 px-4 text-xs text-zinc-400 tabular">{ph.dates}</td>
                                         <td className="py-2.5 px-4 text-right tabular text-sm text-zinc-100">{fmtCurrency(ph.estimated)}</td>
                                         {isCfo ? (
@@ -334,11 +359,12 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
                                         <td className="py-2.5 px-4"><HealthBadge h={ph.health} /></td>
                                         <td className="py-2.5 px-4 text-right">
                                           <button
+                                            disabled={isPhaseLocked}
                                             onClick={() => setDrawer({ project: p, phase: ph, logLane })}
-                                            className="text-xs text-fuchsia-400 hover:text-fuchsia-300 font-medium"
+                                            className={`text-xs font-medium ${isPhaseLocked ? "text-zinc-600 cursor-not-allowed" : "text-fuchsia-400 hover:text-fuchsia-300"}`}
                                             data-testid={`phase-view-${p.id}-${ph.id}`}
                                           >
-                                            View details →
+                                            {isPhaseLocked ? "Locked" : "View details →"}
                                           </button>
                                         </td>
                                       </tr>
@@ -404,7 +430,6 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
   const { role, getPhaseLogs, deletePhaseTask, isTaskEditable, batchDeliveries, budgets, topupRequests, changeRequests } = useApp();
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
-  const canEdit = isTPM; // Only TPM can edit/log
 
   const tasks = getPhaseTasks(project.id, phase.id);
   const tpmLogs = filterLogsByLane(project, getPhaseLogs(project.id, phase.id), logLane);
@@ -420,11 +445,36 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
   const activeBudgetTrack = getLaneBudgetTrack(project, budgets, logLane) || buildBudgetTracks(project, budgets).ordered[0]?.latest || null;
   const trackPhase = activeBudgetTrack?.phases?.find((entry) => entry.id === phase.id || entry.name === phase.name) || null;
   const submittedPhaseBudget = Number(trackPhase?.budget || phase.estimated || 0);
-  const plannedCostPerTask = targetTasks > 0 ? submittedPhaseBudget / targetTasks : 0;
+  const delivery = batchDeliveries.find((d) => d.projectId === project.id && d.phaseId === phase.id) || null;
+  const phaseGate = buildProjectPhaseGate(project, batchDeliveries);
+  const phaseState = phaseGate[phase.id] || {
+    isLocked: false,
+    isSubmitted: false,
+    batchLabel: "This batch",
+    previousBatchLabel: "",
+    previousPhaseName: "",
+  };
+  const isPhaseLocked = isTPM && phaseState.isLocked;
+  const isPhaseSubmitted = isTPM && Boolean(delivery);
+  const canEdit = isTPM && !isPhaseLocked && !isPhaseSubmitted;
+  const phaseLockMessage = isPhaseLocked
+    ? `${phaseState.previousBatchLabel || phaseState.previousPhaseName || "The previous batch"} must be submitted before ${phaseState.batchLabel || "this batch"} can be logged.`
+    : isPhaseSubmitted
+      ? `${phaseState.batchLabel || "This batch"} has already been submitted, so daily task logging is locked.`
+      : "";
+  const deliverableMetrics = buildDeliverableCostMetrics({
+    totalBudgetRequested: submittedPhaseBudget,
+    totalTaskCount: targetTasks,
+    completedDeliverables: loggedTasks,
+    totalAmountConsumed: displaySpend,
+  });
+  const plannedCostPerTask = deliverableMetrics.perTaskCost;
   const plannedCostPerTrajectory = targetTrajectories > 0 ? submittedPhaseBudget / targetTrajectories : 0;
-  const claimedPerTask = loggedTasks > 0 ? loggedCost / loggedTasks : 0;
-  const actualPerTask = (loggedTasks || targetTasks) > 0 ? displaySpend / (loggedTasks || targetTasks) : 0;
+  const claimedCost = deliverableMetrics.claimedCost;
+  const actualCost = deliverableMetrics.actualCost;
+  const actualPerTask = deliverableMetrics.actualPerTaskCost;
   const actualPerTrajectory = (loggedTrajectories || targetTrajectories) > 0 ? displaySpend / (loggedTrajectories || targetTrajectories) : 0;
+  const deliverableVariance = deliverableMetrics.variance;
   const phaseTopups = topupRequests.filter((request) => request.projectId === project.id && request.phaseId === phase.id);
   const phaseChangeRequests = changeRequests.filter((request) => (
     request.projectId === project.id
@@ -445,16 +495,37 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
   const [topupOpen, setTopupOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
 
-  const openEdit = (log) => { setEditingLog(log); setTaskDialogOpen(true); };
-  const openNew = () => { setEditingLog(null); setTaskDialogOpen(true); };
+  const openEdit = (log) => {
+    if (!canEdit) {
+      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
+        description: phaseLockMessage,
+      });
+      return;
+    }
+    setEditingLog(log);
+    setTaskDialogOpen(true);
+  };
+  const openNew = () => {
+    if (!canEdit) {
+      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
+        description: phaseLockMessage,
+      });
+      return;
+    }
+    setEditingLog(null);
+    setTaskDialogOpen(true);
+  };
   const onDelete = (log) => {
+    if (!canEdit) {
+      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
+        description: phaseLockMessage,
+      });
+      return;
+    }
     if (!isTaskEditable(log)) { toast.error("Task log is locked (>24h)"); return; }
     deletePhaseTask(project.id, phase.id, log.id);
     toast.success("Task log deleted");
   };
-
-  // Existing batch delivery for this phase (if any) — surface to CFO/TPM
-  const delivery = batchDeliveries.find((d) => d.projectId === project.id && d.phaseId === phase.id);
 
   return (
     <>
@@ -464,7 +535,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         </div>
         <SheetTitle className="font-display text-2xl text-white">{phase.name}</SheetTitle>
         <SheetDescription className="text-xs text-zinc-400">
-          {phase.dates} · TPM {project.tpm}
+          {phaseState.batchLabel || "Batch"} · {phase.dates} · TPM {project.tpm}
           {isCFO && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-400"><Lock className="w-2.5 h-2.5" /> Read-only</span>}
         </SheetDescription>
       </SheetHeader>
@@ -474,6 +545,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         <div className="mt-4 flex items-center gap-2 flex-wrap">
           <Button
             onClick={openNew}
+            disabled={!canEdit}
             data-testid="drawer-btn-log-task"
             className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
           >
@@ -490,12 +562,18 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
           <Button
             onClick={() => setDeliverOpen(true)}
             variant="outline"
-            disabled={!!delivery}
+            disabled={!!delivery || isPhaseLocked}
             data-testid="drawer-btn-deliver"
             className="h-9 rounded-lg border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-60 gap-1.5"
           >
             <PackageCheck className="w-3.5 h-3.5" /> {delivery ? "Batch delivered" : "Deliver batch"}
           </Button>
+        </div>
+      )}
+
+      {isTPM && phaseLockMessage && (
+        <div className="mt-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-3 py-2 text-[11px] text-amber-100">
+          {phaseLockMessage}
         </div>
       )}
 
@@ -548,11 +626,13 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
           <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Submitted task budget view</div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <DrawerStat label="Target tasks" value={targetTasks.toLocaleString()} />
-            <DrawerStat label="Target trajectories" value={targetTrajectories.toLocaleString()} />
-            <DrawerStat label="Cost / task" value={targetTasks > 0 ? fmtCurrency(plannedCostPerTask, { compact: false }) : "—"} tone="magenta" />
+            <DrawerStat label="Deliverables completed" value={loggedTasks.toLocaleString()} />
+            <DrawerStat label="Per task cost" value={targetTasks > 0 ? fmtCurrency(plannedCostPerTask, { compact: false }) : "—"} tone="magenta" />
             <DrawerStat label="Cost / trajectory" value={targetTrajectories > 0 ? fmtCurrency(plannedCostPerTrajectory, { compact: false }) : "—"} tone="magenta" />
-            <DrawerStat label="Claimed / task" value={loggedTasks > 0 ? fmtCurrency(claimedPerTask, { compact: false }) : "—"} />
-            <DrawerStat label="Actual / task" value={(loggedTasks || targetTasks) > 0 ? fmtCurrency(actualPerTask, { compact: false }) : "—"} tone={isCFO ? "warning" : "neutral"} />
+            <DrawerStat label="Claimed cost" value={loggedTasks > 0 ? fmtCurrency(claimedCost, { compact: false }) : "—"} />
+            <DrawerStat label="Actual cost" value={loggedTasks > 0 ? fmtCurrency(actualCost, { compact: false }) : "—"} tone={isCFO ? "warning" : "neutral"} />
+            <DrawerStat label="Actual / task" value={loggedTasks > 0 ? fmtCurrency(actualPerTask, { compact: false }) : "—"} tone={isCFO ? "warning" : "neutral"} />
+            <DrawerStat label="Variance" value={loggedTasks > 0 ? fmtCurrency(deliverableVariance, { compact: false }) : "—"} tone={deliverableVariance > 0 ? "negative" : deliverableVariance < 0 ? "positive" : "neutral"} />
           </div>
           <div className="mt-3 text-[11px] text-zinc-500">
             Submitted budget {activeBudgetTrack?.budgetType ? `· ${activeBudgetTrack.budgetType}` : ""} {activeBudgetTrack?.submittedAt ? `· ${new Date(activeBudgetTrack.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
@@ -674,7 +754,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
                               <Trash2 className="w-2.5 h-2.5" />
                             </button>
                           </div>
-                        ) : canEdit ? (
+                        ) : isTPM ? (
                           <Lock className="w-2.5 h-2.5 text-zinc-600 inline" />
                         ) : null}
                       </td>

@@ -30,6 +30,7 @@ import TpmTaskLogDialog from "../../components/TpmTaskLogDialog";
 import TopupRequestDialog from "../../components/TopupRequestDialog";
 import { toast } from "sonner";
 import { isTpmView } from "../../lib/roles";
+import { buildProjectPhaseGate } from "../../lib/projectMetrics";
 
 const statusStyles = {
   done: { bg: "bg-emerald-500/10", border: "border-emerald-500/30", text: "text-emerald-300", Icon: CheckCircle2 },
@@ -40,7 +41,7 @@ const statusStyles = {
 const PhaseWorkspace = () => {
   const { id, phaseId } = useParams();
   const nav = useNavigate();
-  const { visibleProjects, role, getPhaseLogs, isTaskEditable, deletePhaseTask } = useApp();
+  const { visibleProjects, role, getPhaseLogs, isTaskEditable, deletePhaseTask, batchDeliveries } = useApp();
   const [statusFilter, setStatusFilter] = useState("all");
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
@@ -67,6 +68,23 @@ const PhaseWorkspace = () => {
   }
 
   const tpmLogs = getPhaseLogs(id, phaseId);
+  const phaseGate = buildProjectPhaseGate(project, batchDeliveries);
+  const phaseState = phaseGate[phase.id] || {
+    isLocked: false,
+    isSubmitted: false,
+    batchLabel: "This batch",
+    previousBatchLabel: "",
+    previousPhaseName: "",
+  };
+  const phaseDelivery = batchDeliveries.find((delivery) => delivery.projectId === id && delivery.phaseId === phaseId) || null;
+  const isPhaseLocked = isTPM && Boolean(phaseState.isLocked);
+  const isPhaseSubmitted = isTPM && Boolean(phaseDelivery);
+  const canMutatePhase = isTPM && !isPhaseLocked && !isPhaseSubmitted;
+  const phaseLockMessage = isPhaseLocked
+    ? `${phaseState.previousBatchLabel || phaseState.previousPhaseName || "The previous batch"} must be submitted before ${phaseState.batchLabel || "this batch"} can be logged.`
+    : isPhaseSubmitted
+      ? `${phaseState.batchLabel || "This batch"} has already been submitted, so task logging is now locked.`
+      : "";
   const filteredTasks = tasks.filter((t) => (statusFilter === "all" ? true : t.status === statusFilter));
   const totalEst = tasks.reduce((s, t) => s + t.estCost, 0);
   const totalActual = tasks.reduce((s, t) => s + t.actualCost, 0);
@@ -77,9 +95,33 @@ const PhaseWorkspace = () => {
   const completion = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
   const utilization = phase.estimated ? Math.round((phase.actual / phase.estimated) * 100) : 0;
 
-  const openEditLog = (log) => { setEditingLog(log); setTaskDialogOpen(true); };
-  const openNewLog = () => { setEditingLog(null); setTaskDialogOpen(true); };
+  const openEditLog = (log) => {
+    if (!canMutatePhase) {
+      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
+        description: phaseLockMessage,
+      });
+      return;
+    }
+    setEditingLog(log);
+    setTaskDialogOpen(true);
+  };
+  const openNewLog = () => {
+    if (!canMutatePhase) {
+      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
+        description: phaseLockMessage,
+      });
+      return;
+    }
+    setEditingLog(null);
+    setTaskDialogOpen(true);
+  };
   const removeLog = (log) => {
+    if (!canMutatePhase) {
+      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
+        description: phaseLockMessage,
+      });
+      return;
+    }
     if (!isTaskEditable(log)) { toast.error("Task log is locked (>24h)"); return; }
     deletePhaseTask(id, phaseId, log.id);
     toast.success("Task log deleted");
@@ -100,7 +142,7 @@ const PhaseWorkspace = () => {
           </div>
           <div className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-sky-300">
             <Target className="w-3 h-3" />
-            Phase workspace
+            {phaseState.batchLabel || "Batch"} workspace
           </div>
           <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">{phase.name}</h1>
           <p className="text-sm text-zinc-400 mt-1">
@@ -113,6 +155,7 @@ const PhaseWorkspace = () => {
               <Button
                 onClick={openNewLog}
                 variant="outline"
+                disabled={!canMutatePhase}
                 className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
                 data-testid="btn-add-task"
               >
@@ -134,12 +177,22 @@ const PhaseWorkspace = () => {
             </span>
           )}
           {isTPM && (
-            <Button className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2" data-testid="btn-mark-complete">
+            <Button
+              disabled={!canMutatePhase}
+              className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2"
+              data-testid="btn-mark-complete"
+            >
               <CheckCircle2 className="w-3.5 h-3.5" /> Mark phase complete
             </Button>
           )}
         </div>
       </div>
+
+      {phaseLockMessage && (
+        <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-3 text-xs text-amber-100">
+          {phaseLockMessage}
+        </div>
+      )}
 
       {/* Phase Stats */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -311,6 +364,7 @@ const PhaseWorkspace = () => {
             <Button
               onClick={openNewLog}
               size="sm"
+              disabled={!canMutatePhase}
               className="h-8 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
               data-testid="btn-log-task-inline"
             >
@@ -345,7 +399,7 @@ const PhaseWorkspace = () => {
                       <div className="text-sm text-white tabular font-semibold">{fmtCurrency(log.cost, { compact: false })}</div>
                       {isTPM && (
                         <div className="flex items-center gap-0.5 justify-end mt-1">
-                          {editable ? (
+                          {editable && canMutatePhase ? (
                             <>
                               <button
                                 onClick={() => openEditLog(log)}

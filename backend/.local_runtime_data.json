@@ -83,13 +83,17 @@
               "id": "emp-0126",
               "name": "Anjali Bhagoria",
               "role": "TPM",
-              "email": "anjali.bhagoria@ethara.ai"
+              "email": "anjali.bhagoria@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
             },
             {
               "id": "emp-0041",
               "name": "Adarsh Raghuwanshi",
               "role": "Quality Lead",
-              "email": "adarsh.raghuwanshi@ethara.ai"
+              "email": "adarsh.raghuwanshi@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
             }
           ],
           "goal": "asd",
@@ -98,10 +102,217 @@
         },
         "startDate": "2026-07-16",
         "estimatedEndDate": "",
-        "status": "Awaiting testing budget",
+        "status": "Testing budget pending approval",
         "type": "R&D",
-        "workflowStage": "awaiting-testing-budget",
+        "workflowStage": "testing-budget-pending",
         "readyForTpmBudget": false,
+        "pendingBudgetSubmission": {
+          "reviewId": "br-mrnhvcfe",
+          "budgetType": "Testing",
+          "teamType": "R&D",
+          "submittedAt": "2026-07-16T12:37:51.146Z",
+          "submittedBy": "R&D Lead",
+          "submittedRole": "R&D",
+          "sampleIteration": 1,
+          "sourceDeliveryId": null,
+          "total": 444.71,
+          "stage": "pending-cto"
+        },
+        "buffer": 10,
+        "recoverableFromClient": false,
+        "recoveredAmount": 0,
+        "approvedBudget": 0,
+        "estimatedBudget": 0,
+        "actualSpend": 0,
+        "remaining": 0,
+        "variance": 0,
+        "utilization": 0,
+        "burnRate": 0,
+        "forecast": 0,
+        "infrastructureCost": 0,
+        "aiModelCost": 0,
+        "employeeCost": 0,
+        "purchaseCost": 0,
+        "reimbursements": 0,
+        "dinnerExpenses": 0,
+        "miscExpenses": 0,
+        "topupsTotal": 0,
+        "health": "healthy",
+        "topModel": "\u2014",
+        "phases": [],
+        "budgetItems": {
+          "models": [],
+          "infra": [],
+          "subs": [],
+          "misc": []
+        },
+        "expenses": [],
+        "budgetHistory": [],
+        "topupHistory": [],
+        "budgetTrackHistory": [
+          {
+            "id": "bud-mrnhvcfe",
+            "projectId": "p-mrn5rhge",
+            "budgetType": "Testing",
+            "teamType": "R&D",
+            "total": 444.71,
+            "totals": {
+              "models": 0,
+              "infra": 31.38,
+              "subs": 413.33,
+              "general": 0,
+              "total": 444.71
+            },
+            "totalTasks": 0,
+            "totalTrajectories": 0,
+            "submittedAt": "2026-07-16T12:37:51.146Z",
+            "submittedBy": "R&D Lead",
+            "status": "pending-cto",
+            "items": {
+              "models": [
+                {
+                  "id": "0bh3v3",
+                  "modelId": "ai21.jamba-1-5-large",
+                  "provider": "AWS",
+                  "usageTag": "Trajectory building",
+                  "costPerTask": 0.016,
+                  "estCost": 0,
+                  "platform": "AWS",
+                  "meta": {
+                    "id": "ai21.jamba-1-5-large",
+                    "name": "Jamba 1.5 Large",
+                    "provider": "AI21",
+                    "modality": "Chat",
+                    "pricePer1kIn": 0.002,
+                    "pricePer1kOut": 0.008,
+                    "platform": "AWS"
+                  }
+                }
+              ],
+              "infra": [
+                {
+                  "id": "zt889x",
+                  "provider": "AWS",
+                  "instance": "t3.medium",
+                  "monthlyCost": 30.37,
+                  "estCost": 31.38,
+                  "days": 31,
+                  "meta": {
+                    "provider": "AWS",
+                    "code": "t3.medium",
+                    "family": "General purpose",
+                    "vCPU": 2,
+                    "memoryGiB": 4,
+                    "hourly": 0.0416
+                  }
+                }
+              ],
+              "subs": [
+                {
+                  "id": "izg0cn",
+                  "subscription": "Claude Max",
+                  "pricePerSeat": 400,
+                  "seats": 1,
+                  "members": [
+                    "Adarsh Raghuwanshi"
+                  ],
+                  "estCost": 413.33,
+                  "days": 31
+                }
+              ],
+              "misc": []
+            },
+            "phases": [
+              {
+                "id": "p1",
+                "name": "Testing budget",
+                "start": "2026-07-16",
+                "end": "2026-08-15",
+                "budget": 444.71,
+                "tasks": 0,
+                "trajectories": 0
+              }
+            ],
+            "sourceDeliveryId": null,
+            "sampleIteration": 1,
+            "reviewId": "br-mrnhvcfe"
+          }
+        ],
+        "auditLog": [
+          {
+            "id": "a-p-mrn5rhge-mrnhvcfi-budget",
+            "ts": "2026-07-16T12:37:51.150Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Testing budget submitted",
+            "detail": "$444.71 \u00b7 R&D team \u00b7 pending CTO review \u00b7 0 tasks"
+          },
+          {
+            "id": "a-p-mrn5rhge-1",
+            "ts": "2026-07-16T06:58:55.646Z",
+            "actor": "R&D Lead",
+            "action": "Project created",
+            "detail": "Assigned TPM: Anjali Bhagoria \u00b7 QL: Adarsh Raghuwanshi \u00b7 Start 2026-07-16 \u00b7 Project Goal: asd"
+          },
+          {
+            "id": "a-p-mrn5rhge-2",
+            "ts": "2026-07-16T06:58:55.646Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Kickoff mail sent",
+            "detail": "2 recipients \u00b7 anjali.bhagoria@ethara.ai, adarsh.raghuwanshi@ethara.ai"
+          }
+        ],
+        "comments": [],
+        "__custom": true
+      },
+      {
+        "id": "p-mrnf8yqc",
+        "name": "demo 2",
+        "clientProjectName": "demo 2",
+        "client": "demo 2",
+        "createdBy": "TPM Lead",
+        "createdByRole": "TPM",
+        "goal": "",
+        "pl": "TPM",
+        "tpm": "TPM",
+        "rnd": null,
+        "rndMembers": [],
+        "plMembers": [],
+        "qlMembers": [],
+        "docUrl": "",
+        "docs": [],
+        "teamMembers": [
+          {
+            "id": "u3",
+            "name": "TPM",
+            "role": "TPM",
+            "email": "tpm@ethara.ai",
+            "status": "Online",
+            "tasksDone": 0
+          }
+        ],
+        "kickoffMail": {
+          "sentAt": "2026-07-16T11:24:27.733Z",
+          "subject": "demo 2 kickoff",
+          "sentBy": "TPM Lead",
+          "sentByRole": "TPM",
+          "recipients": [
+            {
+              "id": "u3",
+              "name": "TPM",
+              "role": "TPM",
+              "email": "tpm@ethara.ai"
+            }
+          ],
+          "goal": "",
+          "requirements": [],
+          "attachmentCount": 0
+        },
+        "startDate": "2026-07-16",
+        "estimatedEndDate": "",
+        "status": "Ready for production budget",
+        "type": "Production",
+        "workflowStage": "tpm-budget-ready",
+        "readyForTpmBudget": true,
         "pendingBudgetSubmission": null,
         "buffer": 10,
         "recoverableFromClient": false,
@@ -137,18 +348,405 @@
         "budgetTrackHistory": [],
         "auditLog": [
           {
-            "id": "a-p-mrn5rhge-1",
-            "ts": "2026-07-16T06:58:55.646Z",
-            "actor": "R&D Lead",
+            "id": "a-p-mrnf8yqc-1",
+            "ts": "2026-07-16T11:24:27.733Z",
+            "actor": "TPM Lead",
             "action": "Project created",
-            "detail": "Assigned TPM: Anjali Bhagoria \u00b7 QL: Adarsh Raghuwanshi \u00b7 Start 2026-07-16 \u00b7 Project Goal: asd"
+            "detail": "Assigned TPM: TPM \u00b7 Start 2026-07-16"
           },
           {
-            "id": "a-p-mrn5rhge-2",
-            "ts": "2026-07-16T06:58:55.646Z",
-            "actor": "R&D Lead \u00b7 R&D",
+            "id": "a-p-mrnf8yqc-2",
+            "ts": "2026-07-16T11:24:27.733Z",
+            "actor": "TPM Lead \u00b7 TPM",
             "action": "Kickoff mail sent",
-            "detail": "2 recipients \u00b7 anjali.bhagoria@ethara.ai, adarsh.raghuwanshi@ethara.ai"
+            "detail": "1 recipient \u00b7 tpm@ethara.ai"
+          }
+        ],
+        "comments": [],
+        "__custom": true
+      },
+      {
+        "id": "p-mrne9dr3",
+        "name": "demo project",
+        "clientProjectName": "Demo",
+        "client": "Demo",
+        "createdBy": "TPM Lead",
+        "createdByRole": "TPM",
+        "goal": "Hi",
+        "pl": "TPM",
+        "tpm": "TPM",
+        "rnd": "Snehil Maurya",
+        "rndMembers": [
+          "Snehil Maurya"
+        ],
+        "plMembers": [],
+        "qlMembers": [
+          "Abhishek Shaw"
+        ],
+        "docUrl": "",
+        "docs": [],
+        "teamMembers": [
+          {
+            "id": "u3",
+            "name": "TPM",
+            "role": "TPM",
+            "email": "tpm@ethara.ai",
+            "status": "Online",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0504",
+            "name": "Navya Arora",
+            "role": "TPM",
+            "email": "navya.arora@ethara.ai",
+            "status": "Online",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0032",
+            "name": "Abhishek Shaw",
+            "role": "Quality Lead",
+            "email": "abhishek.shaw@ethara.ai",
+            "status": "Pending kickoff",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0793",
+            "name": "Snehil Maurya",
+            "role": "R&D",
+            "email": "snehil.maurya@ethara.ai",
+            "status": "Pending kickoff",
+            "tasksDone": 0
+          }
+        ],
+        "kickoffMail": {
+          "sentAt": "2026-07-16T10:56:47.584Z",
+          "subject": "demo project kickoff",
+          "sentBy": "TPM Lead",
+          "sentByRole": "TPM",
+          "recipients": [
+            {
+              "id": "u3",
+              "name": "TPM",
+              "role": "TPM",
+              "email": "tpm@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0504",
+              "name": "Navya Arora",
+              "role": "TPM",
+              "email": "navya.arora@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0032",
+              "name": "Abhishek Shaw",
+              "role": "Quality Lead",
+              "email": "abhishek.shaw@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0793",
+              "name": "Snehil Maurya",
+              "role": "R&D",
+              "email": "snehil.maurya@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
+            }
+          ],
+          "goal": "Hi",
+          "requirements": [],
+          "attachmentCount": 0
+        },
+        "startDate": "2026-07-16",
+        "estimatedEndDate": "",
+        "status": "Production budget pending approval",
+        "type": "Production",
+        "workflowStage": "production-budget-pending",
+        "readyForTpmBudget": false,
+        "pendingBudgetSubmission": {
+          "reviewId": "br-mrnelfup",
+          "budgetType": "Production",
+          "teamType": "Technical",
+          "submittedAt": "2026-07-16T11:06:10.177Z",
+          "submittedBy": "TPM Lead",
+          "submittedRole": "TPM",
+          "sampleIteration": 1,
+          "sourceDeliveryId": null,
+          "total": 4353.42,
+          "stage": "pending-cto"
+        },
+        "buffer": 10,
+        "recoverableFromClient": false,
+        "recoveredAmount": 0,
+        "approvedBudget": 0,
+        "estimatedBudget": 0,
+        "actualSpend": 0,
+        "remaining": 0,
+        "variance": 0,
+        "utilization": 0,
+        "burnRate": 0,
+        "forecast": 0,
+        "infrastructureCost": 0,
+        "aiModelCost": 0,
+        "employeeCost": 0,
+        "purchaseCost": 0,
+        "reimbursements": 0,
+        "dinnerExpenses": 0,
+        "miscExpenses": 0,
+        "topupsTotal": 0,
+        "health": "healthy",
+        "topModel": "\u2014",
+        "phases": [],
+        "budgetItems": {
+          "models": [],
+          "infra": [],
+          "subs": [],
+          "misc": []
+        },
+        "expenses": [],
+        "budgetHistory": [],
+        "topupHistory": [],
+        "budgetTrackHistory": [
+          {
+            "id": "bud-mrnelfup",
+            "projectId": "p-mrne9dr3",
+            "budgetType": "Production",
+            "teamType": "Technical",
+            "total": 4353.42,
+            "totals": {
+              "models": 9.6,
+              "infra": 122.49000000000001,
+              "subs": 413.33,
+              "general": 3808,
+              "total": 4353.42
+            },
+            "totalTasks": 200,
+            "totalTrajectories": 600,
+            "submittedAt": "2026-07-16T11:06:10.177Z",
+            "submittedBy": "TPM Lead",
+            "status": "pending-cto",
+            "items": {
+              "models": [
+                {
+                  "id": "bkbhwa",
+                  "modelId": "ai21.jamba-1-5-large",
+                  "provider": "AWS",
+                  "usageTag": "Trajectory building",
+                  "costPerTask": 0.016,
+                  "estCost": 9.6,
+                  "platform": "AWS",
+                  "meta": {
+                    "id": "ai21.jamba-1-5-large",
+                    "name": "Jamba 1.5 Large",
+                    "provider": "AI21",
+                    "modality": "Chat",
+                    "pricePer1kIn": 0.002,
+                    "pricePer1kOut": 0.008,
+                    "platform": "AWS"
+                  }
+                }
+              ],
+              "infra": [
+                {
+                  "id": "2n1rkh",
+                  "provider": "AWS",
+                  "instance": "t3.medium",
+                  "monthlyCost": 30.37,
+                  "estCost": 31.38,
+                  "days": 31,
+                  "meta": {
+                    "provider": "AWS",
+                    "code": "t3.medium",
+                    "family": "General purpose",
+                    "vCPU": 2,
+                    "memoryGiB": 4,
+                    "hourly": 0.0416
+                  }
+                },
+                {
+                  "id": "kq2wwx",
+                  "provider": "AWS",
+                  "instance": "t3.medium",
+                  "monthlyCost": 30.37,
+                  "estCost": 30.37,
+                  "days": 31,
+                  "meta": {
+                    "provider": "AWS",
+                    "code": "t3.medium",
+                    "family": "General purpose",
+                    "vCPU": 2,
+                    "memoryGiB": 4,
+                    "hourly": 0.0416
+                  }
+                },
+                {
+                  "id": "ubcgaz",
+                  "provider": "AWS",
+                  "instance": "t3.medium",
+                  "monthlyCost": 30.37,
+                  "estCost": 30.37,
+                  "days": 31,
+                  "meta": {
+                    "provider": "AWS",
+                    "code": "t3.medium",
+                    "family": "General purpose",
+                    "vCPU": 2,
+                    "memoryGiB": 4,
+                    "hourly": 0.0416
+                  }
+                },
+                {
+                  "id": "2fq7km",
+                  "provider": "AWS",
+                  "instance": "t3.medium",
+                  "monthlyCost": 30.37,
+                  "estCost": 30.37,
+                  "days": 31,
+                  "meta": {
+                    "provider": "AWS",
+                    "code": "t3.medium",
+                    "family": "General purpose",
+                    "vCPU": 2,
+                    "memoryGiB": 4,
+                    "hourly": 0.0416
+                  }
+                }
+              ],
+              "subs": [
+                {
+                  "id": "yqt1yd",
+                  "subscription": "Claude Max",
+                  "pricePerSeat": 400,
+                  "seats": 1,
+                  "members": [
+                    "Snehil Maurya"
+                  ],
+                  "estCost": 413.33,
+                  "days": 31
+                }
+              ],
+              "misc": [
+                {
+                  "id": "gb-d6ho1o",
+                  "label": "dfsd",
+                  "optionLabel": "dfsd",
+                  "note": "Phase 2 \u00b7 dssd \u00b7 Cost section 1: 222 \u00b7 Cost section 2: 3343",
+                  "detail": "Phase 2 \u00b7 dssd",
+                  "estCost": 3565,
+                  "amount": 3565,
+                  "phaseId": "p2",
+                  "phaseName": "Phase 2",
+                  "costSections": [
+                    {
+                      "header": "Cost section 1",
+                      "amount": 222
+                    },
+                    {
+                      "header": "Cost section 2",
+                      "amount": 3343
+                    }
+                  ],
+                  "tableMode": "custom-table",
+                  "tableHeaders": [
+                    "Line item",
+                    "Details",
+                    "Cost section 1",
+                    "Cost section 2"
+                  ],
+                  "tableCells": {
+                    "Line item": "dfsd",
+                    "Details": "dssd",
+                    "Cost section 1": "222",
+                    "Cost section 2": "3343"
+                  }
+                },
+                {
+                  "id": "gb-u930w6",
+                  "label": "dsf",
+                  "optionLabel": "dsf",
+                  "note": "Phase 1 \u00b7 efs \u00b7 Cost section 1: 232 \u00b7 Cost section 2: 11",
+                  "detail": "Phase 1 \u00b7 efs",
+                  "estCost": 243,
+                  "amount": 243,
+                  "phaseId": "p1",
+                  "phaseName": "Phase 1",
+                  "costSections": [
+                    {
+                      "header": "Cost section 1",
+                      "amount": 232
+                    },
+                    {
+                      "header": "Cost section 2",
+                      "amount": 11
+                    }
+                  ],
+                  "tableMode": "custom-table",
+                  "tableHeaders": [
+                    "Line item",
+                    "Details",
+                    "Cost section 1",
+                    "Cost section 2"
+                  ],
+                  "tableCells": {
+                    "Line item": "dsf",
+                    "Details": "efs",
+                    "Cost section 1": "232",
+                    "Cost section 2": "11"
+                  }
+                }
+              ]
+            },
+            "phases": [
+              {
+                "id": "p1",
+                "name": "Phase 1",
+                "tasks": 100,
+                "trajectories": 3,
+                "start": "2026-07-16",
+                "end": "2026-07-31",
+                "budget": 515.71
+              },
+              {
+                "id": "p2",
+                "name": "Phase 2",
+                "tasks": 100,
+                "trajectories": 3,
+                "start": "2026-08-01",
+                "end": "2026-08-15",
+                "budget": 3837.71
+              }
+            ],
+            "sourceDeliveryId": null,
+            "sampleIteration": 1,
+            "reviewId": "br-mrnelfup"
+          }
+        ],
+        "auditLog": [
+          {
+            "id": "a-p-mrne9dr3-mrnelfuu-budget",
+            "ts": "2026-07-16T11:06:10.182Z",
+            "actor": "TPM Lead \u00b7 TPM",
+            "action": "Production budget submitted",
+            "detail": "$4,353.42 \u00b7 Technical team \u00b7 pending CTO review \u00b7 200 tasks \u00b7 600 trajectories"
+          },
+          {
+            "id": "a-p-mrne9dr3-1",
+            "ts": "2026-07-16T10:56:47.584Z",
+            "actor": "TPM Lead",
+            "action": "Project created",
+            "detail": "Assigned TPM: TPM \u00b7 QL: Abhishek Shaw \u00b7 R&D: Snehil Maurya \u00b7 Start 2026-07-16 \u00b7 Project Goal: Hi"
+          },
+          {
+            "id": "a-p-mrne9dr3-2",
+            "ts": "2026-07-16T10:56:47.584Z",
+            "actor": "TPM Lead \u00b7 TPM",
+            "action": "Kickoff mail sent",
+            "detail": "4 recipients \u00b7 tpm@ethara.ai, navya.arora@ethara.ai, abhishek.shaw@ethara.ai, snehil.maurya@ethara.ai"
           }
         ],
         "comments": [],
@@ -666,6 +1264,320 @@
     ],
     "budgets": [
       {
+        "id": "bud-mrnhvcfe",
+        "projectId": "p-mrn5rhge",
+        "projectName": "as",
+        "budgetType": "Testing",
+        "priority": "Medium",
+        "teamType": "R&D",
+        "totalTasks": 0,
+        "totalTrajectories": 0,
+        "delivery": {
+          "mode": "single",
+          "singleStart": "2026-07-16",
+          "singleEnd": "2026-08-15"
+        },
+        "phases": [
+          {
+            "id": "p1",
+            "name": "Testing budget",
+            "start": "2026-07-16",
+            "end": "2026-08-15",
+            "budget": 444.71,
+            "tasks": 0,
+            "trajectories": 0
+          }
+        ],
+        "items": {
+          "models": [
+            {
+              "id": "0bh3v3",
+              "modelId": "ai21.jamba-1-5-large",
+              "provider": "AWS",
+              "usageTag": "Trajectory building",
+              "costPerTask": 0.016,
+              "estCost": 0,
+              "platform": "AWS",
+              "meta": {
+                "id": "ai21.jamba-1-5-large",
+                "name": "Jamba 1.5 Large",
+                "provider": "AI21",
+                "modality": "Chat",
+                "pricePer1kIn": 0.002,
+                "pricePer1kOut": 0.008,
+                "platform": "AWS"
+              }
+            }
+          ],
+          "infra": [
+            {
+              "id": "zt889x",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 31.38,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            }
+          ],
+          "subs": [
+            {
+              "id": "izg0cn",
+              "subscription": "Claude Max",
+              "pricePerSeat": 400,
+              "seats": 1,
+              "members": [
+                "Adarsh Raghuwanshi"
+              ],
+              "estCost": 413.33,
+              "days": 31
+            }
+          ],
+          "misc": []
+        },
+        "totals": {
+          "models": 0,
+          "infra": 31.38,
+          "subs": 413.33,
+          "general": 0,
+          "total": 444.71
+        },
+        "resubmitOfReviewId": null,
+        "sampleIteration": 1,
+        "sourceDeliveryId": null,
+        "submittedBy": "R&D Lead",
+        "submittedRole": "R&D",
+        "submittedAt": "2026-07-16T12:37:51.146Z",
+        "status": "pending-cto"
+      },
+      {
+        "id": "bud-mrnelfup",
+        "projectId": "p-mrne9dr3",
+        "projectName": "demo project",
+        "budgetType": "Production",
+        "priority": "Medium",
+        "teamType": "Technical",
+        "totalTasks": 200,
+        "totalTrajectories": 600,
+        "delivery": {
+          "mode": "multiple",
+          "singleStart": "2026-07-16",
+          "singleEnd": "2026-08-04"
+        },
+        "phases": [
+          {
+            "id": "p1",
+            "name": "Phase 1",
+            "tasks": 100,
+            "trajectories": 3,
+            "start": "2026-07-16",
+            "end": "2026-07-31",
+            "budget": 515.71
+          },
+          {
+            "id": "p2",
+            "name": "Phase 2",
+            "tasks": 100,
+            "trajectories": 3,
+            "start": "2026-08-01",
+            "end": "2026-08-15",
+            "budget": 3837.71
+          }
+        ],
+        "items": {
+          "models": [
+            {
+              "id": "bkbhwa",
+              "modelId": "ai21.jamba-1-5-large",
+              "provider": "AWS",
+              "usageTag": "Trajectory building",
+              "costPerTask": 0.016,
+              "estCost": 9.6,
+              "platform": "AWS",
+              "meta": {
+                "id": "ai21.jamba-1-5-large",
+                "name": "Jamba 1.5 Large",
+                "provider": "AI21",
+                "modality": "Chat",
+                "pricePer1kIn": 0.002,
+                "pricePer1kOut": 0.008,
+                "platform": "AWS"
+              }
+            }
+          ],
+          "infra": [
+            {
+              "id": "2n1rkh",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 31.38,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            },
+            {
+              "id": "kq2wwx",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 30.37,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            },
+            {
+              "id": "ubcgaz",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 30.37,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            },
+            {
+              "id": "2fq7km",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 30.37,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            }
+          ],
+          "subs": [
+            {
+              "id": "yqt1yd",
+              "subscription": "Claude Max",
+              "pricePerSeat": 400,
+              "seats": 1,
+              "members": [
+                "Snehil Maurya"
+              ],
+              "estCost": 413.33,
+              "days": 31
+            }
+          ],
+          "misc": [
+            {
+              "id": "gb-d6ho1o",
+              "label": "dfsd",
+              "optionLabel": "dfsd",
+              "note": "Phase 2 \u00b7 dssd \u00b7 Cost section 1: 222 \u00b7 Cost section 2: 3343",
+              "detail": "Phase 2 \u00b7 dssd",
+              "estCost": 3565,
+              "amount": 3565,
+              "phaseId": "p2",
+              "phaseName": "Phase 2",
+              "costSections": [
+                {
+                  "header": "Cost section 1",
+                  "amount": 222
+                },
+                {
+                  "header": "Cost section 2",
+                  "amount": 3343
+                }
+              ],
+              "tableMode": "custom-table",
+              "tableHeaders": [
+                "Line item",
+                "Details",
+                "Cost section 1",
+                "Cost section 2"
+              ],
+              "tableCells": {
+                "Line item": "dfsd",
+                "Details": "dssd",
+                "Cost section 1": "222",
+                "Cost section 2": "3343"
+              }
+            },
+            {
+              "id": "gb-u930w6",
+              "label": "dsf",
+              "optionLabel": "dsf",
+              "note": "Phase 1 \u00b7 efs \u00b7 Cost section 1: 232 \u00b7 Cost section 2: 11",
+              "detail": "Phase 1 \u00b7 efs",
+              "estCost": 243,
+              "amount": 243,
+              "phaseId": "p1",
+              "phaseName": "Phase 1",
+              "costSections": [
+                {
+                  "header": "Cost section 1",
+                  "amount": 232
+                },
+                {
+                  "header": "Cost section 2",
+                  "amount": 11
+                }
+              ],
+              "tableMode": "custom-table",
+              "tableHeaders": [
+                "Line item",
+                "Details",
+                "Cost section 1",
+                "Cost section 2"
+              ],
+              "tableCells": {
+                "Line item": "dsf",
+                "Details": "efs",
+                "Cost section 1": "232",
+                "Cost section 2": "11"
+              }
+            }
+          ]
+        },
+        "totals": {
+          "models": 9.6,
+          "infra": 122.49000000000001,
+          "subs": 413.33,
+          "general": 3808,
+          "total": 4353.42
+        },
+        "resubmitOfReviewId": null,
+        "sampleIteration": 1,
+        "sourceDeliveryId": null,
+        "submittedBy": "TPM Lead",
+        "submittedRole": "TPM",
+        "submittedAt": "2026-07-16T11:06:10.177Z",
+        "status": "pending-cto"
+      },
+      {
         "id": "budget-demo-nexa-testing",
         "projectId": "demo-rnd-foundry",
         "budgetType": "Testing",
@@ -820,6 +1732,388 @@
       }
     ],
     "budgetReviews": [
+      {
+        "id": "br-mrnhvcfe",
+        "projectId": "p-mrn5rhge",
+        "projectName": "as",
+        "client": "subom",
+        "tpm": "R&D Lead",
+        "submittedAt": "2026-07-16T12:37:51.146Z",
+        "urgency": "Normal",
+        "stage": "CTO Review",
+        "status": "pending-cto",
+        "type": "Testing budget",
+        "teamType": "R&D",
+        "requestedBudget": 444.71,
+        "currentBudget": 0,
+        "recommendedBudget": 444.71,
+        "bufferPct": 10,
+        "recoveryType": "Internal",
+        "timeline": "2026-07-16 \u2013 2026-08-15",
+        "tasks": 0,
+        "phases": 1,
+        "linesFlagged": 0,
+        "variance": 444.71,
+        "aiCost": 0,
+        "infraCost": 31.38,
+        "subsCost": 413.33,
+        "miscCost": 0,
+        "justification": "Testing budget submitted by R&D Lead \u00b7 R&D team \u00b7 0 tasks",
+        "items": {
+          "models": [
+            {
+              "id": "0bh3v3",
+              "modelId": "ai21.jamba-1-5-large",
+              "provider": "AWS",
+              "usageTag": "Trajectory building",
+              "costPerTask": 0.016,
+              "estCost": 0,
+              "platform": "AWS",
+              "meta": {
+                "id": "ai21.jamba-1-5-large",
+                "name": "Jamba 1.5 Large",
+                "provider": "AI21",
+                "modality": "Chat",
+                "pricePer1kIn": 0.002,
+                "pricePer1kOut": 0.008,
+                "platform": "AWS"
+              }
+            }
+          ],
+          "infra": [
+            {
+              "id": "zt889x",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 31.38,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            }
+          ],
+          "subs": [
+            {
+              "id": "izg0cn",
+              "subscription": "Claude Max",
+              "pricePerSeat": 400,
+              "seats": 1,
+              "members": [
+                "Adarsh Raghuwanshi"
+              ],
+              "estCost": 413.33,
+              "days": 31
+            }
+          ],
+          "misc": []
+        },
+        "requestedPhases": [
+          {
+            "id": "p1",
+            "name": "Testing budget",
+            "start": "2026-07-16",
+            "end": "2026-08-15",
+            "budget": 444.71,
+            "tasks": 0,
+            "trajectories": 0
+          }
+        ],
+        "baselineSnapshot": {
+          "approvedBudget": 0,
+          "estimatedBudget": 0,
+          "remaining": 0,
+          "totalTasks": 0,
+          "phases": [],
+          "budgetItems": {
+            "models": [],
+            "infra": [],
+            "subs": [],
+            "misc": []
+          },
+          "lastBudgetSubmission": null,
+          "status": "Awaiting testing budget",
+          "type": "R&D",
+          "workflowStage": "awaiting-testing-budget",
+          "readyForTpmBudget": false,
+          "pendingBudgetSubmission": null,
+          "promotedToProductionAt": null,
+          "itProvisioningStatus": null
+        },
+        "budgetType": "Testing",
+        "sampleIteration": 1,
+        "sourceDeliveryId": null,
+        "sourceBudgetId": "bud-mrnhvcfe",
+        "requesterRole": "R&D",
+        "history": [
+          {
+            "at": "2026-07-16T12:37:51.146Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Submitted budget request",
+            "detail": "Testing \u00b7 R&D \u00b7 $444.71"
+          }
+        ],
+        "ctoModified": false
+      },
+      {
+        "id": "br-mrnelfup",
+        "projectId": "p-mrne9dr3",
+        "projectName": "demo project",
+        "client": "Demo",
+        "tpm": "TPM Lead",
+        "submittedAt": "2026-07-16T11:06:10.177Z",
+        "urgency": "Normal",
+        "stage": "CTO Review",
+        "status": "pending-cto",
+        "type": "Production budget",
+        "teamType": "Technical",
+        "requestedBudget": 4353.42,
+        "currentBudget": 0,
+        "recommendedBudget": 4353.42,
+        "bufferPct": 10,
+        "recoveryType": "Internal",
+        "timeline": "2026-07-16 \u2013 2026-08-15",
+        "tasks": 200,
+        "phases": 2,
+        "linesFlagged": 0,
+        "variance": 4353.42,
+        "aiCost": 9.6,
+        "infraCost": 122.49000000000001,
+        "subsCost": 413.33,
+        "miscCost": 3808,
+        "justification": "Production budget submitted by TPM Lead \u00b7 Technical team \u00b7 200 tasks \u00b7 600 trajectories",
+        "items": {
+          "models": [
+            {
+              "id": "bkbhwa",
+              "modelId": "ai21.jamba-1-5-large",
+              "provider": "AWS",
+              "usageTag": "Trajectory building",
+              "costPerTask": 0.016,
+              "estCost": 9.6,
+              "platform": "AWS",
+              "meta": {
+                "id": "ai21.jamba-1-5-large",
+                "name": "Jamba 1.5 Large",
+                "provider": "AI21",
+                "modality": "Chat",
+                "pricePer1kIn": 0.002,
+                "pricePer1kOut": 0.008,
+                "platform": "AWS"
+              }
+            }
+          ],
+          "infra": [
+            {
+              "id": "2n1rkh",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 31.38,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            },
+            {
+              "id": "kq2wwx",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 30.37,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            },
+            {
+              "id": "ubcgaz",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 30.37,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            },
+            {
+              "id": "2fq7km",
+              "provider": "AWS",
+              "instance": "t3.medium",
+              "monthlyCost": 30.37,
+              "estCost": 30.37,
+              "days": 31,
+              "meta": {
+                "provider": "AWS",
+                "code": "t3.medium",
+                "family": "General purpose",
+                "vCPU": 2,
+                "memoryGiB": 4,
+                "hourly": 0.0416
+              }
+            }
+          ],
+          "subs": [
+            {
+              "id": "yqt1yd",
+              "subscription": "Claude Max",
+              "pricePerSeat": 400,
+              "seats": 1,
+              "members": [
+                "Snehil Maurya"
+              ],
+              "estCost": 413.33,
+              "days": 31
+            }
+          ],
+          "misc": [
+            {
+              "id": "gb-d6ho1o",
+              "label": "dfsd",
+              "optionLabel": "dfsd",
+              "note": "Phase 2 \u00b7 dssd \u00b7 Cost section 1: 222 \u00b7 Cost section 2: 3343",
+              "detail": "Phase 2 \u00b7 dssd",
+              "estCost": 3565,
+              "amount": 3565,
+              "phaseId": "p2",
+              "phaseName": "Phase 2",
+              "costSections": [
+                {
+                  "header": "Cost section 1",
+                  "amount": 222
+                },
+                {
+                  "header": "Cost section 2",
+                  "amount": 3343
+                }
+              ],
+              "tableMode": "custom-table",
+              "tableHeaders": [
+                "Line item",
+                "Details",
+                "Cost section 1",
+                "Cost section 2"
+              ],
+              "tableCells": {
+                "Line item": "dfsd",
+                "Details": "dssd",
+                "Cost section 1": "222",
+                "Cost section 2": "3343"
+              }
+            },
+            {
+              "id": "gb-u930w6",
+              "label": "dsf",
+              "optionLabel": "dsf",
+              "note": "Phase 1 \u00b7 efs \u00b7 Cost section 1: 232 \u00b7 Cost section 2: 11",
+              "detail": "Phase 1 \u00b7 efs",
+              "estCost": 243,
+              "amount": 243,
+              "phaseId": "p1",
+              "phaseName": "Phase 1",
+              "costSections": [
+                {
+                  "header": "Cost section 1",
+                  "amount": 232
+                },
+                {
+                  "header": "Cost section 2",
+                  "amount": 11
+                }
+              ],
+              "tableMode": "custom-table",
+              "tableHeaders": [
+                "Line item",
+                "Details",
+                "Cost section 1",
+                "Cost section 2"
+              ],
+              "tableCells": {
+                "Line item": "dsf",
+                "Details": "efs",
+                "Cost section 1": "232",
+                "Cost section 2": "11"
+              }
+            }
+          ]
+        },
+        "requestedPhases": [
+          {
+            "id": "p1",
+            "name": "Phase 1",
+            "start": "2026-07-16",
+            "end": "2026-07-31",
+            "budget": 515.71,
+            "tasks": 100,
+            "trajectories": 3
+          },
+          {
+            "id": "p2",
+            "name": "Phase 2",
+            "start": "2026-08-01",
+            "end": "2026-08-15",
+            "budget": 3837.71,
+            "tasks": 100,
+            "trajectories": 3
+          }
+        ],
+        "baselineSnapshot": {
+          "approvedBudget": 0,
+          "estimatedBudget": 0,
+          "remaining": 0,
+          "totalTasks": 0,
+          "phases": [],
+          "budgetItems": {
+            "models": [],
+            "infra": [],
+            "subs": [],
+            "misc": []
+          },
+          "lastBudgetSubmission": null,
+          "status": "Ready for production budget",
+          "type": "Production",
+          "workflowStage": "tpm-budget-ready",
+          "readyForTpmBudget": true,
+          "pendingBudgetSubmission": null,
+          "promotedToProductionAt": null,
+          "itProvisioningStatus": null
+        },
+        "budgetType": "Production",
+        "sampleIteration": 1,
+        "sourceDeliveryId": null,
+        "sourceBudgetId": "bud-mrnelfup",
+        "requesterRole": "TPM",
+        "history": [
+          {
+            "at": "2026-07-16T11:06:10.177Z",
+            "actor": "TPM Lead \u00b7 TPM",
+            "action": "Submitted budget request",
+            "detail": "Production \u00b7 Technical \u00b7 $4,353.42"
+          }
+        ],
+        "ctoModified": false
+      },
       {
         "id": "review-demo-orbit-cfo",
         "projectId": "demo-prod-orbit",
@@ -1416,5 +2710,5 @@
       }
     }
   },
-  "app_state_updated_at": "2026-07-16T06:58:56.260235+00:00"
+  "app_state_updated_at": "2026-07-16T12:57:49.804033+00:00"
 }

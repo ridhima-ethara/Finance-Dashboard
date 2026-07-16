@@ -12,6 +12,7 @@ import {
   CalendarDays,
   Cpu,
   Upload,
+  Server,
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
@@ -22,15 +23,19 @@ import {
 } from "../../lib/projectMetrics";
 import { Button } from "../../components/ui/button";
 import { toast } from "sonner";
-import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../../lib/modelCatalog";
 
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
 const toDraftNumberValue = (value) => {
   if (value === null || value === undefined || value === "") return "";
   return Number(value) === 0 ? "" : String(value);
 };
+
 const toSavedNumber = (value) => Number(value || 0);
-const normalizeActualHeaderKey = (value = "") => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+const normalizeActualHeaderKey = (value = "") =>
+  String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
 const parseActualNumericCell = (value) => {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   const normalized = String(value ?? "")
@@ -52,17 +57,20 @@ const findModelMeta = (modelCatalog = [], value = "") => {
       `${model.name} · ${model.provider}`,
       `${model.name} ${model.provider}`,
     ];
-    return candidates.some((candidate) => String(candidate || "").trim().toLowerCase() === needle);
+    return candidates.some(
+      (candidate) => String(candidate || "").trim().toLowerCase() === needle
+    );
   }) || modelCatalog.find((model) => String(model.name || "").trim().toLowerCase() === needle) || null;
 };
 
 const aggregateImportedModelRows = (rows = []) => {
   const grouped = (Array.isArray(rows) ? rows : []).reduce((acc, row, index) => {
-    const key = row.modelId || row.modelName || `imported-model-${index + 1}`;
+    const key = `${row.modelId || row.modelName || `imported-model-${index + 1}`}::${row.provider || ""}`;
     acc[key] = acc[key] || {
       id: row.id || key,
       modelId: row.modelId || "",
       modelName: row.modelName || "Unspecified model",
+      provider: row.provider || "",
       cost: 0,
       inputTokens: 0,
       outputTokens: 0,
@@ -72,20 +80,63 @@ const aggregateImportedModelRows = (rows = []) => {
     acc[key].outputTokens += Number(row.outputTokens || 0);
     return acc;
   }, {});
-  return Object.values(grouped).filter((row) => row.modelId || row.modelName || row.cost || row.inputTokens || row.outputTokens);
+  return Object.values(grouped).filter(
+    (row) =>
+      row.modelId
+      || row.modelName
+      || row.provider
+      || row.cost
+      || row.inputTokens
+      || row.outputTokens
+  );
 };
 
 const buildUsageRow = (index = 0, row = {}) => ({
   id: row.id || `usage-${Date.now().toString(36)}-${index + 1}`,
   modelId: row.modelId || "",
   modelName: row.modelName || "",
+  provider: row.provider || "",
   cost: toDraftNumberValue(row.cost),
   inputTokens: toDraftNumberValue(row.inputTokens),
   outputTokens: toDraftNumberValue(row.outputTokens),
 });
 
-const buildProjectDraft = (actualSummary, activeKeys = 0) => {
+const buildProjectSeedModelUsage = (project = {}, modelCatalog = []) => {
+  const budgetLines = Array.isArray(project?.budgetItems?.models)
+    ? project.budgetItems.models
+    : [];
+  const seedRows = budgetLines
+    .map((line, index) => {
+      const meta = findModelMeta(
+        modelCatalog,
+        line.modelId || line.modelName || line.meta?.name || line.label
+      );
+      return buildUsageRow(index, {
+        id: line.id || `seed-model-${index + 1}`,
+        modelId: line.modelId || meta?.id || "",
+        modelName:
+          line.modelName
+          || line.meta?.name
+          || line.label
+          || meta?.name
+          || "",
+        provider:
+          line.provider
+          || line.meta?.provider
+          || meta?.provider
+          || "",
+      });
+    })
+    .filter((row) => row.modelId || row.modelName || row.provider);
+
+  return seedRows.length ? seedRows : [buildUsageRow(0)];
+};
+
+const buildProjectDraft = (actualSummary, activeKeys = 0, modelSeedRows = []) => {
   const latestDaily = actualSummary.dailyActuals[actualSummary.dailyActuals.length - 1];
+  const modelUsage = actualSummary.modelUsage.length
+    ? actualSummary.modelUsage.map((row, index) => buildUsageRow(index, row))
+    : modelSeedRows.map((row, index) => buildUsageRow(index, row));
   return {
     actualDate: latestDaily?.date || todayIso(),
     modelActual: toDraftNumberValue(latestDaily?.modelActual ?? actualSummary.modelActual),
@@ -94,27 +145,31 @@ const buildProjectDraft = (actualSummary, activeKeys = 0) => {
     monthEndActual: toDraftNumberValue(actualSummary.monthEndActual),
     activeKeys: toDraftNumberValue(actualSummary.activeKeys || activeKeys),
     note: actualSummary.note || "",
-    modelUsage: actualSummary.modelUsage.map((row, index) => buildUsageRow(index, row)),
+    modelUsage: modelUsage.length ? modelUsage : [buildUsageRow(0)],
     importedDailyActuals: actualSummary.dailyActuals,
     importMeta: null,
   };
 };
 
 const upsertDailyActualRow = (rows = [], nextRow) => {
-  const filtered = (Array.isArray(rows) ? rows : []).filter((row) => row?.date !== nextRow.date);
+  const filtered = (Array.isArray(rows) ? rows : []).filter(
+    (row) => row?.date !== nextRow.date
+  );
   return [...filtered, nextRow].sort(
-    (left, right) => new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime()
+    (left, right) =>
+      new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime()
   );
 };
 
 const mergeDailyActualRows = (baseRows = [], incomingRows = []) =>
   (Array.isArray(incomingRows) ? incomingRows : []).reduce(
-    (rows, row) => upsertDailyActualRow(rows, {
-      date: row.date || todayIso(),
-      modelActual: Number(row.modelActual || 0),
-      infraActual: Number(row.infraActual || 0),
-      subsActual: Number(row.subsActual || 0),
-    }),
+    (rows, row) =>
+      upsertDailyActualRow(rows, {
+        date: row.date || todayIso(),
+        modelActual: Number(row.modelActual || 0),
+        infraActual: Number(row.infraActual || 0),
+        subsActual: Number(row.subsActual || 0),
+      }),
     Array.isArray(baseRows) ? [...baseRows] : []
   );
 
@@ -131,6 +186,8 @@ const parseActualImportGrid = (grid = [], modelCatalog = []) => {
   const hasHeader = headerKeys.some((key) => [
     "date",
     "actualdate",
+    "modelprovider",
+    "provider",
     "model",
     "modelname",
     "bedrockmodel",
@@ -145,7 +202,19 @@ const parseActualImportGrid = (grid = [], modelCatalog = []) => {
   ].includes(key));
   const columns = hasHeader
     ? headerKeys
-    : ["actualdate", "model", "cost", "inputtokens", "outputtokens", "modelactual", "infraactual", "subsactual", "monthendactual", "activekeys"];
+    : [
+        "actualdate",
+        "provider",
+        "model",
+        "cost",
+        "inputtokens",
+        "outputtokens",
+        "modelactual",
+        "infraactual",
+        "subsactual",
+        "monthendactual",
+        "activekeys",
+      ];
   const dataRows = hasHeader ? rows.slice(1) : rows;
   const dailyMap = new Map();
   const modelUsage = [];
@@ -170,6 +239,7 @@ const parseActualImportGrid = (grid = [], modelCatalog = []) => {
   dataRows.forEach((cells) => {
     const record = {
       actualDate: "",
+      provider: "",
       model: "",
       cost: 0,
       inputTokens: 0,
@@ -184,6 +254,7 @@ const parseActualImportGrid = (grid = [], modelCatalog = []) => {
     columns.forEach((column, index) => {
       const cell = cells[index] ?? "";
       if (column === "date" || column === "actualdate") record.actualDate = String(cell || "").trim();
+      if (column === "provider" || column === "modelprovider") record.provider = String(cell || "").trim();
       if (column === "model" || column === "modelname" || column === "bedrockmodel") record.model = String(cell || "").trim();
       if (column === "cost" || column === "actualcost" || column === "modelcost") record.cost = parseActualNumericCell(cell);
       if (column === "inputtokens") record.inputTokens = parseActualNumericCell(cell);
@@ -195,7 +266,15 @@ const parseActualImportGrid = (grid = [], modelCatalog = []) => {
       if (column === "activekeys") record.activeKeys = parseActualNumericCell(cell);
     });
 
-    if (record.actualDate || record.modelActual || record.infraActual || record.subsActual || record.monthEndActual || record.activeKeys || (record.model && record.cost)) {
+    if (
+      record.actualDate
+      || record.modelActual
+      || record.infraActual
+      || record.subsActual
+      || record.monthEndActual
+      || record.activeKeys
+      || (record.model && record.cost)
+    ) {
       const dailyRow = ensureDailyRow(record.actualDate);
       if (record.modelActual > 0) {
         dailyRow.explicitModelActual += record.modelActual;
@@ -210,12 +289,13 @@ const parseActualImportGrid = (grid = [], modelCatalog = []) => {
     if (record.monthEndActual > 0) monthEndActual = Math.max(monthEndActual, record.monthEndActual);
     if (record.activeKeys > 0) activeKeys = Math.max(activeKeys, record.activeKeys);
 
-    if (record.model) {
+    if (record.model || record.provider) {
       const meta = findModelMeta(modelCatalog, record.model);
       modelUsage.push({
-        id: `imported-model-${record.model}-${modelUsage.length + 1}`,
+        id: `imported-model-${record.model || record.provider}-${modelUsage.length + 1}`,
         modelId: meta?.id || "",
         modelName: meta?.name || record.model,
+        provider: record.provider || meta?.provider || "",
         cost: Number(record.cost || 0),
         inputTokens: Number(record.inputTokens || 0),
         outputTokens: Number(record.outputTokens || 0),
@@ -231,7 +311,10 @@ const parseActualImportGrid = (grid = [], modelCatalog = []) => {
       subsActual: row.subsActual,
     }))
     .filter((row) => row.date || row.modelActual || row.infraActual || row.subsActual)
-    .sort((left, right) => new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime());
+    .sort(
+      (left, right) =>
+        new Date(left.date || 0).getTime() - new Date(right.date || 0).getTime()
+    );
 
   return {
     dailyActuals,
@@ -239,6 +322,69 @@ const parseActualImportGrid = (grid = [], modelCatalog = []) => {
     monthEndActual,
     activeKeys,
   };
+};
+
+const buildProjectPhaseLabel = (project = {}) => {
+  const phases = Array.isArray(project?.phases) ? project.phases : [];
+  if (!phases.length) return "No scheduled phase";
+  const firstPhase = phases[0]?.name || phases[0]?.dates || "Phase 1";
+  return phases.length === 1 ? firstPhase : `${firstPhase} +${phases.length - 1}`;
+};
+
+const buildProjectedActualState = (project, draft) => {
+  const seedDailyActuals = Array.isArray(draft.importedDailyActuals)
+    ? draft.importedDailyActuals
+    : (project.actualEntry.dailyActuals || project.actualSummary.dailyActuals || []);
+  const modelUsageTotal = normalizeItModelUsageRows(draft.modelUsage).reduce(
+    (sum, row) => sum + Number(row.cost || 0),
+    0
+  );
+  const resolvedModelActual = modelUsageTotal > 0
+    ? modelUsageTotal
+    : toSavedNumber(draft.modelActual);
+  const dailyRow = {
+    date: draft.actualDate || todayIso(),
+    modelActual: resolvedModelActual,
+    infraActual: toSavedNumber(draft.infraActual),
+    subsActual: toSavedNumber(draft.subsActual),
+  };
+  const latestDailyActual =
+    Number(dailyRow.modelActual || 0)
+    + Number(dailyRow.infraActual || 0)
+    + Number(dailyRow.subsActual || 0);
+  const hasExistingDateRow = seedDailyActuals.some((row) => row?.date === dailyRow.date);
+  const dailyActuals = latestDailyActual > 0 || hasExistingDateRow
+    ? upsertDailyActualRow(seedDailyActuals, dailyRow)
+    : seedDailyActuals;
+  const totals = dailyActuals.reduce(
+    (sum, row) => ({
+      modelActual: sum.modelActual + Number(row.modelActual || 0),
+      infraActual: sum.infraActual + Number(row.infraActual || 0),
+      subsActual: sum.subsActual + Number(row.subsActual || 0),
+    }),
+    { modelActual: 0, infraActual: 0, subsActual: 0 }
+  );
+  const totalActual = totals.modelActual + totals.infraActual + totals.subsActual;
+  return {
+    resolvedModelActual,
+    latestDailyActual,
+    dailyActuals,
+    modelActual: totals.modelActual,
+    infraActual: totals.infraActual,
+    subsActual: totals.subsActual,
+    totalActual,
+    variance: Number(project.approvedBudget || 0) - totalActual,
+  };
+};
+
+const buildStatusMeta = (project, projectedActual) => {
+  const isActive =
+    projectedActual.totalActual > 0
+    || Number(project.activeKeys || 0) > 0
+    || project.itProvisioningStatus === "completed";
+  if (!isActive) return { label: "Inactive", cls: "text-zinc-400" };
+  if (projectedActual.variance < 0) return { label: "Active", cls: "text-red-300" };
+  return { label: "Active", cls: "text-emerald-300" };
 };
 
 const ItDashboard = () => {
@@ -250,8 +396,8 @@ const ItDashboard = () => {
     itMonthlyActuals,
     saveItMonthlyActual,
     modelCatalog,
-    addCustomModel,
   } = useApp();
+
   const [drafts, setDrafts] = useState({});
 
   const pending = useMemo(
@@ -262,6 +408,7 @@ const ItDashboard = () => {
     () => itProvisioningRequests.filter((request) => request.status === "completed"),
     [itProvisioningRequests]
   );
+
   const actualProjects = useMemo(() => {
     const relevantIds = new Set([
       ...itProvisioningRequests.map((entry) => entry.projectId),
@@ -277,37 +424,45 @@ const ItDashboard = () => {
           usage: summarizeLoggedProject(project, taskLogs),
           actualEntry,
           actualSummary,
-          activeKeys: modelKeyRecords.filter((entry) => entry.project === project.id && entry.status === "active").length,
+          activeKeys: modelKeyRecords.filter(
+            (entry) => entry.project === project.id && entry.status === "active"
+          ).length,
+          phaseLabel: buildProjectPhaseLabel(project),
+          seedModelUsage: buildProjectSeedModelUsage(project, modelCatalog),
         };
-      });
-  }, [itProvisioningRequests, modelKeyRecords, projects, taskLogs, itMonthlyActuals]);
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [itProvisioningRequests, modelKeyRecords, projects, taskLogs, itMonthlyActuals, modelCatalog]);
 
-  const updateDraft = (projectId, actualSummary, activeKeys, updater) => {
+  const updateDraft = (project, updater) => {
     setDrafts((current) => {
-      const base = current[projectId] || buildProjectDraft(actualSummary, activeKeys);
+      const base =
+        current[project.id]
+        || buildProjectDraft(project.actualSummary, project.activeKeys, project.seedModelUsage);
       const next = typeof updater === "function" ? updater(base) : { ...base, ...updater };
-      return { ...current, [projectId]: next };
+      return { ...current, [project.id]: next };
     });
   };
 
-  const addModelUsageRow = (projectId, actualSummary, activeKeys) => {
-    updateDraft(projectId, actualSummary, activeKeys, (draft) => ({
+  const addModelUsageRow = (project) => {
+    updateDraft(project, (draft) => ({
       ...draft,
       modelUsage: [...draft.modelUsage, buildUsageRow(draft.modelUsage.length)],
     }));
   };
 
-  const updateModelUsageRow = (projectId, actualSummary, activeKeys, rowId, key, value) => {
-    updateDraft(projectId, actualSummary, activeKeys, (draft) => ({
+  const updateModelUsageRow = (project, rowId, key, value) => {
+    updateDraft(project, (draft) => ({
       ...draft,
       modelUsage: draft.modelUsage.map((row) => {
         if (row.id !== rowId) return row;
-        if (key === "modelId") {
-          const selected = modelCatalog.find((model) => model.id === value);
+        if (key === "modelName") {
+          const meta = findModelMeta(modelCatalog, value);
           return {
             ...row,
-            modelId: value,
-            modelName: selected?.name || row.modelName || "",
+            modelId: meta?.id || row.modelId || "",
+            modelName: value,
+            provider: meta?.provider || row.provider || "",
           };
         }
         return { ...row, [key]: value };
@@ -315,51 +470,39 @@ const ItDashboard = () => {
     }));
   };
 
-  const removeModelUsageRow = (projectId, actualSummary, activeKeys, rowId) => {
-    updateDraft(projectId, actualSummary, activeKeys, (draft) => ({
+  const removeModelUsageRow = (project, rowId) => {
+    updateDraft(project, (draft) => ({
       ...draft,
-      modelUsage: draft.modelUsage.filter((row) => row.id !== rowId),
+      modelUsage:
+        draft.modelUsage.length > 1
+          ? draft.modelUsage.filter((row) => row.id !== rowId)
+          : [buildUsageRow(0)],
     }));
   };
 
   const saveActuals = (project) => {
-    const actualSummary = project.actualSummary;
-    const draft = drafts[project.id] || buildProjectDraft(actualSummary, project.activeKeys);
-    const seedDailyActuals = Array.isArray(draft.importedDailyActuals)
-      ? draft.importedDailyActuals
-      : (project.actualEntry.dailyActuals || actualSummary.dailyActuals || []);
-    const dailyRow = {
-      date: draft.actualDate || todayIso(),
-      modelActual: toSavedNumber(draft.modelActual),
-      infraActual: toSavedNumber(draft.infraActual),
-      subsActual: toSavedNumber(draft.subsActual),
-    };
-    const latestDailyActual = Number(dailyRow.modelActual || 0) + Number(dailyRow.infraActual || 0) + Number(dailyRow.subsActual || 0);
-    const hasExistingDateRow = seedDailyActuals.some(
-      (row) => row?.date === dailyRow.date
-    );
-    const dailyActuals = latestDailyActual > 0 || hasExistingDateRow
-      ? upsertDailyActualRow(seedDailyActuals, dailyRow)
-      : seedDailyActuals;
-    const modelUsage = normalizeItModelUsageRows(draft.modelUsage).map((row) => ({
-      ...row,
-      modelName: row.modelName || modelCatalog.find((model) => model.id === row.modelId)?.name || "Unspecified model",
-    }));
-    const totals = dailyActuals.reduce((sum, row) => ({
-      modelActual: sum.modelActual + Number(row.modelActual || 0),
-      infraActual: sum.infraActual + Number(row.infraActual || 0),
-      subsActual: sum.subsActual + Number(row.subsActual || 0),
-    }), { modelActual: 0, infraActual: 0, subsActual: 0 });
-    const totalActual = totals.modelActual + totals.infraActual + totals.subsActual;
+    const draft =
+      drafts[project.id]
+      || buildProjectDraft(project.actualSummary, project.activeKeys, project.seedModelUsage);
+    const projectedActual = buildProjectedActualState(project, draft);
+    const modelUsage = normalizeItModelUsageRows(draft.modelUsage).map((row) => {
+      const meta = findModelMeta(modelCatalog, row.modelId || row.modelName);
+      return {
+        ...row,
+        modelId: row.modelId || meta?.id || "",
+        modelName: row.modelName || meta?.name || "Unspecified model",
+        provider: row.provider || meta?.provider || "",
+      };
+    });
 
     saveItMonthlyActual(project.id, {
-      dailyActuals,
+      dailyActuals: projectedActual.dailyActuals,
       modelUsage,
-      modelActual: totals.modelActual,
-      infraActual: totals.infraActual,
-      subsActual: totals.subsActual,
-      totalActual,
-      dailyApiCost: latestDailyActual,
+      modelActual: projectedActual.modelActual,
+      infraActual: projectedActual.infraActual,
+      subsActual: projectedActual.subsActual,
+      totalActual: projectedActual.totalActual,
+      dailyApiCost: projectedActual.latestDailyActual,
       monthEndActual: toSavedNumber(draft.monthEndActual),
       monthEndDate: draft.actualDate || todayIso(),
       activeKeys: toSavedNumber(draft.activeKeys || project.activeKeys),
@@ -373,28 +516,11 @@ const ItDashboard = () => {
     });
 
     toast.success("Daily actuals saved", {
-      description: `${project.name} updated with ${fmtCurrency(latestDailyActual, { compact: false })} for ${draft.actualDate || todayIso()}.`,
+      description: `${project.name} updated with ${fmtCurrency(
+        projectedActual.latestDailyActual,
+        { compact: false }
+      )} for ${draft.actualDate || todayIso()}.`,
     });
-  };
-
-  const handleModelUsageSelect = (projectId, actualSummary, activeKeys, rowId, value) => {
-    if (value === ADD_CUSTOM_MODEL_OPTION) {
-      const created = promptForCustomModel(addCustomModel);
-      if (!created) return;
-      updateDraft(projectId, actualSummary, activeKeys, (draft) => ({
-        ...draft,
-        modelUsage: draft.modelUsage.map((row) => (
-          row.id === rowId
-            ? { ...row, modelId: created.id, modelName: created.name }
-            : row
-        )),
-      }));
-      toast.success("Custom model added", {
-        description: `${created.name} · ${created.provider} is now available in all model dropdowns.`,
-      });
-      return;
-    }
-    updateModelUsageRow(projectId, actualSummary, activeKeys, rowId, "modelId", value);
   };
 
   const importActualsFile = async (project, file) => {
@@ -417,23 +543,44 @@ const ItDashboard = () => {
         defval: "",
       });
       const parsed = parseActualImportGrid(rawRows, modelCatalog);
-      if (!parsed.dailyActuals.length && !parsed.modelUsage.length && !parsed.monthEndActual && !parsed.activeKeys) {
+      if (
+        !parsed.dailyActuals.length
+        && !parsed.modelUsage.length
+        && !parsed.monthEndActual
+        && !parsed.activeKeys
+      ) {
         toast.error("No valid IT actual rows found in the uploaded sheet");
         return;
       }
 
-      const baseDailyRows = project.actualEntry.dailyActuals || project.actualSummary.dailyActuals || [];
+      const baseDailyRows =
+        project.actualEntry.dailyActuals || project.actualSummary.dailyActuals || [];
       const mergedDailyActuals = mergeDailyActualRows(baseDailyRows, parsed.dailyActuals);
-      const latestDaily = mergedDailyActuals[mergedDailyActuals.length - 1] || parsed.dailyActuals[parsed.dailyActuals.length - 1] || null;
+      const latestDaily =
+        mergedDailyActuals[mergedDailyActuals.length - 1]
+        || parsed.dailyActuals[parsed.dailyActuals.length - 1]
+        || null;
 
-      updateDraft(project.id, project.actualSummary, project.activeKeys, (draft) => ({
+      updateDraft(project, (draft) => ({
         ...draft,
         actualDate: latestDaily?.date || draft.actualDate || todayIso(),
-        modelActual: latestDaily ? toDraftNumberValue(latestDaily.modelActual) : draft.modelActual,
-        infraActual: latestDaily ? toDraftNumberValue(latestDaily.infraActual) : draft.infraActual,
-        subsActual: latestDaily ? toDraftNumberValue(latestDaily.subsActual) : draft.subsActual,
-        monthEndActual: parsed.monthEndActual > 0 ? toDraftNumberValue(parsed.monthEndActual) : draft.monthEndActual,
-        activeKeys: parsed.activeKeys > 0 ? toDraftNumberValue(parsed.activeKeys) : draft.activeKeys,
+        modelActual: latestDaily
+          ? toDraftNumberValue(latestDaily.modelActual)
+          : draft.modelActual,
+        infraActual: latestDaily
+          ? toDraftNumberValue(latestDaily.infraActual)
+          : draft.infraActual,
+        subsActual: latestDaily
+          ? toDraftNumberValue(latestDaily.subsActual)
+          : draft.subsActual,
+        monthEndActual:
+          parsed.monthEndActual > 0
+            ? toDraftNumberValue(parsed.monthEndActual)
+            : draft.monthEndActual,
+        activeKeys:
+          parsed.activeKeys > 0
+            ? toDraftNumberValue(parsed.activeKeys)
+            : draft.activeKeys,
         modelUsage: parsed.modelUsage.length
           ? parsed.modelUsage.map((row, index) => buildUsageRow(index, row))
           : draft.modelUsage,
@@ -447,7 +594,11 @@ const ItDashboard = () => {
       }));
 
       toast.success("IT actuals imported", {
-        description: `${file.name} loaded ${parsed.dailyActuals.length} daily row${parsed.dailyActuals.length === 1 ? "" : "s"} and ${parsed.modelUsage.length} model row${parsed.modelUsage.length === 1 ? "" : "s"}.`,
+        description: `${file.name} loaded ${parsed.dailyActuals.length} daily row${
+          parsed.dailyActuals.length === 1 ? "" : "s"
+        } and ${parsed.modelUsage.length} model row${
+          parsed.modelUsage.length === 1 ? "" : "s"
+        }.`,
       });
     } catch (error) {
       toast.error("Could not read that sheet", {
@@ -461,28 +612,47 @@ const ItDashboard = () => {
       <div>
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-cyan-300">
           <span className="w-6 h-px bg-cyan-400" />
-          IT Portal · Access Provisioning
+          IT Portal · Provisioning & Actuals
         </div>
-        <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">Approved budget access queue</h1>
+        <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">
+          Approved budget access queue
+        </h1>
         <p className="text-sm text-zinc-400 mt-1">
-          CFO-approved budgets land here so IT can allocate model keys, file day-wise API actuals, and publish the live model usage mix for Finance views.
+          CFO-approved budgets land here so IT can provision access and log the
+          day-wise actuals that flow back into Finance monitoring.
         </p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="Pending provisioning" value={String(pending.length)} icon={ShieldCheck} />
         <Stat label="Provisioned requests" value={String(completed.length)} icon={KeyRound} />
-        <Stat label="Active keys" value={String(modelKeyRecords.filter((entry) => entry.status === "active").length)} icon={KeyRound} />
-        <Stat label="Actuals filed" value={String(Object.keys(itMonthlyActuals).length)} icon={Database} />
+        <Stat
+          label="Active keys"
+          value={String(modelKeyRecords.filter((entry) => entry.status === "active").length)}
+          icon={KeyRound}
+        />
+        <Stat
+          label="Actuals filed"
+          value={String(Object.keys(itMonthlyActuals).length)}
+          icon={Database}
+        />
       </div>
 
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <div>
-            <div className="font-display font-semibold text-[15px] text-white">Pending IT actions</div>
-            <div className="text-xs text-zinc-500 mt-0.5">Open the project Models tab to add the key values and assign them to members.</div>
+            <div className="font-display font-semibold text-[15px] text-white">
+              Pending IT actions
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Open the project Models tab to add the key values and assign them
+              to members.
+            </div>
           </div>
-          <Link to="/projects" className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium">
+          <Link
+            to="/projects"
+            className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium"
+          >
             Open Projects <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
@@ -492,16 +662,28 @@ const ItDashboard = () => {
               No pending CFO-approved provisioning requests right now.
             </div>
           )}
+
           {pending.map((request) => (
-            <div key={request.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <div
+              key={request.id}
+              className="rounded-xl border border-white/10 bg-white/[0.02] p-4"
+            >
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div>
-                  <div className="text-sm font-semibold text-white">{request.projectName}</div>
+                  <div className="text-sm font-semibold text-white">
+                    {request.projectName}
+                  </div>
                   <div className="text-[11px] text-zinc-500 mt-1">
-                    {request.budgetType} · approved by {request.approvedBy} · {new Date(request.approvedAt || Date.now()).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}
+                    {request.budgetType} · approved by {request.approvedBy} ·{" "}
+                    {new Date(request.approvedAt || Date.now()).toLocaleString(
+                      "en-US",
+                      { dateStyle: "medium", timeStyle: "short" }
+                    )}
                   </div>
                 </div>
-                <div className="text-sm font-semibold text-fuchsia-300 tabular">{fmtCurrency(request.approvedAmount, { compact: false })}</div>
+                <div className="text-sm font-semibold text-fuchsia-300 tabular">
+                  {fmtCurrency(request.approvedAmount, { compact: false })}
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
                 <Mini label="Models" value={String(request.requestedModels?.length || 0)} />
@@ -524,44 +706,70 @@ const ItDashboard = () => {
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
           <div>
-            <div className="font-display font-semibold text-[15px] text-white">Daily actuals &amp; model usage reconciliation</div>
+            <div className="font-display font-semibold text-[15px] text-white">
+              Daily actuals worksheet
+            </div>
             <div className="text-xs text-zinc-500 mt-0.5">
-              IT files the daily API actuals, month-end close numbers, and the per-model usage mix that feed the CFO actuals, recovery, and monitoring views.
+              Spreadsheet-style logging for model costs, daily consumed budget,
+              overall actuals, variance, and infra totals.
             </div>
           </div>
-          <Link to="/reports" className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium">
+          <Link
+            to="/reports"
+            className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium"
+          >
             Open Reports <ChevronRight className="w-3 h-3" />
           </Link>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           {actualProjects.length === 0 && (
             <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center text-xs text-zinc-500">
               No approved projects have reached the IT actuals stage yet.
             </div>
           )}
+
           {actualProjects.map((project) => {
-            const draft = drafts[project.id] || buildProjectDraft(project.actualSummary, project.activeKeys);
-            const actual = project.actualSummary;
-            const modelUsageRows = draft.modelUsage;
+            const draft =
+              drafts[project.id]
+              || buildProjectDraft(
+                project.actualSummary,
+                project.activeKeys,
+                project.seedModelUsage
+              );
+            const projectedActual = buildProjectedActualState(project, draft);
+            const modelRows = draft.modelUsage.length
+              ? draft.modelUsage
+              : project.seedModelUsage;
+            const rowSpan = Math.max(modelRows.length, 1);
+            const statusMeta = buildStatusMeta(project, projectedActual);
+
             return (
-              <div key={project.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div
+                key={project.id}
+                className="rounded-2xl border border-white/10 bg-white/[0.02] p-4"
+              >
+                <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                   <div>
-                    <div className="text-sm font-semibold text-white">{project.name}</div>
+                    <div className="text-sm font-semibold text-white">
+                      {project.name}
+                    </div>
                     <div className="text-[11px] text-zinc-500 mt-1">
-                      Logged by delivery {fmtCurrency(project.usage.loggedSpend, { compact: false })} · {project.usage.loggedTasks} tasks · {project.activeKeys} active key{project.activeKeys === 1 ? "" : "s"}
+                      {project.client || "Client"} · {project.phaseLabel} ·{" "}
+                      {fmtCurrency(project.approvedBudget || 0, { compact: false })} approved
                     </div>
                   </div>
-                  <div className="flex flex-col items-stretch gap-2 min-w-[280px]">
-                    <div className="grid grid-cols-2 gap-2 text-[11px]">
-                      <Mini label="IT actual to date" value={fmtCurrency(actual.totalActual, { compact: false })} />
-                      <Mini label="Last daily actual" value={fmtCurrency(actual.latestDailyActual, { compact: false })} />
-                      <Mini label="Month-end actual" value={fmtCurrency(actual.monthEndActual, { compact: false })} />
-                    </div>
-                    <label className="inline-flex items-center justify-center gap-1.5 h-9 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20 cursor-pointer text-xs font-medium">
+                  <div className="flex items-end gap-2 flex-wrap">
+                    <DateField
+                      label="Actual date"
+                      value={draft.actualDate}
+                      onChange={(value) =>
+                        updateDraft(project, { actualDate: value })
+                      }
+                    />
+                    <label className="inline-flex items-center justify-center gap-1.5 h-10 px-3 rounded-lg border border-cyan-500/30 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20 cursor-pointer text-xs font-medium">
                       <Upload className="w-3.5 h-3.5" />
-                      Upload actuals CSV / Excel
+                      CSV / Excel
                       <input
                         type="file"
                         accept=".csv,.xlsx,.xls"
@@ -573,143 +781,326 @@ const ItDashboard = () => {
                         }}
                       />
                     </label>
-                    {draft.importMeta && (
-                      <div className="text-[10px] text-zinc-500 text-right">
-                        Imported {draft.importMeta.fileName} · {draft.importMeta.dailyRows} daily row{draft.importMeta.dailyRows === 1 ? "" : "s"} · {draft.importMeta.modelRows} model row{draft.importMeta.modelRows === 1 ? "" : "s"}
-                      </div>
-                    )}
+                    <Button
+                      onClick={() => saveActuals(project)}
+                      className="h-10 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      Save daily actuals
+                    </Button>
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-7 gap-3">
-                  <DateField
-                    label="Actual date"
-                    value={draft.actualDate}
-                    onChange={(value) => updateDraft(project.id, actual, project.activeKeys, { actualDate: value })}
-                  />
-                  <ActualField
-                    label="Model actual"
-                    value={draft.modelActual}
-                    onChange={(value) => updateDraft(project.id, actual, project.activeKeys, { modelActual: value })}
-                  />
-                  <ActualField
-                    label="Infra actual"
-                    value={draft.infraActual}
-                    onChange={(value) => updateDraft(project.id, actual, project.activeKeys, { infraActual: value })}
-                  />
-                  <ActualField
-                    label="Subs actual"
-                    value={draft.subsActual}
-                    onChange={(value) => updateDraft(project.id, actual, project.activeKeys, { subsActual: value })}
-                  />
+                {draft.importMeta && (
+                  <div className="mb-3 text-[10px] text-zinc-500">
+                    Imported {draft.importMeta.fileName} · {draft.importMeta.dailyRows} daily row
+                    {draft.importMeta.dailyRows === 1 ? "" : "s"} · {draft.importMeta.modelRows} model row
+                    {draft.importMeta.modelRows === 1 ? "" : "s"}
+                  </div>
+                )}
+
+                <div className="overflow-x-auto rounded-xl border border-white/5">
+                  <table className="w-full min-w-[1420px] text-sm">
+                    <thead>
+                      <tr className="bg-white/[0.03] border-b border-white/5 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+                        <th className="py-2.5 px-3 text-left">Project</th>
+                        <th className="py-2.5 px-3 text-left">External / Client</th>
+                        <th className="py-2.5 px-3 text-left">Model Provider</th>
+                        <th className="py-2.5 px-3 text-left">Models</th>
+                        <th className="py-2.5 px-3 text-right">Models Cost ($)</th>
+                        <th className="py-2.5 px-3 text-right">Approved Budget ($)</th>
+                        <th className="py-2.5 px-3 text-left">
+                          Last One Day Consumed Budget ($) ({draft.actualDate || todayIso()})
+                        </th>
+                        <th className="py-2.5 px-3 text-right">Overall Consumed Budget ($)</th>
+                        <th className="py-2.5 px-3 text-right">Under / Over Budget</th>
+                        <th className="py-2.5 px-3 text-left">Status</th>
+                        <th className="py-2.5 px-3 text-right">EC2 Cost / Project</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modelRows.map((row, index) => {
+                        const modelMeta = findModelMeta(
+                          modelCatalog,
+                          row.modelId || row.modelName
+                        );
+                        const providerLabel =
+                          row.provider
+                          || modelMeta?.provider
+                          || "—";
+                        return (
+                          <tr
+                            key={row.id || `${project.id}-model-${index + 1}`}
+                            className="border-b border-white/5 last:border-b-0 align-top"
+                          >
+                            {index === 0 && (
+                              <>
+                                <td
+                                  rowSpan={rowSpan}
+                                  className="py-3 px-3 text-white font-semibold align-top"
+                                >
+                                  {project.name}
+                                </td>
+                                <td rowSpan={rowSpan} className="py-3 px-3 align-top">
+                                  <div className="text-white">{project.phaseLabel}</div>
+                                  <div className="text-[11px] text-zinc-500 mt-1">
+                                    {project.client || "Client"}
+                                  </div>
+                                </td>
+                              </>
+                            )}
+                            <td className="py-3 px-3">
+                              <input
+                                type="text"
+                                value={providerLabel === "—" ? "" : providerLabel}
+                                onChange={(event) =>
+                                  updateModelUsageRow(
+                                    project,
+                                    row.id,
+                                    "provider",
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="Provider"
+                                className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                              />
+                            </td>
+                            <td className="py-3 px-3">
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={row.modelName || ""}
+                                  onChange={(event) =>
+                                    updateModelUsageRow(
+                                      project,
+                                      row.id,
+                                      "modelName",
+                                      event.target.value
+                                    )
+                                  }
+                                  placeholder="Model name"
+                                  className="flex-1 h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeModelUsageRow(project, row.id)}
+                                  className="w-9 h-9 rounded-md border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 inline-flex items-center justify-center"
+                                  title="Remove model row"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-3 px-3">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={row.cost ?? ""}
+                                onChange={(event) =>
+                                  updateModelUsageRow(
+                                    project,
+                                    row.id,
+                                    "cost",
+                                    event.target.value
+                                  )
+                                }
+                                className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                              />
+                            </td>
+                            {index === 0 && (
+                              <>
+                                <td
+                                  rowSpan={rowSpan}
+                                  className="py-3 px-3 text-right text-white font-semibold tabular align-top"
+                                >
+                                  {fmtCurrency(project.approvedBudget || 0, {
+                                    compact: false,
+                                  })}
+                                </td>
+                                <td rowSpan={rowSpan} className="py-3 px-3 align-top">
+                                  <div className="space-y-2 min-w-[220px]">
+                                    <MiniInputRow label="Model">
+                                      {projectedActual.resolvedModelActual > 0 ? (
+                                        <div className="h-9 px-3 rounded-md bg-white/[0.03] border border-white/10 text-sm text-white tabular text-right leading-9">
+                                          {fmtCurrency(
+                                            projectedActual.resolvedModelActual,
+                                            { compact: false }
+                                          )}
+                                        </div>
+                                      ) : (
+                                        <input
+                                          type="number"
+                                          min="0"
+                                          step="0.01"
+                                          value={draft.modelActual ?? ""}
+                                          onChange={(event) =>
+                                            updateDraft(project, {
+                                              modelActual: event.target.value,
+                                            })
+                                          }
+                                          className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                                        />
+                                      )}
+                                    </MiniInputRow>
+                                    <MiniInputRow label="Infra">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={draft.infraActual ?? ""}
+                                        onChange={(event) =>
+                                          updateDraft(project, {
+                                            infraActual: event.target.value,
+                                          })
+                                        }
+                                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                                      />
+                                    </MiniInputRow>
+                                    <MiniInputRow label="Subs">
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={draft.subsActual ?? ""}
+                                        onChange={(event) =>
+                                          updateDraft(project, {
+                                            subsActual: event.target.value,
+                                          })
+                                        }
+                                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular text-right focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
+                                      />
+                                    </MiniInputRow>
+                                    <div className="pt-1 border-t border-white/10 flex items-center justify-between text-[11px]">
+                                      <span className="text-zinc-500">Total</span>
+                                      <span className="text-white font-semibold tabular">
+                                        {fmtCurrency(projectedActual.latestDailyActual, {
+                                          compact: false,
+                                        })}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td
+                                  rowSpan={rowSpan}
+                                  className="py-3 px-3 text-right text-white font-semibold tabular align-top"
+                                >
+                                  {fmtCurrency(projectedActual.totalActual, {
+                                    compact: false,
+                                  })}
+                                </td>
+                                <td
+                                  rowSpan={rowSpan}
+                                  className={`py-3 px-3 text-right font-semibold tabular align-top ${
+                                    projectedActual.variance >= 0
+                                      ? "bg-emerald-500/20 text-emerald-200"
+                                      : "bg-red-500/20 text-red-200"
+                                  }`}
+                                >
+                                  {projectedActual.variance >= 0 ? "" : "-"}
+                                  {fmtCurrency(Math.abs(projectedActual.variance), {
+                                    compact: false,
+                                  })}
+                                </td>
+                                <td rowSpan={rowSpan} className="py-3 px-3 align-top">
+                                  <span className={`text-sm font-semibold ${statusMeta.cls}`}>
+                                    {statusMeta.label}
+                                  </span>
+                                </td>
+                                <td
+                                  rowSpan={rowSpan}
+                                  className="py-3 px-3 text-right text-white font-semibold tabular align-top"
+                                >
+                                  {fmtCurrency(projectedActual.infraActual, {
+                                    compact: false,
+                                  })}
+                                </td>
+                              </>
+                            )}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="inline-flex items-center gap-2 text-[11px] text-zinc-500">
+                    <CalendarDays className="w-3.5 h-3.5 text-cyan-300" />
+                    Logged spend {fmtCurrency(project.usage.loggedSpend, { compact: false })} ·{" "}
+                    {project.usage.loggedTasks} tasks · {project.activeKeys} active key
+                    {project.activeKeys === 1 ? "" : "s"}
+                  </div>
+                  <Button
+                    onClick={() => addModelUsageRow(project)}
+                    variant="outline"
+                    className="h-8 rounded-lg border-cyan-500/30 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20 gap-1.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add model row
+                  </Button>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                   <ActualField
                     label="Month-end actual"
                     value={draft.monthEndActual}
-                    onChange={(value) => updateDraft(project.id, actual, project.activeKeys, { monthEndActual: value })}
+                    onChange={(value) =>
+                      updateDraft(project, { monthEndActual: value })
+                    }
                   />
                   <ActualField
                     label="Active keys"
                     value={draft.activeKeys}
-                    onChange={(value) => updateDraft(project.id, actual, project.activeKeys, { activeKeys: value })}
+                    onChange={(value) =>
+                      updateDraft(project, { activeKeys: value })
+                    }
                   />
-                  <div className="flex items-end">
-                    <Button
-                      onClick={() => saveActuals(project)}
-                      className="h-10 w-full rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
-                    >
-                      <Save className="w-3.5 h-3.5" /> Save
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="mt-4 rounded-xl border border-white/10 bg-[#12121A] p-4">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <div className="text-[10px] uppercase tracking-widest font-semibold text-cyan-300">Model usage filed by IT</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">This mix is used by Finance dashboards when IT has published actuals.</div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => addModelUsageRow(project.id, actual, project.activeKeys)}
-                      className="h-8 rounded-lg border-cyan-500/30 bg-cyan-500/10 text-cyan-200 hover:bg-cyan-500/20 gap-1.5"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> Add model
-                    </Button>
-                  </div>
-
-                  <div className="mt-3 space-y-3">
-                    {modelUsageRows.length === 0 && (
-                      <div className="rounded-lg border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center text-xs text-zinc-500">
-                        No model usage has been filed yet for this project.
-                      </div>
+                  <Mini
+                    label="Models filed"
+                    value={String(
+                      normalizeItModelUsageRows(draft.modelUsage).filter(
+                        (row) => row.modelName || row.provider || row.cost
+                      ).length
                     )}
-                    {modelUsageRows.map((row) => (
-                      <div key={row.id} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_1fr_1fr_auto] gap-3">
-                        <div>
-                          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Bedrock model</div>
-                          <select
-                            value={row.modelId}
-                            onChange={(event) => handleModelUsageSelect(project.id, actual, project.activeKeys, row.id, event.target.value)}
-                            className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                          >
-                            <option value="">Select model</option>
-                            {modelCatalog.map((model) => (
-                              <option key={model.id} value={model.id}>
-                                {buildModelOptionLabel(model)}
-                              </option>
-                            ))}
-                            <option value={ADD_CUSTOM_MODEL_OPTION}>+ Add new model...</option>
-                          </select>
-                        </div>
-                        <ActualField
-                          label="Actual cost"
-                          value={row.cost}
-                          onChange={(value) => updateModelUsageRow(project.id, actual, project.activeKeys, row.id, "cost", value)}
-                        />
-                        <ActualField
-                          label="Input tokens"
-                          value={row.inputTokens}
-                          onChange={(value) => updateModelUsageRow(project.id, actual, project.activeKeys, row.id, "inputTokens", value)}
-                        />
-                        <ActualField
-                          label="Output tokens"
-                          value={row.outputTokens}
-                          onChange={(value) => updateModelUsageRow(project.id, actual, project.activeKeys, row.id, "outputTokens", value)}
-                        />
-                        <div className="flex items-end">
-                          <button
-                            type="button"
-                            onClick={() => removeModelUsageRow(project.id, actual, project.activeKeys, row.id)}
-                            className="w-10 h-10 rounded-lg border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 inline-flex items-center justify-center"
-                            title="Remove model row"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                    icon={Cpu}
+                  />
                 </div>
 
                 <textarea
                   value={draft.note}
-                  onChange={(event) => updateDraft(project.id, actual, project.activeKeys, { note: event.target.value })}
+                  onChange={(event) =>
+                    updateDraft(project, { note: event.target.value })
+                  }
                   rows={2}
-                  placeholder="Optional note for CFO / audit trail"
-                  className="mt-3 w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
+                  placeholder="Optional note for CFO about the actuals, vendor invoice, or reconciliation context."
+                  className="mt-3 w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-cyan-500/40 resize-none"
                 />
 
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
-                  <Mini label="Daily rows filed" value={String(actual.dailyActuals.length)} icon={CalendarDays} />
-                  <Mini label="Models filed" value={String(actual.modelUsage.length || modelUsageRows.length)} icon={Cpu} />
-                  <Mini label="Updated" value={actual.updatedAt ? new Date(actual.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "Not yet"} icon={Database} />
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <Mini
+                    label="Daily rows filed"
+                    value={String(projectedActual.dailyActuals.length)}
+                    icon={CalendarDays}
+                  />
+                  <Mini
+                    label="Updated"
+                    value={
+                      project.actualSummary.updatedAt
+                        ? new Date(project.actualSummary.updatedAt).toLocaleDateString(
+                            "en-US",
+                            { month: "short", day: "numeric" }
+                          )
+                        : "Not yet"
+                    }
+                    icon={Database}
+                  />
+                  <Mini
+                    label="Overall variance"
+                    value={fmtCurrency(projectedActual.variance, { compact: false })}
+                    icon={Server}
+                  />
                 </div>
-
-                {actual.updatedAt && (
-                  <div className="mt-2 text-[10px] text-zinc-500">
-                    Last filed {new Date(actual.updatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })} · by {actual.updatedBy}
-                  </div>
-                )}
               </div>
             );
           })}
@@ -722,12 +1113,16 @@ const ItDashboard = () => {
 const Stat = ({ label, value, icon: Icon }) => (
   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4">
     <div className="flex items-center justify-between">
-      <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">
+        {label}
+      </div>
       <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center">
         <Icon className="w-3.5 h-3.5 text-zinc-400" />
       </div>
     </div>
-    <div className="mt-2 font-display font-semibold text-2xl tabular text-white">{value}</div>
+    <div className="mt-2 font-display font-semibold text-2xl tabular text-white">
+      {value}
+    </div>
   </div>
 );
 
@@ -743,26 +1138,40 @@ const Mini = ({ label, value, icon: Icon }) => (
 
 const ActualField = ({ label, value, onChange }) => (
   <div>
-    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">{label}</div>
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">
+      {label}
+    </div>
     <input
       type="number"
       min="0"
+      step="0.01"
       value={value ?? ""}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
     />
   </div>
 );
 
 const DateField = ({ label, value, onChange }) => (
   <div>
-    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">{label}</div>
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">
+      {label}
+    </div>
     <input
       type="date"
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-cyan-500/40"
     />
+  </div>
+);
+
+const MiniInputRow = ({ label, children }) => (
+  <div>
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">
+      {label}
+    </div>
+    {children}
   </div>
 );
 
