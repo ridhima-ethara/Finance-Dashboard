@@ -4,6 +4,7 @@ import { useApp } from "../context/AppContext";
 import { isTpmView } from "../lib/roles";
 import { fmtCurrency, fmtDate } from "../lib/format";
 import { getCtoForwardLabel, hasCtoModifiedBudgetReview } from "../lib/budgetReview";
+import { buildProjectBudgetBuilderHref } from "../lib/projectBudgetRoute";
 import { APPROVALS } from "../data/mockData";
 import { Button } from "../components/ui/button";
 import PartialApprovalDialog from "../components/PartialApprovalDialog";
@@ -49,10 +50,11 @@ const typeConfig = {
 };
 
 const buildBudgetResubmitHref = (review) => {
-  const next = new URLSearchParams({ edit: review.id, projectId: review.projectId });
-  if (review.budgetType) next.set("budgetType", review.budgetType);
-  if (review.sampleIteration) next.set("sampleIteration", String(review.sampleIteration));
-  return `/budget-builder?${next.toString()}`;
+  return buildProjectBudgetBuilderHref(review.projectId, {
+    edit: review.id,
+    budgetType: review.budgetType,
+    sampleIteration: review.sampleIteration,
+  });
 };
 
 // Build TPM's request rows from context (budget changes + batches + budget reviews) + any mock budget requests they own.
@@ -152,7 +154,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       rows.push({
         id: r.id,
         type: "Topup",
-        title: `${r.phaseName} budget change`,
+        title: `${r.phaseName} change request`,
         subtitle: r.projectName,
         requestedAmount: r.amount,
         approvedAmount: r.status === "rejected" ? 0 : approvedAmount,
@@ -309,7 +311,7 @@ const TpmMyRequests = () => {
         <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center" data-testid="my-req-empty">
           <Info className="w-8 h-8 mx-auto text-zinc-600 mb-3" />
           <div className="text-sm text-zinc-300 font-medium">Nothing to show here yet</div>
-          <div className="text-xs text-zinc-500 mt-1">Raise a budget change or deliver a batch to see it tracked here.</div>
+          <div className="text-xs text-zinc-500 mt-1">Raise a change request or deliver a batch to see it tracked here.</div>
         </div>
       )}
       <div className="space-y-3">

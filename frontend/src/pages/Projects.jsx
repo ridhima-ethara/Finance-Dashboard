@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { fmtCurrency, fmtPct, healthColor, utilColor, varianceColor } from "../lib/format";
-import { Search, Filter, Plus, ChevronRight, ArrowUpRightSquare, Lock } from "lucide-react";
+import { Search, Filter, Plus, Lock, AlertCircle, XCircle } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { useApp } from "../context/AppContext";
 import { isTpmView } from "../lib/roles";
@@ -162,8 +162,13 @@ const Projects = () => {
 
               <div className="mt-4 grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">{budgetState.label}</div>
-                  <div className={`text-sm font-semibold tabular ${budgetState.valueClass}`}>{fmtCurrency(budgetState.amount)}</div>
+                  <div className={`text-[10px] uppercase font-semibold tracking-widest inline-flex items-center gap-1 ${budgetState.labelClass || "text-zinc-500"}`}>
+                    {budgetState.Icon && <budgetState.Icon className="w-3 h-3" />}
+                    <span>{budgetState.label}</span>
+                  </div>
+                  <div className={`text-sm font-semibold tabular min-h-[20px] ${budgetState.valueClass}`}>
+                    {budgetState.amount == null ? "" : fmtCurrency(budgetState.amount)}
+                  </div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">{isCFO ? "Actual" : "Exceeded"}</div>
@@ -196,12 +201,6 @@ const Projects = () => {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center justify-between text-xs">
-                <span className="text-zinc-500">PL · {p.pl}</span>
-                <span className="text-fuchsia-400 font-medium inline-flex items-center gap-1 group-hover:gap-1.5 transition-all">
-                  Open <ChevronRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
             </Link>
           );
         })}
@@ -217,8 +216,8 @@ const Projects = () => {
 const getProjectBudgetCardState = (project, review) => {
   if (!review) {
     return Number(project.approvedBudget || 0) > 0
-      ? { label: "Approved", amount: Number(project.approvedBudget || 0), valueClass: "text-white" }
-      : { label: "Pending", amount: 0, valueClass: "text-amber-300" };
+      ? { label: "Approved", amount: Number(project.approvedBudget || 0), valueClass: "text-white", labelClass: "text-zinc-500" }
+      : { label: "Pending", amount: null, valueClass: "text-zinc-500", labelClass: "text-zinc-500" };
   }
 
   if (["approved", "partial"].includes(review.status)) {
@@ -226,14 +225,17 @@ const getProjectBudgetCardState = (project, review) => {
       label: "Approved",
       amount: Number(project.approvedBudget || review.cfoDecision?.amount || review.modifiedTotal || review.requestedBudget || 0),
       valueClass: "text-white",
+      labelClass: "text-zinc-500",
     };
   }
 
-  if (review.status === "returned-to-tpm") {
+  if (review.status === "returned-to-tpm" || review.status === "returned") {
     return {
       label: "Returned",
-      amount: Number(review.requestedBudget || review.modifiedTotal || 0),
-      valueClass: "text-amber-300",
+      amount: null,
+      valueClass: "text-zinc-500",
+      labelClass: "text-amber-300",
+      Icon: AlertCircle,
       actionRequired: true,
     };
   }
@@ -241,15 +243,18 @@ const getProjectBudgetCardState = (project, review) => {
   if (review.status === "rejected" || review.status === "rejected-by-cto") {
     return {
       label: "Rejected",
-      amount: Number(project.approvedBudget || 0),
-      valueClass: "text-red-300",
+      amount: null,
+      valueClass: "text-zinc-500",
+      labelClass: "text-red-300",
+      Icon: XCircle,
     };
   }
 
   return {
     label: "Pending",
-    amount: Number(review.modifiedTotal || review.requestedBudget || 0),
-    valueClass: "text-amber-300",
+    amount: null,
+    valueClass: "text-zinc-500",
+    labelClass: "text-zinc-500",
   };
 };
 

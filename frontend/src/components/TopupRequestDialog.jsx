@@ -302,7 +302,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
       return;
     }
     if (totalAmount <= 0) {
-      toast.error("Enter at least one budget change line amount");
+      toast.error("Enter at least one change line amount");
       return;
     }
     if (!reason.trim()) {
@@ -381,7 +381,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
       sampleIteration: isRndProject ? sampleIteration : null,
     });
 
-    toast.success("Budget change request submitted", {
+    toast.success("Change request submitted", {
       description: `${activeProject.name} · ${fmtCurrency(totalAmount, { compact: false })} · routed to CTO -> CFO`,
     });
     onOpenChange(false);
@@ -396,9 +396,9 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
               <ArrowUpRightSquare className="w-4 h-4 text-fuchsia-300" />
             </div>
             <div>
-              <DialogTitle className="font-display text-lg text-white">Raise budget change request</DialogTitle>
+              <DialogTitle className="font-display text-lg text-white">Raise change request</DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
-                Two-stage approval · provider-first models and infra · CTO reviews first, CFO gives final sign-off
+                One request for model changes, infra changes, subscription changes, or budget changes · CTO reviews first, CFO gives final sign-off
               </DialogDescription>
             </div>
           </div>
@@ -457,7 +457,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
           )}
 
           <div>
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">Ask · budget items</div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">Ask · change items</div>
             <div className="space-y-3">
               <MultiLineSection
                 title="Models"
@@ -581,7 +581,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               rows={3}
-              placeholder="Why is the budget change needed? What deliverable does it unlock?"
+              placeholder="Why is the change request needed? What deliverable does it unlock?"
               data-testid="tur-reason"
               className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
             />
@@ -591,7 +591,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
             <Zap className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-zinc-300 leading-relaxed">
               <span className="text-fuchsia-200 font-semibold">Flow: </span>
-              CTO reviews the line-item ask and may partially approve it. CFO sees the same model, infra, and subscription breakdown for final sign-off.
+              CTO reviews the line-item change request and may partially approve it. CFO sees the same model, infra, and subscription breakdown for final sign-off.
             </div>
           </div>
 

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "./ui/dialog";
 import { Button } from "./ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { findProjectDirectoryMember, getProjectMembersForSection } from "../data/employeeDirectory";
@@ -102,6 +103,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
   const today = new Date().toISOString().slice(0, 10);
 
   const [form, setForm] = useState(() => buildEmptyForm(today, user));
+  const [activeTab, setActiveTab] = useState("basic");
   const tpmSuggestions = useMemo(() => getProjectMembersForSection("TPM"), []);
   const plQlSuggestions = useMemo(() => getProjectMembersForSection("PL / QL"), []);
   const rndSuggestions = useMemo(() => getProjectMembersForSection("R&D"), []);
@@ -112,6 +114,11 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const isRndDepartmentEmail = (email = "") => rndSuggestionEmails.has(String(email || "").trim().toLowerCase());
+
+  useEffect(() => {
+    if (open) setActiveTab("basic");
+  }, [open]);
+
   const handleFilePick = (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
@@ -234,150 +241,168 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-3">
-          <Field label="Client project name" hint="How the client refers to it">
-            <div className="relative">
-              <FileText className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-3">
+          <TabsList className="grid w-full grid-cols-3 bg-white/[0.04] p-1 h-auto rounded-xl">
+            <TabsTrigger value="basic" className="text-xs text-zinc-300 data-[state=active]:bg-fuchsia-500/15 data-[state=active]:text-fuchsia-200">
+              Basic info
+            </TabsTrigger>
+            <TabsTrigger value="docs" className="text-xs text-zinc-300 data-[state=active]:bg-fuchsia-500/15 data-[state=active]:text-fuchsia-200">
+              Doc upload
+            </TabsTrigger>
+            <TabsTrigger value="members" className="text-xs text-zinc-300 data-[state=active]:bg-fuchsia-500/15 data-[state=active]:text-fuchsia-200">
+              Members allocation
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="basic" className="space-y-3 mt-0">
+            <Field label="Client project name" hint="How the client refers to it">
+              <div className="relative">
+                <FileText className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={form.clientProjectName}
+                  onChange={(e) => update("clientProjectName", e.target.value)}
+                  placeholder="e.g. Client modernization program"
+                  data-testid="input-client-project-name"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                />
+              </div>
+            </Field>
+
+            <Field label="Internal project name" hint="Codename used across dashboards">
               <input
                 type="text"
-                value={form.clientProjectName}
-                onChange={(e) => update("clientProjectName", e.target.value)}
-                placeholder="e.g. Client modernization program"
-                data-testid="input-client-project-name"
-                className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                value={form.internalName}
+                onChange={(e) => update("internalName", e.target.value)}
+                placeholder="e.g. Internal delivery track"
+                data-testid="input-internal-name"
+                className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               />
-            </div>
-          </Field>
+            </Field>
 
-          <Field label="Internal project name" hint="Codename used across dashboards">
-            <input
-              type="text"
-              value={form.internalName}
-              onChange={(e) => update("internalName", e.target.value)}
-              placeholder="e.g. Internal delivery track"
-              data-testid="input-internal-name"
-              className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-            />
-          </Field>
-
-          <Field label="Project Goal" hint="Shared with kickoff recipients">
-            <textarea
-              value={form.goal}
-              onChange={(e) => update("goal", e.target.value)}
-              placeholder="e.g. Validate the sample workflow, scope, requirements, and delivery goal for this project"
-              data-testid="input-kickoff-goal"
-              rows={3}
-              className="w-full px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-y min-h-[88px]"
-            />
-          </Field>
-
-          <Field label="Start date">
-            <div className="relative">
-              <CalIcon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="date"
-                value={form.startDate}
-                onChange={(e) => update("startDate", e.target.value)}
-                data-testid="input-start-date"
-                className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 [color-scheme:dark]"
+            <Field label="Project Goal" hint="Shared with kickoff recipients">
+              <textarea
+                value={form.goal}
+                onChange={(e) => update("goal", e.target.value)}
+                placeholder="e.g. Validate the sample workflow, scope, requirements, and delivery goal for this project"
+                data-testid="input-kickoff-goal"
+                rows={3}
+                className="w-full px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-y min-h-[88px]"
               />
-            </div>
-          </Field>
+            </Field>
 
-          <Field label="Doc attachment (URL / Drive link)" hint="Visible to assigned members">
-            <div className="relative">
-              <Link2 className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="url"
-                value={form.docUrl}
-                onChange={(e) => update("docUrl", e.target.value)}
-                placeholder="https://drive.google.com/…"
-                data-testid="input-doc-url"
-                className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-              />
-            </div>
-            <div className="mt-2 flex items-center gap-2 flex-wrap">
-              <label className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-white/10 bg-white/[0.04] text-xs text-zinc-200 cursor-pointer hover:bg-white/[0.07]">
-                <Upload className="w-3.5 h-3.5 text-fuchsia-300" />
-                Attach file
+            <Field label="Start date">
+              <div className="relative">
+                <CalIcon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
-                  type="file"
-                  multiple
-                  onChange={handleFilePick}
-                  data-testid="input-doc-files"
-                  className="hidden"
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => update("startDate", e.target.value)}
+                  data-testid="input-start-date"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 [color-scheme:dark]"
                 />
-              </label>
-              <span className="text-[10px] text-zinc-500">Add up to {MAX_ATTACHMENTS} files. Each file can be up to {formatFileSize(MAX_ATTACHMENT_SIZE)}.</span>
-            </div>
-            {form.attachments.length > 0 && (
-              <div className="mt-2 space-y-1.5">
-                {form.attachments.map((attachment) => (
-                  <div
-                    key={attachment.id}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
-                    data-testid={`attachment-${attachment.id}`}
-                  >
-                    <div className="min-w-0">
-                      <div className="text-xs text-white truncate">{attachment.name}</div>
-                      <div className="text-[10px] text-zinc-500">{formatFileSize(attachment.size)}</div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeAttachment(attachment.id)}
-                      className="w-7 h-7 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center flex-shrink-0"
-                      data-testid={`remove-attachment-${attachment.id}`}
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
               </div>
-            )}
-          </Field>
+            </Field>
+          </TabsContent>
 
-          <Field label="Assign TPM" hint={isRndCreator ? "Optional during R&D kickoff" : "Owns budget building &amp; delivery"}>
-            <EmailRecipientsInput
-              icon={User}
-              emails={form.tpmEmails}
-              onChange={(emails) => update("tpmEmails", emails)}
-              placeholder="tpm@ethara.ai"
-              dataTestId="input-tpm"
-              helperText={
-                isRndCreator
-                  ? "TPM is optional for R&D kickoff. If you add TPM here, they receive kickoff and see the project as under R&D currently until sample handoff."
-                  : "Enter one or more TPM emails. The first email becomes the primary TPM owner; all listed emails receive kickoff."
-              }
-              suggestions={tpmSuggestions}
-            />
-          </Field>
+          <TabsContent value="docs" className="space-y-3 mt-0">
+            <Field label="Doc attachment (URL / Drive link)" hint="Visible to assigned members">
+              <div className="relative">
+                <Link2 className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="url"
+                  value={form.docUrl}
+                  onChange={(e) => update("docUrl", e.target.value)}
+                  placeholder="https://drive.google.com/…"
+                  data-testid="input-doc-url"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                />
+              </div>
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <label className="inline-flex items-center gap-1.5 px-3 h-9 rounded-lg border border-white/10 bg-white/[0.04] text-xs text-zinc-200 cursor-pointer hover:bg-white/[0.07]">
+                  <Upload className="w-3.5 h-3.5 text-fuchsia-300" />
+                  Attach file
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFilePick}
+                    data-testid="input-doc-files"
+                    className="hidden"
+                  />
+                </label>
+                <span className="text-[10px] text-zinc-500">Add up to {MAX_ATTACHMENTS} files. Each file can be up to {formatFileSize(MAX_ATTACHMENT_SIZE)}.</span>
+              </div>
+              {form.attachments.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  {form.attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2"
+                      data-testid={`attachment-${attachment.id}`}
+                    >
+                      <div className="min-w-0">
+                        <div className="text-xs text-white truncate">{attachment.name}</div>
+                        <div className="text-[10px] text-zinc-500">{formatFileSize(attachment.size)}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeAttachment(attachment.id)}
+                        className="w-7 h-7 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center flex-shrink-0"
+                        data-testid={`remove-attachment-${attachment.id}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Field>
+          </TabsContent>
 
-          <Field label="Assign PL / QL" hint={isRndCreator ? "Optional kickoff recipients" : "Added to project members + kickoff"}>
-            <EmailRecipientsInput
-              icon={Users}
-              emails={form.plQlEmails}
-              onChange={(emails) => update("plQlEmails", emails)}
-            placeholder="pl@ethara.ai, quality.1@ethara.ai"
-            dataTestId="plql-multi-picker"
-            helperText="Enter one or more PL / QL emails. Matching employee directory emails are auto-mapped to Project Lead or Quality Lead."
-              suggestions={plQlSuggestions}
-            />
-          </Field>
+          <TabsContent value="members" className="space-y-3 mt-0">
+            <Field label="Assign TPM" hint={isRndCreator ? "Optional during R&D kickoff" : "Owns budget building &amp; delivery"}>
+              <EmailRecipientsInput
+                icon={User}
+                emails={form.tpmEmails}
+                onChange={(emails) => update("tpmEmails", emails)}
+                placeholder="tpm@ethara.ai"
+                dataTestId="input-tpm"
+                helperText={
+                  isRndCreator
+                    ? "TPM is optional for R&D kickoff. If you add TPM here, they receive kickoff and see the project as under R&D currently until sample handoff."
+                    : "Enter one or more TPM emails. The first email becomes the primary TPM owner; all listed emails receive kickoff."
+                }
+                suggestions={tpmSuggestions}
+              />
+            </Field>
 
-          <Field label="Assign R&amp;D members" hint="Project appears on their dashboard">
-            <EmailRecipientsInput
-              icon={Beaker}
-              emails={form.rndEmails}
-              onChange={(emails) => update("rndEmails", emails)}
-              placeholder="rd@ethara.ai, engineer.1@ethara.ai"
-              dataTestId="rnd-multi-picker"
-              helperText="Only employees from the R&D department can be added here. Everyone listed here gets kickoff access and the kickoff mail."
-              suggestions={rndSuggestions}
-              validateEmail={isRndDepartmentEmail}
-              invalidEmailTitle="Only R&D department members can be assigned here"
-            />
-          </Field>
-        </div>
+            <Field label="Assign PL / QL" hint={isRndCreator ? "Optional kickoff recipients" : "Added to project members + kickoff"}>
+              <EmailRecipientsInput
+                icon={Users}
+                emails={form.plQlEmails}
+                onChange={(emails) => update("plQlEmails", emails)}
+                placeholder="pl@ethara.ai, quality.1@ethara.ai"
+                dataTestId="plql-multi-picker"
+                helperText="Enter one or more PL / QL emails. Matching employee directory emails are auto-mapped to Project Lead or Quality Lead."
+                suggestions={plQlSuggestions}
+              />
+            </Field>
+
+            <Field label="Assign R&amp;D members" hint="Project appears on their dashboard">
+              <EmailRecipientsInput
+                icon={Beaker}
+                emails={form.rndEmails}
+                onChange={(emails) => update("rndEmails", emails)}
+                placeholder="rd@ethara.ai, engineer.1@ethara.ai"
+                dataTestId="rnd-multi-picker"
+                helperText="Only employees from the R&D department can be added here. Everyone listed here gets kickoff access and the kickoff mail."
+                suggestions={rndSuggestions}
+                validateEmail={isRndDepartmentEmail}
+                invalidEmailTitle="Only R&D department members can be assigned here"
+              />
+            </Field>
+          </TabsContent>
+        </Tabs>
 
         <DialogFooter className="pt-3">
           <Button

@@ -257,7 +257,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
                                           </td>
                                           <td className="py-3 px-4">
                                             <div className="text-[11px] text-zinc-300">
-                                              {phaseTopups.length} budget change{phaseTopups.length === 1 ? "" : "s"} · {phaseChangeRequests.length} change request{phaseChangeRequests.length === 1 ? "" : "s"}
+                                              {phaseTopups.length} change request{phaseTopups.length === 1 ? "" : "s"} · {phaseChangeRequests.length} change request{phaseChangeRequests.length === 1 ? "" : "s"}
                                             </div>
                                             <div className="text-[10px] text-zinc-500">
                                               +{fmtCurrency(budgetChangeValue + changeRequestValue, { compact: false })}
@@ -485,7 +485,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
             data-testid="drawer-btn-topup"
             className="h-9 rounded-lg border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20 gap-1.5"
           >
-            <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise budget change
+            <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise change request
           </Button>
           <Button
             onClick={() => setDeliverOpen(true)}
@@ -577,7 +577,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
           <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Budget changes ({phaseTopups.length})</div>
           {phaseTopups.length === 0 ? (
-            <div className="mt-3 text-[11px] text-zinc-500">No budget change requests for this phase.</div>
+            <div className="mt-3 text-[11px] text-zinc-500">No change requests for this phase.</div>
           ) : (
             <div className="mt-3 space-y-2">
               {phaseTopups.map((request) => (

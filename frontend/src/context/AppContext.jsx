@@ -1923,7 +1923,7 @@ export const AppProvider = ({ children }) => {
         {
           at: new Date().toISOString(),
           actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
-          action: "Submitted budget change request",
+          action: "Submitted change request",
           detail: `${phaseName || phaseId} · $${totalAmount.toLocaleString()}${requestedBufferPct > 0 ? ` · ${requestedBufferPct}% buffer` : ""}`,
         },
       ],
