@@ -39,7 +39,13 @@ const typeChip = (type) =>
 
 const providerColor = {
   Anthropic: "#E619B8",
+  AWS: "#F59E0B",
+  Azure: "#0EA5E9",
+  GCP: "#3B82F6",
   OpenAI: "#10B981",
+  OpenRouter: "#F97316",
+  "AIML APIs": "#8B5CF6",
+  Moonshot: "#22C55E",
   Google: "#3B82F6",
   xAI: "#F59E0B",
   Amazon: "#F59E0B",
@@ -48,14 +54,39 @@ const providerColor = {
   Cohere: "#38BDF8",
 };
 
+const normalizeCommaList = (value = "", fallback = "") => {
+  const normalized = String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return normalized.length ? normalized.join(", ") : fallback;
+};
+
+const formatGatewayList = (values = []) => (
+  Array.isArray(values) && values.length ? values.join(", ") : "Any"
+);
+
+const todayPlusDays = (days = 45) => {
+  const next = new Date();
+  next.setDate(next.getDate() + days);
+  return next.toISOString().slice(0, 16);
+};
+
 const buildProvisionLines = (request) =>
   (request?.requestedModels?.length ? request.requestedModels : [{ id: `${request?.id}-fallback`, label: "Project access", provider: "Anthropic" }]).map((line) => ({
     id: line.id,
     label: line.label,
+    modelId: line.modelId || "",
     provider: line.provider || "Anthropic",
     env: request?.budgetType === "Production" ? "production" : "testing",
     fullKey: "",
     memberIds: (request?.members || []).map((member) => member.id),
+    rateLimitPerMinute: 120,
+    budgetCap: Number(line.amount || 0),
+    remainingBudget: Number(line.amount || 0),
+    allowedNetworks: "Corp VPN",
+    allowedDevices: "Managed laptop",
+    expiresAt: todayPlusDays(request?.budgetType === "Production" ? 90 : 45),
   }));
 
 const ModelKeys = () => {
@@ -147,6 +178,7 @@ const ModelKeys = () => {
     prod: keyRows.filter((entry) => entry.env === "production" && entry.status === "active").length,
     rd: keyRows.filter((entry) => entry.type === "R&D" && entry.status === "active").length,
     pendingProvisioning: provisioningRows.filter((entry) => entry.status === "pending-it").length,
+    activeTokens: keyRows.reduce((sum, entry) => sum + (entry.accessTokens?.filter((token) => token.status === "active").length || 0), 0),
   };
 
   if (role === "CTO") {
@@ -188,7 +220,7 @@ const ModelKeys = () => {
           </div>
           <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">Model Keys</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Project-allocated keys with member-level visibility and an IT provisioning handoff after CFO approval
+            Provider keys stay masked here while project teams receive internal platform tokens that route through the AI gateway.
           </p>
         </div>
         {role === "IT" && (
@@ -207,13 +239,14 @@ const ModelKeys = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         {[
           { l: "Total keys", v: stats.total, i: Key },
           { l: "Active", v: stats.active, i: ShieldCheck },
           { l: "Production", v: stats.prod, i: AlertCircle },
           { l: "R&D", v: stats.rd, i: Tag },
           { l: "Pending IT", v: stats.pendingProvisioning, i: Settings2 },
+          { l: "Active tokens", v: stats.activeTokens, i: ShieldCheck },
         ].map((entry) => (
           <div key={entry.l} className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
             <div className="flex items-center justify-between">
@@ -267,6 +300,10 @@ const ModelKeys = () => {
                   <ProvisionStat label="Infra lines" value={String(request.requestedInfra?.length || 0)} />
                   <ProvisionStat label="Members" value={String(request.members?.length || 0)} />
                 </div>
+                <div className="mt-3 text-[11px] text-zinc-500">
+                  Gateway route: <span className="font-mono text-zinc-200">{request.gatewayRoute || "/api/gateway/execute"}</span>
+                  {request.lines?.length ? ` · ${request.lines.reduce((sum, line) => sum + Number(line.issuedTokenCount || 0), 0)} token(s) issued` : ""}
+                </div>
                 <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3">
                   <ProvisionList title="Models" items={(request.requestedModels || []).map((line) => line.label)} empty="No model line requested." />
                   <ProvisionList title="Infrastructure" items={(request.requestedInfra || []).map((line) => line.label)} empty="No infra line requested." />
@@ -291,7 +328,7 @@ const ModelKeys = () => {
         </div>
         <ChipGroup label="Env" value={envFilter} onChange={setEnvFilter} testidPrefix="env" options={["all", "production", "testing"]} />
         <ChipGroup label="Type" value={typeFilter} onChange={setTypeFilter} testidPrefix="type" options={["all", "R&D", "Production"]} />
-        <ChipGroup label="Provider" value={providerFilter} onChange={setProviderFilter} testidPrefix="prov" options={["all", "Anthropic", "OpenAI", "Google", "xAI", "Amazon"]} />
+        <ChipGroup label="Provider" value={providerFilter} onChange={setProviderFilter} testidPrefix="prov" options={["all", "AWS", "Azure", "OpenAI", "OpenRouter", "AIML APIs", "GCP", "Moonshot", "Anthropic", "Amazon"]} />
       </div>
 
       <div className="bg-[#12121A] rounded-2xl border border-white/5 overflow-hidden">
@@ -302,7 +339,7 @@ const ModelKeys = () => {
               <th className="text-left py-3 px-2">Provider · Model</th>
               <th className="text-left py-3 px-2">Type</th>
               <th className="text-left py-3 px-2">Env</th>
-              <th className="text-left py-3 px-2">Key</th>
+              <th className="text-left py-3 px-2">Provider Key</th>
               <th className="text-left py-3 px-2">Allocated members</th>
               <th className="text-right py-3 px-2">Usage</th>
               <th className="text-left py-3 px-2">Last used</th>
@@ -353,6 +390,12 @@ const ModelKeys = () => {
                       <Copy className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                  <div className="mt-1 text-[10px] text-zinc-500">
+                    {(entry.accessTokens || []).length} platform token{(entry.accessTokens || []).length === 1 ? "" : "s"} · {(entry.gatewayPolicy?.rateLimitPerMinute || 0)}/min
+                  </div>
+                  <div className="text-[10px] text-zinc-600">
+                    {entry.gatewayRoute || "/api/gateway/execute"} · budget ${Number(entry.gatewayPolicy?.remainingBudget || 0).toLocaleString()}
+                  </div>
                 </td>
                 <td className="py-3 px-2">
                   <div className="flex flex-wrap gap-1">
@@ -363,6 +406,15 @@ const ModelKeys = () => {
                       </span>
                     ))}
                   </div>
+                  {(entry.accessTokens || []).length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {entry.accessTokens.map((token) => (
+                        <div key={token.id} className="text-[10px] text-zinc-500">
+                          {token.memberName} · {token.maskedToken} · {token.remainingBudget.toFixed(0)} left
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </td>
                 <td className="py-3 px-2 text-right tabular text-sm text-zinc-200 font-medium">{entry.usage.toLocaleString()}</td>
                 <td className="py-3 px-2 text-[11px] text-zinc-500 tabular">{fmtDate(entry.lastUsed)}</td>
@@ -481,10 +533,7 @@ const ProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) => {
   const updateLine = (id, key, value) => {
     setLines((current) => current.map((line) => (
       line.id === id
-        ? {
-            ...line,
-            [key]: key === "memberIds" ? value : value,
-          }
+        ? { ...line, [key]: value }
         : line
     )));
   };
@@ -500,7 +549,7 @@ const ProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) => {
   };
 
   const submit = () => {
-    if (lines.some((line) => !line.fullKey.trim())) {
+    if (lines.some((line) => !String(line.fullKey || "").trim())) {
       toast.error("Add a key value for every requested model line");
       return;
     }
@@ -513,11 +562,11 @@ const ProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[760px] max-h-[92vh] overflow-y-auto bg-[#12121A] border border-white/10 text-zinc-100" data-testid="provision-keys-dialog">
+      <DialogContent className="sm:max-w-[900px] max-h-[92vh] overflow-y-auto bg-[#12121A] border border-white/10 text-zinc-100" data-testid="provision-keys-dialog">
         <DialogHeader>
           <DialogTitle className="font-display text-white">Provision model keys</DialogTitle>
           <DialogDescription className="text-xs text-zinc-400">
-            {request.projectName} · approved {new Date(request.approvedAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · allocate keys to kickoff and project members.
+            {request.projectName} · approved {new Date(request.approvedAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · store the provider key once, then issue internal platform tokens to the selected members.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -537,6 +586,7 @@ const ProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) => {
                   <option value="production">production</option>
                 </select>
               </div>
+
               <div className="mt-3">
                 <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Key value</div>
                 <input
@@ -547,6 +597,55 @@ const ProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) => {
                   className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
                 />
               </div>
+
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                <ProvisionField
+                  label="Rate / min"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={line.rateLimitPerMinute}
+                  onChange={(value) => updateLine(line.id, "rateLimitPerMinute", value)}
+                />
+                <ProvisionField
+                  label="Budget cap"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={line.budgetCap}
+                  onChange={(value) => updateLine(line.id, "budgetCap", value)}
+                />
+                <ProvisionField
+                  label="Remaining budget"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={line.remainingBudget}
+                  onChange={(value) => updateLine(line.id, "remainingBudget", value)}
+                />
+                <ProvisionField
+                  label="Expires at"
+                  type="datetime-local"
+                  value={line.expiresAt}
+                  onChange={(value) => updateLine(line.id, "expiresAt", value)}
+                />
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <ProvisionField
+                  label="Allowed networks"
+                  value={line.allowedNetworks}
+                  placeholder="Corp VPN, HQ Office"
+                  onChange={(value) => updateLine(line.id, "allowedNetworks", normalizeCommaList(value, "Corp VPN"))}
+                />
+                <ProvisionField
+                  label="Allowed devices"
+                  value={line.allowedDevices}
+                  placeholder="Managed laptop, Serverless app"
+                  onChange={(value) => updateLine(line.id, "allowedDevices", normalizeCommaList(value, "Managed laptop"))}
+                />
+              </div>
+
               <div className="mt-3">
                 <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Allocate to members</div>
                 <div className="flex flex-wrap gap-1.5">
@@ -566,6 +665,13 @@ const ProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) => {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/[0.06] px-3 py-2 text-[11px] text-cyan-100">
+                Gateway checks on every call: token status, token owner, user or app identity, allowed model, remaining budget, rate limit, expiration, and allowed network/device.
+                <div className="mt-1 text-cyan-200/80">
+                  Networks: {formatGatewayList(String(line.allowedNetworks || "").split(",").map((entry) => entry.trim()).filter(Boolean))} · Devices: {formatGatewayList(String(line.allowedDevices || "").split(",").map((entry) => entry.trim()).filter(Boolean))}
                 </div>
               </div>
             </div>
@@ -594,5 +700,16 @@ const ProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) => {
     </Dialog>
   );
 };
+
+const ProvisionField = ({ label, onChange, ...props }) => (
+  <div>
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">{label}</div>
+    <input
+      {...props}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+    />
+  </div>
+);
 
 export default ModelKeys;

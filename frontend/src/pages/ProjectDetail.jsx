@@ -313,22 +313,26 @@ const ProjectDetail = () => {
     });
     return editable?.id || null;
   }, [batchPhases, projectBatches]);
-  const latestBudgetReview = projectBudgetReviews[0] || null;
-  const latestBudgetReviewMeta = latestBudgetReview ? getBudgetReviewMeta(latestBudgetReview.status) : null;
-  const workflowStage = p?.workflowStage
-    || (p?.pendingBudgetSubmission
-      ? "budget-pending"
-      : p?.type === "Production" && Number(p?.approvedBudget || 0) > 0
-        ? "production-active"
-        : Number(p?.approvedBudget || 0) > 0
-          ? "sample-active"
-          : "awaiting-testing-budget");
-  const hasPendingBudgetSubmission = Boolean(p?.pendingBudgetSubmission);
-  const showRndBudgetTracks = hasRndWorkflowTracks || isRndProject || Boolean(p?.readyForTpmBudget);
-  const rndExecutionUnlocked = isRnd && !hasPendingBudgetSubmission && ["testing-active", "sample-active"].includes(workflowStage);
-  const tpmExecutionUnlocked = isTPM && !hasPendingBudgetSubmission && workflowStage === "production-active";
-  const executionUnlocked = rndExecutionUnlocked || tpmExecutionUnlocked;
-  const canManageExecution = isExecutionOwner && executionUnlocked;
+const latestBudgetReview = projectBudgetReviews[0] || null;
+const latestBudgetReviewMeta = latestBudgetReview ? getBudgetReviewMeta(latestBudgetReview.status) : null;
+const hasBudgetRejection = Boolean(p?.budgetRejection);
+const budgetRetryAt = p?.budgetRetryAvailableAt || p?.budgetRejection?.retryAt || "";
+const budgetRetryAtTs = budgetRetryAt ? new Date(budgetRetryAt).getTime() : 0;
+const budgetRetryLockActive = hasBudgetRejection && Number.isFinite(budgetRetryAtTs) && budgetRetryAtTs > Date.now();
+const workflowStage = p?.workflowStage
+  || (p?.pendingBudgetSubmission
+    ? "budget-pending"
+    : p?.type === "Production" && Number(p?.approvedBudget || 0) > 0
+      ? "production-active"
+      : Number(p?.approvedBudget || 0) > 0
+        ? "sample-active"
+        : "awaiting-testing-budget");
+const hasPendingBudgetSubmission = Boolean(p?.pendingBudgetSubmission);
+const showRndBudgetTracks = hasRndWorkflowTracks || isRndProject || Boolean(p?.readyForTpmBudget);
+const rndExecutionUnlocked = isRnd && !hasPendingBudgetSubmission && !hasBudgetRejection && ["testing-active", "sample-active"].includes(workflowStage);
+const tpmExecutionUnlocked = isTPM && !hasPendingBudgetSubmission && !hasBudgetRejection && workflowStage === "production-active";
+const executionUnlocked = rndExecutionUnlocked || tpmExecutionUnlocked;
+const canManageExecution = isExecutionOwner && executionUnlocked;
   const taskLogTargetPhase = useMemo(
     () => batchPhases.find((phase) => phase.id === activeBatchPhaseId) || batchPhases[0] || null,
     [activeBatchPhaseId, batchPhases]
@@ -351,12 +355,13 @@ const ProjectDetail = () => {
       .sort((left, right) => new Date(right.deliveredAt || right.createdAt || 0).getTime() - new Date(left.deliveredAt || left.createdAt || 0).getTime())[0] || null,
     [projectBatches]
   );
-  const returnedBudgetReview = latestBudgetReview?.status === "returned-to-tpm" ? latestBudgetReview : null;
-  const canOpenChangeRequest = isExecutionOwner && executionUnlocked && Number(p?.approvedBudget || 0) > 0;
-  const canOpenBudgetBuilder = isRnd
-    ? isExecutionOwner && !hasPendingBudgetSubmission
-    : isExecutionOwner && !hasPendingBudgetSubmission && !canOpenChangeRequest;
-  const projectBudgetBuilderHref = useMemo(() => {
+const returnedBudgetReview = latestBudgetReview?.status === "returned-to-tpm" ? latestBudgetReview : null;
+const canOpenChangeRequest = isExecutionOwner && executionUnlocked && Number(p?.approvedBudget || 0) > 0;
+const canShowBudgetBuilder = isRnd
+  ? isExecutionOwner && !hasPendingBudgetSubmission
+  : isExecutionOwner && !hasPendingBudgetSubmission && !canOpenChangeRequest;
+const canOpenBudgetBuilder = canShowBudgetBuilder && !budgetRetryLockActive;
+const projectBudgetBuilderHref = useMemo(() => {
     if (returnedBudgetReview?.id) {
       return buildProjectBudgetBuilderHref(p.id, { edit: returnedBudgetReview.id });
     }
@@ -373,6 +378,10 @@ const ProjectDetail = () => {
   const canRevealProjectKeys = isCFO || isIT;
   const projectAllocatedMembers = useMemo(
     () => new Set(projectModelKeys.flatMap((entry) => (entry.members || []).map((member) => member.id))).size,
+    [projectModelKeys]
+  );
+  const projectGatewayTokens = useMemo(
+    () => projectModelKeys.reduce((sum, entry) => sum + (entry.accessTokens?.length || 0), 0),
     [projectModelKeys]
   );
   const pendingProvisioningCount = useMemo(
@@ -424,6 +433,11 @@ const ProjectDetail = () => {
     }
     navigator.clipboard?.writeText(entry.fullKey);
     toast.success("Key copied", { description: `${entry.provider} · ${entry.model}` });
+  };
+
+  const copyProjectAccessToken = (token) => {
+    navigator.clipboard?.writeText(token.internalToken);
+    toast.success("Platform token copied", { description: `${token.memberName} · ${token.allowedModelLabel}` });
   };
   const handleMemberDrawerChange = (open) => {
     setMemberDrawerOpen(open);
@@ -556,8 +570,19 @@ const ProjectDetail = () => {
                 </Button>
               </>
             )}
-            {canOpenBudgetBuilder && (
-              <Button size="sm" onClick={() => nav(projectBudgetBuilderHref)} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-build-budget">
+            {canShowBudgetBuilder && (
+              <Button
+                size="sm"
+                disabled={!canOpenBudgetBuilder}
+                title={!canOpenBudgetBuilder ? approvalLockMessage : ""}
+                onClick={() => nav(projectBudgetBuilderHref)}
+                className={`h-9 rounded-lg gap-2 ${
+                  canOpenBudgetBuilder
+                    ? "bg-fuchsia-500 hover:bg-fuchsia-600"
+                    : "bg-white/[0.04] border border-white/10 text-zinc-500 hover:bg-white/[0.04]"
+                }`}
+                data-testid="btn-build-budget"
+              >
                 <ArrowUpRightSquare className="w-3.5 h-3.5" /> Build Budget
               </Button>
             )}
@@ -575,6 +600,12 @@ const ProjectDetail = () => {
           </div>
         </div>
       </div>
+
+      {hasBudgetRejection && (
+        <div className="rounded-2xl border border-red-500/20 bg-red-500/[0.06] px-4 py-3 text-sm text-red-100">
+          {approvalLockMessage}
+        </div>
+      )}
 
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4" data-testid="project-setup-grid">
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -897,7 +928,7 @@ const ProjectDetail = () => {
           <div>
             <h2 className="font-display font-semibold text-xl text-white">Models &amp; keys</h2>
             <p className="text-xs text-zinc-500 mt-0.5">
-              Project-specific model access lives here. IT provisioning, allocated members, and the project key map are kept inside this project instead of a separate dashboard module.
+              Project-specific model access lives here. IT provisions the provider keys, and project members receive internal platform tokens that route through the gateway instead of seeing raw provider credentials.
             </p>
           </div>
 
@@ -905,7 +936,7 @@ const ProjectDetail = () => {
             <ProjectKeyStat label="Allocated keys" value={String(projectModelKeys.length)} />
             <ProjectKeyStat label="Active keys" value={String(projectModelKeys.filter((entry) => entry.status === "active").length)} />
             <ProjectKeyStat label="Pending IT" value={String(pendingProvisioningCount)} />
-            <ProjectKeyStat label="Members mapped" value={String(projectAllocatedMembers)} />
+            <ProjectKeyStat label="Gateway tokens" value={String(projectGatewayTokens || projectAllocatedMembers)} />
           </div>
 
           {projectProvisioningRequests.length > 0 && (
@@ -962,6 +993,10 @@ const ProjectDetail = () => {
                           empty="No members were mapped on this approval."
                         />
                       </div>
+                      <div className="mt-3 text-[11px] text-zinc-500">
+                        Gateway route: <span className="font-mono text-zinc-200">{request.gatewayRoute || "/api/gateway/execute"}</span>
+                        {request.lines?.length ? ` · ${request.lines.reduce((sum, line) => sum + Number(line.issuedTokenCount || 0), 0)} token(s) issued` : ""}
+                      </div>
                     </div>
                   );
                 })}
@@ -973,7 +1008,7 @@ const ProjectDetail = () => {
             <div className="p-5 border-b border-white/5">
               <div className="font-display font-semibold text-[15px] text-white">Allocated model keys</div>
               <div className="text-xs text-zinc-500 mt-0.5">
-                Members see the project-specific allocations here. CFO and IT can reveal or copy the full key values.
+                CFO and IT can manage the provider keys here. Project teams receive internal platform tokens, gateway policy, and remaining-budget visibility.
               </div>
             </div>
 
@@ -989,7 +1024,7 @@ const ProjectDetail = () => {
                       <th className="text-left py-3 px-5">Provider · Model</th>
                       <th className="text-left py-3 px-2">Type</th>
                       <th className="text-left py-3 px-2">Env</th>
-                      <th className="text-left py-3 px-2">Key</th>
+                      <th className="text-left py-3 px-2">{canRevealProjectKeys ? "Provider key" : "Platform token"}</th>
                       <th className="text-left py-3 px-2">Allocated members</th>
                       <th className="text-left py-3 px-2">Created</th>
                     </tr>
@@ -1017,23 +1052,69 @@ const ProjectDetail = () => {
                           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${envChip(entry.env)}`}>{entry.env}</span>
                         </td>
                         <td className="py-3 px-2 font-mono text-xs text-zinc-300 tabular">
-                          <div className="flex items-center gap-1">
-                            <span data-testid={`project-key-value-${entry.id}`}>{revealedProjectKeys[entry.id] ? entry.fullKey : entry.maskedKey}</span>
-                            <button
-                              data-testid={`project-btn-reveal-${entry.id}`}
-                              onClick={() => toggleProjectKeyReveal(entry.id)}
-                              className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
-                            >
-                              {revealedProjectKeys[entry.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                            </button>
-                            <button
-                              data-testid={`project-btn-copy-${entry.id}`}
-                              onClick={() => copyProjectKey(entry)}
-                              className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          {canRevealProjectKeys ? (
+                            <>
+                              <div className="flex items-center gap-1">
+                                <span data-testid={`project-key-value-${entry.id}`}>{revealedProjectKeys[entry.id] ? entry.fullKey : entry.maskedKey}</span>
+                                <button
+                                  data-testid={`project-btn-reveal-${entry.id}`}
+                                  onClick={() => toggleProjectKeyReveal(entry.id)}
+                                  className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
+                                >
+                                  {revealedProjectKeys[entry.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  data-testid={`project-btn-copy-${entry.id}`}
+                                  onClick={() => copyProjectKey(entry)}
+                                  className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="mt-1 text-[10px] text-zinc-500">
+                                {(entry.accessTokens || []).length} platform token{(entry.accessTokens || []).length === 1 ? "" : "s"} · {(entry.gatewayPolicy?.rateLimitPerMinute || 0)}/min
+                              </div>
+                              <div className="text-[10px] text-zinc-600">
+                                {entry.gatewayRoute || "/api/gateway/execute"} · budget ${Number(entry.gatewayPolicy?.remainingBudget || 0).toLocaleString()}
+                              </div>
+                            </>
+                          ) : (
+                            <div className="space-y-2">
+                              {(entry.accessTokens || []).map((token) => (
+                                <div key={token.id} className="rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                      <div className="text-[10px] text-zinc-500">{token.memberName}</div>
+                                      <div className="mt-1 flex items-center gap-1">
+                                        <span>{revealedProjectKeys[token.id] ? token.internalToken : token.maskedToken}</span>
+                                        <button
+                                          type="button"
+                                          onClick={() => setRevealedProjectKeys((current) => ({ ...current, [token.id]: !current[token.id] }))}
+                                          className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
+                                        >
+                                          {revealedProjectKeys[token.id] ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => copyProjectAccessToken(token)}
+                                          className="p-1 rounded hover:bg-white/5 text-zinc-500 hover:text-fuchsia-300"
+                                        >
+                                          <Copy className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                    <div className="text-right text-[10px] text-zinc-500">
+                                      <div>{token.remainingBudget.toFixed(0)} left</div>
+                                      <div>{token.rateLimitPerMinute}/min</div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                              {(entry.accessTokens || []).length === 0 && (
+                                <span className="text-[10px] text-zinc-500">No platform token issued yet.</span>
+                              )}
+                            </div>
+                          )}
                         </td>
                         <td className="py-3 px-2">
                           <div className="flex flex-wrap gap-1">
@@ -1043,6 +1124,9 @@ const ProjectDetail = () => {
                                 {member.name}
                               </span>
                             ))}
+                          </div>
+                          <div className="mt-2 text-[10px] text-zinc-500">
+                            {entry.gatewayRoute || "/api/gateway/execute"} · {formatGatewayList(entry.gatewayPolicy?.allowedNetworks)} · {formatGatewayList(entry.gatewayPolicy?.allowedDevices)}
                           </div>
                         </td>
                         <td className="py-3 px-2 text-[11px] text-zinc-500 tabular">{fmtDate(entry.createdAt)}</td>
@@ -1058,7 +1142,7 @@ const ProjectDetail = () => {
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 flex items-start gap-3 text-xs text-amber-200">
               <Shield className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
               <div>
-                Keys are masked. Only <span className="font-semibold">CFO</span> and <span className="font-semibold">IT</span> can reveal or copy full key values.
+                Provider keys are hidden from project teams. Use the issued platform token to call the gateway, and only CFO or IT can reveal or copy the stored provider key.
               </div>
             </div>
           )}
@@ -2243,7 +2327,13 @@ const typeChip = (type) =>
 
 const providerColor = {
   Anthropic: "#E619B8",
+  AWS: "#F59E0B",
+  Azure: "#0EA5E9",
+  GCP: "#3B82F6",
   OpenAI: "#10B981",
+  OpenRouter: "#F97316",
+  "AIML APIs": "#8B5CF6",
+  Moonshot: "#22C55E",
   Google: "#3B82F6",
   xAI: "#F59E0B",
   Amazon: "#F59E0B",
@@ -2252,14 +2342,39 @@ const providerColor = {
   Cohere: "#38BDF8",
 };
 
+const normalizeCommaList = (value = "", fallback = "") => {
+  const normalized = String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return normalized.length ? normalized.join(", ") : fallback;
+};
+
+const formatGatewayList = (values = []) => (
+  Array.isArray(values) && values.length ? values.join(", ") : "Any"
+);
+
+const todayPlusDays = (days = 45) => {
+  const next = new Date();
+  next.setDate(next.getDate() + days);
+  return next.toISOString().slice(0, 16);
+};
+
 const buildProvisionLines = (request) =>
   (request?.requestedModels?.length ? request.requestedModels : [{ id: `${request?.id}-fallback`, label: "Project access", provider: "Anthropic" }]).map((line) => ({
     id: line.id,
     label: line.label,
+    modelId: line.modelId || "",
     provider: line.provider || "Anthropic",
     env: request?.budgetType === "Production" ? "production" : "testing",
     fullKey: "",
     memberIds: (request?.members || []).map((member) => member.id),
+    rateLimitPerMinute: 120,
+    budgetCap: Number(line.amount || 0),
+    remainingBudget: Number(line.amount || 0),
+    allowedNetworks: "Corp VPN",
+    allowedDevices: "Managed laptop",
+    expiresAt: todayPlusDays(request?.budgetType === "Production" ? 90 : 45),
   }));
 
 const getProjectProvisioningStatusMeta = (status) => (
@@ -2466,11 +2581,11 @@ const ProjectProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) =
       className={`${open ? "fixed" : "hidden"} inset-0 z-50 bg-black/60 backdrop-blur-sm p-4 flex items-center justify-center`}
       data-testid="project-provision-keys-dialog"
     >
-      <div className="w-full max-w-[760px] max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#12121A] text-zinc-100 p-6">
+      <div className="w-full max-w-[900px] max-h-[92vh] overflow-y-auto rounded-2xl border border-white/10 bg-[#12121A] text-zinc-100 p-6">
         <div className="mb-4">
           <div className="font-display text-white text-xl font-semibold">Provision model keys</div>
           <div className="text-xs text-zinc-400 mt-1">
-            {request.projectName} · approved {new Date(request.approvedAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · allocate keys to project members.
+            {request.projectName} · approved {new Date(request.approvedAt || Date.now()).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · store the provider key once, then issue internal platform tokens to the selected members.
           </div>
         </div>
 
@@ -2503,6 +2618,54 @@ const ProjectProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) =
                 />
               </div>
 
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+                <ProjectProvisionField
+                  label="Rate / min"
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={line.rateLimitPerMinute}
+                  onChange={(value) => updateLine(line.id, "rateLimitPerMinute", value)}
+                />
+                <ProjectProvisionField
+                  label="Budget cap"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={line.budgetCap}
+                  onChange={(value) => updateLine(line.id, "budgetCap", value)}
+                />
+                <ProjectProvisionField
+                  label="Remaining budget"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={line.remainingBudget}
+                  onChange={(value) => updateLine(line.id, "remainingBudget", value)}
+                />
+                <ProjectProvisionField
+                  label="Expires at"
+                  type="datetime-local"
+                  value={line.expiresAt}
+                  onChange={(value) => updateLine(line.id, "expiresAt", value)}
+                />
+              </div>
+
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <ProjectProvisionField
+                  label="Allowed networks"
+                  value={line.allowedNetworks}
+                  placeholder="Corp VPN, HQ Office"
+                  onChange={(value) => updateLine(line.id, "allowedNetworks", normalizeCommaList(value, "Corp VPN"))}
+                />
+                <ProjectProvisionField
+                  label="Allowed devices"
+                  value={line.allowedDevices}
+                  placeholder="Managed laptop, Serverless app"
+                  onChange={(value) => updateLine(line.id, "allowedDevices", normalizeCommaList(value, "Managed laptop"))}
+                />
+              </div>
+
               <div className="mt-3">
                 <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Allocate to members</div>
                 <div className="flex flex-wrap gap-1.5">
@@ -2522,6 +2685,13 @@ const ProjectProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) =
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              <div className="mt-3 rounded-lg border border-cyan-500/20 bg-cyan-500/[0.06] px-3 py-2 text-[11px] text-cyan-100">
+                Gateway checks on every call: token status, token owner, user or app identity, allowed model, remaining budget, rate limit, expiration, and allowed network/device.
+                <div className="mt-1 text-cyan-200/80">
+                  Networks: {formatGatewayList(String(line.allowedNetworks || "").split(",").map((entry) => entry.trim()).filter(Boolean))} · Devices: {formatGatewayList(String(line.allowedDevices || "").split(",").map((entry) => entry.trim()).filter(Boolean))}
                 </div>
               </div>
             </div>
@@ -2551,6 +2721,17 @@ const ProjectProvisionKeysDialog = ({ open, onOpenChange, request, onSubmit }) =
     </div>
   );
 };
+
+const ProjectProvisionField = ({ label, onChange, ...props }) => (
+  <div>
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">{label}</div>
+    <input
+      {...props}
+      onChange={(event) => onChange(event.target.value)}
+      className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+    />
+  </div>
+);
 
 const PhaseMetric = ({ label, value, tone = "neutral" }) => {
   const tones = { emerald: "text-emerald-300", magenta: "text-fuchsia-300", warning: "text-amber-300", red: "text-red-300", neutral: "text-white" };
@@ -2701,10 +2882,34 @@ const getDeliverButtonLabel = (isRndProject, delivery, project) => {
   return delivery ? "Delivered" : "Deliver batch";
 };
 
+const formatWorkflowDateTime = (value) => {
+  const ts = new Date(value || "").getTime();
+  if (!Number.isFinite(ts) || ts <= 0) return "";
+  return new Date(ts).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
+
 const getWorkflowLockMessage = ({ project, workflowStage, latestBudgetReviewMeta, role }) => {
   const pendingType = normalizeBudgetType(project?.pendingBudgetSubmission?.budgetType || "");
   const pendingLabel = pendingType ? formatBudgetTabLabel(pendingType) : "Budget";
   const pendingStage = project?.pendingBudgetSubmission?.stage || latestBudgetReviewMeta?.label || "";
+  const rejection = project?.budgetRejection || null;
+  const retryLabel = formatWorkflowDateTime(project?.budgetRetryAvailableAt || rejection?.retryAt);
+  const rejectedAtLabel = formatWorkflowDateTime(rejection?.at);
+  const rejectionNote = String(rejection?.note || "").trim();
+
+  if (rejection) {
+    const byLabel = rejection?.by || rejection?.role || "approver";
+    if (retryLabel && new Date(project?.budgetRetryAvailableAt || rejection?.retryAt || "").getTime() > Date.now()) {
+      return `Budget was rejected by ${byLabel}. Raise a new budget after ${retryLabel}.${rejectionNote ? ` Note: ${rejectionNote}` : ""}`;
+    }
+    return `Budget was rejected${rejectedAtLabel ? ` on ${rejectedAtLabel}` : ""}. Raise a new budget to resume task logging.${rejectionNote ? ` Note: ${rejectionNote}` : ""}`;
+  }
 
   if (project?.pendingBudgetSubmission) {
     const approver = pendingStage === "pending-cfo" || pendingStage === "Pending · CFO" ? "CFO" : "CTO and CFO";

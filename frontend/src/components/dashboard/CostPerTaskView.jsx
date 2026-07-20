@@ -2,9 +2,12 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Cpu, Filter, Layers, ListChecks, TrendingDown, TrendingUp } from "lucide-react";
 import { useApp } from "../../context/AppContext";
-import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { fmtCurrency } from "../../lib/format";
-import { buildDeliverableCostMetrics, summarizeLoggedProject } from "../../lib/projectMetrics";
+import {
+  buildDeliverableCostMetrics,
+  summarizeItProjectActuals,
+  summarizeLoggedProject,
+} from "../../lib/projectMetrics";
 
 const getRequestedTaskCount = (project, review) => {
   const phaseTaskTotal = Array.isArray(project?.phases)
@@ -15,13 +18,35 @@ const getRequestedTaskCount = (project, review) => {
 };
 
 const CostPerTaskView = () => {
-  const { projects, taskLogs } = useApp();
+  const { projects, budgetReviews, taskLogs, itMonthlyActuals } = useApp();
   const [sort, setSort] = useState("variance");
+  const latestReviewByProject = useMemo(() => (
+    budgetReviews.reduce((map, review) => {
+      const current = map.get(review.projectId);
+      const reviewAt = new Date(
+        review?.cfoDecision?.at
+        || review?.ctoAt
+        || review?.submittedAt
+        || 0
+      ).getTime();
+      const currentAt = current
+        ? new Date(
+            current?.cfoDecision?.at
+            || current?.ctoAt
+            || current?.submittedAt
+            || 0
+          ).getTime()
+        : 0;
+      if (!current || reviewAt > currentAt) map.set(review.projectId, review);
+      return map;
+    }, new Map())
+  ), [budgetReviews]);
 
   const rows = useMemo(
     () => projects.map((project) => {
-      const review = BUDGET_REVIEWS.find((entry) => entry.projectId === project.id);
+      const review = latestReviewByProject.get(project.id);
       const usage = summarizeLoggedProject(project, taskLogs);
+      const itActualSummary = summarizeItProjectActuals(itMonthlyActuals[project.id] || {});
       const totalTaskCount = getRequestedTaskCount(project, review);
       const totalBudgetRequested = Number(
         project?.approvedBudget
@@ -33,13 +58,26 @@ const CostPerTaskView = () => {
         totalBudgetRequested,
         totalTaskCount,
         completedDeliverables: usage.loggedTasks,
-        totalAmountConsumed: Number(project?.cfoActualSpend || project?.actualSpend || 0),
+        totalAmountConsumed: Number(
+          itActualSummary.totalActual
+          || project?.cfoActualSpend
+          || project?.actualSpend
+          || 0
+        ),
       });
 
       return {
         projectId: project.id,
         projectName: project.name,
         projectType: project.type || "R&D",
+        latestItFile: itActualSummary.updatedAt
+          ? new Date(itActualSummary.updatedAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })
+          : "Not filed",
+        dailyActualRows: Number(itActualSummary.dailyActuals?.length || 0),
         totalTaskCount,
         totalBudgetRequested,
         ...metrics,
@@ -50,7 +88,7 @@ const CostPerTaskView = () => {
       || row.totalBudgetRequested > 0
       || row.actualCost > 0
     )),
-    [projects, taskLogs]
+    [projects, latestReviewByProject, taskLogs, itMonthlyActuals]
   );
 
   const filtered = useMemo(() => {
@@ -164,7 +202,9 @@ const CostPerTaskView = () => {
                       <Link to={`/projects/${row.projectId}`} className="text-white font-medium hover:text-fuchsia-300">
                         {row.projectName}
                       </Link>
-                      <div className="text-[10px] text-zinc-500 mt-0.5">{row.projectType}</div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5">
+                        {row.projectType} · IT rows {row.dailyActualRows} · {row.latestItFile}
+                      </div>
                     </td>
                     <td className="py-2.5 px-3 text-right tabular text-white font-semibold">
                       {fmtCurrency(row.totalBudgetRequested, { compact: false })}

@@ -119,13 +119,18 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
               const displayUtil = isCfo ? Number(p.cfoUtilization || p.utilization || 0) : logged.utilization;
               const displayRunRate = isCfo ? Number(p.cfoBurnRate || 0) : logged.runRate;
               const isOpen = !!expanded[p.id];
+              const isRejectedProject = Boolean(p.budgetRejection);
               const projectDetailTrack = getLaneBudgetTrack(p, budgets, logLane) || projectTracks[p.id]?.ordered?.[0]?.latest || null;
               const phaseGate = buildProjectPhaseGate(p, batchDeliveries);
               return (
                 <Fragment key={p.id}>
                   <tr
                     data-testid={`project-row-${p.id}`}
-                    className="border-b border-white/5 hover:bg-white/5 transition-colors group"
+                    className={`border-b border-white/5 transition-colors group ${
+                      isRejectedProject
+                        ? "bg-red-500/[0.03] opacity-60"
+                        : "hover:bg-white/5"
+                    }`}
                   >
                     <td className="py-3 pl-6 pr-2">
                       <button
@@ -146,6 +151,11 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
                             }`}>
                               {p.type}
                             </span>
+                            {isRejectedProject && (
+                              <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-red-500/10 border-red-500/30 text-red-300">
+                                Budget rejected
+                              </span>
+                            )}
                           </div>
                           <div className="text-[11px] text-zinc-500">{p.client}</div>
                         </div>

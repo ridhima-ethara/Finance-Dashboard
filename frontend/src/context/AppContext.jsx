@@ -9,6 +9,7 @@ import {
   DEMO_BUFFER_POOL,
   DEMO_BUFFERS,
   DEMO_CHANGE_REQUESTS,
+  DEMO_IT_PROVISIONING,
   DEMO_IT_MONTHLY_ACTUALS,
   DEMO_MODEL_KEYS,
   DEMO_TASK_LOGS,
@@ -128,16 +129,31 @@ const getTaskQuantityFromRow = (row = {}) => {
   return explicitQuantity > 0 ? explicitQuantity : 1;
 };
 
-const maskKey = (full) => `${full.slice(0, 7)}${"•".repeat(18)}${full.slice(-4)}`;
+const maskValue = (value = "", lead = 7, tail = 4, minimumMask = 8) => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const safeLead = Math.min(Math.max(lead, 1), Math.max(raw.length - 1, 1));
+  const safeTail = Math.min(Math.max(tail, 1), Math.max(raw.length - safeLead, 1));
+  return `${raw.slice(0, safeLead)}${"•".repeat(Math.max(minimumMask, raw.length - safeLead - safeTail))}${raw.slice(-safeTail)}`;
+};
+
+const maskKey = (full) => maskValue(full, 7, 4, 18);
+const maskInternalToken = (token) => maskValue(token, 12, 6, 12);
 const providerPrefix = {
   Anthropic: "ant",
+  AWS: "aws",
+  Azure: "azr",
   Amazon: "amz",
+  GCP: "gcp",
   Meta: "met",
   Mistral: "mis",
   Cohere: "coh",
   AI21: "ai21",
   "Stability AI": "stb",
   OpenAI: "oai",
+  OpenRouter: "orx",
+  "AIML APIs": "aim",
+  Moonshot: "kmi",
   Google: "gog",
   xAI: "xai",
   "Moonshot AI": "kmi",
@@ -149,6 +165,216 @@ const buildSyntheticKey = ({ provider, env, seed }) => {
   const mode = env === "production" ? "live" : "test";
   const safeSeed = String(seed || "demo").replace(/[^a-z0-9]/gi, "").slice(0, 14) || Math.random().toString(36).slice(2, 10);
   return `sk-${prefix}-${mode}-${safeSeed}${Math.random().toString(36).slice(2, 8)}`;
+};
+
+const buildInternalPlatformToken = ({ projectId = "project", memberId = "member", provider = "", modelLabel = "", lineId = "" }) => {
+  const scope = [projectId, memberId, lineId || provider || modelLabel]
+    .map((value) => String(value || "").replace(/[^a-z0-9]/gi, "").toLowerCase())
+    .filter(Boolean)
+    .join("")
+    .slice(0, 18) || "platform";
+  return `eth_${scope}_${Math.random().toString(36).slice(2, 14)}`;
+};
+
+const buildGatewayExpiry = (env = "testing") => new Date(
+  Date.now() + (env === "production" ? 90 : 45) * 24 * 60 * 60 * 1000
+).toISOString();
+
+const normalizeGatewayList = (value, fallback = []) => {
+  if (Array.isArray(value)) {
+    const normalized = value.map((entry) => String(entry || "").trim()).filter(Boolean);
+    return normalized.length ? normalized : [...fallback];
+  }
+  const normalized = String(value || "")
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  return normalized.length ? normalized : [...fallback];
+};
+
+const normalizeProvisionMember = (member = {}, index = 0, projectId = "project") => {
+  const email = member.email || `${String(member.name || `member-${index + 1}`).toLowerCase().replace(/\s+/g, ".")}@ethara.ai`;
+  const name = member.name || resolveMemberNameFromEmail(email);
+  return {
+    id: member.id || `${projectId}-member-${index + 1}`,
+    name,
+    role: member.role || "Member",
+    email,
+  };
+};
+
+const normalizeAccessTokenRecord = (token = {}, context = {}) => {
+  const member = normalizeProvisionMember(context.member || {
+    id: token.memberId,
+    name: token.memberName || token.name,
+    role: token.memberRole || token.role,
+    email: token.memberEmail || token.email,
+  }, context.index || 0, context.projectId || "project");
+  const budgetCap = Number(token.budgetCap ?? context.budgetCap ?? 0);
+  const remainingBudget = Number(token.remainingBudget ?? Math.max(0, budgetCap - Number(token.spentBudget || 0)));
+  const internalToken = String(token.internalToken || buildInternalPlatformToken({
+    projectId: context.projectId,
+    memberId: member.id,
+    provider: context.provider,
+    modelLabel: context.modelLabel,
+    lineId: context.lineId,
+  })).trim();
+  return {
+    id: token.id || `tok-${member.id}-${String(context.lineId || context.modelId || context.modelLabel || "access").replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 12)}`,
+    memberId: member.id,
+    memberName: member.name,
+    memberEmail: member.email,
+    memberRole: member.role,
+    internalToken,
+    maskedToken: token.maskedToken || maskInternalToken(internalToken),
+    status: token.status || "active",
+    env: token.env || context.env || "testing",
+    gatewayRoute: token.gatewayRoute || context.gatewayRoute || "/api/gateway/execute",
+    allowedModelId: token.allowedModelId || context.modelId || "",
+    allowedModelLabel: token.allowedModelLabel || context.modelLabel || "Project access",
+    provider: token.provider || context.provider || "",
+    issuedAt: token.issuedAt || context.issuedAt || new Date().toISOString(),
+    expiresAt: token.expiresAt || context.expiresAt || buildGatewayExpiry(context.env || token.env || "testing"),
+    lastUsed: token.lastUsed || null,
+    rateLimitPerMinute: Number(token.rateLimitPerMinute ?? context.rateLimitPerMinute ?? 120),
+    budgetCap,
+    remainingBudget,
+    spentBudget: Number(token.spentBudget ?? Math.max(0, budgetCap - remainingBudget)),
+    allowedNetworks: normalizeGatewayList(token.allowedNetworks, context.allowedNetworks || ["Corp VPN"]),
+    allowedDevices: normalizeGatewayList(token.allowedDevices, context.allowedDevices || ["Managed laptop"]),
+    usage: {
+      requests: Number(token.usage?.requests ?? token.requestCount ?? 0),
+      totalCost: Number(token.usage?.totalCost ?? token.totalCost ?? 0),
+      inputTokens: Number(token.usage?.inputTokens ?? 0),
+      outputTokens: Number(token.usage?.outputTokens ?? 0),
+    },
+  };
+};
+
+const normalizeGatewayPolicy = (policy = {}, context = {}) => ({
+  allowedModelId: policy.allowedModelId || context.modelId || "",
+  allowedModelLabel: policy.allowedModelLabel || context.modelLabel || "Project access",
+  provider: policy.provider || context.provider || "",
+  rateLimitPerMinute: Number(policy.rateLimitPerMinute ?? context.rateLimitPerMinute ?? 120),
+  budgetCap: Number(policy.budgetCap ?? context.budgetCap ?? 0),
+  remainingBudget: Number(policy.remainingBudget ?? context.remainingBudget ?? policy.budgetCap ?? context.budgetCap ?? 0),
+  expiresAt: policy.expiresAt || context.expiresAt || buildGatewayExpiry(context.env || "testing"),
+  allowedNetworks: normalizeGatewayList(policy.allowedNetworks, context.allowedNetworks || ["Corp VPN"]),
+  allowedDevices: normalizeGatewayList(policy.allowedDevices, context.allowedDevices || ["Managed laptop"]),
+});
+
+const normalizeItProvisioningLine = (line = {}, request = {}, index = 0) => {
+  const env = line.env || (request?.budgetType === "Production" ? "production" : "testing");
+  const budgetCap = Number(line.budgetCap ?? line.amount ?? 0);
+  return {
+    id: line.id || `${request?.id || "it-request"}-line-${index + 1}`,
+    label: line.label || line.model || line.optionLabel || `Provision line ${index + 1}`,
+    modelId: line.modelId || "",
+    provider: line.provider || "Anthropic",
+    env,
+    fullKey: String(line.fullKey || ""),
+    maskedKey: line.maskedKey || (line.fullKey ? maskKey(String(line.fullKey).trim()) : ""),
+    memberIds: Array.isArray(line.memberIds) && line.memberIds.length
+      ? [...line.memberIds]
+      : (request.members || []).map((member) => member.id),
+    rateLimitPerMinute: Number(line.rateLimitPerMinute ?? 120),
+    budgetCap,
+    remainingBudget: Number(line.remainingBudget ?? budgetCap),
+    allowedNetworks: normalizeGatewayList(line.allowedNetworks, ["Corp VPN"]),
+    allowedDevices: normalizeGatewayList(line.allowedDevices, ["Managed laptop"]),
+    expiresAt: line.expiresAt || buildGatewayExpiry(env),
+    issuedTokenCount: Number(line.issuedTokenCount ?? line.memberIds?.length ?? 0),
+  };
+};
+
+const normalizeItProvisioningRequest = (request = {}) => {
+  const projectId = request.projectId || request.project || "project";
+  const members = (Array.isArray(request.members) ? request.members : []).map((member, index) => (
+    normalizeProvisionMember(member, index, projectId)
+  ));
+  const normalizeSummaryLine = (line = {}, index = 0) => ({
+    id: line.id || `${projectId}-request-line-${index + 1}`,
+    modelId: line.modelId || "",
+    label: line.label || line.model || line.optionLabel || `Line ${index + 1}`,
+    provider: line.provider || "Anthropic",
+    amount: Number(line.amount || line.estCost || 0),
+    usageTag: line.usageTag || "",
+  });
+  return {
+    ...request,
+    projectId,
+    projectName: request.projectName || projectId,
+    approvedAmount: Number(request.approvedAmount || 0),
+    budgetType: request.budgetType || "Production",
+    gatewayRoute: request.gatewayRoute || "/api/gateway/execute",
+    members,
+    requestedModels: (Array.isArray(request.requestedModels) ? request.requestedModels : []).map(normalizeSummaryLine),
+    requestedInfra: (Array.isArray(request.requestedInfra) ? request.requestedInfra : []).map(normalizeSummaryLine),
+    requestedSubs: (Array.isArray(request.requestedSubs) ? request.requestedSubs : []).map(normalizeSummaryLine),
+    lines: (Array.isArray(request.lines) ? request.lines : []).map((line, index) => normalizeItProvisioningLine(line, { ...request, members }, index)),
+  };
+};
+
+const normalizeModelKeyRecord = (record = {}) => {
+  const projectId = record.project || record.projectId || "project";
+  const provider = record.provider || "Anthropic";
+  const modelLabel = record.model || record.label || "Project access";
+  const env = record.env || "testing";
+  const members = (Array.isArray(record.members) ? record.members : []).map((member, index) => (
+    normalizeProvisionMember(member, index, projectId)
+  ));
+  const gatewayPolicy = normalizeGatewayPolicy(record.gatewayPolicy || {}, {
+    modelId: record.modelId || "",
+    modelLabel,
+    provider,
+    env,
+    budgetCap: Number(record.gatewayPolicy?.budgetCap ?? 0),
+    remainingBudget: Number(record.gatewayPolicy?.remainingBudget ?? record.gatewayPolicy?.budgetCap ?? 0),
+    allowedNetworks: ["Corp VPN"],
+    allowedDevices: ["Managed laptop"],
+  });
+  const fallbackBudgetPerMember = members.length ? gatewayPolicy.budgetCap / members.length : gatewayPolicy.budgetCap;
+  const fallbackRemainingPerMember = members.length ? gatewayPolicy.remainingBudget / members.length : gatewayPolicy.remainingBudget;
+  const accessTokens = (Array.isArray(record.accessTokens) && record.accessTokens.length
+    ? record.accessTokens
+    : members.map((member) => ({ memberId: member.id, memberName: member.name, memberEmail: member.email, memberRole: member.role })))
+    .map((token, index) => normalizeAccessTokenRecord(token, {
+      member: members[index] || members.find((member) => member.id === token.memberId),
+      index,
+      projectId,
+      provider,
+      modelId: record.modelId || "",
+      modelLabel,
+      env,
+      lineId: record.id,
+      gatewayRoute: record.gatewayRoute || "/api/gateway/execute",
+      rateLimitPerMinute: gatewayPolicy.rateLimitPerMinute,
+      budgetCap: fallbackBudgetPerMember,
+      remainingBudget: fallbackRemainingPerMember,
+      allowedNetworks: gatewayPolicy.allowedNetworks,
+      allowedDevices: gatewayPolicy.allowedDevices,
+      expiresAt: gatewayPolicy.expiresAt,
+      issuedAt: record.createdAt,
+    }));
+  const fullKey = String(record.fullKey || "");
+  return {
+    ...record,
+    project: projectId,
+    projectName: record.projectName || projectId,
+    provider,
+    model: modelLabel,
+    env,
+    fullKey,
+    maskedKey: record.maskedKey || (fullKey ? maskKey(fullKey) : ""),
+    type: record.type || "R&D",
+    tags: Array.isArray(record.tags) ? record.tags : [],
+    lastUsed: record.lastUsed || record.createdAt || null,
+    usage: Number(record.usage || 0),
+    gatewayRoute: record.gatewayRoute || "/api/gateway/execute",
+    gatewayPolicy,
+    members,
+    accessTokens,
+  };
 };
 
 const resolveMemberNameFromEmail = (email = "") => {
@@ -509,6 +735,8 @@ const snapshotProjectBudget = (project) => ({
   itProvisioningStatus: project?.itProvisioningStatus || null,
 });
 
+const BUDGET_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
+
 const buildTimelineLabel = (phases = []) => {
   const starts = phases.map((phase) => phase.start).filter(Boolean).sort();
   const ends = phases.map((phase) => phase.end).filter(Boolean).sort();
@@ -684,6 +912,8 @@ const buildProjectBudgetStateFromReview = ({ projectEntry, review, approvedAmoun
     workflowStage: workflowMeta.stage,
     readyForTpmBudget: workflowMeta.readyForTpmBudget,
     pendingBudgetSubmission: null,
+    budgetRejection: null,
+    budgetRetryAvailableAt: null,
     promotedToProductionAt: workflowMeta.type === "Production"
       ? (review?.cfoDecision?.at || review?.submittedAt || new Date().toISOString())
       : projectEntry.promotedToProductionAt || null,
@@ -711,6 +941,33 @@ const buildProjectBaselineFromSnapshot = (projectEntry, snapshot = null) => {
     pendingBudgetSubmission: snapshot.pendingBudgetSubmission ? { ...snapshot.pendingBudgetSubmission } : null,
     promotedToProductionAt: snapshot.promotedToProductionAt || null,
     itProvisioningStatus: snapshot.itProvisioningStatus || null,
+  };
+};
+
+const buildBudgetRejectionState = ({
+  actorName = "Approver",
+  actorRole = "Approver",
+  comment = "",
+  at = new Date().toISOString(),
+} = {}) => {
+  const rejectedAtTs = new Date(at).getTime();
+  const retryAtTs = Number.isFinite(rejectedAtTs)
+    ? rejectedAtTs + BUDGET_RETRY_DELAY_MS
+    : Date.now() + BUDGET_RETRY_DELAY_MS;
+  const retryAt = new Date(retryAtTs).toISOString();
+
+  return {
+    budgetRejection: {
+      at,
+      by: actorName,
+      role: actorRole,
+      note: String(comment || "").trim(),
+      retryAt,
+    },
+    budgetRetryAvailableAt: retryAt,
+    pendingBudgetSubmission: null,
+    workflowStage: "budget-rejected",
+    status: "Budget rejected",
   };
 };
 
@@ -752,8 +1009,14 @@ export const AppProvider = ({ children }) => {
   const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, DEMO_BUDGET_REVIEWS).map(normalizeBudgetReviewRecord));
   const [changeRequests, setChangeRequests] = useState(() => readJSON(CHANGE_REQUESTS_KEY, DEMO_CHANGE_REQUESTS).map(normalizeChangeRequest));
   const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, DEMO_TEAM_REMOVALS));
-  const [modelKeyRecords, setModelKeyRecords] = useState(() => readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS));
-  const [itProvisioningRequests, setItProvisioningRequests] = useState(() => readJSON(IT_PROVISIONING_KEY, []));
+  const [modelKeyRecords, setModelKeyRecords] = useState(() => (
+    (Array.isArray(readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS)) ? readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS) : DEMO_MODEL_KEYS)
+      .map(normalizeModelKeyRecord)
+  ));
+  const [itProvisioningRequests, setItProvisioningRequests] = useState(() => (
+    (Array.isArray(readJSON(IT_PROVISIONING_KEY, DEMO_IT_PROVISIONING)) ? readJSON(IT_PROVISIONING_KEY, DEMO_IT_PROVISIONING) : DEMO_IT_PROVISIONING)
+      .map(normalizeItProvisioningRequest)
+  ));
   const [itMonthlyActuals, setItMonthlyActuals] = useState(() => readJSON(IT_MONTHLY_ACTUALS_KEY, DEMO_IT_MONTHLY_ACTUALS));
   const [hasHydratedRemote, setHasHydratedRemote] = useState(false);
   const remoteApiBaseRef = useRef("");
@@ -772,8 +1035,8 @@ export const AppProvider = ({ children }) => {
     setBudgetReviews((snapshot.budgetReviews ?? DEMO_BUDGET_REVIEWS).map(normalizeBudgetReviewRecord));
     setChangeRequests((snapshot.changeRequests ?? DEMO_CHANGE_REQUESTS).map(normalizeChangeRequest));
     setTeamRemovals(snapshot.teamRemovals ?? DEMO_TEAM_REMOVALS);
-    setModelKeyRecords(snapshot.modelKeyRecords ?? DEMO_MODEL_KEYS);
-    setItProvisioningRequests(snapshot.itProvisioningRequests ?? []);
+    setModelKeyRecords((snapshot.modelKeyRecords ?? DEMO_MODEL_KEYS).map(normalizeModelKeyRecord));
+    setItProvisioningRequests((snapshot.itProvisioningRequests ?? DEMO_IT_PROVISIONING).map(normalizeItProvisioningRequest));
     setItMonthlyActuals(snapshot.itMonthlyActuals ?? DEMO_IT_MONTHLY_ACTUALS);
   };
 
@@ -792,7 +1055,7 @@ export const AppProvider = ({ children }) => {
       changeRequests: readJSON(CHANGE_REQUESTS_KEY, DEMO_CHANGE_REQUESTS),
       teamRemovals: readJSON(TEAM_REMOVALS_KEY, DEMO_TEAM_REMOVALS),
       modelKeyRecords: readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS),
-      itProvisioningRequests: readJSON(IT_PROVISIONING_KEY, []),
+      itProvisioningRequests: readJSON(IT_PROVISIONING_KEY, DEMO_IT_PROVISIONING),
       itMonthlyActuals: readJSON(IT_MONTHLY_ACTUALS_KEY, DEMO_IT_MONTHLY_ACTUALS),
     });
 
@@ -2109,6 +2372,8 @@ export const AppProvider = ({ children }) => {
         status: pendingMeta.status,
         workflowStage: pendingMeta.stage,
         readyForTpmBudget: false,
+        budgetRejection: null,
+        budgetRetryAvailableAt: null,
         pendingBudgetSubmission: {
           reviewId,
           budgetType: normalizedBudgetType,
@@ -2376,6 +2641,8 @@ export const AppProvider = ({ children }) => {
     upsertProjectOverride(projectId, (projectEntry) => ({
       ...projectEntry,
       status: "Awaiting CFO approval",
+      budgetRejection: null,
+      budgetRetryAvailableAt: null,
       pendingBudgetSubmission: projectEntry.pendingBudgetSubmission
         ? {
             ...projectEntry.pendingBudgetSubmission,
@@ -2417,21 +2684,25 @@ export const AppProvider = ({ children }) => {
         ? { ...budget, status: "rejected-by-cto", ctoAt: now, ctoComment }
         : budget
     )));
-    if (currentReview?.baselineSnapshot) {
-      upsertProjectOverride(projectId, (projectEntry) => ({
-        ...buildProjectBaselineFromSnapshot(projectEntry, currentReview.baselineSnapshot),
-        auditLog: [
-          {
-            id: `a-${projectId}-${Date.now().toString(36)}-cto-reject`,
-            ts: now,
-            actor: `${user?.name || "CTO"} · CTO`,
-            action: "Budget rejected by CTO",
-            detail: ctoComment || "Rejected before CFO review",
-          },
-          ...(projectEntry.auditLog || []),
-        ],
-      }));
-    }
+    upsertProjectOverride(projectId, (projectEntry) => ({
+      ...buildProjectBaselineFromSnapshot(projectEntry, currentReview?.baselineSnapshot || null),
+      ...buildBudgetRejectionState({
+        actorName: user?.name || "CTO",
+        actorRole: user?.role || "CTO",
+        comment: ctoComment,
+        at: now,
+      }),
+      auditLog: [
+        {
+          id: `a-${projectId}-${Date.now().toString(36)}-cto-reject`,
+          ts: now,
+          actor: `${user?.name || "CTO"} · CTO`,
+          action: "Budget rejected by CTO",
+          detail: ctoComment || "Rejected before CFO review",
+        },
+        ...(projectEntry.auditLog || []),
+      ],
+    }));
   };
 
   // Return budget to TPM/R&D with comments — TPM sees it as an editable, resubmittable draft.
@@ -2466,21 +2737,21 @@ export const AppProvider = ({ children }) => {
         ? { ...budget, status: "returned-to-tpm", ctoAt: now, ctoComment }
         : budget
     )));
-    if (currentReview?.baselineSnapshot) {
-      upsertProjectOverride(projectId, (projectEntry) => ({
-        ...buildProjectBaselineFromSnapshot(projectEntry, currentReview.baselineSnapshot),
-        auditLog: [
-          {
-            id: `a-${projectId}-${Date.now().toString(36)}-cto-return`,
-            ts: now,
-            actor: `${user?.name || "CTO"} · CTO`,
-            action: `Budget returned to ${returnTo || "TPM"}`,
-            detail: ctoComment || "Returned for edits",
-          },
-          ...(projectEntry.auditLog || []),
-        ],
-      }));
-    }
+    upsertProjectOverride(projectId, (projectEntry) => ({
+      ...buildProjectBaselineFromSnapshot(projectEntry, currentReview?.baselineSnapshot || null),
+      budgetRejection: null,
+      budgetRetryAvailableAt: null,
+      auditLog: [
+        {
+          id: `a-${projectId}-${Date.now().toString(36)}-cto-return`,
+          ts: now,
+          actor: `${user?.name || "CTO"} · CTO`,
+          action: `Budget returned to ${returnTo || "TPM"}`,
+          detail: ctoComment || "Returned for edits",
+        },
+        ...(projectEntry.auditLog || []),
+      ],
+    }));
   };
 
   const cfoDecideBudgetReview = (reviewId, { decision, amount, comment, reviewSeed, modifiedItems }) => {
@@ -2618,22 +2889,31 @@ export const AppProvider = ({ children }) => {
     }
 
     setItProvisioningRequests((arr) => arr.filter((request) => request.sourceReviewId !== reviewId));
-    if (baseReview.baselineSnapshot) {
-      upsertProjectOverride(baseReview.projectId, (projectEntry) => ({
-        ...buildProjectBaselineFromSnapshot(projectEntry, baseReview.baselineSnapshot),
-        itProvisioningStatus: null,
-        auditLog: [
-          {
-            id: `a-${baseReview.projectId}-${Date.now().toString(36)}-cfo-reset`,
-            ts: at,
-            actor: `${user?.name || "CFO"} · CFO`,
-            action: decision === "return" ? "Budget returned for changes" : "Budget rejected by CFO",
-            detail: comment || (decision === "return" ? "Returned to CTO for revision" : "Rejected"),
-          },
-          ...(projectEntry.auditLog || []),
-        ],
-      }));
-    }
+    upsertProjectOverride(baseReview.projectId, (projectEntry) => ({
+      ...buildProjectBaselineFromSnapshot(projectEntry, baseReview.baselineSnapshot || null),
+      itProvisioningStatus: null,
+      ...(decision === "reject"
+        ? buildBudgetRejectionState({
+            actorName: user?.name || "CFO",
+            actorRole: user?.role || "CFO",
+            comment,
+            at,
+          })
+        : {
+            budgetRejection: null,
+            budgetRetryAvailableAt: null,
+          }),
+      auditLog: [
+        {
+          id: `a-${baseReview.projectId}-${Date.now().toString(36)}-cfo-reset`,
+          ts: at,
+          actor: `${user?.name || "CFO"} · CFO`,
+          action: decision === "return" ? "Budget returned for changes" : "Budget rejected by CFO",
+          detail: comment || (decision === "return" ? "Returned to CTO for revision" : "Rejected"),
+        },
+        ...(projectEntry.auditLog || []),
+      ],
+    }));
 
     return nextReview;
   };
@@ -2902,14 +3182,42 @@ export const AppProvider = ({ children }) => {
       .map((line, index) => {
         const teamMembers = request.members.filter((member) => (line.memberIds || []).includes(member.id));
         const fullKey = String(line.fullKey).trim();
-        return {
+        const env = line.env || "testing";
+        const budgetCap = Number(line.budgetCap ?? line.amount ?? 0);
+        const remainingBudget = Number(line.remainingBudget ?? budgetCap);
+        const allowedNetworks = normalizeGatewayList(line.allowedNetworks, ["Corp VPN"]);
+        const allowedDevices = normalizeGatewayList(line.allowedDevices, ["Managed laptop"]);
+        const expiresAt = line.expiresAt || buildGatewayExpiry(env);
+        const rateLimitPerMinute = Number(line.rateLimitPerMinute ?? 120);
+        const perMemberBudgetCap = teamMembers.length ? budgetCap / teamMembers.length : budgetCap;
+        const perMemberRemainingBudget = teamMembers.length ? remainingBudget / teamMembers.length : remainingBudget;
+        const accessTokens = teamMembers.map((member, memberIndex) => normalizeAccessTokenRecord({}, {
+          member,
+          index: memberIndex,
+          projectId: request.projectId,
+          provider: line.provider || "Anthropic",
+          modelId: line.modelId || "",
+          modelLabel: line.label,
+          env,
+          lineId: line.id || `${request.id}-line-${index + 1}`,
+          gatewayRoute: request.gatewayRoute || "/api/gateway/execute",
+          rateLimitPerMinute,
+          budgetCap: perMemberBudgetCap,
+          remainingBudget: perMemberRemainingBudget,
+          allowedNetworks,
+          allowedDevices,
+          expiresAt,
+          issuedAt: at,
+        }));
+        return normalizeModelKeyRecord({
           id: `k-${request.projectId}-${Date.now().toString(36)}-${index + 1}`,
           project: request.projectId,
           projectName: request.projectName,
           provider: line.provider || "Anthropic",
           model: line.label,
+          modelId: line.modelId || "",
           type: request.budgetType === "Production" ? "Production" : "R&D",
-          env: line.env || "testing",
+          env,
           fullKey,
           maskedKey: maskKey(fullKey),
           tags: [request.budgetType.toLowerCase(), line.env || "testing", "it-provisioned"],
@@ -2925,23 +3233,60 @@ export const AppProvider = ({ children }) => {
             email: member.email,
           })),
           sourceReviewId: request.sourceReviewId,
-        };
+          gatewayRoute: request.gatewayRoute || "/api/gateway/execute",
+          gatewayPolicy: {
+            allowedModelId: line.modelId || "",
+            allowedModelLabel: line.label,
+            provider: line.provider || "Anthropic",
+            rateLimitPerMinute,
+            budgetCap,
+            remainingBudget,
+            expiresAt,
+            allowedNetworks,
+            allowedDevices,
+          },
+          accessTokens,
+        });
       });
 
-    setModelKeyRecords((arr) => [...createdKeys, ...arr]);
+    setModelKeyRecords((arr) => {
+      const retained = arr.filter((existing) => !createdKeys.some((created) => (
+        created.project === existing.project
+        && created.provider === existing.provider
+        && created.model === existing.model
+        && created.env === existing.env
+      )));
+      return [...createdKeys, ...retained].map(normalizeModelKeyRecord);
+    });
     setItProvisioningRequests((arr) => arr.map((entry) => (
       entry.id === requestId
-        ? {
+        ? normalizeItProvisioningRequest({
             ...entry,
             status: "completed",
             provisionedAt: at,
             provisionedBy: user?.name || "IT",
             note,
             lines: lines.map((line) => ({
-              ...line,
+              id: line.id,
+              label: line.label,
+              modelId: line.modelId || "",
+              provider: line.provider || "Anthropic",
+              env: line.env || "testing",
               maskedKey: line.fullKey ? maskKey(String(line.fullKey).trim()) : "",
+              memberIds: Array.isArray(line.memberIds) ? [...line.memberIds] : [],
+              rateLimitPerMinute: Number(line.rateLimitPerMinute ?? 120),
+              budgetCap: Number(line.budgetCap ?? line.amount ?? 0),
+              remainingBudget: Number(line.remainingBudget ?? line.budgetCap ?? line.amount ?? 0),
+              allowedNetworks: normalizeGatewayList(line.allowedNetworks, ["Corp VPN"]),
+              allowedDevices: normalizeGatewayList(line.allowedDevices, ["Managed laptop"]),
+              expiresAt: line.expiresAt || buildGatewayExpiry(line.env || "testing"),
+              issuedTokenCount: createdKeys.find((created) => (
+                created.provider === (line.provider || "Anthropic")
+                && created.model === line.label
+                && created.env === (line.env || "testing")
+              ))?.accessTokens?.length || 0,
             })),
-          }
+          })
         : entry
     )));
     if (project) {
@@ -2954,7 +3299,7 @@ export const AppProvider = ({ children }) => {
             ts: at,
             actor: `${user?.name || "IT"} · ${user?.role || "IT"}`,
             action: "Model keys provisioned",
-            detail: `${createdKeys.length} key${createdKeys.length === 1 ? "" : "s"} provisioned${note ? ` · ${note}` : ""}`,
+            detail: `${createdKeys.length} key${createdKeys.length === 1 ? "" : "s"} provisioned · ${createdKeys.reduce((sum, entry) => sum + (entry.accessTokens?.length || 0), 0)} internal token${createdKeys.reduce((sum, entry) => sum + (entry.accessTokens?.length || 0), 0) === 1 ? "" : "s"} issued${note ? ` · ${note}` : ""}`,
           },
           ...(projectEntry.auditLog || []),
         ],

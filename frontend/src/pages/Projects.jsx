@@ -120,6 +120,7 @@ const Projects = () => {
           const latestReview = latestBudgetReviewByProject.get(p.id);
           const budgetState = getProjectBudgetCardState(p, latestReview);
           const isLocked = Boolean(p.pendingBudgetSubmission);
+          const isRejectedProject = Boolean(p.budgetRejection);
           const displayActual = isCFO ? Number(p.cfoActualSpend || p.actualSpend || 0) : Number(p.actualSpend || 0);
           const displayVariance = isCFO ? Number(p.cfoVariance || p.variance || 0) : Number(p.variance || 0);
           const displayUtilization = isCFO ? Number(p.cfoUtilization || p.utilization || 0) : Number(p.utilization || 0);
@@ -129,7 +130,13 @@ const Projects = () => {
               to={`/projects/${p.id}`}
               key={p.id}
               data-testid={`project-card-${p.id}`}
-              className={`group bg-[#12121A] rounded-2xl border border-white/10 p-5 card-hover ${isLocked ? "opacity-70" : ""}`}
+              className={`group bg-[#12121A] rounded-2xl border p-5 card-hover ${
+                isRejectedProject
+                  ? "opacity-60 border-red-500/20 bg-white/[0.01]"
+                  : isLocked
+                    ? "opacity-70 border-white/10"
+                    : "border-white/10"
+              }`}
             >
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
@@ -148,6 +155,11 @@ const Projects = () => {
                     {isLocked && (
                       <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-amber-500/10 border-amber-500/30 text-amber-300">
                         Pending approval
+                      </span>
+                    )}
+                    {isRejectedProject && (
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-red-500/10 border-red-500/30 text-red-300">
+                        Budget rejected
                       </span>
                     )}
                   </div>
@@ -214,6 +226,16 @@ const Projects = () => {
 };
 
 const getProjectBudgetCardState = (project, review) => {
+  if (project?.budgetRejection && !review) {
+    return {
+      label: "Rejected",
+      amount: null,
+      valueClass: "text-zinc-500",
+      labelClass: "text-red-300",
+      Icon: XCircle,
+    };
+  }
+
   if (!review) {
     return Number(project.approvedBudget || 0) > 0
       ? { label: "Approved", amount: Number(project.approvedBudget || 0), valueClass: "text-white", labelClass: "text-zinc-500" }
