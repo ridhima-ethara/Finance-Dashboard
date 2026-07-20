@@ -375,6 +375,7 @@ export const CategoryDonut = () => {
   }, [projects]);
 
   const totalPct = breakdown.reduce((sum, row) => sum + row.value, 0);
+  const totalActual = breakdown.reduce((sum, row) => sum + Number(row.actual || 0), 0);
 
   return (
     <CardShell
@@ -382,8 +383,8 @@ export const CategoryDonut = () => {
       title="Expense breakdown"
       subtitle="Portfolio actuals by category"
     >
-      <div className="flex items-center gap-4">
-        <div className="w-[180px] h-[180px] relative">
+      <div className="flex flex-col lg:flex-row lg:items-center gap-5 h-full">
+        <div className="w-[180px] h-[180px] relative mx-auto lg:mx-0">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie
@@ -416,14 +417,18 @@ export const CategoryDonut = () => {
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Actual mix</div>
             <div className="font-display text-xl font-semibold text-white">{totalPct}%</div>
+            <div className="text-[11px] text-zinc-500 mt-1">{fmtCurrency(totalActual, { compact: false })}</div>
           </div>
         </div>
-        <div className="flex-1 grid grid-cols-1 gap-1.5">
+        <div className="flex-1 grid grid-cols-1 gap-2">
           {breakdown.map((row) => (
-            <div key={row.name} className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-sm" style={{ background: row.color }} />
-                <span className="text-zinc-200">{row.name}</span>
+            <div key={row.name} className="rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5 flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: row.color }} />
+                <div>
+                  <div className="text-zinc-200 font-medium">{row.name}</div>
+                  <div className="text-[11px] text-zinc-500">{row.value}% of actuals</div>
+                </div>
               </div>
               <span className="font-semibold text-white tabular">{fmtCurrency(row.actual, { compact: false })}</span>
             </div>
@@ -437,11 +442,14 @@ export const CategoryDonut = () => {
 export const UtilizationBars = () => {
   const { projects } = useApp();
   const data = useMemo(
-    () => projects.map((project) => ({
-      name: project.name,
-      util: Number(project.cfoUtilization || project.utilization || 0),
-      buffer: Number(project.buffer || 10),
-    })),
+    () => projects
+      .map((project) => ({
+        name: project.name,
+        util: Number(project.cfoUtilization || project.utilization || 0),
+        buffer: Number(project.buffer || 10),
+      }))
+      .sort((left, right) => right.util - left.util)
+      .slice(0, 6),
     [projects]
   );
 
@@ -449,7 +457,7 @@ export const UtilizationBars = () => {
     <CardShell
       testid="chart-utilization"
       title="Budget utilization"
-      subtitle="Per project · CFO actuals with project buffer guardrails"
+      subtitle="Top utilization projects · CFO actuals with buffer guardrails"
     >
       <div className="space-y-3">
         {data.map((row) => {

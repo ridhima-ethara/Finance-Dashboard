@@ -337,14 +337,16 @@ const Dashboard = () => {
       </div>
 
       {/* Charts grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <BudgetActualChart />
-        <ModelExpensesChart />
-        <InfraStackedChart />
-        <SubscriptionsPanel />
-        <MonthlySpendChart />
-        <MonthEndActualChart />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        <div className="xl:col-span-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <BudgetActualChart />
+          <ModelExpensesChart />
+          <InfraStackedChart />
+          <SubscriptionsPanel />
+          <MonthlySpendChart />
+          <MonthEndActualChart />
+        </div>
+        <div className="xl:col-span-4 grid grid-cols-1 gap-4 auto-rows-fr">
           <CategoryDonut />
           <UtilizationBars />
         </div>

@@ -6,10 +6,28 @@
       "demo-prod-lattice": 10
     },
     "bufferPool": {
-      "total": 12000,
-      "available": 7100,
+      "total": 11592,
+      "available": 6692,
       "policyPct": 10,
       "history": [
+        {
+          "id": "bh-mrrtmav0",
+          "date": "2026-07-19T13:17:49.308Z",
+          "project": "Pool",
+          "action": "Pool reduced",
+          "amount": 1008,
+          "by": "CFO Admin",
+          "reason": "8% action"
+        },
+        {
+          "id": "bh-mrrtm06i",
+          "date": "2026-07-19T13:17:35.466Z",
+          "project": "Pool",
+          "action": "Pool increased",
+          "amount": 600,
+          "by": "CFO Admin",
+          "reason": "5% action"
+        },
         {
           "id": "buffer-history-1",
           "date": "2026-06-24T11:00:00.000Z",
@@ -2710,5 +2728,5 @@
       }
     }
   },
-  "app_state_updated_at": "2026-07-16T12:57:49.804033+00:00"
+  "app_state_updated_at": "2026-07-19T13:17:49.829150+00:00"
 }

@@ -94,6 +94,17 @@ const getInclusiveDayCount = (start = "", end = "") => {
   return Math.floor((endTs - startTs) / MS_PER_DAY) + 1;
 };
 const formatBudgetTypeOptionLabel = (value = "") => (value === "RnD" ? "Sample" : value);
+const formatRetryDateTime = (value = "") => {
+  const ts = new Date(value || "").getTime();
+  if (!Number.isFinite(ts) || ts <= 0) return "";
+  return new Date(ts).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+};
 
 // Seed cost/task from the model catalog (~4K in + 1K out per trajectory) — user can override.
 const seedCostPerTask = (model) => {
@@ -404,6 +415,10 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   }, [returnedReview, visibleProjects, modelCatalog, modelProviderOptions, budgetTypeOptions, initialBudgetType]);
 
   const project = visibleProjects.find((p) => p.id === projectId);
+  const budgetRetryAt = project?.budgetRetryAvailableAt || project?.budgetRejection?.retryAt || "";
+  const budgetRetryAtTs = budgetRetryAt ? new Date(budgetRetryAt).getTime() : 0;
+  const budgetRetryLockActive = Boolean(project?.budgetRejection) && Number.isFinite(budgetRetryAtTs) && budgetRetryAtTs > Date.now();
+  const budgetRetryLabel = formatRetryDateTime(budgetRetryAt);
   const generalPhaseOptions = useMemo(() => (
     deliveryMode === "single"
       ? [{
@@ -953,6 +968,36 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       <span className={`text-xs font-medium ${done ? "text-emerald-300" : active ? "text-fuchsia-300" : "text-zinc-500"}`}>{label}</span>
     </div>
   );
+
+  if (budgetRetryLockActive) {
+    return (
+      <div className="space-y-6" data-testid="page-budget-builder-locked">
+        <div>
+          {!embeddedProjectId && (
+            <Link to={`/projects/${projectId}`} className="text-xs text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1">
+              <ArrowLeft className="w-3 h-3" /> Back to project
+            </Link>
+          )}
+          <div className="mt-1 flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
+            <ClipboardCheck className="w-3 h-3" /> {isRnd ? "R&D Portal · Budget Builder" : "Budget Builder"}
+          </div>
+          <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">
+            {project?.name || "Budget Builder"}
+          </h1>
+        </div>
+
+        <div className="rounded-2xl border border-red-500/25 bg-red-500/[0.06] p-5">
+          <div className="text-sm font-semibold text-red-200">
+            This budget was rejected and cannot be raised again yet.
+          </div>
+          <div className="mt-2 text-sm text-zinc-200 leading-relaxed">
+            Raise the next budget after <span className="font-semibold text-white">{budgetRetryLabel || "the retry window opens"}</span>.
+            {project?.budgetRejection?.note ? ` Note from approver: ${project.budgetRejection.note}` : ""}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6" data-testid="page-budget-builder">

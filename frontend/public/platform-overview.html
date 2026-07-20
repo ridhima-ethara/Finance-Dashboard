@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Finance Dashboard Platform Overview</title>
+    <style>
+      :root {
+        --bg: #09090f;
+        --panel: #12121a;
+        --panel-soft: rgba(255, 255, 255, 0.03);
+        --border: rgba(255, 255, 255, 0.08);
+        --text: #f7f7fb;
+        --muted: #a1a1aa;
+        --cyan: #67e8f9;
+        --fuchsia: #f472b6;
+        --emerald: #34d399;
+        --amber: #fbbf24;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top right, rgba(244, 114, 182, 0.18), transparent 26%),
+          radial-gradient(circle at top left, rgba(103, 232, 249, 0.18), transparent 22%),
+          var(--bg);
+        line-height: 1.5;
+      }
+
+      a {
+        color: var(--cyan);
+      }
+
+      .wrap {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0 56px;
+      }
+
+      .hero,
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+      }
+
+      .hero {
+        padding: 32px;
+        margin-bottom: 24px;
+      }
+
+      .eyebrow {
+        color: var(--cyan);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+      }
+
+      h1 {
+        margin-top: 12px;
+        font-size: clamp(2rem, 3vw, 3.2rem);
+        line-height: 1.1;
+      }
+
+      .lede {
+        max-width: 760px;
+        margin-top: 14px;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .pill {
+        background: var(--panel-soft);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.cols-4 {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .grid.cols-3 {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .grid.cols-2 {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .section {
+        margin-top: 24px;
+      }
+
+      .panel {
+        padding: 20px;
+      }
+
+      .panel h2 {
+        font-size: 1.2rem;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .card {
+        background: var(--panel-soft);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 16px;
+      }
+
+      .card h3 {
+        font-size: 1rem;
+      }
+
+      .card p,
+      .card li,
+      .panel p,
+      .panel li {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      ol,
+      ul {
+        margin: 12px 0 0;
+        padding-left: 18px;
+      }
+
+      .route {
+        display: inline-block;
+        margin-top: 8px;
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid rgba(103, 232, 249, 0.22);
+        background: rgba(103, 232, 249, 0.08);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        color: var(--cyan);
+      }
+
+      .timeline {
+        display: grid;
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .timeline-step {
+        display: grid;
+        grid-template-columns: 36px 1fr;
+        gap: 12px;
+        align-items: start;
+      }
+
+      .timeline-step strong {
+        display: inline-grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        background: rgba(244, 114, 182, 0.12);
+        border: 1px solid rgba(244, 114, 182, 0.3);
+        color: var(--fuchsia);
+      }
+
+      .footer {
+        margin-top: 24px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      @media (max-width: 960px) {
+        .grid.cols-4,
+        .grid.cols-3 {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 640px) {
+        .wrap {
+          width: min(100% - 20px, 100%);
+          padding-top: 20px;
+        }
+
+        .hero,
+        .panel {
+          border-radius: 18px;
+        }
+
+        .hero {
+          padding: 22px;
+        }
+
+        .grid.cols-4,
+        .grid.cols-3,
+        .grid.cols-2 {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="hero" aria-labelledby="overview-title">
+        <div class="eyebrow">Finance Dashboard Overview</div>
+        <h1 id="overview-title">Role-based project finance, approvals, provisioning, and actuals in one governed platform</h1>
+        <p class="lede">
+          This application connects R&amp;D, TPM, CTO, CFO, and IT workflows across project creation, kickoff, budget building, approvals, key provisioning, daily actuals, change requests, and financial monitoring. The latest implementation also routes project AI access through internal platform tokens instead of exposing provider keys to project teams.
+        </p>
+        <div class="meta" aria-label="Overview highlights">
+          <span class="pill">Frontend: React + CRACO + Tailwind-style utility classes</span>
+          <span class="pill">Backend: FastAPI + local or Mongo-backed app-state sync</span>
+          <span class="pill">Project detail is the primary workspace for budgets, members, tokens, and change requests</span>
+          <span class="pill">IT now provisions gateway tokens and logs actuals on the same platform</span>
+        </div>
+      </section>
+
+      <section class="grid cols-4 section" aria-label="Primary roles">
+        <article class="card">
+          <h3>R&amp;D</h3>
+          <p>Creates projects, runs kickoff, raises testing or sample budgets, logs early-stage task consumption, and raises in-project change requests when scope changes.</p>
+        </article>
+        <article class="card">
+          <h3>TPM</h3>
+          <p>Sees projects once assigned, raises production or general budgets, controls phase execution, logs deliverable progress, and moves approved work into delivery.</p>
+        </article>
+        <article class="card">
+          <h3>CTO / CFO</h3>
+          <p>Review, modify, partially approve, return, or reject budgets. Their decision history is visible back to the requester, and approved requests feed IT provisioning.</p>
+        </article>
+        <article class="card">
+          <h3>IT</h3>
+          <p>Stores provider keys, issues internal platform tokens, applies gateway policy, imports or logs actuals, and feeds real spend visibility back to Finance.</p>
+        </article>
+      </section>
+
+      <section class="panel section" aria-labelledby="workflow-title">
+        <h2 id="workflow-title">End-to-End Workflow</h2>
+        <div class="timeline">
+          <div class="timeline-step">
+            <strong>1</strong>
+            <div>
+              <h3>Project setup and kickoff</h3>
+              <p>Projects are created with staged member allocation, project goal, and requirement attachments. Members added during or after kickoff receive the kickoff context.</p>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <strong>2</strong>
+            <div>
+              <h3>Budget build inside the project</h3>
+              <p>Budgets are raised from the project itself. R&amp;D, testing, sample, rework, production, and general asks all follow the approval chain without separate side modules.</p>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <strong>3</strong>
+            <div>
+              <h3>Approval and audit visibility</h3>
+              <p>CTO and CFO can edit line items, partially approve, or return requests. Their edits and reasoning are captured in request history so the requester sees what changed.</p>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <strong>4</strong>
+            <div>
+              <h3>IT provisioning and token issuance</h3>
+              <p>Approved requests move into the IT queue. IT adds the provider key once, defines the gateway policy, and issues internal platform tokens to the assigned project members.</p>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <strong>5</strong>
+            <div>
+              <h3>Task logging and actuals</h3>
+              <p>Project teams log work in phases or batches, and IT captures actual model, infrastructure, and subscription costs through direct entry or CSV import.</p>
+            </div>
+          </div>
+          <div class="timeline-step">
+            <strong>6</strong>
+            <div>
+              <h3>Finance monitoring</h3>
+              <p>CFO views approved budgets, actuals, recovery, variance, and governed spend. Deliverable-based claimed-versus-actual analysis can be monitored centrally.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid cols-2 section">
+        <article class="panel" aria-labelledby="gateway-title">
+          <h2 id="gateway-title">Gateway Token Flow</h2>
+          <ol>
+            <li>Member receives an internal platform token from the IT allocation.</li>
+            <li>Member or app calls the internal AI gateway instead of a model provider directly.</li>
+            <li>Gateway validates token status, owner, identity, device, network, allowed model, remaining budget, rate limit, and expiration.</li>
+            <li>Gateway retrieves the provider key securely and keeps it masked from project roles.</li>
+            <li>Gateway sends the request to the configured provider and model.</li>
+            <li>Usage and cost are recorded against the mapped employee.</li>
+            <li>Gateway returns the model response back to the caller.</li>
+          </ol>
+          <span class="route">POST /api/gateway/execute</span>
+        </article>
+
+        <article class="panel" aria-labelledby="modules-title">
+          <h2 id="modules-title">Key Platform Areas</h2>
+          <ul>
+            <li><strong>Dashboard</strong>: role-specific cards for R&amp;D, TPM, CTO, CFO, and IT.</li>
+            <li><strong>Projects</strong>: creation, kickoff, team allocation, budget history, token access, task logging, and change requests.</li>
+            <li><strong>Approvals</strong>: clear request detail, modified amounts, decision logs, and routed provisioning.</li>
+            <li><strong>IT dashboard</strong>: pending provisioning, gateway token visibility, and daily actuals worksheet.</li>
+            <li><strong>Reports and finance monitoring</strong>: portfolio, recovery, warnings, forecasts, and tracked actuals.</li>
+          </ul>
+          <p class="muted">To open the live application, go to <a href="/login">/login</a> after the frontend server is running.</p>
+        </article>
+      </section>
+
+      <section class="grid cols-3 section" aria-label="Implementation notes">
+        <article class="card">
+          <h3>Persistence</h3>
+          <p>The app syncs browser state with <code>/api/app-state</code>. Local development can persist to a workspace JSON file, while hosted environments can use the backend state store.</p>
+        </article>
+        <article class="card">
+          <h3>Provisioning model</h3>
+          <p>Provider keys and issued platform tokens are tracked per project and per model line, with budget caps, rate limits, network/device policy, and expiry metadata.</p>
+        </article>
+        <article class="card">
+          <h3>IT actuals</h3>
+          <p>Daily actuals accept manual entry or CSV/XLSX import, then roll model, infra, and subscription costs back into the project and finance views.</p>
+        </article>
+      </section>
+
+      <p class="footer">
+        Static overview page for quick walkthroughs and stakeholder reviews.
+      </p>
+    </main>
+  </body>
+</html>

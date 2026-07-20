@@ -408,6 +408,21 @@ const ItDashboard = () => {
     () => itProvisioningRequests.filter((request) => request.status === "completed"),
     [itProvisioningRequests]
   );
+  const gatewayOverview = useMemo(() => {
+    const accessTokens = modelKeyRecords.flatMap((entry) => entry.accessTokens || []);
+    const activeTokens = accessTokens.filter((token) => token.status === "active");
+    const expiringSoon = activeTokens.filter((token) => {
+      if (!token.expiresAt) return false;
+      const expiresAt = new Date(token.expiresAt).getTime();
+      return Number.isFinite(expiresAt) && expiresAt <= Date.now() + (14 * 24 * 60 * 60 * 1000);
+    }).length;
+    return {
+      activeTokens: activeTokens.length,
+      governedProjects: new Set(modelKeyRecords.map((entry) => entry.project).filter(Boolean)).size,
+      routes: new Set(activeTokens.map((token) => token.gatewayRoute || "/api/gateway/execute")).size,
+      expiringSoon,
+    };
+  }, [modelKeyRecords]);
 
   const actualProjects = useMemo(() => {
     const relevantIds = new Set([
@@ -419,14 +434,20 @@ const ItDashboard = () => {
       .map((project) => {
         const actualEntry = itMonthlyActuals[project.id] || {};
         const actualSummary = summarizeItProjectActuals(actualEntry);
+        const projectKeys = modelKeyRecords.filter((entry) => entry.project === project.id);
+        const gatewayTokens = projectKeys.flatMap((entry) => entry.accessTokens || []);
         return {
           ...project,
           usage: summarizeLoggedProject(project, taskLogs),
           actualEntry,
           actualSummary,
-          activeKeys: modelKeyRecords.filter(
-            (entry) => entry.project === project.id && entry.status === "active"
-          ).length,
+          activeKeys: projectKeys.filter((entry) => entry.status === "active").length,
+          gatewayTokens,
+          gatewayRoutes: Array.from(new Set(projectKeys.map((entry) => entry.gatewayRoute || "/api/gateway/execute"))),
+          governedBudgetLeft: projectKeys.reduce(
+            (sum, entry) => sum + Number(entry.gatewayPolicy?.remainingBudget || 0),
+            0
+          ),
           phaseLabel: buildProjectPhaseLabel(project),
           seedModelUsage: buildProjectSeedModelUsage(project, modelCatalog),
         };
@@ -619,11 +640,13 @@ const ItDashboard = () => {
         </h1>
         <p className="text-sm text-zinc-400 mt-1">
           CFO-approved budgets land here so IT can provision access and log the
-          day-wise actuals that flow back into Finance monitoring.
+          day-wise actuals that flow back into Finance monitoring. Provider keys
+          stay masked while project teams receive internal platform tokens for
+          the gateway.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
         <Stat label="Pending provisioning" value={String(pending.length)} icon={ShieldCheck} />
         <Stat label="Provisioned requests" value={String(completed.length)} icon={KeyRound} />
         <Stat
@@ -631,11 +654,80 @@ const ItDashboard = () => {
           value={String(modelKeyRecords.filter((entry) => entry.status === "active").length)}
           icon={KeyRound}
         />
+        <Stat label="Active tokens" value={String(gatewayOverview.activeTokens)} icon={ShieldCheck} />
+        <Stat label="Gateway projects" value={String(gatewayOverview.governedProjects)} icon={Server} />
         <Stat
           label="Actuals filed"
           value={String(Object.keys(itMonthlyActuals).length)}
           icon={Database}
         />
+      </div>
+
+      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+          <div>
+            <div className="font-display font-semibold text-[15px] text-white">
+              Gateway token allocation
+            </div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Internal platform tokens are what members use. Each call is routed
+              through <span className="font-mono text-zinc-300">/api/gateway/execute</span>,
+              where policy, budget, and rate checks happen before the provider
+              key is used.
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+          <Mini label="Active tokens" value={String(gatewayOverview.activeTokens)} icon={ShieldCheck} />
+          <Mini label="Projects routed" value={String(gatewayOverview.governedProjects)} icon={Server} />
+          <Mini label="Routes live" value={String(gatewayOverview.routes)} icon={ChevronRight} />
+          <Mini label="Expiring in 14d" value={String(gatewayOverview.expiringSoon)} icon={CalendarDays} />
+        </div>
+
+        <div className="space-y-3">
+          {actualProjects.map((project) => (
+            <div key={`${project.id}-gateway`} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="flex items-start justify-between gap-3 flex-wrap">
+                <div>
+                  <div className="text-sm font-semibold text-white">{project.name}</div>
+                  <div className="text-[11px] text-zinc-500 mt-1">
+                    {project.gatewayTokens.length} token{project.gatewayTokens.length === 1 ? "" : "s"} ·{" "}
+                    {project.activeKeys} active key{project.activeKeys === 1 ? "" : "s"} ·{" "}
+                    {project.gatewayRoutes[0] || "/api/gateway/execute"}
+                  </div>
+                </div>
+                <div className="text-sm font-semibold text-cyan-200 tabular">
+                  {fmtCurrency(project.governedBudgetLeft || 0, { compact: false })}
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 lg:grid-cols-3 gap-3 text-[11px]">
+                <ProvisionMini
+                  label="Models"
+                  value={String(project.seedModelUsage.length || 0)}
+                  detail={project.seedModelUsage.map((row) => row.modelName).filter(Boolean).join(" · ") || "No model rows mapped"}
+                />
+                <ProvisionMini
+                  label="Members"
+                  value={String(project.gatewayTokens.length)}
+                  detail={project.gatewayTokens.map((token) => token.memberName).join(" · ") || "No token issued"}
+                />
+                <ProvisionMini
+                  label="Policy"
+                  value={project.gatewayTokens[0]?.rateLimitPerMinute ? `${project.gatewayTokens[0].rateLimitPerMinute}/min` : "Pending"}
+                  detail={project.gatewayTokens[0]
+                    ? `${(project.gatewayTokens[0].allowedNetworks || []).join(", ") || "Any network"} · ${(project.gatewayTokens[0].allowedDevices || []).join(", ") || "Any device"}`
+                    : "Awaiting IT provisioning"}
+                />
+              </div>
+            </div>
+          ))}
+          {actualProjects.length === 0 && (
+            <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center text-xs text-zinc-500">
+              No gateway-managed projects are available yet.
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
@@ -689,6 +781,9 @@ const ItDashboard = () => {
                 <Mini label="Models" value={String(request.requestedModels?.length || 0)} />
                 <Mini label="Infra lines" value={String(request.requestedInfra?.length || 0)} />
                 <Mini label="Members" value={String(request.members?.length || 0)} icon={Users} />
+              </div>
+              <div className="mt-3 text-[11px] text-zinc-500">
+                Gateway route: <span className="font-mono text-zinc-200">{request.gatewayRoute || "/api/gateway/execute"}</span>
               </div>
               <div className="mt-3 flex justify-end">
                 <Link
@@ -757,6 +852,17 @@ const ItDashboard = () => {
                     <div className="text-[11px] text-zinc-500 mt-1">
                       {project.client || "Client"} · {project.phaseLabel} ·{" "}
                       {fmtCurrency(project.approvedBudget || 0, { compact: false })} approved
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-[10px] text-zinc-500">
+                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1">
+                        {project.gatewayTokens.length} token{project.gatewayTokens.length === 1 ? "" : "s"}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1">
+                        {project.activeKeys} active key{project.activeKeys === 1 ? "" : "s"}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1">
+                        {fmtCurrency(project.governedBudgetLeft || 0, { compact: false })} gateway budget left
+                      </span>
                     </div>
                   </div>
                   <div className="flex items-end gap-2 flex-wrap">
@@ -1133,6 +1239,14 @@ const Mini = ({ label, value, icon: Icon }) => (
       {label}
     </div>
     <div className="mt-1 text-sm font-semibold text-white tabular">{value}</div>
+  </div>
+);
+
+const ProvisionMini = ({ label, value, detail }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.03] p-3">
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className="mt-1 text-sm font-semibold text-white tabular">{value}</div>
+    <div className="mt-1 text-[11px] text-zinc-500 leading-relaxed">{detail}</div>
   </div>
 );
 

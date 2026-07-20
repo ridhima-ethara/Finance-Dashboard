@@ -7,6 +7,11 @@ import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCa
 import { useApp } from "../../context/AppContext";
 import { areBudgetItemsEqual } from "../../lib/budgetReview";
 import {
+  buildDeliverableCostMetrics,
+  buildLoggedDailyRows,
+  summarizeItProjectActuals,
+} from "../../lib/projectMetrics";
+import {
   ArrowLeft,
   Check,
   X,
@@ -136,6 +141,7 @@ const ApprovalDetail = () => {
     taskLogs,
     cfoDecideBudgetReview,
     itProvisioningRequests,
+    itMonthlyActuals,
     applyBufferAction,
     bufferOverview,
   } = useApp();
@@ -259,6 +265,72 @@ const ApprovalDetail = () => {
     },
   ]), [editedItems]);
 
+  const itActualSummary = useMemo(
+    () => summarizeItProjectActuals(project ? (itMonthlyActuals[project.id] || {}) : {}),
+    [itMonthlyActuals, project]
+  );
+  const loggedDailyRows = useMemo(
+    () => (project ? buildLoggedDailyRows([project], taskLogs) : []),
+    [project, taskLogs]
+  );
+  const dailyComparisonRows = useMemo(() => {
+    const byDate = new Map();
+
+    loggedDailyRows.forEach((row) => {
+      byDate.set(row.date, {
+        date: row.date,
+        loggedTasks: Number(row.tasks || 0),
+        loggedSpend: Number(row.spent || 0),
+        itModelActual: 0,
+        itInfraActual: 0,
+        itSubsActual: 0,
+        itTotalActual: 0,
+      });
+    });
+
+    (itActualSummary.dailyActuals || []).forEach((row) => {
+      const current = byDate.get(row.date) || {
+        date: row.date,
+        loggedTasks: 0,
+        loggedSpend: 0,
+        itModelActual: 0,
+        itInfraActual: 0,
+        itSubsActual: 0,
+        itTotalActual: 0,
+      };
+      current.itModelActual = Number(row.modelActual || 0);
+      current.itInfraActual = Number(row.infraActual || 0);
+      current.itSubsActual = Number(row.subsActual || 0);
+      current.itTotalActual = Number(row.total || 0);
+      byDate.set(row.date, current);
+    });
+
+    return Array.from(byDate.values())
+      .map((row) => ({
+        ...row,
+        variance: Number(row.itTotalActual || 0) - Number(row.loggedSpend || 0),
+      }))
+      .sort((left, right) => new Date(right.date || 0).getTime() - new Date(left.date || 0).getTime());
+  }, [itActualSummary.dailyActuals, loggedDailyRows]);
+  const costAuditMetrics = useMemo(
+    () => buildDeliverableCostMetrics({
+      totalBudgetRequested: approvedAmountValue || ctoForwardAmount,
+      totalTaskCount: Number(review?.tasks || 0),
+      completedDeliverables: loggedTasks,
+      totalAmountConsumed: Number(itActualSummary.totalActual || 0),
+    }),
+    [approvedAmountValue, ctoForwardAmount, review?.tasks, loggedTasks, itActualSummary.totalActual]
+  );
+  const latestItFiledAt = itActualSummary.updatedAt
+    ? new Date(itActualSummary.updatedAt).toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "Not filed yet";
+
   if (!review || !project) {
     return (
       <div className="text-sm text-zinc-400">
@@ -358,6 +430,12 @@ const ApprovalDetail = () => {
     }));
   };
 
+  const requireComment = (actionLabel) => {
+    if (comment.trim()) return true;
+    toast.error(`Comment required to ${actionLabel}`);
+    return false;
+  };
+
   const approve = () => {
     if (approvedAmountValue <= 0) {
       toast.error("Enter or retain a valid approved budget");
@@ -367,6 +445,7 @@ const ApprovalDetail = () => {
       toast.error("This edited breakdown is below the CTO forwarded amount. Use Partial approval.");
       return;
     }
+    if (!requireComment("approve")) return;
     cfoDecideBudgetReview(review.id, {
       decision: "approve",
       amount: approvedAmountValue,
@@ -385,6 +464,7 @@ const ApprovalDetail = () => {
       toast.error("Lower the edited breakdown below the CTO forwarded amount to submit a partial approval");
       return;
     }
+    if (!requireComment("partially approve")) return;
     cfoDecideBudgetReview(review.id, {
       decision: "partial",
       amount: approvedAmountValue,
@@ -399,10 +479,7 @@ const ApprovalDetail = () => {
   };
 
   const sendBack = () => {
-    if (!comment.trim()) {
-      toast.error("Comment required to return");
-      return;
-    }
+    if (!requireComment("return")) return;
     cfoDecideBudgetReview(review.id, {
       decision: "return",
       amount: approvedAmountValue,
@@ -414,10 +491,7 @@ const ApprovalDetail = () => {
   };
 
   const reject = () => {
-    if (!comment.trim()) {
-      toast.error("Comment required to reject");
-      return;
-    }
+    if (!requireComment("reject")) return;
     cfoDecideBudgetReview(review.id, {
       decision: "reject",
       amount: 0,
@@ -685,6 +759,76 @@ const ApprovalDetail = () => {
             </div>
           </div>
 
+          <div
+            className="bg-[#12121A] rounded-2xl border border-white/5 p-5"
+            data-testid="daily-log-audit"
+          >
+            <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+              <div>
+                <div className="font-display font-semibold text-[15px] text-white">
+                  Daily logs vs IT actuals
+                </div>
+                <div className="text-xs text-zinc-500 mt-1">
+                  Daily execution logs are compared against the IT team&apos;s filed actuals for CFO review.
+                </div>
+              </div>
+              <div className="text-xs text-zinc-500">
+                Latest IT file: <span className="text-white font-medium">{latestItFiledAt}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mb-4">
+              <AuditMetric label="Delivered tasks" value={loggedTasks.toLocaleString()} tone="text-emerald-300" />
+              <AuditMetric label="Claimed cost" value={fmtCurrency(costAuditMetrics.claimedCost, { compact: false })} tone="text-fuchsia-300" />
+              <AuditMetric label="IT actual" value={fmtCurrency(itActualSummary.totalActual, { compact: false })} tone="text-cyan-300" />
+              <AuditMetric
+                label="Variance"
+                value={fmtCurrency(costAuditMetrics.variance, { compact: false })}
+                tone={costAuditMetrics.variance > 0 ? "text-red-300" : costAuditMetrics.variance < 0 ? "text-emerald-300" : "text-white"}
+              />
+            </div>
+
+            {dailyComparisonRows.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center text-xs text-zinc-500">
+                No daily execution logs or IT actual rows have been filed for this project yet.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-white/5">
+                <table className="w-full min-w-[760px] text-sm">
+                  <thead>
+                    <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.03]">
+                      <th className="text-left py-2.5 px-3">Date</th>
+                      <th className="text-right py-2.5 px-3">Logged tasks</th>
+                      <th className="text-right py-2.5 px-3">Logged spend</th>
+                      <th className="text-right py-2.5 px-3">IT model</th>
+                      <th className="text-right py-2.5 px-3">IT infra</th>
+                      <th className="text-right py-2.5 px-3">IT subs</th>
+                      <th className="text-right py-2.5 px-3">IT total</th>
+                      <th className="text-right py-2.5 px-3">Variance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyComparisonRows.slice(0, 10).map((row) => (
+                      <tr key={row.date} className="border-b border-white/5 last:border-b-0">
+                        <td className="py-2.5 px-3 text-zinc-200">{row.date || "—"}</td>
+                        <td className="py-2.5 px-3 text-right tabular text-white">{row.loggedTasks.toLocaleString()}</td>
+                        <td className="py-2.5 px-3 text-right tabular text-zinc-200">{fmtCurrency(row.loggedSpend, { compact: false })}</td>
+                        <td className="py-2.5 px-3 text-right tabular text-zinc-300">{fmtCurrency(row.itModelActual, { compact: false })}</td>
+                        <td className="py-2.5 px-3 text-right tabular text-zinc-300">{fmtCurrency(row.itInfraActual, { compact: false })}</td>
+                        <td className="py-2.5 px-3 text-right tabular text-zinc-300">{fmtCurrency(row.itSubsActual, { compact: false })}</td>
+                        <td className="py-2.5 px-3 text-right tabular text-white font-semibold">{fmtCurrency(row.itTotalActual, { compact: false })}</td>
+                        <td className={`py-2.5 px-3 text-right tabular font-semibold ${row.variance > 0 ? "text-red-300" : row.variance < 0 ? "text-emerald-300" : "text-zinc-400"}`}>
+                          {row.variance > 0 ? "+" : ""}
+                          {fmtCurrency(row.variance, { compact: false })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
           <GeneralBudgetTableCard
             lines={editedItems.misc}
             title="General budget table"
@@ -779,6 +923,9 @@ const ApprovalDetail = () => {
                 <div>
                   <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">
                     Comment
+                  </div>
+                  <div className="text-[11px] text-zinc-500 mb-2">
+                    Required for approve, partial approve, return, and reject.
                   </div>
                   <textarea
                     value={comment}
@@ -891,9 +1038,25 @@ const ApprovalDetail = () => {
                 )}
               />
               <SummaryRow
-                label="Variance vs CTO"
-                value={fmtCurrency(variance, { compact: false })}
-                valueClassName={variance >= 0 ? "text-emerald-300" : "text-amber-300"}
+                label="Claimed cost"
+                value={fmtCurrency(costAuditMetrics.claimedCost, { compact: false })}
+                valueClassName="text-fuchsia-300"
+              />
+              <SummaryRow
+                label="IT actual filed"
+                value={fmtCurrency(itActualSummary.totalActual, { compact: false })}
+                valueClassName="text-white"
+              />
+              <SummaryRow
+                label="Claimed vs IT actual"
+                value={fmtCurrency(costAuditMetrics.variance, { compact: false })}
+                valueClassName={
+                  costAuditMetrics.variance > 0
+                    ? "text-red-300"
+                    : costAuditMetrics.variance < 0
+                      ? "text-emerald-300"
+                      : "text-zinc-400"
+                }
               />
             </div>
           </div>
@@ -989,6 +1152,13 @@ const BreakdownCell = ({ icon: Icon, label, value, color }) => (
     <div className="text-lg font-display font-semibold text-white tabular mt-1">
       {fmtCurrency(value, { compact: false })}
     </div>
+  </div>
+);
+
+const AuditMetric = ({ label, value, tone = "text-white" }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className={`mt-1 text-base font-semibold tabular ${tone}`}>{value}</div>
   </div>
 );
 
