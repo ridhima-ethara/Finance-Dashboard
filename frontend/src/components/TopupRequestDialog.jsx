@@ -17,6 +17,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
   const [sampleIteration, setSampleIteration] = useState(1);
   const [urgency, setUrgency] = useState("Normal");
   const [reason, setReason] = useState("");
+  const [timeline, setTimeline] = useState("");
   const [items, setItems] = useState({ breakdown: null, total: 0 });
   const wasOpenRef = useRef(false);
   const lastProjectIdRef = useRef(project?.id || projectList[0]?.id || "");
@@ -86,6 +87,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
     if (openedNow || projectChangedWhileOpen) {
       setUrgency("Normal");
       setReason("");
+      setTimeline("");
     }
 
     wasOpenRef.current = open;
@@ -126,6 +128,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
       bufferAmount: 0,
       reason,
       urgency,
+      timelineDelta: timeline,
       breakdown: items.breakdown,
       sampleIteration: isRndProject ? sampleIteration : null,
     });
@@ -243,6 +246,16 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
                 </button>
               ))}
             </div>
+          </Field>
+
+          <Field label="Timeline change (optional)">
+            <input
+              value={timeline}
+              onChange={(event) => setTimeline(event.target.value)}
+              placeholder="e.g. Extend delivery by 5 days"
+              data-testid="tur-timeline"
+              className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+            />
           </Field>
 
           <Field label="Justification">

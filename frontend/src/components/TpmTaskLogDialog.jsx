@@ -411,54 +411,38 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   const dailyAllocationUtilization = approvedDailyAllocation > 0
     ? Math.round((effectiveCostTotal / approvedDailyAllocation) * 100)
     : 0;
-  const modelConsumptionRows = useMemo(() => {
-    const grouped = allRows.reduce((acc, row) => {
-      const key = row.modelId || row.modelName || uid("mdl");
-      acc[key] = acc[key] || {
-        modelId: row.modelId || "",
-        modelName: row.modelName || "Unspecified model",
-        tasks: 0,
-        successfulCost: 0,
-        failedCost: 0,
-        totalCost: 0,
-        inputTokens: 0,
-        outputTokens: 0,
-      };
-      const cost = Number(row.cost || 0);
-      acc[key].tasks += getRowTaskQuantity(row);
-      acc[key].totalCost += cost;
-      acc[key].inputTokens += Number(row.inputTokens || 0);
-      acc[key].outputTokens += Number(row.outputTokens || 0);
-      if (populatedSuccessRows.some((entry) => entry.id === row.id)) {
-        acc[key].successfulCost += cost;
-      } else {
-        acc[key].failedCost += cost;
-      }
-      return acc;
-    }, {});
-
-    return Object.values(grouped)
-      .map((row) => ({
-        ...row,
-        sharePct: costTotal > 0 ? Math.round((row.totalCost / costTotal) * 100) : 0,
-      }))
-      .sort((left, right) => (
-        right.totalCost - left.totalCost
-          || right.inputTokens - left.inputTokens
-          || right.tasks - left.tasks
-      ));
-  }, [allRows, costTotal, populatedSuccessRows]);
   const doneAlreadyExcludingEdit = isEdit ? doneAlready - (Number(editingLog?.successfulTasks ?? editingLog?.tasksDone) || 0) : doneAlready;
   const projectedDone = doneAlreadyExcludingEdit + derivedSuccessfulTasks;
   const progressPct = phaseTotalTasks > 0 ? Math.min(100, Math.round((projectedDone / phaseTotalTasks) * 100)) : 0;
   const primaryUsage = [...modelUsage].sort((left, right) => Number(right.cost || 0) - Number(left.cost || 0))[0];
-  const modelOptions = useMemo(
-    () => modelCatalog.map((model) => ({
-      value: model.id,
-      label: buildModelOptionLabel(model),
-    })),
-    [modelCatalog]
-  );
+  // When logging, only offer the models/subscriptions that were asked for in this project's
+  // approved budget (subscription names + model names). Fall back to the full catalog only if
+  // the project has no budget items yet, so logging is never blocked.
+  const modelOptions = useMemo(() => {
+    const options = [];
+    const seen = new Set();
+    const push = (value, label) => {
+      const v = String(value || "").trim();
+      if (!v || seen.has(v.toLowerCase())) return;
+      seen.add(v.toLowerCase());
+      options.push({ value: v, label: String(label || v).trim() });
+    };
+    const projectBudgetItems = budgets
+      .filter((entry) => entry.projectId === activeProject?.id)
+      .map((entry) => entry.items || {});
+    const allItems = [...projectBudgetItems, activeProject?.budgetItems || {}];
+    allItems.forEach((items) => {
+      (items.subs || []).forEach((sub) => push(sub.subscription || sub.optionId, sub.subscription || sub.optionLabel));
+      (items.models || []).forEach((model) => {
+        const meta = findModelMeta(modelCatalog, model.modelId || model.modelName);
+        push(model.modelId || model.modelName, meta ? buildModelOptionLabel(meta) : (model.modelName || model.modelId));
+      });
+    });
+    if (options.length === 0) {
+      return modelCatalog.map((model) => ({ value: model.id, label: buildModelOptionLabel(model) }));
+    }
+    return options;
+  }, [budgets, activeProject, modelCatalog]);
 
   const createAndSelectCustomModel = (setter, rowId) => {
     const created = promptForCustomModel(addCustomModel);
@@ -483,7 +467,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
       const next = { ...row, [key]: value };
       if (key === "modelId") {
         const meta = modelCatalog.find((model) => model.id === value);
-        next.modelName = meta?.name || "";
+        next.modelName = meta?.name || modelOptions.find((option) => option.value === value)?.label || value || "";
       }
       if (["inputTokens", "outputTokens", "llmCalls", "cost", "inputTokensM", "outputTokensM"].includes(key)) {
         next[key] = Number(value || 0);
@@ -880,7 +864,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             onUpdateRow={(id, key, value) => updateSheetRow(setSuccessfulRows, id, key, value)}
             onRemoveRow={(id) => removeSheetRow(setSuccessfulRows, id)}
             testidPrefix="success"
-            helper="Upload the successful-task CSV / Excel sheet with columns: Model, Task, Runs, Input Tokens, Input Tokens (M), Output Tokens, Output Tokens (M), Cost ($). The uploaded rows appear below in the manual editor."
+            helper="Upload the successful-task CSV / Excel sheet with columns: Model, Task, Runs/Trajectories, Input Tokens, Input Tokens (M), Output Tokens, Output Tokens (M), Cost ($). The uploaded rows appear below in the manual editor."
           />
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -937,56 +921,6 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
               </div>
               <div>
                 Models logged today: <span className="text-fuchsia-300 font-semibold tabular">{modelUsage.length.toLocaleString()}</span>
-              </div>
-            </div>
-          )}
-
-          {modelConsumptionRows.length > 0 && (
-            <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4" data-testid="task-model-consumption">
-              <div className="mb-3">
-                <div className="text-sm font-semibold text-white">Model-wise consumption for the day</div>
-                <div className="text-[11px] text-zinc-500 mt-1">
-                  When multiple models are logged, each model&apos;s cost and token burn rolls into the total day spend below.
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[820px] text-sm">
-                  <thead>
-                    <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                      <th className="text-left py-2 px-3">Model</th>
-                      <th className="text-right py-2 px-3">Tasks</th>
-                      <th className="text-right py-2 px-3">Success ($)</th>
-                      <th className="text-right py-2 px-3">Total ($)</th>
-                      <th className="text-right py-2 px-3">Day share</th>
-                      <th className="text-right py-2 px-3">Input tokens</th>
-                      <th className="text-right py-2 px-3">Output tokens</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modelConsumptionRows.map((row) => (
-                      <tr key={row.modelId || row.modelName} className="border-b border-white/5 last:border-b-0">
-                        <td className="py-2 px-3 text-white font-medium">{row.modelName}</td>
-                        <td className="py-2 px-3 text-right tabular text-zinc-300">{row.tasks.toLocaleString()}</td>
-                        <td className="py-2 px-3 text-right tabular text-emerald-300">{fmtCurrency(row.successfulCost, { compact: false })}</td>
-                        <td className="py-2 px-3 text-right tabular text-fuchsia-300 font-semibold">{fmtCurrency(row.totalCost, { compact: false })}</td>
-                        <td className="py-2 px-3 text-right tabular text-zinc-200">{row.sharePct}%</td>
-                        <td className="py-2 px-3 text-right tabular text-zinc-300">{row.inputTokens.toLocaleString()}</td>
-                        <td className="py-2 px-3 text-right tabular text-zinc-300">{row.outputTokens.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 border-fuchsia-500/30">
-                      <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Day total</td>
-                      <td className="py-3 px-3 text-right tabular text-zinc-300">{modelConsumptionRows.reduce((sum, row) => sum + row.tasks, 0).toLocaleString()}</td>
-                      <td className="py-3 px-3 text-right tabular text-emerald-300">{fmtCurrency(successCost, { compact: false })}</td>
-                      <td className="py-3 px-3 text-right tabular text-fuchsia-300 font-bold">{fmtCurrency(costTotal, { compact: false })}</td>
-                      <td className="py-3 px-3 text-right tabular text-zinc-200">{costTotal > 0 ? "100%" : "0%"}</td>
-                      <td className="py-3 px-3 text-right tabular text-zinc-300">{inputTokenTotal.toLocaleString()}</td>
-                      <td className="py-3 px-3 text-right tabular text-zinc-300">{outputTokenTotal.toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                </table>
               </div>
             </div>
           )}
@@ -1175,15 +1109,15 @@ const TaskSheetSection = ({
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[1060px] space-y-2">
+      <div>
+        <div className="space-y-2">
           <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
             Manual input section
           </div>
           <div className="grid grid-cols-[1.35fr_1.1fr_.9fr_.9fr_.9fr_.9fr_.9fr_.8fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
             <span>Model</span>
             <span>Task</span>
-            <span>Runs</span>
+            <span>Runs/Trajectories</span>
             <span className="text-right">Input tokens</span>
             <span className="text-right">Input tokens (M)</span>
             <span className="text-right">Output tokens</span>
@@ -1221,7 +1155,7 @@ const TaskSheetSection = ({
                 onChange={(e) => onUpdateRow(row.id, "stage", e.target.value)}
                 data-testid={`${testidPrefix}-stage-${row.id}`}
                 className={rowInp}
-                placeholder="Runs"
+                placeholder="Runs/Trajectories"
               />
               <input
                 type="number"
@@ -1352,8 +1286,8 @@ const GeneralActualSection = ({
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-sm">
+      <div>
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
               {headers.map((header) => (

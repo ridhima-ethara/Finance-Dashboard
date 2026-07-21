@@ -588,10 +588,10 @@
         "totalTasks": 500,
         "totalTrajectories": 1500,
         "totals": {
-          "total": 600,
+          "total": 1315,
           "models": 0,
           "infra": 0,
-          "subs": 600,
+          "subs": 1315,
           "general": 0
         },
         "phases": [
@@ -600,7 +600,7 @@
             "name": "Sampling",
             "start": "2026-07-09",
             "end": "2026-07-31",
-            "budget": 600,
+            "budget": 1315,
             "tasks": 500,
             "trajectories": 3
           }
@@ -618,22 +618,32 @@
               "amount": 600,
               "estCost": 600,
               "billingUnit": "per month"
+            },
+            {
+              "id": "budget-zoro-sub-codex",
+              "optionId": "gpt-codex-pro-20x",
+              "subscription": "GPT Codex Pro 20x",
+              "optionLabel": "GPT Codex Pro 20x \u00b7 3 accounts \u00b7 INR 59,700 (~$715)",
+              "seats": 3,
+              "amount": 715,
+              "estCost": 715,
+              "billingUnit": "per month"
             }
           ],
           "misc": []
         },
         "ctoDecision": {
           "decision": "approve",
-          "amount": 600,
+          "amount": 1315,
           "comment": "",
-          "at": "2026-07-13T15:00:00.000Z",
+          "at": "2026-07-20T10:30:00.000Z",
           "by": "CTO Admin"
         },
         "cfoDecision": {
           "decision": "approve",
-          "amount": 600,
+          "amount": 1315,
           "comment": "Approved",
-          "at": "2026-07-13T17:01:00.000Z",
+          "at": "2026-07-20T11:51:00.000Z",
           "by": "Shubham Garg"
         }
       },
@@ -650,10 +660,10 @@
         "totalTasks": 500,
         "totalTrajectories": 1500,
         "totals": {
-          "total": 200,
+          "total": 600,
           "models": 0,
           "infra": 0,
-          "subs": 200,
+          "subs": 600,
           "general": 0
         },
         "phases": [
@@ -662,7 +672,7 @@
             "name": "Sampling",
             "start": "2026-07-09",
             "end": "2026-07-31",
-            "budget": 200,
+            "budget": 600,
             "tasks": 500,
             "trajectories": 3
           }
@@ -672,7 +682,7 @@
           "infra": [],
           "subs": [
             {
-              "id": "budget-tron-sub-claude",
+              "id": "budget-tron-sub-claude-1",
               "optionId": "claude-code-max-20x",
               "subscription": "Claude Code Max 20x",
               "optionLabel": "Claude Code Max 20x \u00b7 1 subscription",
@@ -680,22 +690,32 @@
               "amount": 200,
               "estCost": 200,
               "billingUnit": "per month"
+            },
+            {
+              "id": "budget-tron-sub-claude-2",
+              "optionId": "claude-code-max-20x",
+              "subscription": "Claude Code Max 20x",
+              "optionLabel": "Claude Code Max 20x \u00b7 2 subscriptions",
+              "seats": 2,
+              "amount": 400,
+              "estCost": 400,
+              "billingUnit": "per month"
             }
           ],
           "misc": []
         },
         "ctoDecision": {
           "decision": "approve",
-          "amount": 200,
+          "amount": 600,
           "comment": "",
-          "at": "2026-07-09T15:30:00.000Z",
+          "at": "2026-07-14T14:00:00.000Z",
           "by": "CTO Admin"
         },
         "cfoDecision": {
           "decision": "approve",
-          "amount": 200,
+          "amount": 600,
           "comment": "Approved",
-          "at": "2026-07-09T16:16:00.000Z",
+          "at": "2026-07-14T16:00:00.000Z",
           "by": "Shubham Garg"
         }
       },
@@ -1090,340 +1110,7 @@
         "cfoChangeSummary": "Total $600.00 \u00b7 Subscriptions $600.00 \u00b7 1 line item"
       }
     ],
-    "changeRequests": [
-      {
-        "id": "cr-zoro-claude-max",
-        "projectId": "zoro",
-        "projectName": "Zoro",
-        "type": "Budget change",
-        "amount": 600,
-        "currentBudget": 0,
-        "requestedBudget": 600,
-        "requester": "Dhawal Bathre",
-        "requesterRole": "R&D",
-        "urgency": "Normal",
-        "stage": "Approved",
-        "status": "approved",
-        "createdAt": "2026-07-13T09:34:00.000Z",
-        "reason": "Claude Code Max 20x (3 subscriptions) to be shared among the 5 pod members for research, engineering, and baselining against the latest SOTA model (Claude Opus 4.8).",
-        "expectedTasks": "500",
-        "timelineDelta": "",
-        "affectedPhase": "Sampling",
-        "breakdown": {
-          "models": {
-            "amount": 0,
-            "optionLabel": "",
-            "note": "",
-            "entries": []
-          },
-          "infra": {
-            "amount": 0,
-            "optionLabel": "",
-            "note": "",
-            "entries": []
-          },
-          "subs": {
-            "amount": 600,
-            "optionLabel": "Claude Code Max 20x \u00b7 3 subscriptions",
-            "note": "Shared among 5 pod members \u00b7 baselining vs Claude Opus 4.8",
-            "entries": [
-              {
-                "id": "cr-zoro-sub-claude",
-                "optionId": "claude-code-max-20x",
-                "optionLabel": "Claude Code Max 20x \u00b7 3 subscriptions",
-                "note": "Shared among 5 pod members \u00b7 baselining vs Claude Opus 4.8",
-                "amount": 600,
-                "billingUnit": "per month"
-              }
-            ],
-            "billingUnit": "per month"
-          }
-        },
-        "ctoDecision": {
-          "decision": "approve",
-          "amount": 600,
-          "comment": "",
-          "at": "2026-07-13T15:00:00.000Z",
-          "by": "CTO Admin"
-        },
-        "cfoDecision": {
-          "decision": "approve",
-          "amount": 600,
-          "comment": "Approved",
-          "at": "2026-07-13T17:01:00.000Z",
-          "by": "Shubham Garg"
-        },
-        "history": [
-          {
-            "at": "2026-07-13T09:34:00.000Z",
-            "actor": "Dhawal Bathre \u00b7 R&D",
-            "action": "Submitted additional request",
-            "detail": "Claude Code Max 20x (3 subs) \u00b7 $600"
-          },
-          {
-            "at": "2026-07-13T15:00:00.000Z",
-            "actor": "CTO Admin \u00b7 CTO",
-            "action": "CTO approved",
-            "detail": "Forwarded to CFO at $600"
-          },
-          {
-            "at": "2026-07-13T17:01:00.000Z",
-            "actor": "Shubham Garg \u00b7 CFO",
-            "action": "CFO approved",
-            "detail": "Approved at $600"
-          }
-        ]
-      },
-      {
-        "id": "cr-zoro-codex-pro",
-        "projectId": "zoro",
-        "projectName": "Zoro",
-        "type": "Budget change",
-        "amount": 715,
-        "currentBudget": 600,
-        "requestedBudget": 1315,
-        "requester": "Dhawal Bathre",
-        "requesterRole": "R&D",
-        "urgency": "Normal",
-        "stage": "Approved",
-        "status": "approved",
-        "createdAt": "2026-07-20T09:00:00.000Z",
-        "reason": "Three (3) GPT Codex Pro 20x accounts to support baselining for GPT-5.6. High-volume, long-running software engineering and evaluation tasks \u2014 distributes workload across the team and avoids session limits.",
-        "expectedTasks": "500",
-        "timelineDelta": "",
-        "affectedPhase": "Sampling",
-        "breakdown": {
-          "models": {
-            "amount": 0,
-            "optionLabel": "",
-            "note": "",
-            "entries": []
-          },
-          "infra": {
-            "amount": 0,
-            "optionLabel": "",
-            "note": "",
-            "entries": []
-          },
-          "subs": {
-            "amount": 715,
-            "optionLabel": "GPT Codex Pro 20x \u00b7 3 accounts \u00b7 INR 59,700 (~$715)",
-            "note": "Baselining GPT-5.6 \u00b7 distribute load, avoid session limits",
-            "entries": [
-              {
-                "id": "cr-zoro-sub-codex",
-                "optionId": "gpt-codex-pro-20x",
-                "optionLabel": "GPT Codex Pro 20x \u00b7 3 accounts \u00b7 INR 59,700 (~$715)",
-                "note": "Baselining GPT-5.6 \u00b7 distribute load, avoid session limits",
-                "amount": 715,
-                "billingUnit": "per month"
-              }
-            ],
-            "billingUnit": "per month"
-          }
-        },
-        "ctoDecision": {
-          "decision": "approve",
-          "amount": 715,
-          "comment": "",
-          "at": "2026-07-20T10:30:00.000Z",
-          "by": "CTO Admin"
-        },
-        "cfoDecision": {
-          "decision": "approve",
-          "amount": 715,
-          "comment": "Approved",
-          "at": "2026-07-20T11:51:00.000Z",
-          "by": "Shubham Garg"
-        },
-        "history": [
-          {
-            "at": "2026-07-20T09:00:00.000Z",
-            "actor": "Dhawal Bathre \u00b7 R&D",
-            "action": "Submitted additional request",
-            "detail": "GPT Codex Pro 20x (3 accounts) \u00b7 INR 59,700 (~$715)"
-          },
-          {
-            "at": "2026-07-20T10:30:00.000Z",
-            "actor": "CTO Admin \u00b7 CTO",
-            "action": "CTO approved",
-            "detail": "Forwarded to CFO at ~$715"
-          },
-          {
-            "at": "2026-07-20T11:51:00.000Z",
-            "actor": "Shubham Garg \u00b7 CFO",
-            "action": "CFO approved",
-            "detail": "Approved at ~$715"
-          }
-        ]
-      },
-      {
-        "id": "cr-tron-claude-1",
-        "projectId": "tron",
-        "projectName": "Tron",
-        "type": "Budget change",
-        "amount": 200,
-        "currentBudget": 0,
-        "requestedBudget": 200,
-        "requester": "Piyush Chandra",
-        "requesterRole": "R&D",
-        "urgency": "Normal",
-        "stage": "Approved",
-        "status": "approved",
-        "createdAt": "2026-07-09T12:29:00.000Z",
-        "reason": "Claude Code Max 20x (1 subscription) for the 5 pod members to support R&D efforts on the RL environment, along with testing Claude Opus 4.8.",
-        "expectedTasks": "500",
-        "timelineDelta": "",
-        "affectedPhase": "Sampling",
-        "breakdown": {
-          "models": {
-            "amount": 0,
-            "optionLabel": "",
-            "note": "",
-            "entries": []
-          },
-          "infra": {
-            "amount": 0,
-            "optionLabel": "",
-            "note": "",
-            "entries": []
-          },
-          "subs": {
-            "amount": 200,
-            "optionLabel": "Claude Code Max 20x \u00b7 1 subscription",
-            "note": "Shared by 5 pod members \u00b7 R&D efforts + testing Opus 4.8",
-            "entries": [
-              {
-                "id": "cr-tron-sub-1",
-                "optionId": "claude-code-max-20x",
-                "optionLabel": "Claude Code Max 20x \u00b7 1 subscription",
-                "note": "Shared by 5 pod members \u00b7 R&D efforts + testing Opus 4.8",
-                "amount": 200,
-                "billingUnit": "per month"
-              }
-            ],
-            "billingUnit": "per month"
-          }
-        },
-        "ctoDecision": {
-          "decision": "approve",
-          "amount": 200,
-          "comment": "",
-          "at": "2026-07-09T15:30:00.000Z",
-          "by": "CTO Admin"
-        },
-        "cfoDecision": {
-          "decision": "approve",
-          "amount": 200,
-          "comment": "Approved",
-          "at": "2026-07-09T16:16:00.000Z",
-          "by": "Shubham Garg"
-        },
-        "history": [
-          {
-            "at": "2026-07-09T12:29:00.000Z",
-            "actor": "Piyush Chandra \u00b7 R&D",
-            "action": "Submitted additional request",
-            "detail": "Claude Code Max 20x (1 sub) \u00b7 $200"
-          },
-          {
-            "at": "2026-07-09T15:30:00.000Z",
-            "actor": "CTO Admin \u00b7 CTO",
-            "action": "CTO approved",
-            "detail": "Forwarded to CFO at $200"
-          },
-          {
-            "at": "2026-07-09T16:16:00.000Z",
-            "actor": "Shubham Garg \u00b7 CFO",
-            "action": "CFO approved",
-            "detail": "Approved at $200"
-          }
-        ]
-      },
-      {
-        "id": "cr-tron-claude-2",
-        "projectId": "tron",
-        "projectName": "Tron",
-        "type": "Budget change",
-        "amount": 400,
-        "currentBudget": 200,
-        "requestedBudget": 600,
-        "requester": "Piyush Chandra",
-        "requesterRole": "R&D",
-        "urgency": "Normal",
-        "stage": "Approved",
-        "status": "approved",
-        "createdAt": "2026-07-14T11:17:00.000Z",
-        "reason": "Two (2) additional Claude Code Max 20x subscriptions (Opus 4.8) solely for trajectory generation to baseline the tasks we create \u2014 maintains dataset quality and difficulty and avoids exhausting the session limit during simultaneous development.",
-        "expectedTasks": "500",
-        "timelineDelta": "",
-        "affectedPhase": "Sampling",
-        "breakdown": {
-          "models": {
-            "amount": 0,
-            "optionLabel": "",
-            "note": "",
-            "entries": []
-          },
-          "infra": {
-            "amount": 0,
-            "optionLabel": "",
-            "note": "",
-            "entries": []
-          },
-          "subs": {
-            "amount": 400,
-            "optionLabel": "Claude Code Max 20x \u00b7 2 subscriptions",
-            "note": "Trajectory generation \u00b7 Opus 4.8 baselining",
-            "entries": [
-              {
-                "id": "cr-tron-sub-2",
-                "optionId": "claude-code-max-20x",
-                "optionLabel": "Claude Code Max 20x \u00b7 2 subscriptions",
-                "note": "Trajectory generation \u00b7 Opus 4.8 baselining",
-                "amount": 400,
-                "billingUnit": "per month"
-              }
-            ],
-            "billingUnit": "per month"
-          }
-        },
-        "ctoDecision": {
-          "decision": "approve",
-          "amount": 400,
-          "comment": "",
-          "at": "2026-07-14T14:00:00.000Z",
-          "by": "CTO Admin"
-        },
-        "cfoDecision": {
-          "decision": "approve",
-          "amount": 400,
-          "comment": "Approved",
-          "at": "2026-07-14T16:00:00.000Z",
-          "by": "Shubham Garg"
-        },
-        "history": [
-          {
-            "at": "2026-07-14T11:17:00.000Z",
-            "actor": "Piyush Chandra \u00b7 R&D",
-            "action": "Submitted additional request",
-            "detail": "Claude Code Max 20x (2 subs) \u00b7 $400"
-          },
-          {
-            "at": "2026-07-14T14:00:00.000Z",
-            "actor": "CTO Admin \u00b7 CTO",
-            "action": "CTO approved",
-            "detail": "Forwarded to CFO at $400"
-          },
-          {
-            "at": "2026-07-14T16:00:00.000Z",
-            "actor": "Shubham Garg \u00b7 CFO",
-            "action": "CFO approved",
-            "detail": "Approved at $400"
-          }
-        ]
-      }
-    ],
+    "changeRequests": [],
     "teamRemovals": {},
     "modelKeyRecords": [],
     "itProvisioningRequests": [
@@ -1499,5 +1186,5 @@
     ],
     "itMonthlyActuals": {}
   },
-  "app_state_updated_at": "2026-07-20T19:51:00.130268+00:00"
+  "app_state_updated_at": "2026-07-21T08:58:41.996588+00:00"
 }

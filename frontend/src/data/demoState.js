@@ -393,9 +393,10 @@ export const DEMO_AI_INSIGHTS = [];
 
 export const DEMO_TOPUP_REQUESTS = [];
 
-// Each project's first CFO-approved subscription ask is seeded as the approved base R&D
-// budget (shown as a budget-track card in the R&D budget tab). Later asks are additional
-// requests (DEMO_CHANGE_REQUESTS) that stack on top, so the total budget grows.
+// Each project's CFO-approved subscription asks are consolidated into a single approved R&D
+// budget so the budget view shows one correct total with every subscription itemized.
+// Zoro: Claude Code Max 20x (3 subs, $600) + GPT Codex Pro 20x (3 accounts, ~$715) = $1,315.
+// Tron: Claude Code Max 20x (1 sub, $200) + Claude Code Max 20x (2 subs, $400) = $600.
 export const DEMO_BUDGETS = [
   {
     id: "budget-zoro-rnd",
@@ -409,20 +410,21 @@ export const DEMO_BUDGETS = [
     teamType: "R&D",
     totalTasks: 500,
     totalTrajectories: 1500,
-    totals: { total: ZORO_CLAUDE_SUB_COST, models: 0, infra: 0, subs: ZORO_CLAUDE_SUB_COST, general: 0 },
+    totals: { total: ZORO_APPROVED_BUDGET, models: 0, infra: 0, subs: ZORO_APPROVED_BUDGET, general: 0 },
     phases: [
-      { id: "zoro-sampling", name: "Sampling", start: "2026-07-09", end: "2026-07-31", budget: ZORO_CLAUDE_SUB_COST, tasks: 500, trajectories: 3 },
+      { id: "zoro-sampling", name: "Sampling", start: "2026-07-09", end: "2026-07-31", budget: ZORO_APPROVED_BUDGET, tasks: 500, trajectories: 3 },
     ],
     items: {
       models: [],
       infra: [],
       subs: [
         { id: "budget-zoro-sub-claude", optionId: "claude-code-max-20x", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 3 subscriptions", seats: 3, amount: ZORO_CLAUDE_SUB_COST, estCost: ZORO_CLAUDE_SUB_COST, billingUnit: "per month" },
+        { id: "budget-zoro-sub-codex", optionId: "gpt-codex-pro-20x", subscription: "GPT Codex Pro 20x", optionLabel: "GPT Codex Pro 20x · 3 accounts · INR 59,700 (~$715)", seats: 3, amount: ZORO_CODEX_SUB_COST, estCost: ZORO_CODEX_SUB_COST, billingUnit: "per month" },
       ],
       misc: [],
     },
-    ctoDecision: { decision: "approve", amount: ZORO_CLAUDE_SUB_COST, comment: "", at: "2026-07-13T15:00:00.000Z", by: "CTO Admin" },
-    cfoDecision: { decision: "approve", amount: ZORO_CLAUDE_SUB_COST, comment: "Approved", at: "2026-07-13T17:01:00.000Z", by: "Shubham Garg" },
+    ctoDecision: { decision: "approve", amount: ZORO_APPROVED_BUDGET, comment: "", at: "2026-07-20T10:30:00.000Z", by: "CTO Admin" },
+    cfoDecision: { decision: "approve", amount: ZORO_APPROVED_BUDGET, comment: "Approved", at: "2026-07-20T11:51:00.000Z", by: "Shubham Garg" },
   },
   {
     id: "budget-tron-rnd",
@@ -436,20 +438,21 @@ export const DEMO_BUDGETS = [
     teamType: "R&D",
     totalTasks: 500,
     totalTrajectories: 1500,
-    totals: { total: 200, models: 0, infra: 0, subs: 200, general: 0 },
+    totals: { total: TRON_APPROVED_BUDGET, models: 0, infra: 0, subs: TRON_APPROVED_BUDGET, general: 0 },
     phases: [
-      { id: "tron-sampling", name: "Sampling", start: "2026-07-09", end: "2026-07-31", budget: 200, tasks: 500, trajectories: 3 },
+      { id: "tron-sampling", name: "Sampling", start: "2026-07-09", end: "2026-07-31", budget: TRON_APPROVED_BUDGET, tasks: 500, trajectories: 3 },
     ],
     items: {
       models: [],
       infra: [],
       subs: [
-        { id: "budget-tron-sub-claude", optionId: "claude-code-max-20x", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 1 subscription", seats: 1, amount: 200, estCost: 200, billingUnit: "per month" },
+        { id: "budget-tron-sub-claude-1", optionId: "claude-code-max-20x", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 1 subscription", seats: 1, amount: 200, estCost: 200, billingUnit: "per month" },
+        { id: "budget-tron-sub-claude-2", optionId: "claude-code-max-20x", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 2 subscriptions", seats: 2, amount: 400, estCost: 400, billingUnit: "per month" },
       ],
       misc: [],
     },
-    ctoDecision: { decision: "approve", amount: 200, comment: "", at: "2026-07-09T15:30:00.000Z", by: "CTO Admin" },
-    cfoDecision: { decision: "approve", amount: 200, comment: "Approved", at: "2026-07-09T16:16:00.000Z", by: "Shubham Garg" },
+    ctoDecision: { decision: "approve", amount: TRON_APPROVED_BUDGET, comment: "", at: "2026-07-14T14:00:00.000Z", by: "CTO Admin" },
+    cfoDecision: { decision: "approve", amount: TRON_APPROVED_BUDGET, comment: "Approved", at: "2026-07-14T16:00:00.000Z", by: "Shubham Garg" },
   },
 ];
 
@@ -457,96 +460,9 @@ export const DEMO_BATCH_DELIVERIES = [];
 
 export const DEMO_BUDGET_REVIEWS = [];
 
-export const DEMO_CHANGE_REQUESTS = [
-  {
-    id: "cr-zoro-codex-pro",
-    projectId: "zoro",
-    projectName: "Zoro",
-    type: "Budget change",
-    amount: ZORO_CODEX_SUB_COST,
-    currentBudget: ZORO_CLAUDE_SUB_COST,
-    requestedBudget: ZORO_APPROVED_BUDGET,
-    requester: "Dhawal Bathre",
-    requesterRole: "R&D",
-    urgency: "Normal",
-    stage: "Approved",
-    status: "approved",
-    createdAt: "2026-07-20T09:00:00.000Z",
-    reason:
-      "Three (3) GPT Codex Pro 20x accounts to support baselining for GPT-5.6. High-volume, long-running software engineering and evaluation tasks — distributes workload across the team and avoids session limits.",
-    expectedTasks: "500",
-    timelineDelta: "",
-    affectedPhase: "Sampling",
-    breakdown: {
-      models: buildBreakdownSection([]),
-      infra: buildBreakdownSection([]),
-      subs: buildBreakdownSection(
-        [
-          {
-            id: "cr-zoro-sub-codex",
-            optionId: "gpt-codex-pro-20x",
-            optionLabel: "GPT Codex Pro 20x · 3 accounts · INR 59,700 (~$715)",
-            note: "Baselining GPT-5.6 · distribute load, avoid session limits",
-            amount: ZORO_CODEX_SUB_COST,
-            billingUnit: "per month",
-          },
-        ],
-        { billingUnit: "per month" }
-      ),
-    },
-    ctoDecision: { decision: "approve", amount: ZORO_CODEX_SUB_COST, comment: "", at: "2026-07-20T10:30:00.000Z", by: "CTO Admin" },
-    cfoDecision: { decision: "approve", amount: ZORO_CODEX_SUB_COST, comment: "Approved", at: "2026-07-20T11:51:00.000Z", by: "Shubham Garg" },
-    history: [
-      { at: "2026-07-20T09:00:00.000Z", actor: "Dhawal Bathre · R&D", action: "Submitted additional request", detail: "GPT Codex Pro 20x (3 accounts) · INR 59,700 (~$715)" },
-      { at: "2026-07-20T10:30:00.000Z", actor: "CTO Admin · CTO", action: "CTO approved", detail: "Forwarded to CFO at ~$715" },
-      { at: "2026-07-20T11:51:00.000Z", actor: "Shubham Garg · CFO", action: "CFO approved", detail: "Approved at ~$715" },
-    ],
-  },
-  {
-    id: "cr-tron-claude-2",
-    projectId: "tron",
-    projectName: "Tron",
-    type: "Budget change",
-    amount: 400,
-    currentBudget: 200,
-    requestedBudget: 600,
-    requester: "Piyush Chandra",
-    requesterRole: "R&D",
-    urgency: "Normal",
-    stage: "Approved",
-    status: "approved",
-    createdAt: "2026-07-14T11:17:00.000Z",
-    reason:
-      "Two (2) additional Claude Code Max 20x subscriptions (Opus 4.8) solely for trajectory generation to baseline the tasks we create — maintains dataset quality and difficulty and avoids exhausting the session limit during simultaneous development.",
-    expectedTasks: "500",
-    timelineDelta: "",
-    affectedPhase: "Sampling",
-    breakdown: {
-      models: buildBreakdownSection([]),
-      infra: buildBreakdownSection([]),
-      subs: buildBreakdownSection(
-        [
-          {
-            id: "cr-tron-sub-2",
-            optionId: "claude-code-max-20x",
-            optionLabel: "Claude Code Max 20x · 2 subscriptions",
-            note: "Trajectory generation · Opus 4.8 baselining",
-            amount: 400,
-            billingUnit: "per month",
-          },
-        ],
-        { billingUnit: "per month" }
-      ),
-    },
-    ctoDecision: { decision: "approve", amount: 400, comment: "", at: "2026-07-14T14:00:00.000Z", by: "CTO Admin" },
-    cfoDecision: { decision: "approve", amount: 400, comment: "Approved", at: "2026-07-14T16:00:00.000Z", by: "Shubham Garg" },
-    history: [
-      { at: "2026-07-14T11:17:00.000Z", actor: "Piyush Chandra · R&D", action: "Submitted additional request", detail: "Claude Code Max 20x (2 subs) · $400" },
-      { at: "2026-07-14T14:00:00.000Z", actor: "CTO Admin · CTO", action: "CTO approved", detail: "Forwarded to CFO at $400" },
-      { at: "2026-07-14T16:00:00.000Z", actor: "Shubham Garg · CFO", action: "CFO approved", detail: "Approved at $400" },
-    ],
-  },
-];
+// Seeded subscription asks are consolidated into DEMO_BUDGETS; no seed change requests remain.
+// New additional requests raised in-app still create change requests and stack on the budget.
+export const DEMO_CHANGE_REQUESTS = [];
 
 export const DEMO_PHASE_TASKS = {};
 
