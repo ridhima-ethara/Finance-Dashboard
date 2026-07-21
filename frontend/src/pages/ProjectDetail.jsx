@@ -29,7 +29,6 @@ import { getPhaseTasks } from "../data/mockTpm";
 import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
 import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
-import ChangeRequestDialog from "./tpm/ChangeRequestDialog";
 import EditProjectDialog from "../components/EditProjectDialog";
 import { DAILY_ACTIVITY } from "../data/mockAi";
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
@@ -110,7 +109,6 @@ const ProjectDetail = () => {
 
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
-  const [changeRequestOpen, setChangeRequestOpen] = useState(false);
   const [deliverPhase, setDeliverPhase] = useState(null); // {project, phase} or null
   const [taskLogPhase, setTaskLogPhase] = useState(null); // phase for log dialog
   const [editingLog, setEditingLog] = useState(null);
@@ -601,11 +599,6 @@ const projectBudgetBuilderHref = useMemo(() => {
               </Button>
             )}
 
-            {canOpenChangeRequest && (
-              <Button size="sm" onClick={() => setChangeRequestOpen(true)} className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 gap-2" data-testid="btn-open-change-request">
-                <ArrowUpRightSquare className="w-3.5 h-3.5" /> Change request
-              </Button>
-            )}
             {isCFO && (
               <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300" data-testid="cfo-readonly-badge">
                 <Lock className="w-3 h-3" /> Finance view
@@ -1551,31 +1544,9 @@ const projectBudgetBuilderHref = useMemo(() => {
                                 empty="No change requests mapped to this phase."
                                 testid={`phase-change-requests-${selectedPhase.id}`}
                               >
-                                {selectedPhaseChanges.map((request) => {
-                                  const status = getChangeRequestMeta(request);
-                                  const breakdownSelections = getChangeBreakdownSelections(request);
-                                  return (
-                                    <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div>
-                                          <div className="text-[11px] text-white font-medium">{request.type}</div>
-                                          <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-2">{request.reason}</div>
-                                          {breakdownSelections.length > 0 && (
-                                            <div className="text-[10px] text-zinc-400 mt-1 line-clamp-3">{breakdownSelections.join(" · ")}</div>
-                                          )}
-                                        </div>
-                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
-                                          <status.Icon className="w-2.5 h-2.5" />
-                                          {status.label}
-                                        </span>
-                                      </div>
-                                      <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
-                                        <span>{fmtDate(request.createdAt)}</span>
-                                        <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
+                                {selectedPhaseChanges.map((request) => (
+                                  <ChangeRequestCard key={request.id} request={request} />
+                                ))}
                               </RequestSummaryCard>
                             </div>
 
@@ -1875,7 +1846,6 @@ const projectBudgetBuilderHref = useMemo(() => {
               const isActivePhase = activeBatchPhaseId ? activeBatchPhaseId === ph.id : (!delivery || isRevisableDelivery);
               const isLockedPhase = !isSubmitted && !isActivePhase && role !== "R&D";
               const lockedByApproval = !executionUnlocked;
-              const topupsForPhase = projectTopups.filter((r) => r.phaseId === ph.id);
               const changesForPhase = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
               const logs = getPhaseLogs(p.id, ph.id);
               const loggedCost = logs.reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0);
@@ -1995,49 +1965,16 @@ const projectBudgetBuilderHref = useMemo(() => {
                     />
                   </div>
 
-                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
-                    <RequestSummaryCard
-                      title={`Change requests (${topupsForPhase.length})`}
-                      icon={ArrowUpRightSquare}
-                      empty="No change requests for this phase."
-                      testid={`sub-topups-${ph.id}`}
-                    >
-                      {topupsForPhase.map((request) => (
-                        <TopupRequestCard key={request.id} request={request} />
-                      ))}
-                    </RequestSummaryCard>
-
+                  <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
                     <RequestSummaryCard
                       title={`Changes (${changesForPhase.length})`}
                       icon={Shield}
                       empty="No change requests raised for this phase."
                       testid={`sub-changes-${ph.id}`}
                     >
-                      {changesForPhase.map((request) => {
-                        const status = getChangeRequestMeta(request);
-                        const breakdownSelections = getChangeBreakdownSelections(request);
-                        return (
-                          <div key={request.id} className="p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
-                            <div className="flex items-start justify-between gap-2">
-                              <div>
-                                <div className="text-[11px] text-white font-medium">{request.type}</div>
-                                <div className="text-[10px] text-zinc-500 mt-0.5 line-clamp-2">{request.reason}</div>
-                                {breakdownSelections.length > 0 && (
-                                  <div className="text-[10px] text-zinc-400 mt-1 line-clamp-3">{breakdownSelections.join(" · ")}</div>
-                                )}
-                              </div>
-                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
-                                <status.Icon className="w-2.5 h-2.5" />
-                                {status.label}
-                              </span>
-                            </div>
-                            <div className="mt-2 text-[10px] text-zinc-500 flex items-center justify-between">
-                              <span>{fmtDate(request.createdAt)}</span>
-                              <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {changesForPhase.map((request) => (
+                        <ChangeRequestCard key={request.id} request={request} />
+                      ))}
                     </RequestSummaryCard>
 
                     <RequestSummaryCard
@@ -2251,7 +2188,6 @@ const projectBudgetBuilderHref = useMemo(() => {
       </Tabs>
 
       <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} project={p} defaultPhaseId={topupPhaseId} />
-      <ChangeRequestDialog open={changeRequestOpen} onOpenChange={setChangeRequestOpen} projectId={p.id} />
       <EditProjectDialog open={editDetailsOpen} onOpenChange={setEditDetailsOpen} project={p} />
       <DeliverBatchDialog
         open={!!deliverPhase}
@@ -2527,6 +2463,49 @@ const RequestSummaryCard = ({ title, icon: Icon, children, empty, testid }) => {
         <Icon className="w-3 h-3" /> {title}
       </div>
       {!hasContent ? <div className="text-[11px] text-zinc-600 italic">{empty}</div> : <div className="space-y-1.5">{children}</div>}
+    </div>
+  );
+};
+
+// Change requests and top-ups are both "additional requests" — render them with the same card look.
+const ChangeRequestCard = ({ request }) => {
+  const status = changeRequestStatusMap[request.status] || getChangeRequestMeta(request);
+  const breakdown = getChangeBreakdownAmounts(request);
+  const hasBreakdown = Object.values(breakdown).some((value) => value > 0);
+  const breakdownSelections = getChangeBreakdownSelections(request);
+  return (
+    <div className="block rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-[11px] text-white font-medium">{request.type}</div>
+            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
+              <status.Icon className="w-2.5 h-2.5" />
+              {status.label}
+            </span>
+          </div>
+          <div className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{request.reason}</div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <TopupBreakdownPill label="Models" value={breakdown.models} />
+            <TopupBreakdownPill label="Infra" value={breakdown.infra} />
+            <TopupBreakdownPill label="Subs" value={breakdown.subs} />
+          </div>
+          {breakdownSelections.length > 0 && (
+            <div className="mt-2 text-[10px] text-zinc-400 leading-relaxed">
+              {breakdownSelections.join(" · ")}
+            </div>
+          )}
+          {!hasBreakdown && (
+            <div className="mt-2 text-[10px] text-zinc-600">
+              Line-item breakdown was not captured on the request.
+            </div>
+          )}
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-[10px] text-zinc-500">{fmtDate(request.createdAt)}</div>
+          <div className="mt-1 text-[11px] font-semibold text-white">{fmtCurrency(request.amount, { compact: false })}</div>
+        </div>
+      </div>
     </div>
   );
 };

@@ -262,6 +262,12 @@ const TopupRequestDetail = () => {
               </div>
               <Field label="Raised by" value={`${req.requester} · ${req.requesterRole}`} />
             </div>
+            {req.timelineDelta ? (
+              <div className="mt-4 pt-4 border-t border-white/5">
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Timeline change</div>
+                <div className="text-sm text-zinc-200 leading-relaxed">{req.timelineDelta}</div>
+              </div>
+            ) : null}
             <div className="mt-4 pt-4 border-t border-white/5">
               <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Business justification</div>
               <div className="text-sm text-zinc-200 leading-relaxed">{req.reason}</div>

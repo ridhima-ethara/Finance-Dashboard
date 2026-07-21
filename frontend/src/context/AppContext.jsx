@@ -61,13 +61,25 @@ const readJSON = (key, fallback) => {
 };
 
 // Ensure canonical seed records (e.g. mapped project approvals) always load,
-// even when localStorage already holds a persisted list. Stored entries win on id
-// collision so user edits are preserved; new seed entries are appended.
+// even when localStorage already holds a persisted list. The seed is authoritative for its own
+// ids, so seed updates always take effect (a stale localStorage copy can't override them);
+// user-created entries (any other id) are preserved.
 const mergeSeedById = (seed = [], stored = []) => {
   const storedList = Array.isArray(stored) ? stored : [];
-  const storedIds = new Set(storedList.map((entry) => entry?.id));
-  return [...seed.filter((entry) => !storedIds.has(entry?.id)), ...storedList];
+  const seedIds = new Set(seed.map((entry) => entry?.id));
+  return [...seed, ...storedList.filter((entry) => !seedIds.has(entry?.id))];
 };
+
+// Seeded subscription asks were consolidated into the approved budgets (see DEMO_BUDGETS). Any
+// stale localStorage copy of these change requests is dropped on load so their amount is not
+// double-counted against the budget.
+const RETIRED_CHANGE_REQUEST_IDS = new Set([
+  "cr-zoro-claude-max",
+  "cr-zoro-codex-pro",
+  "cr-tron-claude-1",
+  "cr-tron-claude-2",
+]);
+const dropRetiredChangeRequests = (list = []) => list.filter((entry) => !RETIRED_CHANGE_REQUEST_IDS.has(entry?.id));
 
 const toAppStateUrl = (base = "") => `${String(base || "").replace(/\/$/, "")}/api/app-state`;
 
@@ -1016,7 +1028,7 @@ export const AppProvider = ({ children }) => {
   const [budgets, setBudgets] = useState(() => mergeSeedById(DEMO_BUDGETS, readJSON(BUDGETS_KEY, [])));
   const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, DEMO_BATCH_DELIVERIES));
   const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, DEMO_BUDGET_REVIEWS).map(normalizeBudgetReviewRecord));
-  const [changeRequests, setChangeRequests] = useState(() => mergeSeedById(DEMO_CHANGE_REQUESTS, readJSON(CHANGE_REQUESTS_KEY, [])).map(normalizeChangeRequest));
+  const [changeRequests, setChangeRequests] = useState(() => dropRetiredChangeRequests(mergeSeedById(DEMO_CHANGE_REQUESTS, readJSON(CHANGE_REQUESTS_KEY, []))).map(normalizeChangeRequest));
   const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, DEMO_TEAM_REMOVALS));
   const [modelKeyRecords, setModelKeyRecords] = useState(() => (
     (Array.isArray(readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS)) ? readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS) : DEMO_MODEL_KEYS)
@@ -1042,7 +1054,7 @@ export const AppProvider = ({ children }) => {
     setBudgets(mergeSeedById(DEMO_BUDGETS, snapshot.budgets ?? []));
     setBatchDeliveries(snapshot.batchDeliveries ?? DEMO_BATCH_DELIVERIES);
     setBudgetReviews((snapshot.budgetReviews ?? DEMO_BUDGET_REVIEWS).map(normalizeBudgetReviewRecord));
-    setChangeRequests(mergeSeedById(DEMO_CHANGE_REQUESTS, snapshot.changeRequests ?? []).map(normalizeChangeRequest));
+    setChangeRequests(dropRetiredChangeRequests(mergeSeedById(DEMO_CHANGE_REQUESTS, snapshot.changeRequests ?? [])).map(normalizeChangeRequest));
     setTeamRemovals(snapshot.teamRemovals ?? DEMO_TEAM_REMOVALS);
     setModelKeyRecords((snapshot.modelKeyRecords ?? DEMO_MODEL_KEYS).map(normalizeModelKeyRecord));
     setItProvisioningRequests((snapshot.itProvisioningRequests ?? DEMO_IT_PROVISIONING).map(normalizeItProvisioningRequest));
@@ -2232,6 +2244,7 @@ export const AppProvider = ({ children }) => {
     bufferAmount,
     reason,
     urgency,
+    timelineDelta,
     breakdown,
     sampleIteration,
   }) => {
@@ -2253,6 +2266,7 @@ export const AppProvider = ({ children }) => {
       bufferAmount: requestedBufferAmount,
       reason,
       urgency: urgency || "Normal",
+      timelineDelta: timelineDelta || "",
       requester: user?.name || "TPM",
       requesterRole: user?.role || "TPM",
       requestedAt: new Date().toISOString(),
