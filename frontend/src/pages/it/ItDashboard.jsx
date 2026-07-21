@@ -809,12 +809,6 @@ const ItDashboard = () => {
               overall actuals, variance, and infra totals.
             </div>
           </div>
-          <Link
-            to="/reports"
-            className="inline-flex items-center gap-1 text-xs text-fuchsia-300 hover:text-fuchsia-200 font-medium"
-          >
-            Open Reports <ChevronRight className="w-3 h-3" />
-          </Link>
         </div>
 
         <div className="space-y-4">

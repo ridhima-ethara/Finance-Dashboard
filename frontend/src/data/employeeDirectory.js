@@ -986,6 +986,7 @@ export const getProjectMembersForSection = (section = "") => {
     if (normalizedSection === "TPM") return member.assignmentGroup === "TPM";
     if (normalizedSection === "PL / QL") return member.assignmentGroup === "PL / QL";
     if (normalizedSection === "R&D") return member.assignmentGroup === "R&D" && isRndDepartmentMember(member);
+    if (normalizedSection === "Engineering") return normalizeText(member.department) === "engineering";
     return true;
   });
 };

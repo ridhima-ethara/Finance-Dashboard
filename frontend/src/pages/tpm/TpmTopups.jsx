@@ -62,7 +62,7 @@ const TpmTopups = () => {
           className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
           data-testid="btn-new-topup"
         >
-          <Plus className="w-4 h-4" /> Raise change request
+          <Plus className="w-4 h-4" /> Raise additional request
         </Button>
       </div>
 

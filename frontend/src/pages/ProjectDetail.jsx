@@ -30,6 +30,7 @@ import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
 import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
 import ChangeRequestDialog from "./tpm/ChangeRequestDialog";
+import EditProjectDialog from "../components/EditProjectDialog";
 import { DAILY_ACTIVITY } from "../data/mockAi";
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
 import { buildBudgetTracks, formatBudgetTypeLabel, normalizeBudgetType, summarizeLoggedProject } from "../lib/projectMetrics";
@@ -126,6 +127,7 @@ const ProjectDetail = () => {
   const [coreTpmSelection, setCoreTpmSelection] = useState("");
   const [coreRndSelection, setCoreRndSelection] = useState("");
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
+  const [editDetailsOpen, setEditDetailsOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const team = useMemo(() => {
@@ -532,10 +534,22 @@ const projectBudgetBuilderHref = useMemo(() => {
               </span>
             </div>
             <div className="mt-1 text-xs text-zinc-500 tabular">
-              {prjCode} · Started {startDate} · {team.length} team members · Client {p.client}
+              {prjCode} · Started {startDate} · {team.length} team members{isCFO && p.client ? ` · Client ${p.client}` : ""}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {(isCto || isCFO || isTPM || isRnd) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setEditDetailsOpen(true)}
+                data-testid="btn-edit-project-details"
+                className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08] gap-2"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                Edit details
+              </Button>
+            )}
             {isCto && (
               <>
                 <Button
@@ -1164,6 +1178,29 @@ const projectBudgetBuilderHref = useMemo(() => {
             const latestBudgetEntry = budgetTracks.entries[0] || null;
             const totalTopupAmount = projectTopups.reduce((sum, request) => sum + getResolvedTopupAmount(request), 0);
             const totalChangeAmount = projectChangeRequests.reduce((sum, request) => sum + Number(request.amount || 0), 0);
+            // Every subscription asked for this project — from the approved base budget and from
+            // additional (change / top-up) requests — so they all show with their correct cost.
+            const subscriptionAsks = [
+              ...budgetTracks.ordered.flatMap((track) => (track.latest?.items?.subs || []).map((sub) => ({
+                id: sub.id || `${track.key}-${sub.optionId || sub.subscription}`,
+                label: sub.optionLabel || sub.subscription || "Subscription",
+                amount: Number(sub.amount ?? sub.estCost ?? 0),
+                source: `${track.label} budget · approved`,
+              }))),
+              ...projectChangeRequests.flatMap((request) => (request.breakdown?.subs?.entries || []).map((sub) => ({
+                id: sub.id || `${request.id}-${sub.optionId}`,
+                label: sub.optionLabel || sub.subscription || "Subscription",
+                amount: Number(sub.amount || 0),
+                source: "Additional request · approved",
+              }))),
+              ...projectTopups.flatMap((request) => (request.breakdown?.subs?.entries || []).map((sub) => ({
+                id: sub.id || `${request.id}-${sub.optionId}`,
+                label: sub.optionLabel || sub.subscription || "Subscription",
+                amount: Number(sub.amount || 0),
+                source: "Top-up request",
+              }))),
+            ];
+            const subscriptionAsksTotal = subscriptionAsks.reduce((sum, sub) => sum + sub.amount, 0);
             const currentBudgetEnvelope = cap + totalTopupAmount + totalChangeAmount;
             const seriesByDate = projectUsage.logs.reduce((map, log) => {
               if (!log.date) return map;
@@ -1314,6 +1351,29 @@ const projectBudgetBuilderHref = useMemo(() => {
                             changeCount={projectChangeRequests.length}
                           />
                         ))}
+                      </div>
+                    )}
+                    {subscriptionAsks.length > 0 && (
+                      <div className="mt-4" data-testid="rnd-subscriptions">
+                        <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+                              <Wallet className="w-3 h-3" /> Subscriptions ({subscriptionAsks.length})
+                            </div>
+                            <div className="text-[11px] text-zinc-400">Total <span className="text-white font-semibold tabular">{fmtCurrency(subscriptionAsksTotal, { compact: false })}</span></div>
+                          </div>
+                          <div className="space-y-1.5">
+                            {subscriptionAsks.map((sub) => (
+                              <div key={sub.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02]" data-testid="rnd-subscription-line">
+                                <div className="min-w-0">
+                                  <div className="text-[11px] text-white font-medium truncate">{sub.label}</div>
+                                  <div className="text-[10px] text-zinc-500">{sub.source}</div>
+                                </div>
+                                <div className="text-[11px] text-white font-semibold tabular flex-shrink-0">{fmtCurrency(sub.amount, { compact: false })}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1575,7 +1635,8 @@ const projectBudgetBuilderHref = useMemo(() => {
                   </div>
                 )}
 
-                {/* Budget change requests (kept — accessible from within the specific project) */}
+                {/* Top-up requests — only shown when there are any (the empty card is hidden) */}
+                {projectTopups.length > 0 && (
                 <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
@@ -1584,7 +1645,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                       </div>
                     {canRequestTopup && (
                       <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1" data-testid="btn-raise-topup-project">
-                        <Plus className="w-3 h-3" /> Raise change request
+                        <Plus className="w-3 h-3" /> Raise additional request
                       </Button>
                     )}
                   </div>
@@ -1598,6 +1659,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                     </div>
                   )}
                 </div>
+                )}
               </>
             );
           })()}
@@ -2190,6 +2252,7 @@ const projectBudgetBuilderHref = useMemo(() => {
 
       <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} project={p} defaultPhaseId={topupPhaseId} />
       <ChangeRequestDialog open={changeRequestOpen} onOpenChange={setChangeRequestOpen} projectId={p.id} />
+      <EditProjectDialog open={editDetailsOpen} onOpenChange={setEditDetailsOpen} project={p} />
       <DeliverBatchDialog
         open={!!deliverPhase}
         onOpenChange={(o) => !o && setDeliverPhase(null)}

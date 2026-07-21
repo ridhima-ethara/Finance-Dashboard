@@ -21,12 +21,14 @@ const buildEmptyForm = (today, user) => ({
   tpmEmails: user?.role === "TPM" && user?.email ? [String(user.email).trim().toLowerCase()] : [],
   plQlEmails: [],
   rndEmails: [],
+  engineeringEmails: [],
   attachments: [],
 });
 
 const normalizeRoleForSection = (memberRole = "", sectionRole = "Member") => {
   if (sectionRole === "TPM") return "TPM";
   if (sectionRole === "R&D") return memberRole === "Engineer" ? "Engineer" : "R&D";
+  if (sectionRole === "Engineering") return memberRole || "Engineer";
   if (sectionRole === "PL / QL") {
     if (memberRole === "Quality Lead" || memberRole === "QL") return "Quality Lead";
     if (memberRole === "Project Lead" || memberRole === "PL") return "Project Lead";
@@ -107,6 +109,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
   const tpmSuggestions = useMemo(() => getProjectMembersForSection("TPM"), []);
   const plQlSuggestions = useMemo(() => getProjectMembersForSection("PL / QL"), []);
   const rndSuggestions = useMemo(() => getProjectMembersForSection("R&D"), []);
+  const engineeringSuggestions = useMemo(() => getProjectMembersForSection("Engineering"), []);
   const rndSuggestionEmails = useMemo(
     () => new Set(rndSuggestions.map((member) => String(member.email || "").trim().toLowerCase())),
     [rndSuggestions]
@@ -166,6 +169,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
       ...form.tpmEmails.map((email) => resolveMemberFromEmail(email, "TPM")),
       ...form.plQlEmails.map((email) => resolveMemberFromEmail(email, "PL / QL")),
       ...form.rndEmails.map((email) => resolveMemberFromEmail(email, "R&D")),
+      ...form.engineeringEmails.map((email) => resolveMemberFromEmail(email, "Engineering")),
     ];
     const seen = new Set();
     return recipients.filter((member) => {
@@ -174,10 +178,9 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
       seen.add(key);
       return true;
     });
-  }, [form.plQlEmails, form.rndEmails, form.tpmEmails]);
+  }, [form.engineeringEmails, form.plQlEmails, form.rndEmails, form.tpmEmails]);
 
   const submit = () => {
-    if (!form.clientProjectName.trim()) return toast.error("Enter the client project name");
     if (!form.internalName.trim()) return toast.error("Enter the internal project name");
     if (!isRndCreator && !form.tpmEmails.length) return toast.error("Assign at least one TPM email");
     if (!form.startDate) return toast.error("Set the start date");
@@ -186,6 +189,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
       ...form.tpmEmails,
       ...form.plQlEmails,
       ...form.rndEmails,
+      ...form.engineeringEmails,
     ]).filter((email) => !ETHARA_EMAIL_REGEX.test(email));
     if (invalidEmails.length) {
       return toast.error("Only @ethara.ai emails are allowed", {
@@ -202,6 +206,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
     const tpmRecipients = form.tpmEmails.map((email) => resolveMemberFromEmail(email, "TPM"));
     const plQlRecipients = form.plQlEmails.map((email) => resolveMemberFromEmail(email, "PL / QL"));
     const rndRecipients = form.rndEmails.map((email) => resolveMemberFromEmail(email, "R&D"));
+    const engineeringRecipients = form.engineeringEmails.map((email) => resolveMemberFromEmail(email, "Engineering"));
     const primaryTpm = tpmRecipients[0];
     const plMembers = plQlRecipients
       .filter((member) => member.role !== "Quality Lead" && member.role !== "QL")
@@ -213,7 +218,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
       ...form,
       tpm: primaryTpm?.name || "",
       tpmEmail: primaryTpm?.email || "",
-      assignedMembers: [...tpmRecipients, ...plQlRecipients, ...rndRecipients],
+      assignedMembers: [...tpmRecipients, ...plQlRecipients, ...rndRecipients, ...engineeringRecipients],
       plMembers,
       qlMembers,
       rndMembers: rndRecipients.map((member) => member.name),
@@ -255,7 +260,7 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
           </TabsList>
 
           <TabsContent value="basic" className="space-y-3 mt-0">
-            <Field label="Client project name" hint="How the client refers to it">
+            <Field label="Client project name (optional)" hint="Visible to CFO only">
               <div className="relative">
                 <FileText className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 <input
@@ -399,6 +404,18 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
                 suggestions={rndSuggestions}
                 validateEmail={isRndDepartmentEmail}
                 invalidEmailTitle="Only R&D department members can be assigned here"
+              />
+            </Field>
+
+            <Field label="Assign Engineering members" hint="Added to project members + kickoff">
+              <EmailRecipientsInput
+                icon={Users}
+                emails={form.engineeringEmails}
+                onChange={(emails) => update("engineeringEmails", emails)}
+                placeholder="engineer@ethara.ai"
+                dataTestId="engineering-multi-picker"
+                helperText="Select Engineering department members. Everyone listed here gets project access and receives the kickoff mail."
+                suggestions={engineeringSuggestions}
               />
             </Field>
           </TabsContent>

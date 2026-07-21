@@ -31,7 +31,6 @@ import Buffer from "./pages/cfo/Buffer";
 import Recovery from "./pages/cfo/Recovery";
 import EarlyWarning from "./pages/cfo/EarlyWarning";
 import MonthlyForecast from "./pages/cfo/MonthlyForecast";
-import Reports from "./pages/Reports";
 import { Toaster } from "./components/ui/sonner";
 
 const Protected = ({ children }) => {
@@ -105,7 +104,6 @@ function App() {
               <Route path="/recovery" element={<Recovery />} />
               <Route path="/early-warning" element={<EarlyWarning />} />
               <Route path="/monthly-forecast" element={<MonthlyForecast />} />
-              <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

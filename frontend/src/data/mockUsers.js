@@ -10,7 +10,7 @@ export const CURRENT_USER = {
 // Default role accounts for local workspace access.
 export const USERS = [
   { id: "u1", name: "CTO Admin", role: "CTO", title: "Chief Technology Officer", email: "cto@ethara.ai", password: "ethara123", avatarUrl: "" },
-  { id: "u2", name: "CFO Admin", role: "CFO", title: "Chief Financial Officer", email: "cfo@ethara.ai", password: "ethara123", avatarUrl: "" },
+  { id: "u2", name: "Shubham Garg", role: "CFO", title: "Chief Financial Officer", email: "cfo@ethara.ai", password: "ethara123", avatarUrl: "" },
   { id: "u3", name: "TPM Lead", role: "TPM", title: "Technical Program Manager", email: "tpm@ethara.ai", password: "ethara123", avatarUrl: "" },
   { id: "u4", name: "Project Lead", role: "PL", title: "Project Lead", email: "pl@ethara.ai", password: "ethara123", avatarUrl: "" },
   { id: "u5", name: "R&D Lead", role: "R&D", title: "R&D Lead", email: "rd@ethara.ai", password: "ethara123", avatarUrl: "" },
