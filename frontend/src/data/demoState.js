@@ -1,19 +1,9 @@
-const members = {
-  cto: { id: "u1", name: "CTO Admin", role: "CTO", email: "cto@ethara.ai", status: "Online" },
-  cfo: { id: "u2", name: "CFO Admin", role: "CFO", email: "cfo@ethara.ai", status: "Online" },
-  tpm: { id: "u3", name: "TPM Lead", role: "TPM", email: "tpm@ethara.ai", status: "Online" },
-  pl: { id: "u4", name: "Project Lead", role: "Project Lead", email: "pl@ethara.ai", status: "Assigned" },
-  rnd: { id: "u5", name: "R&D Lead", role: "R&D", email: "rd@ethara.ai", status: "Kickoff sent" },
-  qa: { id: "u11", name: "Quality Lead 1", role: "Quality Lead", email: "quality.1@ethara.ai", status: "Kickoff sent" },
-  eng1: { id: "u9", name: "R&D Lead 1", role: "Engineer", email: "rnd.1@ethara.ai", status: "Kickoff sent" },
-  eng2: { id: "u10", name: "R&D Lead 2", role: "Engineer", email: "rnd.2@ethara.ai", status: "Kickoff sent" },
-};
-
-const docs = {
-  brief: { id: "doc-brief", name: "Client brief.pdf", kind: "file", url: "", type: "application/pdf", size: 180000 },
-  spec: { id: "doc-spec", name: "Solution requirements.docx", kind: "file", url: "", type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 92000 },
-  tracker: { id: "doc-tracker", name: "Acceptance matrix.xlsx", kind: "file", url: "", type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", size: 64000 },
-};
+// Seed state for the platform.
+// Sample/demo records were removed earlier; the only pre-seeded content below is the
+// real "Zoro" (RetailBench RL Environment) project mapped from its kickoff email thread,
+// including its members, kickoff mail, subscriptions, and the two CFO-approved
+// additional (subscription) requests. Everything else starts empty and is populated
+// from real user activity persisted in localStorage. Export names/shapes are preserved.
 
 const buildKickoffMail = ({ subject, goal, sentBy, sentByRole, sentAt, recipients, requirements }) => ({
   sentAt,
@@ -33,8 +23,8 @@ const buildProject = ({
   createdBy,
   createdByRole,
   goal,
-  tpm,
   pl,
+  tpm,
   rnd,
   plMembers,
   qlMembers,
@@ -148,361 +138,6 @@ const buildProject = ({
   };
 };
 
-const demoProjects = [
-  buildProject({
-    id: "demo-rnd-foundry",
-    name: "Nexa Copilot Foundry",
-    client: "Nexa Health",
-    createdBy: members.rnd.name,
-    createdByRole: "R&D",
-    goal: "Validate multilingual clinical summarization quality and move approved sample set into TPM budget planning.",
-    tpm: members.tpm.name,
-    pl: members.pl.name,
-    rnd: members.rnd.name,
-    plMembers: [members.pl.name],
-    qlMembers: [members.qa.name],
-    rndMembers: [members.rnd.name, members.eng1.name],
-    teamMembers: [members.tpm, members.pl, members.qa, members.rnd, members.eng1],
-    docsList: [docs.brief, docs.spec],
-    startDate: "2026-06-03",
-    estimatedEndDate: "2026-06-28",
-    status: "Sampling active",
-    type: "R&D",
-    workflowStage: "sample-active",
-    readyForTpmBudget: false,
-    approvedBudget: 15600,
-    estimatedBudget: 16800,
-    actualSpend: 6400,
-    burnRate: 860,
-    health: "healthy",
-    topModel: "Claude Sonnet 5",
-    phases: [
-      {
-        id: "demo-rnd-testing",
-        name: "Testing",
-        dates: "2026-06-03 → 2026-06-11",
-        start: "2026-06-03",
-        end: "2026-06-11",
-        estimated: 9200,
-        actual: 4100,
-        totalTasks: 220,
-        tasks: 220,
-        trajectoriesPerTask: 3,
-        health: "healthy",
-      },
-      {
-        id: "demo-rnd-sample-1",
-        name: "Sample 1",
-        dates: "2026-06-12 → 2026-06-28",
-        start: "2026-06-12",
-        end: "2026-06-28",
-        estimated: 6400,
-        actual: 2300,
-        totalTasks: 140,
-        tasks: 140,
-        trajectoriesPerTask: 2,
-        health: "watch",
-      },
-    ],
-    budgetItems: {
-      models: [
-        { id: "rnd-model-1", modelId: "anthropic.claude-sonnet-5", provider: "AWS", usageTag: "Evaluation runs", estCost: 5200 },
-      ],
-      infra: [
-        { id: "rnd-infra-1", provider: "AWS", instance: "g5.2xlarge", estCost: 4300 },
-      ],
-      subs: [
-        { id: "rnd-sub-1", subscription: "Cursor Pro", seats: 3, estCost: 120 },
-      ],
-      misc: [
-        { id: "rnd-misc-1", label: "Annotator support", estCost: 5980 },
-      ],
-    },
-    topupsTotal: 1800,
-    changeRequestsTotal: 900,
-    buffer: 8,
-  }),
-  buildProject({
-    id: "demo-prod-orbit",
-    name: "Orbit Support Console",
-    client: "Orbit Retail",
-    createdBy: members.tpm.name,
-    createdByRole: "TPM",
-    goal: "Launch the production support-assistant rollout with governed model access, infra, and team subscriptions.",
-    tpm: members.tpm.name,
-    pl: members.pl.name,
-    rnd: members.rnd.name,
-    plMembers: [members.pl.name],
-    qlMembers: [members.qa.name],
-    rndMembers: [members.rnd.name, members.eng2.name],
-    teamMembers: [members.tpm, members.pl, members.qa, members.rnd, members.eng2],
-    docsList: [docs.brief, docs.spec, docs.tracker],
-    startDate: "2026-06-01",
-    estimatedEndDate: "2026-06-30",
-    status: "Production active",
-    type: "Production",
-    workflowStage: "production-active",
-    readyForTpmBudget: true,
-    approvedBudget: 48000,
-    estimatedBudget: 51200,
-    actualSpend: 30700,
-    burnRate: 2140,
-    health: "watch",
-    topModel: "GPT-4o",
-    phases: [
-      {
-        id: "demo-prod-discovery",
-        name: "Discovery",
-        dates: "2026-06-01 → 2026-06-07",
-        start: "2026-06-01",
-        end: "2026-06-07",
-        estimated: 12000,
-        actual: 9500,
-        totalTasks: 120,
-        tasks: 120,
-        trajectoriesPerTask: 2,
-        health: "healthy",
-      },
-      {
-        id: "demo-prod-build",
-        name: "Build",
-        dates: "2026-06-08 → 2026-06-22",
-        start: "2026-06-08",
-        end: "2026-06-22",
-        estimated: 22000,
-        actual: 15000,
-        totalTasks: 420,
-        tasks: 420,
-        trajectoriesPerTask: 3,
-        health: "watch",
-      },
-      {
-        id: "demo-prod-qa",
-        name: "QA",
-        dates: "2026-06-23 → 2026-06-30",
-        start: "2026-06-23",
-        end: "2026-06-30",
-        estimated: 14000,
-        actual: 6200,
-        totalTasks: 220,
-        tasks: 220,
-        trajectoriesPerTask: 2,
-        health: "healthy",
-      },
-    ],
-    budgetItems: {
-      models: [
-        { id: "prod-model-1", modelId: "openai.gpt-4o", provider: "OpenAI", usageTag: "Agent responses", estCost: 18200 },
-        { id: "prod-model-2", modelId: "google.gemini-2-5-pro", provider: "GCP", usageTag: "Long-context validation", estCost: 5400 },
-      ],
-      infra: [
-        { id: "prod-infra-1", provider: "AWS", instance: "g5.2xlarge", estCost: 9800 },
-        { id: "prod-infra-2", provider: "OpenAI", instance: "priority-processing", estCost: 2600 },
-      ],
-      subs: [
-        { id: "prod-sub-1", subscription: "ChatGPT Team", seats: 6, estCost: 1800 },
-        { id: "prod-sub-2", subscription: "Figma Organization", seats: 2, estCost: 90 },
-      ],
-      misc: [
-        { id: "prod-misc-1", label: "Prompt QA coverage", estCost: 10310 },
-      ],
-    },
-    promotedToProductionAt: "2026-06-01T08:00:00.000Z",
-    recoverableFromClient: true,
-    recoveredAmount: 21400,
-    topupsTotal: 3200,
-    changeRequestsTotal: 2400,
-    buffer: 12,
-  }),
-  buildProject({
-    id: "demo-prod-lattice",
-    name: "Lattice Vision Rollout",
-    client: "Lattice Logistics",
-    createdBy: members.tpm.name,
-    createdByRole: "TPM",
-    goal: "Scale the inspection co-pilot into production with vision prompts and inference infra governance.",
-    tpm: members.tpm.name,
-    pl: members.pl.name,
-    rnd: members.rnd.name,
-    plMembers: [members.pl.name],
-    qlMembers: [members.qa.name],
-    rndMembers: [members.eng1.name],
-    teamMembers: [members.tpm, members.pl, members.qa, members.eng1],
-    docsList: [docs.spec, docs.tracker],
-    startDate: "2026-06-05",
-    estimatedEndDate: "2026-07-08",
-    status: "Production active",
-    type: "Production",
-    workflowStage: "production-active",
-    readyForTpmBudget: true,
-    approvedBudget: 36000,
-    estimatedBudget: 38800,
-    actualSpend: 24100,
-    burnRate: 1780,
-    health: "over",
-    topModel: "Kimi 1.5 Vision",
-    phases: [
-      {
-        id: "demo-lattice-enable",
-        name: "Enablement",
-        dates: "2026-06-05 → 2026-06-12",
-        start: "2026-06-05",
-        end: "2026-06-12",
-        estimated: 9000,
-        actual: 7200,
-        totalTasks: 90,
-        tasks: 90,
-        trajectoriesPerTask: 2,
-        health: "watch",
-      },
-      {
-        id: "demo-lattice-scale",
-        name: "Scale",
-        dates: "2026-06-13 → 2026-06-30",
-        start: "2026-06-13",
-        end: "2026-06-30",
-        estimated: 27000,
-        actual: 16900,
-        totalTasks: 310,
-        tasks: 310,
-        trajectoriesPerTask: 3,
-        health: "over",
-      },
-    ],
-    budgetItems: {
-      models: [
-        { id: "lat-model-1", modelId: "moonshot.kimi-1-5-vision", provider: "Moonshot", usageTag: "Visual defect review", estCost: 12400 },
-      ],
-      infra: [
-        { id: "lat-infra-1", provider: "GCP", instance: "a2-highgpu-1g", estCost: 13400 },
-      ],
-      subs: [
-        { id: "lat-sub-1", subscription: "GitHub Enterprise", seats: 5, estCost: 105 },
-      ],
-      misc: [
-        { id: "lat-misc-1", label: "Operations support", estCost: 12295 },
-      ],
-    },
-    promotedToProductionAt: "2026-06-05T08:00:00.000Z",
-    recoverableFromClient: true,
-    recoveredAmount: 11800,
-    topupsTotal: 1400,
-    changeRequestsTotal: 800,
-    buffer: 10,
-  }),
-];
-
-export const DEMO_PROJECTS = demoProjects;
-
-export const DEMO_PORTFOLIO = {
-  approvedBudget: 99600,
-  estimatedBudget: 106800,
-  actualSpend: 61200,
-  remaining: 38400,
-  utilization: 61,
-  variance: 38400,
-  forecastVariance: -4200,
-  cpi: 1.08,
-  spi: 0.94,
-  eac: 103800,
-  burnRate: 4780,
-  cashRunwayDays: 42,
-  aiCostRatio: 36,
-  infrastructureSpend: 30100,
-  aiModelSpend: 41200,
-  employeeSpend: 35500,
-  accuracy: 93,
-  healthScore: 81,
-  projectsOverBudget: 1,
-  activeProjects: demoProjects.length,
-  pendingApprovals: 4,
-  pendingTopups: 2,
-  pendingApprovalValue: 18400,
-  amountAtRisk: 14200,
-  approvedRisk: 6200,
-  flagged: 2,
-  total: 106800,
-};
-
-export const DEMO_MONTHLY_SPEND = [
-  { month: "Jan", actual: 32100, budget: 36000 },
-  { month: "Feb", actual: 35400, budget: 38000 },
-  { month: "Mar", actual: 40200, budget: 42000 },
-  { month: "Apr", actual: 45800, budget: 47000 },
-  { month: "May", actual: 52300, budget: 54000 },
-  { month: "Jun", actual: 61200, budget: 64000 },
-];
-
-export const DEMO_CATEGORY_BREAKDOWN = [
-  { name: "Models", value: 41200 },
-  { name: "Infrastructure", value: 30100 },
-  { name: "Subscriptions", value: 2115 },
-  { name: "Operations", value: 12785 },
-];
-
-export const DEMO_MODELS_USAGE = [
-  { model: "GPT-4o", provider: "OpenAI", spend: 18200 },
-  { model: "Claude Sonnet 5", provider: "AWS", spend: 5200 },
-  { model: "Gemini 2.5 Pro", provider: "GCP", spend: 5400 },
-  { model: "Kimi 1.5 Vision", provider: "Moonshot", spend: 12400 },
-];
-
-export const DEMO_INFRA_BY_PROJECT = [
-  { project: "Orbit Support Console", provider: "AWS", spend: 9800 },
-  { project: "Lattice Vision Rollout", provider: "GCP", spend: 13400 },
-  { project: "Nexa Copilot Foundry", provider: "AWS", spend: 4300 },
-  { project: "Orbit Support Console", provider: "OpenAI", spend: 2600 },
-];
-
-export const DEMO_SUBSCRIPTIONS = [
-  { name: "ChatGPT Team", monthly: 1800, seats: 6 },
-  { name: "Cursor Pro", monthly: 120, seats: 3 },
-  { name: "Figma Organization", monthly: 90, seats: 2 },
-  { name: "GitHub Enterprise", monthly: 105, seats: 5 },
-];
-
-export const DEMO_NOTIFICATIONS = [
-  {
-    id: "notif-1",
-    type: "warning",
-    title: "Orbit change request is awaiting CFO review",
-    detail: "Build phase requested +$5,400 with OpenAI capacity and shared-routing uplift.",
-    read: false,
-  },
-  {
-    id: "notif-2",
-    type: "info",
-    title: "Kickoff sent to newly added project members",
-    detail: "Nexa Copilot Foundry recipients received the kickoff goal and requirements pack.",
-    read: false,
-  },
-  {
-    id: "notif-3",
-    type: "danger",
-    title: "Lattice scale phase is trending over budget",
-    detail: "Actuals are 94% of approved spend with 37% of target tasks still open.",
-    read: true,
-  },
-  {
-    id: "notif-4",
-    type: "success",
-    title: "Sampling budget approved by CFO",
-    detail: "Sample 1 for Nexa Copilot Foundry is active and ready for task logging.",
-    read: true,
-  },
-];
-
-export const DEMO_APPROVALS = [
-  { id: "approval-1", requester: "TPM Lead", type: "Budget review", project: "Orbit Support Console", status: "Pending CFO" },
-  { id: "approval-2", requester: "TPM Lead", type: "Budget change", project: "Lattice Vision Rollout", status: "Pending CTO" },
-  { id: "approval-3", requester: "R&D Lead", type: "Sampling budget", project: "Nexa Copilot Foundry", status: "Approved" },
-];
-
-export const DEMO_AI_INSIGHTS = [
-  { id: "insight-1", title: "Moonshot vision workloads are the highest variance driver this month.", detail: "Lattice Vision Rollout is consuming 31% more model spend than its plan." },
-  { id: "insight-2", title: "OpenAI-hosted infra is cheaper than the prior dedicated cluster mix.", detail: "Orbit build-stage infra is 14% under the baseline daily plan." },
-];
-
 const buildBreakdownSection = (entries, extra = {}) => ({
   amount: entries.reduce((sum, entry) => sum + Number(entry.amount || 0), 0),
   optionLabel: entries.map((entry) => entry.optionLabel).join(" | "),
@@ -511,1253 +146,457 @@ const buildBreakdownSection = (entries, extra = {}) => ({
   ...extra,
 });
 
-export const DEMO_TOPUP_REQUESTS = [
+// --- Zoro (RetailBench RL Environment) — mapped from the kickoff email thread ---
+const ZORO_GOAL =
+  "Enterprise AI agents fail not because they lack knowledge, but because they cannot sustain coherent decisions across long-horizon, multi-constraint environments. Zoro puts this to the test: an LLM agent manages a real supermarket — pricing, inventory, supplier orders, and cash flow — over 180 simulated days of actual Dominick's transaction data. Zoro builds a task library, evaluation harness, and trajectory dataset on top of RetailBench to turn failure modes into a scalable, high-signal training corpus.";
+
+const ZORO_TEAM = [
+  { id: "u5", name: "R&D Lead", role: "R&D", email: "rd@ethara.ai", status: "Online" },
+  { id: "emp-0268", name: "Dhawal Bathre", role: "R&D", email: "dhawal.bathre@ethara.ai", status: "Online" },
+  { id: "emp-0493", name: "Mumukshu Panchal", role: "R&D", email: "mumukshu.panchal@ethara.ai", status: "Kickoff sent" },
+  { id: "emp-0772", name: "Shubham Chaturvedi", role: "R&D", email: "shubham.chaturvedi@ethara.ai", status: "Kickoff sent" },
+  { id: "emp-0016", name: "Abhay Haldia", role: "Engineer", email: "abhay.haldiya@ethara.ai", status: "Kickoff sent" },
+  { id: "emp-0424", name: "Kshitij Sharma", role: "Engineer", email: "kshitij.sharma@ethara.ai", status: "Kickoff sent" },
+];
+
+const ZORO_DOCS = [
+  { id: "doc-zoro-paper", name: "RetailBench paper (arXiv 2603.16453)", kind: "link", url: "https://arxiv.org/pdf/2603.16453" },
   {
-    id: "tur-demo-orbit-build",
-    projectId: "demo-prod-orbit",
-    projectName: "Orbit Support Console",
-    phaseId: "demo-prod-build",
-    phaseName: "Build",
-    amount: 5400,
-    baseAmount: 5400,
-    bufferPct: 0,
-    bufferAmount: 0,
-    reason: "Additional routing capacity and one month of shared subscriptions are needed to finish the escalated launch scope.",
-    urgency: "High",
-    requester: "TPM Lead",
-    requesterRole: "TPM",
-    requestedAt: "2026-06-21T10:30:00.000Z",
-    sampleIteration: null,
-    status: "pending-cfo",
-    ctoDecision: { amount: 5400, comment: "Approved as requested", at: "2026-06-22T08:15:00.000Z", decision: "approve" },
-    cfoDecision: null,
-    breakdown: {
-      total: 5400,
-      models: buildBreakdownSection([
-        {
-          id: "tur-orbit-model-1",
-          optionId: "openai.gpt-4o",
-          optionLabel: "GPT-4o · OpenAI",
-          provider: "OpenAI",
-          note: "Overflow inference traffic",
-          amount: 2200,
-        },
-        {
-          id: "tur-orbit-model-2",
-          optionId: "google.gemini-2-5-pro",
-          optionLabel: "Gemini 2.5 Pro · Google",
-          provider: "GCP",
-          note: "Long-context regression set",
-          amount: 900,
-        },
-      ]),
-      infra: buildBreakdownSection([
-        {
-          id: "tur-orbit-infra-1",
-          optionId: "shared-routing",
-          optionLabel: "shared-routing · Hosted routing · 0 vCPU · 0 GiB",
-          provider: "OpenRouter",
-          note: "Fallback routing pool",
-          amount: 1700,
-        },
-      ]),
-      subs: buildBreakdownSection([
-        {
-          id: "tur-orbit-sub-1",
-          optionId: "chatgpt-team",
-          optionLabel: "ChatGPT Team · $300/month",
-          note: "Additional enablement seats",
-          amount: 600,
-          billingUnit: "per month",
-        },
-      ], { billingUnit: "per month" }),
-    },
-    history: [
-      {
-        at: "2026-06-21T10:30:00.000Z",
-        actor: "TPM Lead · TPM",
-        action: "Submitted change request",
-        detail: "Build · $5,400",
-      },
-      {
-        at: "2026-06-22T08:15:00.000Z",
-        actor: "CTO Admin · CTO",
-        action: "CTO approved",
-        detail: "Forwarded to CFO at $5,400",
-      },
-    ],
-  },
-  {
-    id: "tur-demo-nexa-sample",
-    projectId: "demo-rnd-foundry",
-    projectName: "Nexa Copilot Foundry",
-    phaseId: "demo-rnd-sample-1",
-    phaseName: "Sample 1",
-    amount: 1800,
-    baseAmount: 1800,
-    bufferPct: 0,
-    bufferAmount: 0,
-    reason: "Extended sample validation required a short Moonshot vision pass and extra QA subscription time.",
-    urgency: "Normal",
-    requester: "R&D Lead",
-    requesterRole: "R&D",
-    requestedAt: "2026-06-15T07:45:00.000Z",
-    sampleIteration: 1,
-    status: "approved",
-    ctoDecision: { amount: 1650, comment: "Trimmed to the validated sample scope", at: "2026-06-15T12:30:00.000Z", decision: "partial" },
-    cfoDecision: { amount: 1650, comment: "Approved at CTO-modified amount", at: "2026-06-16T09:10:00.000Z", decision: "partial" },
-    breakdown: {
-      total: 1800,
-      models: buildBreakdownSection([
-        {
-          id: "tur-nexa-model-1",
-          optionId: "moonshot.kimi-1-5-vision",
-          optionLabel: "Kimi 1.5 Vision · Moonshot AI",
-          provider: "Moonshot",
-          note: "Visual edge-case review",
-          amount: 900,
-        },
-      ]),
-      infra: buildBreakdownSection([
-        {
-          id: "tur-nexa-infra-1",
-          optionId: "kimi-vision-cluster",
-          optionLabel: "kimi-vision-cluster · Vision inference · 0 vCPU · 0 GiB",
-          provider: "Moonshot",
-          note: "Short-lived sampling cluster",
-          amount: 500,
-        },
-      ]),
-      subs: buildBreakdownSection([
-        {
-          id: "tur-nexa-sub-1",
-          optionId: "cursor-pro",
-          optionLabel: "Cursor Pro · $40/month",
-          note: "Prompt editor seat",
-          amount: 40,
-          billingUnit: "per month",
-        },
-      ], { billingUnit: "per month" }),
-    },
-    history: [
-      {
-        at: "2026-06-15T07:45:00.000Z",
-        actor: "R&D Lead · R&D",
-        action: "Submitted change request",
-        detail: "Sample 1 · $1,800",
-      },
-      {
-        at: "2026-06-15T12:30:00.000Z",
-        actor: "CTO Admin · CTO",
-        action: "CTO partial approval",
-        detail: "Forwarded to CFO at $1,650",
-      },
-      {
-        at: "2026-06-16T09:10:00.000Z",
-        actor: "CFO Admin · CFO",
-        action: "CFO partial approval",
-        detail: "Baseline updated by $1,650",
-      },
-    ],
+    id: "doc-zoro-budget",
+    name: "Zoro Budget sheet",
+    kind: "link",
+    url: "https://docs.google.com/spreadsheets/d/1p5hzVzV7egwv9FiyPoIHdNL7TszHxKarTCUVDiRB6Kg/edit",
   },
 ];
 
+// Subscription asks approved by CFO (Shubham Garg). Codex ask was INR 59,700 (3 × INR 19,900);
+// converted to ~USD $715 at ~₹83.5/$ for the USD-denominated platform (original INR kept in labels).
+const ZORO_CLAUDE_SUB_COST = 600;
+const ZORO_CODEX_SUB_COST = 715;
+const ZORO_APPROVED_BUDGET = ZORO_CLAUDE_SUB_COST + ZORO_CODEX_SUB_COST;
+
+const zoroProject = (() => {
+  const base = buildProject({
+    id: "zoro",
+    name: "Zoro",
+    client: "RetailBench RL Environment",
+    createdBy: "Dhawal Bathre",
+    createdByRole: "R&D",
+    goal: ZORO_GOAL,
+    pl: "",
+    tpm: "",
+    rnd: "Dhawal Bathre",
+    plMembers: [],
+    qlMembers: [],
+    rndMembers: ["Dhawal Bathre", "Mumukshu Panchal", "Shubham Chaturvedi", "R&D Lead"],
+    teamMembers: ZORO_TEAM,
+    docsList: ZORO_DOCS,
+    startDate: "2026-07-09",
+    estimatedEndDate: "2026-07-31",
+    status: "Sampling active",
+    type: "R&D",
+    workflowStage: "sample-active",
+    readyForTpmBudget: false,
+    approvedBudget: 0,
+    estimatedBudget: ZORO_APPROVED_BUDGET,
+    actualSpend: 0,
+    burnRate: 0,
+    health: "healthy",
+    topModel: "Claude Opus 4.8",
+    phases: [
+      {
+        id: "zoro-sampling",
+        name: "Sampling",
+        dates: "2026-07-09 → 2026-07-31",
+        start: "2026-07-09",
+        end: "2026-07-31",
+        estimated: ZORO_APPROVED_BUDGET,
+        actual: 0,
+        totalTasks: 500,
+        tasks: 500,
+        trajectoriesPerTask: 3,
+        health: "healthy",
+      },
+    ],
+    // Subscriptions were approved as CFO change requests (see DEMO_CHANGE_REQUESTS);
+    // the approved amounts drive the project's budget via the change-request aggregation,
+    // so budgetItems stays empty here to avoid double-counting.
+    budgetItems: { models: [], infra: [], subs: [], misc: [] },
+    topupsTotal: 0,
+    changeRequestsTotal: 0,
+  });
+  return {
+    ...base,
+    auditLog: [
+      ...base.auditLog,
+      {
+        id: "audit-zoro-cr-claude",
+        ts: "2026-07-13T17:01:00.000Z",
+        actor: "Shubham Garg · CFO",
+        action: "CFO approved additional request",
+        detail: "Claude Code Max 20x (3 subscriptions) · $600",
+      },
+      {
+        id: "audit-zoro-cr-codex",
+        ts: "2026-07-20T11:51:00.000Z",
+        actor: "Shubham Garg · CFO",
+        action: "CFO approved additional request",
+        detail: "GPT Codex Pro 20x (3 accounts) · INR 59,700 (~$715)",
+      },
+    ],
+  };
+})();
+
+// --- Tron (RL Environment Creation) — mapped from the kickoff email thread ---
+const TRON_GOAL =
+  "High-value enterprise AI adoption is bottlenecked because standard benchmarks focus on isolated, predictable scripts rather than live environments. Tron's RL Environment focuses on raw LLM capabilities through direct tool execution across multiple enterprise domains like ITSM, CSM, Email, Calendar, and HR.";
+
+const TRON_TEAM = [
+  { id: "u5", name: "R&D Lead", role: "R&D", email: "rd@ethara.ai", status: "Online" },
+  { id: "emp-0547", name: "Piyush Chandra", role: "R&D", email: "piyush.chandra@ethara.ai", status: "Online" },
+  { id: "emp-0897", name: "Viksit Kumar Chauhan", role: "R&D", email: "viksit.chauhan@ethara.ai", status: "Kickoff sent" },
+  { id: "emp-0080", name: "Akash Kumar", role: "R&D", email: "akash.kumar@ethara.ai", status: "Kickoff sent" },
+  { id: "emp-0425", name: "Kshitiz Mehta", role: "R&D", email: "kshitiz.mehta@ethara.ai", status: "Kickoff sent" },
+  { id: "emp-0776", name: "Shubhi Khandelwal", role: "Engineer", email: "shubhi.khandelwal@ethara.ai", status: "Kickoff sent" },
+];
+
+const TRON_DOCS = [
+  { id: "doc-tron-paper", name: "RL environment paper (arXiv 2603.13594)", kind: "link", url: "https://arxiv.org/pdf/2603.13594" },
+  {
+    id: "doc-tron-budget",
+    name: "Tron Budget sheet",
+    kind: "link",
+    url: "https://docs.google.com/spreadsheets/d/1_InQU3V66n5KACpSblmOY3bJCnFBGHxWgT-73PaliZY/edit",
+  },
+];
+
+// Claude Code Max 20x asks approved by CFO (Shubham Garg): $200 (1 sub, 9 Jul) + $400 (2 subs, 14 Jul) = $600.
+const TRON_APPROVED_BUDGET = 600;
+
+const tronProject = (() => {
+  const base = buildProject({
+    id: "tron",
+    name: "Tron",
+    client: "RL Environment Creation",
+    createdBy: "Piyush Chandra",
+    createdByRole: "R&D",
+    goal: TRON_GOAL,
+    pl: "",
+    tpm: "",
+    rnd: "Piyush Chandra",
+    plMembers: [],
+    qlMembers: [],
+    rndMembers: ["Piyush Chandra", "Viksit Kumar Chauhan", "Akash Kumar", "Kshitiz Mehta", "R&D Lead"],
+    teamMembers: TRON_TEAM,
+    docsList: TRON_DOCS,
+    startDate: "2026-07-09",
+    estimatedEndDate: "2026-07-31",
+    status: "Sampling active",
+    type: "R&D",
+    workflowStage: "sample-active",
+    readyForTpmBudget: false,
+    approvedBudget: 0,
+    estimatedBudget: TRON_APPROVED_BUDGET,
+    actualSpend: 0,
+    burnRate: 0,
+    health: "healthy",
+    topModel: "Claude Opus 4.8",
+    phases: [
+      {
+        id: "tron-sampling",
+        name: "Sampling",
+        dates: "2026-07-09 → 2026-07-31",
+        start: "2026-07-09",
+        end: "2026-07-31",
+        estimated: TRON_APPROVED_BUDGET,
+        actual: 0,
+        totalTasks: 500,
+        tasks: 500,
+        trajectoriesPerTask: 3,
+        health: "healthy",
+      },
+    ],
+    // Subscriptions approved via CFO change requests (see DEMO_CHANGE_REQUESTS) drive the budget.
+    budgetItems: { models: [], infra: [], subs: [], misc: [] },
+    topupsTotal: 0,
+    changeRequestsTotal: 0,
+  });
+  return {
+    ...base,
+    auditLog: [
+      ...base.auditLog,
+      {
+        id: "audit-tron-cr-1",
+        ts: "2026-07-09T16:16:00.000Z",
+        actor: "Shubham Garg · CFO",
+        action: "CFO approved additional request",
+        detail: "Claude Code Max 20x (1 subscription) · $200",
+      },
+      {
+        id: "audit-tron-cr-2",
+        ts: "2026-07-14T16:00:00.000Z",
+        actor: "Shubham Garg · CFO",
+        action: "CFO approved additional request",
+        detail: "Claude Code Max 20x (2 subscriptions) · $400",
+      },
+    ],
+  };
+})();
+
+export const DEMO_PROJECTS = [zoroProject, tronProject];
+
+export const DEMO_PORTFOLIO = {
+  approvedBudget: 0,
+  estimatedBudget: 0,
+  actualSpend: 0,
+  remaining: 0,
+  utilization: 0,
+  variance: 0,
+  forecastVariance: 0,
+  cpi: 0,
+  spi: 0,
+  eac: 0,
+  burnRate: 0,
+  cashRunwayDays: 0,
+  aiCostRatio: 0,
+  infrastructureSpend: 0,
+  aiModelSpend: 0,
+  employeeSpend: 0,
+  accuracy: 0,
+  healthScore: 0,
+  projectsOverBudget: 0,
+  activeProjects: 0,
+  pendingApprovals: 0,
+  pendingTopups: 0,
+  pendingApprovalValue: 0,
+  amountAtRisk: 0,
+  approvedRisk: 0,
+  flagged: 0,
+  total: 0,
+};
+
+export const DEMO_MONTHLY_SPEND = [];
+
+export const DEMO_CATEGORY_BREAKDOWN = [];
+
+export const DEMO_MODELS_USAGE = [];
+
+export const DEMO_INFRA_BY_PROJECT = [];
+
+export const DEMO_SUBSCRIPTIONS = [];
+
+export const DEMO_NOTIFICATIONS = [];
+
+export const DEMO_APPROVALS = [];
+
+export const DEMO_AI_INSIGHTS = [];
+
+export const DEMO_TOPUP_REQUESTS = [];
+
+// Each project's first CFO-approved subscription ask is seeded as the approved base R&D
+// budget (shown as a budget-track card in the R&D budget tab). Later asks are additional
+// requests (DEMO_CHANGE_REQUESTS) that stack on top, so the total budget grows.
 export const DEMO_BUDGETS = [
   {
-    id: "budget-demo-nexa-testing",
-    projectId: "demo-rnd-foundry",
-    budgetType: "Testing",
-    status: "approved",
-    submittedAt: "2026-06-03T08:00:00.000Z",
-    submittedBy: "R&D Lead",
-    totalTasks: 220,
-    totalTrajectories: 660,
-    totals: { total: 9200, models: 3400, infra: 2800, subs: 0, general: 3000 },
-    phases: [
-      { id: "demo-rnd-testing", name: "Testing", start: "2026-06-03", end: "2026-06-11", budget: 9200, tasks: 220, trajectories: 3 },
-    ],
-  },
-  {
-    id: "budget-demo-nexa-sample",
-    projectId: "demo-rnd-foundry",
+    id: "budget-zoro-rnd",
+    projectId: "zoro",
     budgetType: "RnD",
     status: "approved",
-    submittedAt: "2026-06-12T08:30:00.000Z",
-    submittedBy: "R&D Lead",
-    totalTasks: 140,
-    totalTrajectories: 280,
-    totals: { total: 6400, models: 1800, infra: 1700, subs: 40, general: 2860 },
-    phases: [
-      { id: "demo-rnd-sample-1", name: "Sample 1", start: "2026-06-12", end: "2026-06-28", budget: 6400, tasks: 140, trajectories: 2 },
-    ],
-    sampleIteration: 1,
-  },
-  {
-    id: "budget-demo-orbit-prod",
-    projectId: "demo-prod-orbit",
-    budgetType: "Production",
-    status: "approved",
-    submittedAt: "2026-06-01T07:30:00.000Z",
-    submittedBy: "TPM Lead",
-    totalTasks: 760,
-    totalTrajectories: 2020,
-    totals: { total: 48000, models: 23600, infra: 12400, subs: 1890, general: 10110 },
-    phases: [
-      { id: "demo-prod-discovery", name: "Discovery", start: "2026-06-01", end: "2026-06-07", budget: 12000, tasks: 120, trajectories: 2 },
-      { id: "demo-prod-build", name: "Build", start: "2026-06-08", end: "2026-06-22", budget: 22000, tasks: 420, trajectories: 3 },
-      { id: "demo-prod-qa", name: "QA", start: "2026-06-23", end: "2026-06-30", budget: 14000, tasks: 220, trajectories: 2 },
-    ],
-  },
-  {
-    id: "budget-demo-lattice-prod",
-    projectId: "demo-prod-lattice",
-    budgetType: "Production",
-    status: "approved",
-    submittedAt: "2026-06-05T07:45:00.000Z",
-    submittedBy: "TPM Lead",
-    totalTasks: 400,
-    totalTrajectories: 1110,
-    totals: { total: 36000, models: 12400, infra: 13400, subs: 105, general: 10095 },
-    phases: [
-      { id: "demo-lattice-enable", name: "Enablement", start: "2026-06-05", end: "2026-06-12", budget: 9000, tasks: 90, trajectories: 2 },
-      { id: "demo-lattice-scale", name: "Scale", start: "2026-06-13", end: "2026-06-30", budget: 27000, tasks: 310, trajectories: 3 },
-    ],
-  },
-];
-
-export const DEMO_BATCH_DELIVERIES = [
-  {
-    id: "batch-demo-nexa-1",
-    projectId: "demo-rnd-foundry",
-    phaseId: "demo-rnd-sample-1",
-    sampleIteration: 1,
-    stage: "rnd-review",
-    status: "approved",
-    submittedAt: "2026-06-14T16:00:00.000Z",
-    actualRecovered: 0,
-    proposedAmount: 0,
-  },
-];
-
-export const DEMO_BUDGET_REVIEWS = [
-  {
-    id: "review-demo-orbit-cfo",
-    projectId: "demo-prod-orbit",
-    projectName: "Orbit Support Console",
-    client: "Orbit Retail",
-    tpm: "TPM Lead",
-    submittedAt: "2026-06-24T09:00:00.000Z",
-    urgency: "High",
-    stage: "CFO Review",
-    status: "forwarded-cfo",
-    type: "Production budget",
-    teamType: "Technical",
-    requestedBudget: 52000,
-    currentBudget: 48000,
-    recommendedBudget: 50000,
-    bufferPct: 12,
-    recoveryType: "Client-billable",
-    timeline: "2026-06-24 → 2026-07-12",
-    tasks: 780,
-    phases: 3,
-    linesFlagged: 0,
-    variance: 4000,
-    aiCost: 24800,
-    infraCost: 13200,
-    subsCost: 2100,
-    miscCost: 9900,
-    justification: "Production expansion budget for escalated retailer launch scope.",
-    items: {},
-    requestedPhases: [],
-    baselineSnapshot: {
-      approvedBudget: 48000,
-      estimatedBudget: 51200,
-      totalTasks: 760,
-      phases: demoProjects[1].phases,
-      budgetItems: demoProjects[1].budgetItems,
-      status: demoProjects[1].status,
-      type: demoProjects[1].type,
-      workflowStage: demoProjects[1].workflowStage,
-      readyForTpmBudget: demoProjects[1].readyForTpmBudget,
-      pendingBudgetSubmission: null,
-    },
-    budgetType: "Production",
-    sampleIteration: 1,
-    sourceDeliveryId: null,
-    sourceBudgetId: "budget-demo-orbit-prod",
-    requesterRole: "TPM",
-    ctoModified: false,
-    history: [
-      {
-        at: "2026-06-24T09:00:00.000Z",
-        actor: "TPM Lead · TPM",
-        action: "Submitted budget request",
-        detail: "Production · Technical · $52,000",
-      },
-      {
-        at: "2026-06-24T16:20:00.000Z",
-        actor: "CTO Admin · CTO",
-        action: "Approved by CTO and forwarded to CFO",
-        detail: "Forwarded at $52,000",
-      },
-    ],
-  },
-  {
-    id: "review-demo-nexa-returned",
-    projectId: "demo-rnd-foundry",
-    projectName: "Nexa Copilot Foundry",
-    client: "Nexa Health",
-    tpm: "R&D Lead",
-    submittedAt: "2026-06-10T08:15:00.000Z",
-    urgency: "Normal",
-    stage: "CTO Review",
-    status: "returned-to-tpm",
-    type: "Sample budget",
-    teamType: "R&D",
-    requestedBudget: 6800,
-    currentBudget: 6400,
-    recommendedBudget: 6600,
-    bufferPct: 8,
-    recoveryType: "Internal",
-    timeline: "2026-06-12 → 2026-06-28",
-    tasks: 140,
-    phases: 1,
-    linesFlagged: 1,
-    variance: 400,
-    aiCost: 1900,
-    infraCost: 1750,
-    subsCost: 40,
-    miscCost: 3110,
-    justification: "Returned sample budget after line-rate review.",
-    items: {},
-    requestedPhases: [],
-    baselineSnapshot: {
-      approvedBudget: 6400,
-      estimatedBudget: 16800,
-      totalTasks: 140,
-      phases: demoProjects[0].phases,
-      budgetItems: demoProjects[0].budgetItems,
-      status: demoProjects[0].status,
-      type: demoProjects[0].type,
-      workflowStage: demoProjects[0].workflowStage,
-      readyForTpmBudget: demoProjects[0].readyForTpmBudget,
-      pendingBudgetSubmission: null,
-    },
-    budgetType: "RnD",
-    sampleIteration: 1,
-    sourceDeliveryId: "batch-demo-nexa-1",
-    sourceBudgetId: "budget-demo-nexa-sample",
+    submittedAt: "2026-07-13T09:34:00.000Z",
+    submittedBy: "Dhawal Bathre",
+    submittedRole: "R&D",
     requesterRole: "R&D",
-    returnedTo: "R&D",
-    ctoComment: "Keep the same Moonshot cluster but reduce general support padding.",
-    ctoAt: "2026-06-10T14:10:00.000Z",
-    ctoModified: true,
-    history: [
-      {
-        at: "2026-06-10T08:15:00.000Z",
-        actor: "R&D Lead · R&D",
-        action: "Submitted budget request",
-        detail: "Sample · R&D · $6,800",
-      },
-      {
-        at: "2026-06-10T14:10:00.000Z",
-        actor: "CTO Admin · CTO",
-        action: "Returned to R&D",
-        detail: "Keep the same Moonshot cluster but reduce general support padding.",
-      },
+    teamType: "R&D",
+    totalTasks: 500,
+    totalTrajectories: 1500,
+    totals: { total: ZORO_CLAUDE_SUB_COST, models: 0, infra: 0, subs: ZORO_CLAUDE_SUB_COST, general: 0 },
+    phases: [
+      { id: "zoro-sampling", name: "Sampling", start: "2026-07-09", end: "2026-07-31", budget: ZORO_CLAUDE_SUB_COST, tasks: 500, trajectories: 3 },
     ],
+    items: {
+      models: [],
+      infra: [],
+      subs: [
+        { id: "budget-zoro-sub-claude", optionId: "claude-code-max-20x", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 3 subscriptions", seats: 3, amount: ZORO_CLAUDE_SUB_COST, estCost: ZORO_CLAUDE_SUB_COST, billingUnit: "per month" },
+      ],
+      misc: [],
+    },
+    ctoDecision: { decision: "approve", amount: ZORO_CLAUDE_SUB_COST, comment: "", at: "2026-07-13T15:00:00.000Z", by: "CTO Admin" },
+    cfoDecision: { decision: "approve", amount: ZORO_CLAUDE_SUB_COST, comment: "Approved", at: "2026-07-13T17:01:00.000Z", by: "Shubham Garg" },
+  },
+  {
+    id: "budget-tron-rnd",
+    projectId: "tron",
+    budgetType: "RnD",
+    status: "approved",
+    submittedAt: "2026-07-09T12:29:00.000Z",
+    submittedBy: "Piyush Chandra",
+    submittedRole: "R&D",
+    requesterRole: "R&D",
+    teamType: "R&D",
+    totalTasks: 500,
+    totalTrajectories: 1500,
+    totals: { total: 200, models: 0, infra: 0, subs: 200, general: 0 },
+    phases: [
+      { id: "tron-sampling", name: "Sampling", start: "2026-07-09", end: "2026-07-31", budget: 200, tasks: 500, trajectories: 3 },
+    ],
+    items: {
+      models: [],
+      infra: [],
+      subs: [
+        { id: "budget-tron-sub-claude", optionId: "claude-code-max-20x", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 1 subscription", seats: 1, amount: 200, estCost: 200, billingUnit: "per month" },
+      ],
+      misc: [],
+    },
+    ctoDecision: { decision: "approve", amount: 200, comment: "", at: "2026-07-09T15:30:00.000Z", by: "CTO Admin" },
+    cfoDecision: { decision: "approve", amount: 200, comment: "Approved", at: "2026-07-09T16:16:00.000Z", by: "Shubham Garg" },
   },
 ];
+
+export const DEMO_BATCH_DELIVERIES = [];
+
+export const DEMO_BUDGET_REVIEWS = [];
 
 export const DEMO_CHANGE_REQUESTS = [
   {
-    id: "cr-demo-lattice-scale",
-    projectId: "demo-prod-lattice",
-    projectName: "Lattice Vision Rollout",
+    id: "cr-zoro-codex-pro",
+    projectId: "zoro",
+    projectName: "Zoro",
     type: "Budget change",
-    amount: 6200,
-    currentBudget: 36000,
-    requestedBudget: 42200,
-    requester: "TPM Lead",
-    requesterRole: "TPM",
-    urgency: "High",
-    stage: "CTO Review",
-    status: "pending",
-    createdAt: "2026-06-25T11:05:00.000Z",
-    reason: "Scale phase needs larger GCP GPU coverage and OpenRouter fallback to meet the inspection backlog.",
-    expectedTasks: "410",
-    timelineDelta: "Extend by 4 days",
-    affectedPhase: "Scale",
-    breakdown: {
-      models: buildBreakdownSection([
-        {
-          id: "cr-lattice-model-1",
-          optionId: "moonshot.kimi-1-5-vision",
-          optionLabel: "Kimi 1.5 Vision · Moonshot AI",
-          provider: "Moonshot",
-          note: "Longer vision context window",
-          amount: 2200,
-        },
-      ]),
-      infra: buildBreakdownSection([
-        {
-          id: "cr-lattice-infra-1",
-          optionId: "a2-highgpu-1g",
-          optionLabel: "a2-highgpu-1g · GPU · 12 vCPU · 85 GiB",
-          provider: "GCP",
-          note: "Higher parallel image throughput",
-          amount: 3100,
-        },
-        {
-          id: "cr-lattice-infra-2",
-          optionId: "priority-routing",
-          optionLabel: "priority-routing · Priority routing · 0 vCPU · 0 GiB",
-          provider: "OpenRouter",
-          note: "Fallback during traffic spikes",
-          amount: 600,
-        },
-      ]),
-      subs: buildBreakdownSection([
-        {
-          id: "cr-lattice-sub-1",
-          optionId: "github-enterprise",
-          optionLabel: "GitHub Enterprise · $21/month",
-          note: "Temporary contractor seats",
-          amount: 300,
-          billingUnit: "per month",
-        },
-      ], { billingUnit: "per month" }),
-    },
-    history: [
-      {
-        at: "2026-06-25T11:05:00.000Z",
-        actor: "TPM Lead · TPM",
-        action: "Submitted change request",
-        detail: "$6,200 · Extend by 4 days",
-      },
-    ],
-  },
-  {
-    id: "cr-demo-nexa-approved",
-    projectId: "demo-rnd-foundry",
-    projectName: "Nexa Copilot Foundry",
-    type: "Scope / timeline change",
-    amount: 900,
-    currentBudget: 15600,
-    requestedBudget: 16500,
-    requester: "R&D Lead",
+    amount: ZORO_CODEX_SUB_COST,
+    currentBudget: ZORO_CLAUDE_SUB_COST,
+    requestedBudget: ZORO_APPROVED_BUDGET,
+    requester: "Dhawal Bathre",
     requesterRole: "R&D",
     urgency: "Normal",
     stage: "Approved",
     status: "approved",
-    createdAt: "2026-06-18T08:20:00.000Z",
-    reason: "Added one QA acceptance pass before R&D handoff.",
-    expectedTasks: "155",
-    timelineDelta: "Add 2 days",
-    affectedPhase: "Sample 1",
+    createdAt: "2026-07-20T09:00:00.000Z",
+    reason:
+      "Three (3) GPT Codex Pro 20x accounts to support baselining for GPT-5.6. High-volume, long-running software engineering and evaluation tasks — distributes workload across the team and avoids session limits.",
+    expectedTasks: "500",
+    timelineDelta: "",
+    affectedPhase: "Sampling",
     breakdown: {
-      models: buildBreakdownSection([
-        {
-          id: "cr-nexa-model-1",
-          optionId: "anthropic.claude-sonnet-5",
-          optionLabel: "Claude Sonnet 5 · Anthropic",
-          provider: "AWS",
-          note: "Acceptance reruns",
-          amount: 300,
-        },
-      ]),
-      infra: buildBreakdownSection([
-        {
-          id: "cr-nexa-infra-1",
-          optionId: "g5.2xlarge",
-          optionLabel: "g5.2xlarge · GPU · 8 vCPU · 32 GiB",
-          provider: "AWS",
-          note: "Short QA replay window",
-          amount: 400,
-        },
-      ]),
-      subs: buildBreakdownSection([
-        {
-          id: "cr-nexa-sub-1",
-          optionId: "cursor-pro",
-          optionLabel: "Cursor Pro · $40/month",
-          note: "One extra seat",
-          amount: 200,
-          billingUnit: "per month",
-        },
-      ], { billingUnit: "per month" }),
+      models: buildBreakdownSection([]),
+      infra: buildBreakdownSection([]),
+      subs: buildBreakdownSection(
+        [
+          {
+            id: "cr-zoro-sub-codex",
+            optionId: "gpt-codex-pro-20x",
+            optionLabel: "GPT Codex Pro 20x · 3 accounts · INR 59,700 (~$715)",
+            note: "Baselining GPT-5.6 · distribute load, avoid session limits",
+            amount: ZORO_CODEX_SUB_COST,
+            billingUnit: "per month",
+          },
+        ],
+        { billingUnit: "per month" }
+      ),
     },
-    ctoDecision: { decision: "approve", amount: 900, comment: "", at: "2026-06-18T12:00:00.000Z", by: "CTO Admin" },
-    cfoDecision: { decision: "approve", amount: 900, comment: "", at: "2026-06-19T09:00:00.000Z", by: "CFO Admin" },
+    ctoDecision: { decision: "approve", amount: ZORO_CODEX_SUB_COST, comment: "", at: "2026-07-20T10:30:00.000Z", by: "CTO Admin" },
+    cfoDecision: { decision: "approve", amount: ZORO_CODEX_SUB_COST, comment: "Approved", at: "2026-07-20T11:51:00.000Z", by: "Shubham Garg" },
     history: [
-      {
-        at: "2026-06-18T08:20:00.000Z",
-        actor: "R&D Lead · R&D",
-        action: "Submitted change request",
-        detail: "$900 · Add 2 days",
-      },
-      {
-        at: "2026-06-18T12:00:00.000Z",
-        actor: "CTO Admin · CTO",
-        action: "CTO approved",
-        detail: "Forwarded to CFO at $900",
-      },
-      {
-        at: "2026-06-19T09:00:00.000Z",
-        actor: "CFO Admin · CFO",
-        action: "CFO approved",
-        detail: "Approved at $900",
-      },
+      { at: "2026-07-20T09:00:00.000Z", actor: "Dhawal Bathre · R&D", action: "Submitted additional request", detail: "GPT Codex Pro 20x (3 accounts) · INR 59,700 (~$715)" },
+      { at: "2026-07-20T10:30:00.000Z", actor: "CTO Admin · CTO", action: "CTO approved", detail: "Forwarded to CFO at ~$715" },
+      { at: "2026-07-20T11:51:00.000Z", actor: "Shubham Garg · CFO", action: "CFO approved", detail: "Approved at ~$715" },
+    ],
+  },
+  {
+    id: "cr-tron-claude-2",
+    projectId: "tron",
+    projectName: "Tron",
+    type: "Budget change",
+    amount: 400,
+    currentBudget: 200,
+    requestedBudget: 600,
+    requester: "Piyush Chandra",
+    requesterRole: "R&D",
+    urgency: "Normal",
+    stage: "Approved",
+    status: "approved",
+    createdAt: "2026-07-14T11:17:00.000Z",
+    reason:
+      "Two (2) additional Claude Code Max 20x subscriptions (Opus 4.8) solely for trajectory generation to baseline the tasks we create — maintains dataset quality and difficulty and avoids exhausting the session limit during simultaneous development.",
+    expectedTasks: "500",
+    timelineDelta: "",
+    affectedPhase: "Sampling",
+    breakdown: {
+      models: buildBreakdownSection([]),
+      infra: buildBreakdownSection([]),
+      subs: buildBreakdownSection(
+        [
+          {
+            id: "cr-tron-sub-2",
+            optionId: "claude-code-max-20x",
+            optionLabel: "Claude Code Max 20x · 2 subscriptions",
+            note: "Trajectory generation · Opus 4.8 baselining",
+            amount: 400,
+            billingUnit: "per month",
+          },
+        ],
+        { billingUnit: "per month" }
+      ),
+    },
+    ctoDecision: { decision: "approve", amount: 400, comment: "", at: "2026-07-14T14:00:00.000Z", by: "CTO Admin" },
+    cfoDecision: { decision: "approve", amount: 400, comment: "Approved", at: "2026-07-14T16:00:00.000Z", by: "Shubham Garg" },
+    history: [
+      { at: "2026-07-14T11:17:00.000Z", actor: "Piyush Chandra · R&D", action: "Submitted additional request", detail: "Claude Code Max 20x (2 subs) · $400" },
+      { at: "2026-07-14T14:00:00.000Z", actor: "CTO Admin · CTO", action: "CTO approved", detail: "Forwarded to CFO at $400" },
+      { at: "2026-07-14T16:00:00.000Z", actor: "Shubham Garg · CFO", action: "CFO approved", detail: "Approved at $400" },
     ],
   },
 ];
 
-export const DEMO_PHASE_TASKS = {
-  "demo-rnd-foundry::demo-rnd-testing": [
-    { id: "task-rnd-1", name: "Clinical summary eval batch", model: "Claude Sonnet 5", status: "done", estCost: 1200, actualCost: 1080 },
-    { id: "task-rnd-2", name: "Reviewer calibration", model: "Claude Sonnet 5", status: "in-progress", estCost: 900, actualCost: 640 },
-  ],
-  "demo-rnd-foundry::demo-rnd-sample-1": [
-    { id: "task-rnd-3", name: "Sample packet QA", model: "Kimi 1.5 Vision", status: "planned", estCost: 780, actualCost: 0 },
-    { id: "task-rnd-4", name: "Requirements trace check", model: "Claude Sonnet 5", status: "done", estCost: 420, actualCost: 390 },
-  ],
-  "demo-prod-orbit::demo-prod-discovery": [
-    { id: "task-prod-1", name: "Support taxonomy mapping", model: "GPT-4o", status: "done", estCost: 950, actualCost: 860 },
-    { id: "task-prod-2", name: "Escalation path design", model: "Gemini 2.5 Pro", status: "done", estCost: 1100, actualCost: 980 },
-  ],
-  "demo-prod-orbit::demo-prod-build": [
-    { id: "task-prod-3", name: "Agent prompt hardening", model: "GPT-4o", status: "in-progress", estCost: 3200, actualCost: 2580 },
-    { id: "task-prod-4", name: "Fallback policy testing", model: "Gemini 2.5 Pro", status: "planned", estCost: 1700, actualCost: 0 },
-  ],
-  "demo-prod-orbit::demo-prod-qa": [
-    { id: "task-prod-5", name: "Acceptance regression pack", model: "GPT-4o", status: "planned", estCost: 1400, actualCost: 0 },
-  ],
-  "demo-prod-lattice::demo-lattice-enable": [
-    { id: "task-lat-1", name: "Camera sample alignment", model: "Kimi 1.5 Vision", status: "done", estCost: 1300, actualCost: 1220 },
-  ],
-  "demo-prod-lattice::demo-lattice-scale": [
-    { id: "task-lat-2", name: "Inference throughput tuning", model: "Kimi 1.5 Vision", status: "in-progress", estCost: 2400, actualCost: 1960 },
-    { id: "task-lat-3", name: "Fallback router validation", model: "Kimi 1.5 Vision", status: "planned", estCost: 980, actualCost: 0 },
-  ],
-};
+export const DEMO_PHASE_TASKS = {};
 
-export const DEMO_TASK_LOGS = {
-  "demo-rnd-foundry::demo-rnd-testing": [
-    {
-      id: "log-rnd-1",
-      date: "2026-06-05",
-      createdAt: "2026-06-05T11:30:00.000Z",
-      tasksDone: 48,
-      successfulTasks: 48,
-      failedTasks: 4,
-      trajectories: 144,
-      successTrajectories: 144,
-      failedTrajectories: 12,
-      cost: 1120,
-      inputTokens: 680000,
-      outputTokens: 166000,
-      modelUsage: [
-        { id: "mu-rnd-1", modelId: "anthropic.claude-sonnet-5", modelName: "Claude Sonnet 5", tasksDone: 48, cost: 1120, inputTokens: 680000, outputTokens: 166000 },
-      ],
-      approvalStatus: "approved",
-    },
-    {
-      id: "log-rnd-2",
-      date: "2026-06-09",
-      createdAt: "2026-06-09T15:10:00.000Z",
-      tasksDone: 36,
-      successfulTasks: 36,
-      failedTasks: 2,
-      trajectories: 108,
-      successTrajectories: 108,
-      failedTrajectories: 6,
-      cost: 980,
-      inputTokens: 512000,
-      outputTokens: 138000,
-      modelUsage: [
-        { id: "mu-rnd-2", modelId: "anthropic.claude-sonnet-5", modelName: "Claude Sonnet 5", tasksDone: 36, cost: 980, inputTokens: 512000, outputTokens: 138000 },
-      ],
-      approvalStatus: "approved",
-    },
-  ],
-  "demo-rnd-foundry::demo-rnd-sample-1": [
-    {
-      id: "log-rnd-3",
-      date: "2026-06-18",
-      createdAt: "2026-06-18T10:00:00.000Z",
-      tasksDone: 22,
-      successfulTasks: 22,
-      failedTasks: 1,
-      trajectories: 44,
-      successTrajectories: 44,
-      failedTrajectories: 2,
-      cost: 740,
-      inputTokens: 240000,
-      outputTokens: 76000,
-      modelUsage: [
-        { id: "mu-rnd-3", modelId: "moonshot.kimi-1-5-vision", modelName: "Kimi 1.5 Vision", tasksDone: 12, cost: 420, inputTokens: 122000, outputTokens: 32000 },
-        { id: "mu-rnd-4", modelId: "anthropic.claude-sonnet-5", modelName: "Claude Sonnet 5", tasksDone: 10, cost: 320, inputTokens: 118000, outputTokens: 44000 },
-      ],
-      approvalStatus: "approved",
-    },
-  ],
-  "demo-prod-orbit::demo-prod-discovery": [
-    {
-      id: "log-orbit-1",
-      date: "2026-06-04",
-      createdAt: "2026-06-04T14:00:00.000Z",
-      tasksDone: 52,
-      successfulTasks: 52,
-      failedTasks: 3,
-      trajectories: 104,
-      successTrajectories: 104,
-      failedTrajectories: 6,
-      cost: 2860,
-      inputTokens: 920000,
-      outputTokens: 286000,
-      modelUsage: [
-        { id: "mu-orbit-1", modelId: "openai.gpt-4o", modelName: "GPT-4o", tasksDone: 35, cost: 1880, inputTokens: 620000, outputTokens: 180000 },
-        { id: "mu-orbit-2", modelId: "google.gemini-2-5-pro", modelName: "Gemini 2.5 Pro", tasksDone: 17, cost: 980, inputTokens: 300000, outputTokens: 106000 },
-      ],
-      approvalStatus: "approved",
-    },
-  ],
-  "demo-prod-orbit::demo-prod-build": [
-    {
-      id: "log-orbit-2",
-      date: "2026-06-14",
-      createdAt: "2026-06-14T18:20:00.000Z",
-      tasksDone: 110,
-      successfulTasks: 110,
-      failedTasks: 6,
-      trajectories: 330,
-      successTrajectories: 330,
-      failedTrajectories: 18,
-      cost: 6120,
-      inputTokens: 1820000,
-      outputTokens: 560000,
-      modelUsage: [
-        { id: "mu-orbit-3", modelId: "openai.gpt-4o", modelName: "GPT-4o", tasksDone: 82, cost: 4440, inputTokens: 1280000, outputTokens: 400000 },
-        { id: "mu-orbit-4", modelId: "google.gemini-2-5-pro", modelName: "Gemini 2.5 Pro", tasksDone: 28, cost: 1680, inputTokens: 540000, outputTokens: 160000 },
-      ],
-      approvalStatus: "approved",
-    },
-    {
-      id: "log-orbit-3",
-      date: "2026-06-20",
-      createdAt: "2026-06-20T16:10:00.000Z",
-      tasksDone: 86,
-      successfulTasks: 86,
-      failedTasks: 5,
-      trajectories: 258,
-      successTrajectories: 258,
-      failedTrajectories: 15,
-      cost: 4740,
-      inputTokens: 1360000,
-      outputTokens: 438000,
-      modelUsage: [
-        { id: "mu-orbit-5", modelId: "openai.gpt-4o", modelName: "GPT-4o", tasksDone: 64, cost: 3540, inputTokens: 980000, outputTokens: 316000 },
-        { id: "mu-orbit-6", modelId: "google.gemini-2-5-pro", modelName: "Gemini 2.5 Pro", tasksDone: 22, cost: 1200, inputTokens: 380000, outputTokens: 122000 },
-      ],
-      approvalStatus: "approved",
-    },
-  ],
-  "demo-prod-orbit::demo-prod-qa": [
-    {
-      id: "log-orbit-4",
-      date: "2026-06-27",
-      createdAt: "2026-06-27T12:15:00.000Z",
-      tasksDone: 44,
-      successfulTasks: 44,
-      failedTasks: 1,
-      trajectories: 88,
-      successTrajectories: 88,
-      failedTrajectories: 2,
-      cost: 2180,
-      inputTokens: 640000,
-      outputTokens: 188000,
-      modelUsage: [
-        { id: "mu-orbit-7", modelId: "openai.gpt-4o", modelName: "GPT-4o", tasksDone: 44, cost: 2180, inputTokens: 640000, outputTokens: 188000 },
-      ],
-      approvalStatus: "approved",
-    },
-  ],
-  "demo-prod-lattice::demo-lattice-enable": [
-    {
-      id: "log-lattice-1",
-      date: "2026-06-09",
-      createdAt: "2026-06-09T10:40:00.000Z",
-      tasksDone: 38,
-      successfulTasks: 38,
-      failedTasks: 2,
-      trajectories: 76,
-      successTrajectories: 76,
-      failedTrajectories: 4,
-      cost: 2980,
-      inputTokens: 480000,
-      outputTokens: 122000,
-      modelUsage: [
-        { id: "mu-lattice-1", modelId: "moonshot.kimi-1-5-vision", modelName: "Kimi 1.5 Vision", tasksDone: 38, cost: 2980, inputTokens: 480000, outputTokens: 122000 },
-      ],
-      approvalStatus: "approved",
-    },
-  ],
-  "demo-prod-lattice::demo-lattice-scale": [
-    {
-      id: "log-lattice-2",
-      date: "2026-06-18",
-      createdAt: "2026-06-18T18:05:00.000Z",
-      tasksDone: 76,
-      successfulTasks: 76,
-      failedTasks: 5,
-      trajectories: 228,
-      successTrajectories: 228,
-      failedTrajectories: 15,
-      cost: 6640,
-      inputTokens: 830000,
-      outputTokens: 242000,
-      modelUsage: [
-        { id: "mu-lattice-2", modelId: "moonshot.kimi-1-5-vision", modelName: "Kimi 1.5 Vision", tasksDone: 76, cost: 6640, inputTokens: 830000, outputTokens: 242000 },
-      ],
-      approvalStatus: "approved",
-    },
-    {
-      id: "log-lattice-3",
-      date: "2026-06-26",
-      createdAt: "2026-06-26T17:00:00.000Z",
-      tasksDone: 64,
-      successfulTasks: 64,
-      failedTasks: 4,
-      trajectories: 192,
-      successTrajectories: 192,
-      failedTrajectories: 12,
-      cost: 5420,
-      inputTokens: 720000,
-      outputTokens: 210000,
-      modelUsage: [
-        { id: "mu-lattice-3", modelId: "moonshot.kimi-1-5-vision", modelName: "Kimi 1.5 Vision", tasksDone: 64, cost: 5420, inputTokens: 720000, outputTokens: 210000 },
-      ],
-      approvalStatus: "approved",
-    },
-  ],
-};
+export const DEMO_TASK_LOGS = {};
 
-export const DEMO_BUFFERS = {
-  "demo-rnd-foundry": 8,
-  "demo-prod-orbit": 12,
-  "demo-prod-lattice": 10,
-};
+export const DEMO_BUFFERS = {};
 
 export const DEMO_BUFFER_POOL = {
-  total: 12000,
-  available: 7100,
-  policyPct: 10,
-  history: [
-    {
-      id: "buffer-history-1",
-      date: "2026-06-24T11:00:00.000Z",
-      project: "Orbit Support Console",
-      action: "Allocated",
-      amount: 2400,
-      by: "CFO Admin",
-      reason: "5% hidden reserve for rollout risk",
-    },
-  ],
-  alerts: [
-    {
-      id: "buffer-alert-1",
-      level: "warning",
-      title: "Lattice Vision Rollout is above 75% of its visible budget.",
-      detail: "Keep the hidden reserve unchanged until the scale-phase request is resolved.",
-    },
-  ],
-  projectConsumed: {
-    "demo-rnd-foundry": 420,
-    "demo-prod-orbit": 880,
-    "demo-prod-lattice": 1600,
-  },
+  total: 0,
+  available: 0,
+  policyPct: 0,
+  history: [],
+  alerts: [],
+  projectConsumed: {},
 };
 
-export const DEMO_IT_MONTHLY_ACTUALS = {
-  "demo-prod-orbit": {
-    monthKey: "2026-06",
-    updatedAt: "2026-06-30T18:00:00.000Z",
-    modelActual: 12460,
-    infraActual: 9460,
-    subsActual: 1890,
-    monthEndActual: 23810,
-    dailyActuals: [
-      { date: "2026-06-25", modelActual: 620, infraActual: 340, subsActual: 90 },
-      { date: "2026-06-26", modelActual: 680, infraActual: 360, subsActual: 90 },
-      { date: "2026-06-27", modelActual: 710, infraActual: 380, subsActual: 90 },
-      { date: "2026-06-28", modelActual: 690, infraActual: 360, subsActual: 90 },
-      { date: "2026-06-29", modelActual: 720, infraActual: 390, subsActual: 90 },
-      { date: "2026-06-30", modelActual: 760, infraActual: 420, subsActual: 90 },
-    ],
-    modelUsage: [
-      { id: "it-orbit-model-1", modelId: "openai.gpt-4o", modelName: "GPT-4o", cost: 8120, inputTokens: 2400000, outputTokens: 710000 },
-      { id: "it-orbit-model-2", modelId: "google.gemini-2-5-pro", modelName: "Gemini 2.5 Pro", cost: 4340, inputTokens: 1220000, outputTokens: 388000 },
-    ],
-    note: "Month-end actuals loaded from vendor invoices.",
-    updatedBy: "IT Admin",
-  },
-  "demo-prod-lattice": {
-    monthKey: "2026-06",
-    updatedAt: "2026-06-30T18:10:00.000Z",
-    modelActual: 11120,
-    infraActual: 11880,
-    subsActual: 105,
-    monthEndActual: 23105,
-    dailyActuals: [
-      { date: "2026-06-25", modelActual: 540, infraActual: 520, subsActual: 5 },
-      { date: "2026-06-26", modelActual: 610, infraActual: 610, subsActual: 5 },
-      { date: "2026-06-27", modelActual: 640, infraActual: 650, subsActual: 5 },
-      { date: "2026-06-28", modelActual: 620, infraActual: 640, subsActual: 5 },
-      { date: "2026-06-29", modelActual: 670, infraActual: 700, subsActual: 5 },
-      { date: "2026-06-30", modelActual: 720, infraActual: 760, subsActual: 5 },
-    ],
-    modelUsage: [
-      { id: "it-lattice-model-1", modelId: "moonshot.kimi-1-5-vision", modelName: "Kimi 1.5 Vision", cost: 11120, inputTokens: 2050000, outputTokens: 574000 },
-    ],
-    note: "Vendor and cloud-invoice actuals synchronized.",
-    updatedBy: "IT Admin",
-  },
-};
+export const DEMO_IT_MONTHLY_ACTUALS = {};
 
-export const DEMO_REPORTS_CATALOG = [
-  {
-    id: "report-1",
-    name: "June Portfolio Burn Summary",
-    type: "Finance",
-    frequency: "Monthly",
-    owner: "CFO Admin",
-    updatedAt: "2026-06-30T19:00:00.000Z",
-  },
-  {
-    id: "report-2",
-    name: "R&D Sampling Status Digest",
-    type: "Operations",
-    frequency: "Weekly",
-    owner: "CTO Admin",
-    updatedAt: "2026-06-28T15:30:00.000Z",
-  },
-];
+export const DEMO_REPORTS_CATALOG = [];
 
 export const DEMO_AI_COST_TODAY = {
-  total: 3680,
-  budget: 4200,
-  yesterday: 3420,
-  wowChange: 7.6,
-  tokensInput: 1240000,
-  tokensOutput: 386000,
-  avgLatencyMs: 1180,
-  requests: 6420,
+  total: 0,
+  budget: 0,
+  yesterday: 0,
+  wowChange: 0,
+  tokensInput: 0,
+  tokensOutput: 0,
+  avgLatencyMs: 0,
+  requests: 0,
 };
 
 export const DEMO_AI_COST_MONTHLY = {
-  total: 41200,
-  budget: 46000,
-  forecast: 43800,
-  projected: 45100,
-  daysElapsed: 30,
+  total: 0,
+  budget: 0,
+  forecast: 0,
+  projected: 0,
+  daysElapsed: 0,
   daysRemaining: 0,
 };
 
-export const DEMO_AI_COST_BY_PROVIDER = [
-  { provider: "OpenAI", value: 18200, color: "#E619B8" },
-  { provider: "Moonshot", value: 12400, color: "#10B981" },
-  { provider: "GCP", value: 5400, color: "#3B82F6" },
-  { provider: "AWS", value: 5200, color: "#F59E0B" },
-];
+export const DEMO_AI_COST_BY_PROVIDER = [];
 
-export const DEMO_AI_COST_BY_MODEL = [
-  { model: "GPT-4o", provider: "OpenAI", value: 18200 },
-  { model: "Kimi 1.5 Vision", provider: "Moonshot", value: 12400 },
-  { model: "Gemini 2.5 Pro", provider: "GCP", value: 5400 },
-  { model: "Claude Sonnet 5", provider: "AWS", value: 5200 },
-];
+export const DEMO_AI_COST_BY_MODEL = [];
 
-export const DEMO_AI_COST_TREND = [
-  { day: "Jun 24", value: 3020 },
-  { day: "Jun 25", value: 3180 },
-  { day: "Jun 26", value: 3310 },
-  { day: "Jun 27", value: 3470 },
-  { day: "Jun 28", value: 3380 },
-  { day: "Jun 29", value: 3590 },
-  { day: "Jun 30", value: 3680 },
-];
+export const DEMO_AI_COST_TREND = [];
 
-export const DEMO_AI_COST_BY_PROJECT = [
-  { projectId: "demo-prod-orbit", project: "Orbit Support Console", spend: 18200 },
-  { projectId: "demo-prod-lattice", project: "Lattice Vision Rollout", spend: 12400 },
-  { projectId: "demo-rnd-foundry", project: "Nexa Copilot Foundry", spend: 5200 },
-];
+export const DEMO_AI_COST_BY_PROJECT = [];
 
-const maskDemoSecret = (value = "", lead = 10, tail = 4) => {
-  const raw = String(value || "").trim();
-  if (!raw) return "";
-  const safeLead = Math.min(Math.max(lead, 1), Math.max(raw.length - 1, 1));
-  const safeTail = Math.min(Math.max(tail, 1), Math.max(raw.length - safeLead, 1));
-  const visibleStart = raw.slice(0, safeLead);
-  const visibleEnd = raw.slice(-safeTail);
-  return `${visibleStart}${"•".repeat(Math.max(8, raw.length - safeLead - safeTail))}${visibleEnd}`;
-};
+export const DEMO_MODEL_KEYS = [];
 
-const buildDemoAccessToken = ({
-  member,
-  internalToken,
-  modelId,
-  modelName,
-  provider,
-  env = "production",
-  gatewayRoute = "/api/gateway/execute",
-  rateLimitPerMinute = 120,
-  budgetCap = 0,
-  remainingBudget = budgetCap,
-  allowedNetworks = ["Corp VPN"],
-  allowedDevices = ["Managed laptop"],
-  expiresAt = "2026-09-30T23:59:59.000Z",
-  issuedAt = "2026-06-30T09:00:00.000Z",
-  lastUsed = null,
-  requestCount = 0,
-  totalCost = 0,
-  inputTokens = 0,
-  outputTokens = 0,
-}) => ({
-  id: `tok-${member.id}-${String(modelId || modelName || provider).replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 12)}`,
-  memberId: member.id,
-  memberName: member.name,
-  memberEmail: member.email,
-  memberRole: member.role,
-  internalToken,
-  maskedToken: maskDemoSecret(internalToken, 12, 6),
-  status: "active",
-  env,
-  gatewayRoute,
-  allowedModelId: modelId || "",
-  allowedModelLabel: modelName,
-  provider,
-  issuedAt,
-  expiresAt,
-  lastUsed,
-  rateLimitPerMinute,
-  budgetCap: Number(budgetCap || 0),
-  remainingBudget: Number(remainingBudget || 0),
-  spentBudget: Math.max(0, Number(budgetCap || 0) - Number(remainingBudget || 0)),
-  allowedNetworks,
-  allowedDevices,
-  usage: {
-    requests: Number(requestCount || 0),
-    totalCost: Number(totalCost || 0),
-    inputTokens: Number(inputTokens || 0),
-    outputTokens: Number(outputTokens || 0),
-  },
-});
-
-const buildDemoModelKeyRecord = ({
-  id,
-  projectId,
-  projectName,
-  provider,
-  model,
-  modelId,
-  type = "Production",
-  env = "production",
-  fullKey,
-  members = [],
-  budgetCap = 0,
-  remainingBudget = budgetCap,
-  rateLimitPerMinute = 120,
-  allowedNetworks = ["Corp VPN"],
-  allowedDevices = ["Managed laptop"],
-  expiresAt = "2026-09-30T23:59:59.000Z",
-  createdAt = "2026-06-30T09:00:00.000Z",
-  createdBy = "IT Admin",
-  lastUsed = createdAt,
-  usage = 0,
-  sourceReviewId = "",
-  tags = [],
-  tokenUsageByMember = {},
-}) => {
-  const memberCount = Math.max(members.length, 1);
-  const perMemberBudget = Number(budgetCap || 0) / memberCount;
-  const perMemberRemaining = Number(remainingBudget || 0) / memberCount;
-  const accessTokens = members.map((member, index) => {
-    const tokenUsage = tokenUsageByMember[member.id] || {};
-    return buildDemoAccessToken({
-      member,
-      internalToken: `eth_${projectId.replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 8)}_${member.id.toLowerCase()}_${String(modelId || model).replace(/[^a-z0-9]/gi, "").toLowerCase().slice(0, 8)}_${String(index + 1).padStart(2, "0")}`,
-      modelId,
-      modelName: model,
-      provider,
-      env,
-      rateLimitPerMinute,
-      budgetCap: Number(tokenUsage.budgetCap || perMemberBudget),
-      remainingBudget: Number(tokenUsage.remainingBudget || perMemberRemaining),
-      allowedNetworks,
-      allowedDevices,
-      expiresAt,
-      issuedAt: createdAt,
-      lastUsed: tokenUsage.lastUsed || lastUsed,
-      requestCount: tokenUsage.requests || 0,
-      totalCost: tokenUsage.totalCost || 0,
-      inputTokens: tokenUsage.inputTokens || 0,
-      outputTokens: tokenUsage.outputTokens || 0,
-    });
-  });
-
-  return {
-    id,
-    project: projectId,
-    projectName,
-    provider,
-    model,
-    modelId,
-    type,
-    env,
-    fullKey,
-    maskedKey: maskDemoSecret(fullKey, 7, 4),
-    tags: tags.length ? tags : [type.toLowerCase(), env, "gateway-routed"],
-    lastUsed,
-    usage: Number(usage || 0),
-    createdBy,
-    createdAt,
-    status: "active",
-    members: members.map((member) => ({
-      id: member.id,
-      name: member.name,
-      role: member.role,
-      email: member.email,
-    })),
-    sourceReviewId,
-    gatewayRoute: "/api/gateway/execute",
-    gatewayPolicy: {
-      allowedModelId: modelId || "",
-      allowedModelLabel: model,
-      provider,
-      rateLimitPerMinute,
-      budgetCap: Number(budgetCap || 0),
-      remainingBudget: Number(remainingBudget || 0),
-      expiresAt,
-      allowedNetworks,
-      allowedDevices,
-    },
-    accessTokens,
-  };
-};
-
-export const DEMO_MODEL_KEYS = [
-  buildDemoModelKeyRecord({
-    id: "k-demo-prod-orbit-gpt4o",
-    projectId: "demo-prod-orbit",
-    projectName: "Orbit Support Console",
-    provider: "OpenAI",
-    model: "GPT-4o",
-    modelId: "openai.gpt-4o",
-    fullKey: "sk-oai-live-orbitgpt4o72b1m9q",
-    members: [members.tpm, members.pl, members.qa, members.rnd, members.eng2],
-    budgetCap: 18200,
-    remainingBudget: 14640,
-    rateLimitPerMinute: 240,
-    allowedNetworks: ["Corp VPN", "HQ Office"],
-    allowedDevices: ["Managed laptop", "Serverless app"],
-    expiresAt: "2026-09-30T23:59:59.000Z",
-    createdAt: "2026-06-22T09:40:00.000Z",
-    lastUsed: "2026-06-30T18:05:00.000Z",
-    usage: 1842,
-    sourceReviewId: "review-demo-orbit-approved",
-    tokenUsageByMember: {
-      u3: { requests: 482, totalCost: 3840, remainingBudget: 2788, inputTokens: 922000, outputTokens: 288000, lastUsed: "2026-06-30T18:05:00.000Z" },
-      u4: { requests: 311, totalCost: 2210, remainingBudget: 3418, inputTokens: 612000, outputTokens: 188000, lastUsed: "2026-06-30T14:10:00.000Z" },
-      u11: { requests: 218, totalCost: 1490, remainingBudget: 4138, inputTokens: 404000, outputTokens: 128000, lastUsed: "2026-06-30T13:20:00.000Z" },
-      u5: { requests: 401, totalCost: 2870, remainingBudget: 3198, inputTokens: 744000, outputTokens: 232000, lastUsed: "2026-06-30T17:32:00.000Z" },
-      u10: { requests: 430, totalCost: 3150, remainingBudget: 3098, inputTokens: 798000, outputTokens: 244000, lastUsed: "2026-06-30T17:54:00.000Z" },
-    },
-  }),
-  buildDemoModelKeyRecord({
-    id: "k-demo-prod-orbit-gemini",
-    projectId: "demo-prod-orbit",
-    projectName: "Orbit Support Console",
-    provider: "GCP",
-    model: "Gemini 2.5 Pro",
-    modelId: "google.gemini-2-5-pro",
-    fullKey: "sk-gcp-live-orbitgemini93aqx4m",
-    members: [members.tpm, members.qa],
-    budgetCap: 5400,
-    remainingBudget: 4340,
-    rateLimitPerMinute: 90,
-    allowedNetworks: ["Corp VPN"],
-    allowedDevices: ["Managed laptop"],
-    expiresAt: "2026-09-30T23:59:59.000Z",
-    createdAt: "2026-06-22T09:45:00.000Z",
-    lastUsed: "2026-06-30T16:52:00.000Z",
-    usage: 624,
-    sourceReviewId: "review-demo-orbit-approved",
-    tokenUsageByMember: {
-      u3: { requests: 352, totalCost: 2580, remainingBudget: 120, inputTokens: 522000, outputTokens: 176000, lastUsed: "2026-06-30T16:52:00.000Z" },
-      u11: { requests: 272, totalCost: 2480, remainingBudget: 220, inputTokens: 468000, outputTokens: 164000, lastUsed: "2026-06-30T12:48:00.000Z" },
-    },
-  }),
-  buildDemoModelKeyRecord({
-    id: "k-demo-prod-lattice-kimi",
-    projectId: "demo-prod-lattice",
-    projectName: "Lattice Vision Rollout",
-    provider: "Moonshot",
-    model: "Kimi 1.5 Vision",
-    modelId: "moonshot.kimi-1-5-vision",
-    fullKey: "sk-kmi-live-latticevision91dn2z",
-    members: [members.tpm, members.pl, members.qa, members.eng1],
-    budgetCap: 12400,
-    remainingBudget: 10320,
-    rateLimitPerMinute: 120,
-    allowedNetworks: ["Corp VPN", "Factory VLAN"],
-    allowedDevices: ["Managed laptop", "Edge appliance"],
-    expiresAt: "2026-10-15T23:59:59.000Z",
-    createdAt: "2026-06-26T10:05:00.000Z",
-    lastUsed: "2026-06-30T17:10:00.000Z",
-    usage: 912,
-    sourceReviewId: "review-demo-lattice-approved",
-    tokenUsageByMember: {
-      u3: { requests: 241, totalCost: 1820, remainingBudget: 1280, inputTokens: 428000, outputTokens: 122000, lastUsed: "2026-06-30T16:05:00.000Z" },
-      u4: { requests: 198, totalCost: 1470, remainingBudget: 1630, inputTokens: 354000, outputTokens: 98000, lastUsed: "2026-06-30T14:48:00.000Z" },
-      u11: { requests: 163, totalCost: 1180, remainingBudget: 1920, inputTokens: 302000, outputTokens: 86000, lastUsed: "2026-06-30T13:20:00.000Z" },
-      u9: { requests: 310, totalCost: 1610, remainingBudget: 2330, inputTokens: 498000, outputTokens: 132000, lastUsed: "2026-06-30T17:10:00.000Z" },
-    },
-  }),
-];
-
-export const DEMO_IT_PROVISIONING = [
-  {
-    id: "it-demo-orbit-prod",
-    sourceReviewId: "review-demo-orbit-approved",
-    sourceType: "budget-review",
-    projectId: "demo-prod-orbit",
-    projectName: "Orbit Support Console",
-    approvedAmount: 48000,
-    status: "completed",
-    approvedAt: "2026-06-22T09:20:00.000Z",
-    approvedBy: "CFO Admin",
-    approvedRole: "CFO",
-    budgetType: "Production",
-    requestedModels: [
-      { id: "it-orbit-model-1", modelId: "openai.gpt-4o", label: "GPT-4o", provider: "OpenAI", amount: 18200, usageTag: "Agent responses" },
-      { id: "it-orbit-model-2", modelId: "google.gemini-2-5-pro", label: "Gemini 2.5 Pro", provider: "GCP", amount: 5400, usageTag: "Regression and long-context review" },
-    ],
-    requestedInfra: [
-      { id: "it-orbit-infra-1", label: "g5.2xlarge", amount: 9800 },
-      { id: "it-orbit-infra-2", label: "priority-processing", amount: 2600 },
-    ],
-    requestedSubs: [
-      { id: "it-orbit-sub-1", label: "ChatGPT Team", amount: 1800 },
-      { id: "it-orbit-sub-2", label: "Figma Organization", amount: 90 },
-    ],
-    members: [members.tpm, members.pl, members.qa, members.rnd, members.eng2],
-    note: "Production gateway tokens issued after CFO approval. Provider keys stay masked and are only used from the gateway.",
-    provisionedAt: "2026-06-22T09:50:00.000Z",
-    provisionedBy: "IT Admin",
-    gatewayRoute: "/api/gateway/execute",
-    lines: [
-      {
-        id: "it-orbit-model-1",
-        label: "GPT-4o",
-        provider: "OpenAI",
-        env: "production",
-        maskedKey: maskDemoSecret("sk-oai-live-orbitgpt4o72b1m9q", 7, 4),
-        memberIds: ["u3", "u4", "u11", "u5", "u10"],
-        rateLimitPerMinute: 240,
-        budgetCap: 18200,
-        remainingBudget: 14640,
-        allowedNetworks: ["Corp VPN", "HQ Office"],
-        allowedDevices: ["Managed laptop", "Serverless app"],
-        expiresAt: "2026-09-30T23:59:59.000Z",
-        issuedTokenCount: 5,
-      },
-      {
-        id: "it-orbit-model-2",
-        label: "Gemini 2.5 Pro",
-        provider: "GCP",
-        env: "production",
-        maskedKey: maskDemoSecret("sk-gcp-live-orbitgemini93aqx4m", 7, 4),
-        memberIds: ["u3", "u11"],
-        rateLimitPerMinute: 90,
-        budgetCap: 5400,
-        remainingBudget: 4340,
-        allowedNetworks: ["Corp VPN"],
-        allowedDevices: ["Managed laptop"],
-        expiresAt: "2026-09-30T23:59:59.000Z",
-        issuedTokenCount: 2,
-      },
-    ],
-  },
-  {
-    id: "it-demo-lattice-prod",
-    sourceReviewId: "review-demo-lattice-approved",
-    sourceType: "budget-review",
-    projectId: "demo-prod-lattice",
-    projectName: "Lattice Vision Rollout",
-    approvedAmount: 36000,
-    status: "completed",
-    approvedAt: "2026-06-26T09:40:00.000Z",
-    approvedBy: "CFO Admin",
-    approvedRole: "CFO",
-    budgetType: "Production",
-    requestedModels: [
-      { id: "it-lattice-model-1", modelId: "moonshot.kimi-1-5-vision", label: "Kimi 1.5 Vision", provider: "Moonshot", amount: 12400, usageTag: "Visual inspection routing" },
-    ],
-    requestedInfra: [
-      { id: "it-lattice-infra-1", label: "a2-highgpu-1g", amount: 13400 },
-    ],
-    requestedSubs: [
-      { id: "it-lattice-sub-1", label: "GitHub Enterprise", amount: 105 },
-    ],
-    members: [members.tpm, members.pl, members.qa, members.eng1],
-    note: "Vision-team tokens restricted to factory VLAN or corp VPN with managed-device checks.",
-    provisionedAt: "2026-06-26T10:10:00.000Z",
-    provisionedBy: "IT Admin",
-    gatewayRoute: "/api/gateway/execute",
-    lines: [
-      {
-        id: "it-lattice-model-1",
-        label: "Kimi 1.5 Vision",
-        provider: "Moonshot",
-        env: "production",
-        maskedKey: maskDemoSecret("sk-kmi-live-latticevision91dn2z", 7, 4),
-        memberIds: ["u3", "u4", "u11", "u9"],
-        rateLimitPerMinute: 120,
-        budgetCap: 12400,
-        remainingBudget: 10320,
-        allowedNetworks: ["Corp VPN", "Factory VLAN"],
-        allowedDevices: ["Managed laptop", "Edge appliance"],
-        expiresAt: "2026-10-15T23:59:59.000Z",
-        issuedTokenCount: 4,
-      },
-    ],
-  },
-  {
-    id: "it-demo-nexa-sample",
-    sourceReviewId: "review-demo-nexa-approved",
-    sourceType: "budget-review",
-    projectId: "demo-rnd-foundry",
-    projectName: "Nexa Copilot Foundry",
-    approvedAmount: 6900,
-    status: "pending-it",
-    approvedAt: "2026-06-18T11:30:00.000Z",
-    approvedBy: "CFO Admin",
-    approvedRole: "CFO",
-    budgetType: "RnD",
-    requestedModels: [
-      { id: "it-nexa-model-1", modelId: "anthropic.claude-sonnet-5", label: "Claude Sonnet 5", provider: "AWS", amount: 3900, usageTag: "Sample QA and acceptance reruns" },
-    ],
-    requestedInfra: [
-      { id: "it-nexa-infra-1", label: "g5.2xlarge", amount: 2100 },
-    ],
-    requestedSubs: [
-      { id: "it-nexa-sub-1", label: "Cursor Pro", amount: 120 },
-    ],
-    members: [members.rnd, members.eng1, members.tpm],
-    note: "Awaiting IT key intake. R&D members will receive platform tokens only after provisioning.",
-    gatewayRoute: "/api/gateway/execute",
-  },
-];
+export const DEMO_IT_PROVISIONING = [];
 
 export const DEMO_TEAM_REMOVALS = {};

@@ -13,7 +13,6 @@ import {
   Calendar,
   ClipboardCheck,
   GitPullRequest,
-  FileText,
   Bell,
   Activity,
   Bot,
@@ -45,7 +44,6 @@ const NAV_CFO = [
   { to: "/buffer", label: "Contingency Buffer", icon: ShieldCheck, testid: "nav-buffer" },
   { to: "/recovery", label: "Client Recovery", icon: Receipt, testid: "nav-recovery" },
   { to: "/batch-deliveries", label: "Batch Deliveries", icon: PackageCheck, testid: "nav-batch-deliveries" },
-  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/audit", label: "Audit Log", icon: History, testid: "nav-audit" },
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
 ];
@@ -63,14 +61,12 @@ const NAV_PL = [
   { to: "/daily", label: "Daily", icon: Calendar, testid: "nav-daily" },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
-  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
   { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
 ];
 
 const NAV_IT = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
-  { to: "/reports", label: "Reports", icon: FileText, testid: "nav-reports" },
 ];
 
 const pickNav = (role) => {

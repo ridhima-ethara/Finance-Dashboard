@@ -1,139 +1,147 @@
 {
   "app_state": {
-    "buffers": {
-      "demo-rnd-foundry": 8,
-      "demo-prod-orbit": 12,
-      "demo-prod-lattice": 10
-    },
+    "buffers": {},
     "bufferPool": {
-      "total": 11592,
-      "available": 6692,
-      "policyPct": 10,
-      "history": [
-        {
-          "id": "bh-mrrtmav0",
-          "date": "2026-07-19T13:17:49.308Z",
-          "project": "Pool",
-          "action": "Pool reduced",
-          "amount": 1008,
-          "by": "CFO Admin",
-          "reason": "8% action"
-        },
-        {
-          "id": "bh-mrrtm06i",
-          "date": "2026-07-19T13:17:35.466Z",
-          "project": "Pool",
-          "action": "Pool increased",
-          "amount": 600,
-          "by": "CFO Admin",
-          "reason": "5% action"
-        },
-        {
-          "id": "buffer-history-1",
-          "date": "2026-06-24T11:00:00.000Z",
-          "project": "Orbit Support Console",
-          "action": "Allocated",
-          "amount": 2400,
-          "by": "CFO Admin",
-          "reason": "5% hidden reserve for rollout risk"
-        }
-      ],
-      "alerts": [
-        {
-          "id": "buffer-alert-1",
-          "level": "warning",
-          "title": "Lattice Vision Rollout is above 75% of its visible budget.",
-          "detail": "Keep the hidden reserve unchanged until the scale-phase request is resolved."
-        }
-      ],
-      "projectConsumed": {
-        "demo-rnd-foundry": 420,
-        "demo-prod-orbit": 880,
-        "demo-prod-lattice": 1600
-      }
+      "total": 0,
+      "available": 0,
+      "policyPct": 0,
+      "history": [],
+      "alerts": [],
+      "projectConsumed": {}
     },
     "recoveries": {},
     "customModels": [],
     "customProjects": [
       {
-        "id": "p-mrn5rhge",
-        "name": "as",
-        "clientProjectName": "subom",
-        "client": "subom",
+        "id": "p-mrt8ry5b",
+        "name": "Tron",
+        "clientProjectName": "Tron",
+        "client": "Tron",
         "createdBy": "R&D Lead",
         "createdByRole": "R&D",
-        "goal": "asd",
-        "pl": "Anjali Bhagoria",
-        "tpm": "Anjali Bhagoria",
+        "goal": "High-value enterprise AI adoption is bottlenecked because standard benchmarks focus on isolated, predictable scripts rather than live environments. Our RL Environment focuses on raw LLM capabilities through direct tool execution across multiple Enterprise domains like ITSM, CSM, Email, Calendar, HR, etc.\n\n",
+        "pl": "",
+        "tpm": "",
         "rnd": null,
-        "rndMembers": [],
+        "rndMembers": [
+          "Piyush Chandra",
+          "Viksit Kumar Chauhan"
+        ],
         "plMembers": [],
         "qlMembers": [
-          "Adarsh Raghuwanshi"
+          "Shubhi Khandelwal"
         ],
         "docUrl": "",
         "docs": [],
         "teamMembers": [
           {
-            "id": "emp-0126",
-            "name": "Anjali Bhagoria",
-            "role": "TPM",
-            "email": "anjali.bhagoria@ethara.ai",
-            "status": "Online",
+            "id": "emp-0080",
+            "name": "Akash Kumar",
+            "role": "Engineer",
+            "email": "akash.kumar@ethara.ai",
+            "status": "Added later",
             "tasksDone": 0
           },
           {
-            "id": "emp-0041",
-            "name": "Adarsh Raghuwanshi",
+            "id": "emp-0425",
+            "name": "Kshitiz Mehta",
+            "role": "Engineer",
+            "email": "kshitiz.mehta@ethara.ai",
+            "status": "Added later",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0547",
+            "name": "Piyush Chandra",
+            "role": "R&D",
+            "email": "piyush.chandra@ethara.ai",
+            "status": "Added later",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0776",
+            "name": "Shubhi Khandelwal",
             "role": "Quality Lead",
-            "email": "adarsh.raghuwanshi@ethara.ai",
-            "status": "Pending kickoff",
+            "email": "shubhi.khandelwal@ethara.ai",
+            "status": "Added later",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0897",
+            "name": "Viksit Kumar Chauhan",
+            "role": "R&D",
+            "email": "viksit.chauhan@ethara.ai",
+            "status": "Added later",
             "tasksDone": 0
           }
         ],
         "kickoffMail": {
-          "sentAt": "2026-07-16T06:58:55.646Z",
-          "subject": "as kickoff",
+          "sentAt": "2026-07-20T13:09:53.183Z",
+          "subject": "Tron kickoff",
           "sentBy": "R&D Lead",
           "sentByRole": "R&D",
           "recipients": [
             {
-              "id": "emp-0126",
-              "name": "Anjali Bhagoria",
-              "role": "TPM",
-              "email": "anjali.bhagoria@ethara.ai",
-              "status": "Pending kickoff",
+              "id": "emp-0080",
+              "name": "Akash Kumar",
+              "role": "Engineer",
+              "email": "akash.kumar@ethara.ai",
+              "status": "Added later",
               "tasksDone": 0
             },
             {
-              "id": "emp-0041",
-              "name": "Adarsh Raghuwanshi",
+              "id": "emp-0425",
+              "name": "Kshitiz Mehta",
+              "role": "Engineer",
+              "email": "kshitiz.mehta@ethara.ai",
+              "status": "Added later",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0547",
+              "name": "Piyush Chandra",
+              "role": "R&D",
+              "email": "piyush.chandra@ethara.ai",
+              "status": "Added later",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0776",
+              "name": "Shubhi Khandelwal",
               "role": "Quality Lead",
-              "email": "adarsh.raghuwanshi@ethara.ai",
-              "status": "Pending kickoff",
+              "email": "shubhi.khandelwal@ethara.ai",
+              "status": "Added later",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0897",
+              "name": "Viksit Kumar Chauhan",
+              "role": "R&D",
+              "email": "viksit.chauhan@ethara.ai",
+              "status": "Added later",
               "tasksDone": 0
             }
           ],
-          "goal": "asd",
+          "goal": "High-value enterprise AI adoption is bottlenecked because standard benchmarks focus on isolated, predictable scripts rather than live environments. Our RL Environment focuses on raw LLM capabilities through direct tool execution across multiple Enterprise domains like ITSM, CSM, Email, Calendar, HR, etc.\n\n",
           "requirements": [],
           "attachmentCount": 0
         },
-        "startDate": "2026-07-16",
+        "startDate": "2026-07-09",
         "estimatedEndDate": "",
-        "status": "Testing budget pending approval",
+        "status": "Sample budget pending approval",
         "type": "R&D",
-        "workflowStage": "testing-budget-pending",
+        "workflowStage": "rnd-budget-pending",
         "readyForTpmBudget": false,
         "pendingBudgetSubmission": {
-          "reviewId": "br-mrnhvcfe",
-          "budgetType": "Testing",
+          "reviewId": "br-mrt8ytic",
+          "budgetType": "RnD",
           "teamType": "R&D",
-          "submittedAt": "2026-07-16T12:37:51.146Z",
+          "submittedAt": "2026-07-20T13:15:13.764Z",
           "submittedBy": "R&D Lead",
           "submittedRole": "R&D",
           "sampleIteration": 1,
           "sourceDeliveryId": null,
-          "total": 444.71,
+          "total": 800,
           "stage": "pending-cto"
         },
         "buffer": 10,
@@ -169,73 +177,41 @@
         "topupHistory": [],
         "budgetTrackHistory": [
           {
-            "id": "bud-mrnhvcfe",
-            "projectId": "p-mrn5rhge",
-            "budgetType": "Testing",
+            "id": "bud-mrt8ytic",
+            "projectId": "p-mrt8ry5b",
+            "budgetType": "RnD",
             "teamType": "R&D",
-            "total": 444.71,
+            "total": 800,
             "totals": {
               "models": 0,
-              "infra": 31.38,
-              "subs": 413.33,
+              "infra": 0,
+              "subs": 800,
               "general": 0,
-              "total": 444.71
+              "total": 800
             },
-            "totalTasks": 0,
+            "totalTasks": 500,
             "totalTrajectories": 0,
-            "submittedAt": "2026-07-16T12:37:51.146Z",
+            "submittedAt": "2026-07-20T13:15:13.764Z",
             "submittedBy": "R&D Lead",
             "status": "pending-cto",
             "items": {
-              "models": [
-                {
-                  "id": "0bh3v3",
-                  "modelId": "ai21.jamba-1-5-large",
-                  "provider": "AWS",
-                  "usageTag": "Trajectory building",
-                  "costPerTask": 0.016,
-                  "estCost": 0,
-                  "platform": "AWS",
-                  "meta": {
-                    "id": "ai21.jamba-1-5-large",
-                    "name": "Jamba 1.5 Large",
-                    "provider": "AI21",
-                    "modality": "Chat",
-                    "pricePer1kIn": 0.002,
-                    "pricePer1kOut": 0.008,
-                    "platform": "AWS"
-                  }
-                }
-              ],
-              "infra": [
-                {
-                  "id": "zt889x",
-                  "provider": "AWS",
-                  "instance": "t3.medium",
-                  "monthlyCost": 30.37,
-                  "estCost": 31.38,
-                  "days": 31,
-                  "meta": {
-                    "provider": "AWS",
-                    "code": "t3.medium",
-                    "family": "General purpose",
-                    "vCPU": 2,
-                    "memoryGiB": 4,
-                    "hourly": 0.0416
-                  }
-                }
-              ],
+              "models": [],
+              "infra": [],
               "subs": [
                 {
-                  "id": "izg0cn",
+                  "id": "dsvllh",
                   "subscription": "Claude Max",
-                  "pricePerSeat": 400,
-                  "seats": 1,
+                  "pricePerSeat": "200",
+                  "seats": "4",
+                  "days": 30,
                   "members": [
-                    "Adarsh Raghuwanshi"
+                    "Akash Kumar",
+                    "Kshitiz Mehta",
+                    "Piyush Chandra",
+                    "Shubhi Khandelwal",
+                    "Viksit Kumar Chauhan"
                   ],
-                  "estCost": 413.33,
-                  "days": 31
+                  "estCost": 800
                 }
               ],
               "misc": []
@@ -243,102 +219,194 @@
             "phases": [
               {
                 "id": "p1",
-                "name": "Testing budget",
-                "start": "2026-07-16",
-                "end": "2026-08-15",
-                "budget": 444.71,
-                "tasks": 0,
+                "name": "Delivery",
+                "start": "2026-07-09",
+                "end": "2026-07-31",
+                "budget": 800,
+                "tasks": 500,
                 "trajectories": 0
               }
             ],
             "sourceDeliveryId": null,
             "sampleIteration": 1,
-            "reviewId": "br-mrnhvcfe"
+            "reviewId": "br-mrt8ytic"
           }
         ],
         "auditLog": [
           {
-            "id": "a-p-mrn5rhge-mrnhvcfi-budget",
-            "ts": "2026-07-16T12:37:51.150Z",
+            "id": "a-p-mrt8ry5b-mrt8ytif-budget",
+            "ts": "2026-07-20T13:15:13.767Z",
             "actor": "R&D Lead \u00b7 R&D",
-            "action": "Testing budget submitted",
-            "detail": "$444.71 \u00b7 R&D team \u00b7 pending CTO review \u00b7 0 tasks"
+            "action": "Sample budget submitted",
+            "detail": "$800 \u00b7 R&D team \u00b7 pending CTO review \u00b7 500 tasks"
           },
           {
-            "id": "a-p-mrn5rhge-1",
-            "ts": "2026-07-16T06:58:55.646Z",
+            "id": "a-p-mrt8ry5b-mrt8w4iz",
+            "ts": "2026-07-20T13:13:08.075Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Project members updated",
+            "detail": "Project Team added Akash Kumar (Engineer), Kshitiz Mehta (Engineer), Piyush Chandra (R&D), Shubhi Khandelwal (Quality Lead), Viksit Kumar Chauhan (R&D)"
+          },
+          {
+            "id": "a-p-mrt8ry5b-1",
+            "ts": "2026-07-20T13:09:53.183Z",
             "actor": "R&D Lead",
             "action": "Project created",
-            "detail": "Assigned TPM: Anjali Bhagoria \u00b7 QL: Adarsh Raghuwanshi \u00b7 Start 2026-07-16 \u00b7 Project Goal: asd"
+            "detail": "Start 2026-07-09 \u00b7 Project Goal: High-value enterprise AI adoption is bottlenecked because standard benchmarks focus on isolated, predictable scripts rather than live environments. Our RL Environment focuses on raw LLM capabilities through direct tool execution across multiple Enterprise domains like ITSM, CSM, Email, Calendar, HR, etc.\n\n"
           },
           {
-            "id": "a-p-mrn5rhge-2",
-            "ts": "2026-07-16T06:58:55.646Z",
+            "id": "a-p-mrt8ry5b-2",
+            "ts": "2026-07-20T13:09:53.183Z",
             "actor": "R&D Lead \u00b7 R&D",
             "action": "Kickoff mail sent",
-            "detail": "2 recipients \u00b7 anjali.bhagoria@ethara.ai, adarsh.raghuwanshi@ethara.ai"
+            "detail": "0 recipients \u00b7 "
           }
         ],
         "comments": [],
-        "__custom": true
+        "__custom": true,
+        "budgetRejection": null,
+        "budgetRetryAvailableAt": null
       },
       {
-        "id": "p-mrnf8yqc",
-        "name": "demo 2",
-        "clientProjectName": "demo 2",
-        "client": "demo 2",
-        "createdBy": "TPM Lead",
-        "createdByRole": "TPM",
-        "goal": "",
-        "pl": "TPM",
-        "tpm": "TPM",
-        "rnd": null,
-        "rndMembers": [],
+        "id": "p-mrt792c6",
+        "name": "Zoro",
+        "clientProjectName": "Zoro",
+        "client": "Zoro",
+        "createdBy": "R&D Lead",
+        "createdByRole": "R&D",
+        "goal": "Enterprise AI agents fail not because they lack knowledge, but because they cannot sustain coherent decisions across long-horizon, multi-constraint environments. Zoro puts this to the test, an LLM agent manages a real supermarket: pricing, inventory, supplier orders, and cash flow over 180 simulated days of actual Dominick's transaction data. Zoro builds the task library, evaluation harness, and trajectory dataset on top of RetailBench to turn these failure modes into a scalable, high-signal training corpus.\n",
+        "pl": "",
+        "tpm": "",
+        "rnd": "Dhawal Bathre",
+        "rndMembers": [
+          "Dhawal Bathre",
+          "Mumukshu Panchal"
+        ],
         "plMembers": [],
         "qlMembers": [],
-        "docUrl": "",
-        "docs": [],
+        "docUrl": "https://arxiv.org/pdf/2603.16453",
+        "docs": [
+          {
+            "id": "p-mrt792c6-doc-link",
+            "name": "Project brief link",
+            "url": "https://arxiv.org/pdf/2603.16453",
+            "kind": "link"
+          }
+        ],
         "teamMembers": [
           {
-            "id": "u3",
-            "name": "TPM",
-            "role": "TPM",
-            "email": "tpm@ethara.ai",
-            "status": "Online",
+            "id": "emp-0268",
+            "name": "Dhawal Bathre",
+            "role": "R&D",
+            "email": "dhawal.bathre@ethara.ai",
+            "status": "Pending kickoff",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0493",
+            "name": "Mumukshu Panchal",
+            "role": "R&D",
+            "email": "mumukshu.panchal@ethara.ai",
+            "status": "Pending kickoff",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0424",
+            "name": "Kshitij Sharma",
+            "role": "Engineer",
+            "email": "kshitij.sharma@ethara.ai",
+            "status": "Pending kickoff",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0016",
+            "name": "Abhay Haldia",
+            "role": "Engineer",
+            "email": "abhay.haldiya@ethara.ai",
+            "status": "Added later",
+            "tasksDone": 0
+          },
+          {
+            "id": "emp-0772",
+            "name": "Shubham Chaturvedi",
+            "role": "Engineer",
+            "email": "shubham.chaturvedi@ethara.ai",
+            "status": "Added later",
             "tasksDone": 0
           }
         ],
         "kickoffMail": {
-          "sentAt": "2026-07-16T11:24:27.733Z",
-          "subject": "demo 2 kickoff",
-          "sentBy": "TPM Lead",
-          "sentByRole": "TPM",
+          "sentAt": "2026-07-20T12:27:12.535Z",
+          "subject": "Zoro kickoff",
+          "sentBy": "R&D Lead",
+          "sentByRole": "R&D",
           "recipients": [
             {
-              "id": "u3",
-              "name": "TPM",
-              "role": "TPM",
-              "email": "tpm@ethara.ai"
+              "id": "emp-0268",
+              "name": "Dhawal Bathre",
+              "role": "R&D",
+              "email": "dhawal.bathre@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0493",
+              "name": "Mumukshu Panchal",
+              "role": "R&D",
+              "email": "mumukshu.panchal@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0424",
+              "name": "Kshitij Sharma",
+              "role": "Engineer",
+              "email": "kshitij.sharma@ethara.ai",
+              "status": "Pending kickoff",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0016",
+              "name": "Abhay Haldia",
+              "role": "Engineer",
+              "email": "abhay.haldiya@ethara.ai",
+              "status": "Added later",
+              "tasksDone": 0
+            },
+            {
+              "id": "emp-0772",
+              "name": "Shubham Chaturvedi",
+              "role": "Engineer",
+              "email": "shubham.chaturvedi@ethara.ai",
+              "status": "Added later",
+              "tasksDone": 0
             }
           ],
-          "goal": "",
-          "requirements": [],
-          "attachmentCount": 0
+          "goal": "Enterprise AI agents fail not because they lack knowledge, but because they cannot sustain coherent decisions across long-horizon, multi-constraint environments. Zoro puts this to the test, an LLM agent manages a real supermarket: pricing, inventory, supplier orders, and cash flow over 180 simulated days of actual Dominick's transaction data. Zoro builds the task library, evaluation harness, and trajectory dataset on top of RetailBench to turn these failure modes into a scalable, high-signal training corpus.\n",
+          "requirements": [
+            {
+              "id": "p-mrt792c6-doc-link",
+              "name": "Project brief link",
+              "kind": "link",
+              "url": "https://arxiv.org/pdf/2603.16453"
+            }
+          ],
+          "attachmentCount": 1
         },
-        "startDate": "2026-07-16",
+        "startDate": "2026-07-09",
         "estimatedEndDate": "",
-        "status": "Ready for production budget",
-        "type": "Production",
-        "workflowStage": "tpm-budget-ready",
-        "readyForTpmBudget": true,
+        "status": "Sample budget approved",
+        "type": "R&D",
+        "workflowStage": "sample-active",
+        "readyForTpmBudget": false,
         "pendingBudgetSubmission": null,
         "buffer": 10,
         "recoverableFromClient": false,
         "recoveredAmount": 0,
-        "approvedBudget": 0,
-        "estimatedBudget": 0,
+        "approvedBudget": 600,
+        "estimatedBudget": 600,
         "actualSpend": 0,
-        "remaining": 0,
+        "remaining": 600,
         "variance": 0,
         "utilization": 0,
         "burnRate": 0,
@@ -353,177 +421,37 @@
         "topupsTotal": 0,
         "health": "healthy",
         "topModel": "\u2014",
-        "phases": [],
+        "phases": [
+          {
+            "id": "p1",
+            "name": "Delivery",
+            "dates": "",
+            "estimated": 600,
+            "totalTasks": 0,
+            "trajectoriesPerTask": 0
+          }
+        ],
         "budgetItems": {
           "models": [],
           "infra": [],
-          "subs": [],
-          "misc": []
-        },
-        "expenses": [],
-        "budgetHistory": [],
-        "topupHistory": [],
-        "budgetTrackHistory": [],
-        "auditLog": [
-          {
-            "id": "a-p-mrnf8yqc-1",
-            "ts": "2026-07-16T11:24:27.733Z",
-            "actor": "TPM Lead",
-            "action": "Project created",
-            "detail": "Assigned TPM: TPM \u00b7 Start 2026-07-16"
-          },
-          {
-            "id": "a-p-mrnf8yqc-2",
-            "ts": "2026-07-16T11:24:27.733Z",
-            "actor": "TPM Lead \u00b7 TPM",
-            "action": "Kickoff mail sent",
-            "detail": "1 recipient \u00b7 tpm@ethara.ai"
-          }
-        ],
-        "comments": [],
-        "__custom": true
-      },
-      {
-        "id": "p-mrne9dr3",
-        "name": "demo project",
-        "clientProjectName": "Demo",
-        "client": "Demo",
-        "createdBy": "TPM Lead",
-        "createdByRole": "TPM",
-        "goal": "Hi",
-        "pl": "TPM",
-        "tpm": "TPM",
-        "rnd": "Snehil Maurya",
-        "rndMembers": [
-          "Snehil Maurya"
-        ],
-        "plMembers": [],
-        "qlMembers": [
-          "Abhishek Shaw"
-        ],
-        "docUrl": "",
-        "docs": [],
-        "teamMembers": [
-          {
-            "id": "u3",
-            "name": "TPM",
-            "role": "TPM",
-            "email": "tpm@ethara.ai",
-            "status": "Online",
-            "tasksDone": 0
-          },
-          {
-            "id": "emp-0504",
-            "name": "Navya Arora",
-            "role": "TPM",
-            "email": "navya.arora@ethara.ai",
-            "status": "Online",
-            "tasksDone": 0
-          },
-          {
-            "id": "emp-0032",
-            "name": "Abhishek Shaw",
-            "role": "Quality Lead",
-            "email": "abhishek.shaw@ethara.ai",
-            "status": "Pending kickoff",
-            "tasksDone": 0
-          },
-          {
-            "id": "emp-0793",
-            "name": "Snehil Maurya",
-            "role": "R&D",
-            "email": "snehil.maurya@ethara.ai",
-            "status": "Pending kickoff",
-            "tasksDone": 0
-          }
-        ],
-        "kickoffMail": {
-          "sentAt": "2026-07-16T10:56:47.584Z",
-          "subject": "demo project kickoff",
-          "sentBy": "TPM Lead",
-          "sentByRole": "TPM",
-          "recipients": [
+          "subs": [
             {
-              "id": "u3",
-              "name": "TPM",
-              "role": "TPM",
-              "email": "tpm@ethara.ai",
-              "status": "Pending kickoff",
-              "tasksDone": 0
-            },
-            {
-              "id": "emp-0504",
-              "name": "Navya Arora",
-              "role": "TPM",
-              "email": "navya.arora@ethara.ai",
-              "status": "Pending kickoff",
-              "tasksDone": 0
-            },
-            {
-              "id": "emp-0032",
-              "name": "Abhishek Shaw",
-              "role": "Quality Lead",
-              "email": "abhishek.shaw@ethara.ai",
-              "status": "Pending kickoff",
-              "tasksDone": 0
-            },
-            {
-              "id": "emp-0793",
-              "name": "Snehil Maurya",
-              "role": "R&D",
-              "email": "snehil.maurya@ethara.ai",
-              "status": "Pending kickoff",
-              "tasksDone": 0
+              "id": "ek52ge",
+              "subscription": "Claude Max",
+              "pricePerSeat": "200",
+              "seats": "3",
+              "members": [
+                "Dhawal Bathre",
+                "Mumukshu Panchal",
+                "Kshitij Sharma",
+                "Abhay Haldia",
+                "Shubham Chaturvedi"
+              ],
+              "estCost": 600,
+              "days": 30,
+              "amount": 600
             }
           ],
-          "goal": "Hi",
-          "requirements": [],
-          "attachmentCount": 0
-        },
-        "startDate": "2026-07-16",
-        "estimatedEndDate": "",
-        "status": "Production budget pending approval",
-        "type": "Production",
-        "workflowStage": "production-budget-pending",
-        "readyForTpmBudget": false,
-        "pendingBudgetSubmission": {
-          "reviewId": "br-mrnelfup",
-          "budgetType": "Production",
-          "teamType": "Technical",
-          "submittedAt": "2026-07-16T11:06:10.177Z",
-          "submittedBy": "TPM Lead",
-          "submittedRole": "TPM",
-          "sampleIteration": 1,
-          "sourceDeliveryId": null,
-          "total": 4353.42,
-          "stage": "pending-cto"
-        },
-        "buffer": 10,
-        "recoverableFromClient": false,
-        "recoveredAmount": 0,
-        "approvedBudget": 0,
-        "estimatedBudget": 0,
-        "actualSpend": 0,
-        "remaining": 0,
-        "variance": 0,
-        "utilization": 0,
-        "burnRate": 0,
-        "forecast": 0,
-        "infrastructureCost": 0,
-        "aiModelCost": 0,
-        "employeeCost": 0,
-        "purchaseCost": 0,
-        "reimbursements": 0,
-        "dinnerExpenses": 0,
-        "miscExpenses": 0,
-        "topupsTotal": 0,
-        "health": "healthy",
-        "topModel": "\u2014",
-        "phases": [],
-        "budgetItems": {
-          "models": [],
-          "infra": [],
-          "subs": [],
           "misc": []
         },
         "expenses": [],
@@ -531,1302 +459,430 @@
         "topupHistory": [],
         "budgetTrackHistory": [
           {
-            "id": "bud-mrnelfup",
-            "projectId": "p-mrne9dr3",
-            "budgetType": "Production",
-            "teamType": "Technical",
-            "total": 4353.42,
+            "id": "bud-mrt7tdds",
+            "projectId": "p-mrt792c6",
+            "budgetType": "RnD",
+            "teamType": "R&D",
+            "total": 600,
             "totals": {
-              "models": 9.6,
-              "infra": 122.49000000000001,
-              "subs": 413.33,
-              "general": 3808,
-              "total": 4353.42
+              "models": 0,
+              "infra": 0,
+              "subs": 600,
+              "general": 0,
+              "total": 600
             },
-            "totalTasks": 200,
-            "totalTrajectories": 600,
-            "submittedAt": "2026-07-16T11:06:10.177Z",
-            "submittedBy": "TPM Lead",
+            "totalTasks": 500,
+            "totalTrajectories": 0,
+            "submittedAt": "2026-07-20T12:42:59.968Z",
+            "submittedBy": "R&D Lead",
             "status": "pending-cto",
             "items": {
-              "models": [
-                {
-                  "id": "bkbhwa",
-                  "modelId": "ai21.jamba-1-5-large",
-                  "provider": "AWS",
-                  "usageTag": "Trajectory building",
-                  "costPerTask": 0.016,
-                  "estCost": 9.6,
-                  "platform": "AWS",
-                  "meta": {
-                    "id": "ai21.jamba-1-5-large",
-                    "name": "Jamba 1.5 Large",
-                    "provider": "AI21",
-                    "modality": "Chat",
-                    "pricePer1kIn": 0.002,
-                    "pricePer1kOut": 0.008,
-                    "platform": "AWS"
-                  }
-                }
-              ],
-              "infra": [
-                {
-                  "id": "2n1rkh",
-                  "provider": "AWS",
-                  "instance": "t3.medium",
-                  "monthlyCost": 30.37,
-                  "estCost": 31.38,
-                  "days": 31,
-                  "meta": {
-                    "provider": "AWS",
-                    "code": "t3.medium",
-                    "family": "General purpose",
-                    "vCPU": 2,
-                    "memoryGiB": 4,
-                    "hourly": 0.0416
-                  }
-                },
-                {
-                  "id": "kq2wwx",
-                  "provider": "AWS",
-                  "instance": "t3.medium",
-                  "monthlyCost": 30.37,
-                  "estCost": 30.37,
-                  "days": 31,
-                  "meta": {
-                    "provider": "AWS",
-                    "code": "t3.medium",
-                    "family": "General purpose",
-                    "vCPU": 2,
-                    "memoryGiB": 4,
-                    "hourly": 0.0416
-                  }
-                },
-                {
-                  "id": "ubcgaz",
-                  "provider": "AWS",
-                  "instance": "t3.medium",
-                  "monthlyCost": 30.37,
-                  "estCost": 30.37,
-                  "days": 31,
-                  "meta": {
-                    "provider": "AWS",
-                    "code": "t3.medium",
-                    "family": "General purpose",
-                    "vCPU": 2,
-                    "memoryGiB": 4,
-                    "hourly": 0.0416
-                  }
-                },
-                {
-                  "id": "2fq7km",
-                  "provider": "AWS",
-                  "instance": "t3.medium",
-                  "monthlyCost": 30.37,
-                  "estCost": 30.37,
-                  "days": 31,
-                  "meta": {
-                    "provider": "AWS",
-                    "code": "t3.medium",
-                    "family": "General purpose",
-                    "vCPU": 2,
-                    "memoryGiB": 4,
-                    "hourly": 0.0416
-                  }
-                }
-              ],
+              "models": [],
+              "infra": [],
               "subs": [
                 {
-                  "id": "yqt1yd",
+                  "id": "ek52ge",
                   "subscription": "Claude Max",
-                  "pricePerSeat": 400,
-                  "seats": 1,
+                  "pricePerSeat": "200",
+                  "seats": "3",
                   "members": [
-                    "Snehil Maurya"
+                    "Dhawal Bathre",
+                    "Mumukshu Panchal",
+                    "Kshitij Sharma",
+                    "Abhay Haldia",
+                    "Shubham Chaturvedi"
                   ],
-                  "estCost": 413.33,
-                  "days": 31
+                  "estCost": 600,
+                  "days": 30
                 }
               ],
-              "misc": [
-                {
-                  "id": "gb-d6ho1o",
-                  "label": "dfsd",
-                  "optionLabel": "dfsd",
-                  "note": "Phase 2 \u00b7 dssd \u00b7 Cost section 1: 222 \u00b7 Cost section 2: 3343",
-                  "detail": "Phase 2 \u00b7 dssd",
-                  "estCost": 3565,
-                  "amount": 3565,
-                  "phaseId": "p2",
-                  "phaseName": "Phase 2",
-                  "costSections": [
-                    {
-                      "header": "Cost section 1",
-                      "amount": 222
-                    },
-                    {
-                      "header": "Cost section 2",
-                      "amount": 3343
-                    }
-                  ],
-                  "tableMode": "custom-table",
-                  "tableHeaders": [
-                    "Line item",
-                    "Details",
-                    "Cost section 1",
-                    "Cost section 2"
-                  ],
-                  "tableCells": {
-                    "Line item": "dfsd",
-                    "Details": "dssd",
-                    "Cost section 1": "222",
-                    "Cost section 2": "3343"
-                  }
-                },
-                {
-                  "id": "gb-u930w6",
-                  "label": "dsf",
-                  "optionLabel": "dsf",
-                  "note": "Phase 1 \u00b7 efs \u00b7 Cost section 1: 232 \u00b7 Cost section 2: 11",
-                  "detail": "Phase 1 \u00b7 efs",
-                  "estCost": 243,
-                  "amount": 243,
-                  "phaseId": "p1",
-                  "phaseName": "Phase 1",
-                  "costSections": [
-                    {
-                      "header": "Cost section 1",
-                      "amount": 232
-                    },
-                    {
-                      "header": "Cost section 2",
-                      "amount": 11
-                    }
-                  ],
-                  "tableMode": "custom-table",
-                  "tableHeaders": [
-                    "Line item",
-                    "Details",
-                    "Cost section 1",
-                    "Cost section 2"
-                  ],
-                  "tableCells": {
-                    "Line item": "dsf",
-                    "Details": "efs",
-                    "Cost section 1": "232",
-                    "Cost section 2": "11"
-                  }
-                }
-              ]
+              "misc": []
             },
             "phases": [
               {
                 "id": "p1",
-                "name": "Phase 1",
-                "tasks": 100,
-                "trajectories": 3,
-                "start": "2026-07-16",
+                "name": "Delivery",
+                "start": "2026-07-09",
                 "end": "2026-07-31",
-                "budget": 515.71
-              },
-              {
-                "id": "p2",
-                "name": "Phase 2",
-                "tasks": 100,
-                "trajectories": 3,
-                "start": "2026-08-01",
-                "end": "2026-08-15",
-                "budget": 3837.71
+                "budget": 600,
+                "tasks": 500,
+                "trajectories": 0
               }
             ],
             "sourceDeliveryId": null,
             "sampleIteration": 1,
-            "reviewId": "br-mrnelfup"
+            "reviewId": "br-mrt7tddt"
           }
         ],
         "auditLog": [
           {
-            "id": "a-p-mrne9dr3-mrnelfuu-budget",
-            "ts": "2026-07-16T11:06:10.182Z",
-            "actor": "TPM Lead \u00b7 TPM",
-            "action": "Production budget submitted",
-            "detail": "$4,353.42 \u00b7 Technical team \u00b7 pending CTO review \u00b7 200 tasks \u00b7 600 trajectories"
+            "id": "a-p-mrt792c6-mrt7ve0f-it",
+            "ts": "2026-07-20T12:44:34.094Z",
+            "actor": "CFO Admin \u00b7 CFO",
+            "action": "Budget approved and routed to IT",
+            "detail": "Sample \u00b7 600 \u00b7 5 members queued for access"
           },
           {
-            "id": "a-p-mrne9dr3-1",
-            "ts": "2026-07-16T10:56:47.584Z",
-            "actor": "TPM Lead",
+            "id": "a-p-mrt792c6-mrt7tddx-budget",
+            "ts": "2026-07-20T12:42:59.973Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Sample budget submitted",
+            "detail": "$600 \u00b7 R&D team \u00b7 pending CTO review \u00b7 500 tasks"
+          },
+          {
+            "id": "a-p-mrt792c6-mrt79fow",
+            "ts": "2026-07-20T12:27:29.840Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Project members updated",
+            "detail": "Project Team added Shubham Chaturvedi (Engineer)"
+          },
+          {
+            "id": "a-p-mrt792c6-mrt799wu",
+            "ts": "2026-07-20T12:27:22.350Z",
+            "actor": "R&D Lead \u00b7 R&D",
+            "action": "Project members updated",
+            "detail": "Project Team added Abhay Haldia (Engineer)"
+          },
+          {
+            "id": "a-p-mrt792c6-1",
+            "ts": "2026-07-20T12:27:12.535Z",
+            "actor": "R&D Lead",
             "action": "Project created",
-            "detail": "Assigned TPM: TPM \u00b7 QL: Abhishek Shaw \u00b7 R&D: Snehil Maurya \u00b7 Start 2026-07-16 \u00b7 Project Goal: Hi"
+            "detail": "R&D: Dhawal Bathre, Mumukshu Panchal \u00b7 Start 2026-07-09 \u00b7 Project Goal: Enterprise AI agents fail not because they lack knowledge, but because they cannot sustain coherent decisions across long-horizon, multi-constraint environments. Zoro puts this to the test, an LLM agent manages a real supermarket: pricing, inventory, supplier orders, and cash flow over 180 simulated days of actual Dominick's transaction data. Zoro builds the task library, evaluation harness, and trajectory dataset on top of RetailBench to turn these failure modes into a scalable, high-signal training corpus.\n \u00b7 1 attachment"
           },
           {
-            "id": "a-p-mrne9dr3-2",
-            "ts": "2026-07-16T10:56:47.584Z",
-            "actor": "TPM Lead \u00b7 TPM",
+            "id": "a-p-mrt792c6-2",
+            "ts": "2026-07-20T12:27:12.535Z",
+            "actor": "R&D Lead \u00b7 R&D",
             "action": "Kickoff mail sent",
-            "detail": "4 recipients \u00b7 tpm@ethara.ai, navya.arora@ethara.ai, abhishek.shaw@ethara.ai, snehil.maurya@ethara.ai"
+            "detail": "3 recipients \u00b7 dhawal.bathre@ethara.ai, mumukshu.panchal@ethara.ai, kshitij.sharma@ethara.ai"
           }
         ],
         "comments": [],
-        "__custom": true
+        "__custom": true,
+        "budgetRejection": null,
+        "budgetRetryAvailableAt": null,
+        "totalTasks": 500,
+        "lastBudgetSubmission": {
+          "budgetType": "RnD",
+          "sampleIteration": 1,
+          "sourceDeliveryId": null
+        },
+        "promotedToProductionAt": null,
+        "itProvisioningStatus": "pending-it"
       }
     ],
-    "taskLogs": {
-      "demo-rnd-foundry::demo-rnd-testing": [
-        {
-          "id": "log-rnd-1",
-          "date": "2026-06-05",
-          "createdAt": "2026-06-05T11:30:00.000Z",
-          "tasksDone": 48,
-          "successfulTasks": 48,
-          "failedTasks": 4,
-          "trajectories": 144,
-          "successTrajectories": 144,
-          "failedTrajectories": 12,
-          "cost": 1120,
-          "inputTokens": 680000,
-          "outputTokens": 166000,
-          "modelUsage": [
-            {
-              "id": "mu-rnd-1",
-              "modelId": "anthropic.claude-sonnet-5",
-              "modelName": "Claude Sonnet 5",
-              "tasksDone": 48,
-              "cost": 1120,
-              "inputTokens": 680000,
-              "outputTokens": 166000
-            }
-          ],
-          "approvalStatus": "approved"
-        },
-        {
-          "id": "log-rnd-2",
-          "date": "2026-06-09",
-          "createdAt": "2026-06-09T15:10:00.000Z",
-          "tasksDone": 36,
-          "successfulTasks": 36,
-          "failedTasks": 2,
-          "trajectories": 108,
-          "successTrajectories": 108,
-          "failedTrajectories": 6,
-          "cost": 980,
-          "inputTokens": 512000,
-          "outputTokens": 138000,
-          "modelUsage": [
-            {
-              "id": "mu-rnd-2",
-              "modelId": "anthropic.claude-sonnet-5",
-              "modelName": "Claude Sonnet 5",
-              "tasksDone": 36,
-              "cost": 980,
-              "inputTokens": 512000,
-              "outputTokens": 138000
-            }
-          ],
-          "approvalStatus": "approved"
-        }
-      ],
-      "demo-rnd-foundry::demo-rnd-sample-1": [
-        {
-          "id": "log-rnd-3",
-          "date": "2026-06-18",
-          "createdAt": "2026-06-18T10:00:00.000Z",
-          "tasksDone": 22,
-          "successfulTasks": 22,
-          "failedTasks": 1,
-          "trajectories": 44,
-          "successTrajectories": 44,
-          "failedTrajectories": 2,
-          "cost": 740,
-          "inputTokens": 240000,
-          "outputTokens": 76000,
-          "modelUsage": [
-            {
-              "id": "mu-rnd-3",
-              "modelId": "moonshot.kimi-1-5-vision",
-              "modelName": "Kimi 1.5 Vision",
-              "tasksDone": 12,
-              "cost": 420,
-              "inputTokens": 122000,
-              "outputTokens": 32000
-            },
-            {
-              "id": "mu-rnd-4",
-              "modelId": "anthropic.claude-sonnet-5",
-              "modelName": "Claude Sonnet 5",
-              "tasksDone": 10,
-              "cost": 320,
-              "inputTokens": 118000,
-              "outputTokens": 44000
-            }
-          ],
-          "approvalStatus": "approved"
-        }
-      ],
-      "demo-prod-orbit::demo-prod-discovery": [
-        {
-          "id": "log-orbit-1",
-          "date": "2026-06-04",
-          "createdAt": "2026-06-04T14:00:00.000Z",
-          "tasksDone": 52,
-          "successfulTasks": 52,
-          "failedTasks": 3,
-          "trajectories": 104,
-          "successTrajectories": 104,
-          "failedTrajectories": 6,
-          "cost": 2860,
-          "inputTokens": 920000,
-          "outputTokens": 286000,
-          "modelUsage": [
-            {
-              "id": "mu-orbit-1",
-              "modelId": "openai.gpt-4o",
-              "modelName": "GPT-4o",
-              "tasksDone": 35,
-              "cost": 1880,
-              "inputTokens": 620000,
-              "outputTokens": 180000
-            },
-            {
-              "id": "mu-orbit-2",
-              "modelId": "google.gemini-2-5-pro",
-              "modelName": "Gemini 2.5 Pro",
-              "tasksDone": 17,
-              "cost": 980,
-              "inputTokens": 300000,
-              "outputTokens": 106000
-            }
-          ],
-          "approvalStatus": "approved"
-        }
-      ],
-      "demo-prod-orbit::demo-prod-build": [
-        {
-          "id": "log-orbit-2",
-          "date": "2026-06-14",
-          "createdAt": "2026-06-14T18:20:00.000Z",
-          "tasksDone": 110,
-          "successfulTasks": 110,
-          "failedTasks": 6,
-          "trajectories": 330,
-          "successTrajectories": 330,
-          "failedTrajectories": 18,
-          "cost": 6120,
-          "inputTokens": 1820000,
-          "outputTokens": 560000,
-          "modelUsage": [
-            {
-              "id": "mu-orbit-3",
-              "modelId": "openai.gpt-4o",
-              "modelName": "GPT-4o",
-              "tasksDone": 82,
-              "cost": 4440,
-              "inputTokens": 1280000,
-              "outputTokens": 400000
-            },
-            {
-              "id": "mu-orbit-4",
-              "modelId": "google.gemini-2-5-pro",
-              "modelName": "Gemini 2.5 Pro",
-              "tasksDone": 28,
-              "cost": 1680,
-              "inputTokens": 540000,
-              "outputTokens": 160000
-            }
-          ],
-          "approvalStatus": "approved"
-        },
-        {
-          "id": "log-orbit-3",
-          "date": "2026-06-20",
-          "createdAt": "2026-06-20T16:10:00.000Z",
-          "tasksDone": 86,
-          "successfulTasks": 86,
-          "failedTasks": 5,
-          "trajectories": 258,
-          "successTrajectories": 258,
-          "failedTrajectories": 15,
-          "cost": 4740,
-          "inputTokens": 1360000,
-          "outputTokens": 438000,
-          "modelUsage": [
-            {
-              "id": "mu-orbit-5",
-              "modelId": "openai.gpt-4o",
-              "modelName": "GPT-4o",
-              "tasksDone": 64,
-              "cost": 3540,
-              "inputTokens": 980000,
-              "outputTokens": 316000
-            },
-            {
-              "id": "mu-orbit-6",
-              "modelId": "google.gemini-2-5-pro",
-              "modelName": "Gemini 2.5 Pro",
-              "tasksDone": 22,
-              "cost": 1200,
-              "inputTokens": 380000,
-              "outputTokens": 122000
-            }
-          ],
-          "approvalStatus": "approved"
-        }
-      ],
-      "demo-prod-orbit::demo-prod-qa": [
-        {
-          "id": "log-orbit-4",
-          "date": "2026-06-27",
-          "createdAt": "2026-06-27T12:15:00.000Z",
-          "tasksDone": 44,
-          "successfulTasks": 44,
-          "failedTasks": 1,
-          "trajectories": 88,
-          "successTrajectories": 88,
-          "failedTrajectories": 2,
-          "cost": 2180,
-          "inputTokens": 640000,
-          "outputTokens": 188000,
-          "modelUsage": [
-            {
-              "id": "mu-orbit-7",
-              "modelId": "openai.gpt-4o",
-              "modelName": "GPT-4o",
-              "tasksDone": 44,
-              "cost": 2180,
-              "inputTokens": 640000,
-              "outputTokens": 188000
-            }
-          ],
-          "approvalStatus": "approved"
-        }
-      ],
-      "demo-prod-lattice::demo-lattice-enable": [
-        {
-          "id": "log-lattice-1",
-          "date": "2026-06-09",
-          "createdAt": "2026-06-09T10:40:00.000Z",
-          "tasksDone": 38,
-          "successfulTasks": 38,
-          "failedTasks": 2,
-          "trajectories": 76,
-          "successTrajectories": 76,
-          "failedTrajectories": 4,
-          "cost": 2980,
-          "inputTokens": 480000,
-          "outputTokens": 122000,
-          "modelUsage": [
-            {
-              "id": "mu-lattice-1",
-              "modelId": "moonshot.kimi-1-5-vision",
-              "modelName": "Kimi 1.5 Vision",
-              "tasksDone": 38,
-              "cost": 2980,
-              "inputTokens": 480000,
-              "outputTokens": 122000
-            }
-          ],
-          "approvalStatus": "approved"
-        }
-      ],
-      "demo-prod-lattice::demo-lattice-scale": [
-        {
-          "id": "log-lattice-2",
-          "date": "2026-06-18",
-          "createdAt": "2026-06-18T18:05:00.000Z",
-          "tasksDone": 76,
-          "successfulTasks": 76,
-          "failedTasks": 5,
-          "trajectories": 228,
-          "successTrajectories": 228,
-          "failedTrajectories": 15,
-          "cost": 6640,
-          "inputTokens": 830000,
-          "outputTokens": 242000,
-          "modelUsage": [
-            {
-              "id": "mu-lattice-2",
-              "modelId": "moonshot.kimi-1-5-vision",
-              "modelName": "Kimi 1.5 Vision",
-              "tasksDone": 76,
-              "cost": 6640,
-              "inputTokens": 830000,
-              "outputTokens": 242000
-            }
-          ],
-          "approvalStatus": "approved"
-        },
-        {
-          "id": "log-lattice-3",
-          "date": "2026-06-26",
-          "createdAt": "2026-06-26T17:00:00.000Z",
-          "tasksDone": 64,
-          "successfulTasks": 64,
-          "failedTasks": 4,
-          "trajectories": 192,
-          "successTrajectories": 192,
-          "failedTrajectories": 12,
-          "cost": 5420,
-          "inputTokens": 720000,
-          "outputTokens": 210000,
-          "modelUsage": [
-            {
-              "id": "mu-lattice-3",
-              "modelId": "moonshot.kimi-1-5-vision",
-              "modelName": "Kimi 1.5 Vision",
-              "tasksDone": 64,
-              "cost": 5420,
-              "inputTokens": 720000,
-              "outputTokens": 210000
-            }
-          ],
-          "approvalStatus": "approved"
-        }
-      ]
-    },
-    "topupRequests": [
-      {
-        "id": "tur-demo-orbit-build",
-        "projectId": "demo-prod-orbit",
-        "projectName": "Orbit Support Console",
-        "phaseId": "demo-prod-build",
-        "phaseName": "Build",
-        "amount": 5400,
-        "baseAmount": 5400,
-        "bufferPct": 0,
-        "bufferAmount": 0,
-        "reason": "Additional routing capacity and one month of shared subscriptions are needed to finish the escalated launch scope.",
-        "urgency": "High",
-        "requester": "TPM Lead",
-        "requesterRole": "TPM",
-        "requestedAt": "2026-06-21T10:30:00.000Z",
-        "sampleIteration": null,
-        "status": "pending-cfo",
-        "ctoDecision": {
-          "amount": 5400,
-          "comment": "Approved as requested",
-          "at": "2026-06-22T08:15:00.000Z",
-          "decision": "approve"
-        },
-        "cfoDecision": null,
-        "breakdown": {
-          "total": 5400,
-          "models": {
-            "amount": 3100,
-            "optionLabel": "GPT-4o \u00b7 OpenAI | Gemini 2.5 Pro \u00b7 Google",
-            "note": "Overflow inference traffic | Long-context regression set",
-            "entries": [
-              {
-                "id": "tur-orbit-model-1",
-                "optionId": "openai.gpt-4o",
-                "optionLabel": "GPT-4o \u00b7 OpenAI",
-                "provider": "OpenAI",
-                "note": "Overflow inference traffic",
-                "amount": 2200
-              },
-              {
-                "id": "tur-orbit-model-2",
-                "optionId": "google.gemini-2-5-pro",
-                "optionLabel": "Gemini 2.5 Pro \u00b7 Google",
-                "provider": "GCP",
-                "note": "Long-context regression set",
-                "amount": 900
-              }
-            ]
-          },
-          "infra": {
-            "amount": 1700,
-            "optionLabel": "shared-routing \u00b7 Hosted routing \u00b7 0 vCPU \u00b7 0 GiB",
-            "note": "Fallback routing pool",
-            "entries": [
-              {
-                "id": "tur-orbit-infra-1",
-                "optionId": "shared-routing",
-                "optionLabel": "shared-routing \u00b7 Hosted routing \u00b7 0 vCPU \u00b7 0 GiB",
-                "provider": "OpenRouter",
-                "note": "Fallback routing pool",
-                "amount": 1700
-              }
-            ]
-          },
-          "subs": {
-            "amount": 600,
-            "optionLabel": "ChatGPT Team \u00b7 $300/month",
-            "note": "Additional enablement seats",
-            "entries": [
-              {
-                "id": "tur-orbit-sub-1",
-                "optionId": "chatgpt-team",
-                "optionLabel": "ChatGPT Team \u00b7 $300/month",
-                "note": "Additional enablement seats",
-                "amount": 600,
-                "billingUnit": "per month"
-              }
-            ],
-            "billingUnit": "per month"
-          }
-        },
-        "history": [
-          {
-            "at": "2026-06-21T10:30:00.000Z",
-            "actor": "TPM Lead \u00b7 TPM",
-            "action": "Submitted budget change request",
-            "detail": "Build \u00b7 $5,400"
-          },
-          {
-            "at": "2026-06-22T08:15:00.000Z",
-            "actor": "CTO Admin \u00b7 CTO",
-            "action": "CTO approved",
-            "detail": "Forwarded to CFO at $5,400"
-          }
-        ]
-      },
-      {
-        "id": "tur-demo-nexa-sample",
-        "projectId": "demo-rnd-foundry",
-        "projectName": "Nexa Copilot Foundry",
-        "phaseId": "demo-rnd-sample-1",
-        "phaseName": "Sample 1",
-        "amount": 1800,
-        "baseAmount": 1800,
-        "bufferPct": 0,
-        "bufferAmount": 0,
-        "reason": "Extended sample validation required a short Moonshot vision pass and extra QA subscription time.",
-        "urgency": "Normal",
-        "requester": "R&D Lead",
-        "requesterRole": "R&D",
-        "requestedAt": "2026-06-15T07:45:00.000Z",
-        "sampleIteration": 1,
-        "status": "approved",
-        "ctoDecision": {
-          "amount": 1650,
-          "comment": "Trimmed to the validated sample scope",
-          "at": "2026-06-15T12:30:00.000Z",
-          "decision": "partial"
-        },
-        "cfoDecision": {
-          "amount": 1650,
-          "comment": "Approved at CTO-modified amount",
-          "at": "2026-06-16T09:10:00.000Z",
-          "decision": "partial"
-        },
-        "breakdown": {
-          "total": 1800,
-          "models": {
-            "amount": 900,
-            "optionLabel": "Kimi 1.5 Vision \u00b7 Moonshot AI",
-            "note": "Visual edge-case review",
-            "entries": [
-              {
-                "id": "tur-nexa-model-1",
-                "optionId": "moonshot.kimi-1-5-vision",
-                "optionLabel": "Kimi 1.5 Vision \u00b7 Moonshot AI",
-                "provider": "Moonshot",
-                "note": "Visual edge-case review",
-                "amount": 900
-              }
-            ]
-          },
-          "infra": {
-            "amount": 500,
-            "optionLabel": "kimi-vision-cluster \u00b7 Vision inference \u00b7 0 vCPU \u00b7 0 GiB",
-            "note": "Short-lived sampling cluster",
-            "entries": [
-              {
-                "id": "tur-nexa-infra-1",
-                "optionId": "kimi-vision-cluster",
-                "optionLabel": "kimi-vision-cluster \u00b7 Vision inference \u00b7 0 vCPU \u00b7 0 GiB",
-                "provider": "Moonshot",
-                "note": "Short-lived sampling cluster",
-                "amount": 500
-              }
-            ]
-          },
-          "subs": {
-            "amount": 40,
-            "optionLabel": "Cursor Pro \u00b7 $40/month",
-            "note": "Prompt editor seat",
-            "entries": [
-              {
-                "id": "tur-nexa-sub-1",
-                "optionId": "cursor-pro",
-                "optionLabel": "Cursor Pro \u00b7 $40/month",
-                "note": "Prompt editor seat",
-                "amount": 40,
-                "billingUnit": "per month"
-              }
-            ],
-            "billingUnit": "per month"
-          }
-        },
-        "history": [
-          {
-            "at": "2026-06-15T07:45:00.000Z",
-            "actor": "R&D Lead \u00b7 R&D",
-            "action": "Submitted budget change request",
-            "detail": "Sample 1 \u00b7 $1,800"
-          },
-          {
-            "at": "2026-06-15T12:30:00.000Z",
-            "actor": "CTO Admin \u00b7 CTO",
-            "action": "CTO partial approval",
-            "detail": "Forwarded to CFO at $1,650"
-          },
-          {
-            "at": "2026-06-16T09:10:00.000Z",
-            "actor": "CFO Admin \u00b7 CFO",
-            "action": "CFO partial approval",
-            "detail": "Baseline updated by $1,650"
-          }
-        ]
-      }
-    ],
+    "taskLogs": [],
+    "topupRequests": [],
     "budgets": [
       {
-        "id": "bud-mrnhvcfe",
-        "projectId": "p-mrn5rhge",
-        "projectName": "as",
-        "budgetType": "Testing",
+        "id": "budget-zoro-rnd",
+        "projectId": "zoro",
+        "budgetType": "RnD",
+        "status": "approved",
+        "submittedAt": "2026-07-13T09:34:00.000Z",
+        "submittedBy": "Dhawal Bathre",
+        "submittedRole": "R&D",
+        "requesterRole": "R&D",
+        "teamType": "R&D",
+        "totalTasks": 500,
+        "totalTrajectories": 1500,
+        "totals": {
+          "total": 600,
+          "models": 0,
+          "infra": 0,
+          "subs": 600,
+          "general": 0
+        },
+        "phases": [
+          {
+            "id": "zoro-sampling",
+            "name": "Sampling",
+            "start": "2026-07-09",
+            "end": "2026-07-31",
+            "budget": 600,
+            "tasks": 500,
+            "trajectories": 3
+          }
+        ],
+        "items": {
+          "models": [],
+          "infra": [],
+          "subs": [
+            {
+              "id": "budget-zoro-sub-claude",
+              "optionId": "claude-code-max-20x",
+              "subscription": "Claude Code Max 20x",
+              "optionLabel": "Claude Code Max 20x \u00b7 3 subscriptions",
+              "seats": 3,
+              "amount": 600,
+              "estCost": 600,
+              "billingUnit": "per month"
+            }
+          ],
+          "misc": []
+        },
+        "ctoDecision": {
+          "decision": "approve",
+          "amount": 600,
+          "comment": "",
+          "at": "2026-07-13T15:00:00.000Z",
+          "by": "CTO Admin"
+        },
+        "cfoDecision": {
+          "decision": "approve",
+          "amount": 600,
+          "comment": "Approved",
+          "at": "2026-07-13T17:01:00.000Z",
+          "by": "Shubham Garg"
+        }
+      },
+      {
+        "id": "budget-tron-rnd",
+        "projectId": "tron",
+        "budgetType": "RnD",
+        "status": "approved",
+        "submittedAt": "2026-07-09T12:29:00.000Z",
+        "submittedBy": "Piyush Chandra",
+        "submittedRole": "R&D",
+        "requesterRole": "R&D",
+        "teamType": "R&D",
+        "totalTasks": 500,
+        "totalTrajectories": 1500,
+        "totals": {
+          "total": 200,
+          "models": 0,
+          "infra": 0,
+          "subs": 200,
+          "general": 0
+        },
+        "phases": [
+          {
+            "id": "tron-sampling",
+            "name": "Sampling",
+            "start": "2026-07-09",
+            "end": "2026-07-31",
+            "budget": 200,
+            "tasks": 500,
+            "trajectories": 3
+          }
+        ],
+        "items": {
+          "models": [],
+          "infra": [],
+          "subs": [
+            {
+              "id": "budget-tron-sub-claude",
+              "optionId": "claude-code-max-20x",
+              "subscription": "Claude Code Max 20x",
+              "optionLabel": "Claude Code Max 20x \u00b7 1 subscription",
+              "seats": 1,
+              "amount": 200,
+              "estCost": 200,
+              "billingUnit": "per month"
+            }
+          ],
+          "misc": []
+        },
+        "ctoDecision": {
+          "decision": "approve",
+          "amount": 200,
+          "comment": "",
+          "at": "2026-07-09T15:30:00.000Z",
+          "by": "CTO Admin"
+        },
+        "cfoDecision": {
+          "decision": "approve",
+          "amount": 200,
+          "comment": "Approved",
+          "at": "2026-07-09T16:16:00.000Z",
+          "by": "Shubham Garg"
+        }
+      },
+      {
+        "id": "bud-mrt8ytic",
+        "projectId": "p-mrt8ry5b",
+        "projectName": "Tron",
+        "budgetType": "RnD",
         "priority": "Medium",
         "teamType": "R&D",
-        "totalTasks": 0,
+        "totalTasks": 500,
         "totalTrajectories": 0,
         "delivery": {
           "mode": "single",
-          "singleStart": "2026-07-16",
-          "singleEnd": "2026-08-15"
+          "singleStart": "2026-07-09",
+          "singleEnd": "2026-07-31"
         },
         "phases": [
           {
             "id": "p1",
-            "name": "Testing budget",
-            "start": "2026-07-16",
-            "end": "2026-08-15",
-            "budget": 444.71,
-            "tasks": 0,
+            "name": "Delivery",
+            "start": "2026-07-09",
+            "end": "2026-07-31",
+            "budget": 800,
+            "tasks": 500,
             "trajectories": 0
           }
         ],
         "items": {
-          "models": [
-            {
-              "id": "0bh3v3",
-              "modelId": "ai21.jamba-1-5-large",
-              "provider": "AWS",
-              "usageTag": "Trajectory building",
-              "costPerTask": 0.016,
-              "estCost": 0,
-              "platform": "AWS",
-              "meta": {
-                "id": "ai21.jamba-1-5-large",
-                "name": "Jamba 1.5 Large",
-                "provider": "AI21",
-                "modality": "Chat",
-                "pricePer1kIn": 0.002,
-                "pricePer1kOut": 0.008,
-                "platform": "AWS"
-              }
-            }
-          ],
-          "infra": [
-            {
-              "id": "zt889x",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 31.38,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            }
-          ],
+          "models": [],
+          "infra": [],
           "subs": [
             {
-              "id": "izg0cn",
+              "id": "dsvllh",
               "subscription": "Claude Max",
-              "pricePerSeat": 400,
-              "seats": 1,
+              "pricePerSeat": "200",
+              "seats": "4",
+              "days": 30,
               "members": [
-                "Adarsh Raghuwanshi"
+                "Akash Kumar",
+                "Kshitiz Mehta",
+                "Piyush Chandra",
+                "Shubhi Khandelwal",
+                "Viksit Kumar Chauhan"
               ],
-              "estCost": 413.33,
-              "days": 31
+              "estCost": 800
             }
           ],
           "misc": []
         },
         "totals": {
           "models": 0,
-          "infra": 31.38,
-          "subs": 413.33,
+          "infra": 0,
+          "subs": 800,
           "general": 0,
-          "total": 444.71
+          "total": 800
         },
         "resubmitOfReviewId": null,
         "sampleIteration": 1,
         "sourceDeliveryId": null,
         "submittedBy": "R&D Lead",
         "submittedRole": "R&D",
-        "submittedAt": "2026-07-16T12:37:51.146Z",
+        "submittedAt": "2026-07-20T13:15:13.764Z",
         "status": "pending-cto"
       },
       {
-        "id": "bud-mrnelfup",
-        "projectId": "p-mrne9dr3",
-        "projectName": "demo project",
-        "budgetType": "Production",
+        "id": "bud-mrt7tdds",
+        "projectId": "p-mrt792c6",
+        "projectName": "Zoro",
+        "budgetType": "RnD",
         "priority": "Medium",
-        "teamType": "Technical",
-        "totalTasks": 200,
-        "totalTrajectories": 600,
+        "teamType": "R&D",
+        "totalTasks": 500,
+        "totalTrajectories": 0,
         "delivery": {
-          "mode": "multiple",
-          "singleStart": "2026-07-16",
-          "singleEnd": "2026-08-04"
+          "mode": "single",
+          "singleStart": "2026-07-09",
+          "singleEnd": "2026-07-31"
         },
         "phases": [
           {
             "id": "p1",
-            "name": "Phase 1",
-            "tasks": 100,
-            "trajectories": 3,
-            "start": "2026-07-16",
+            "name": "Delivery",
+            "start": "2026-07-09",
             "end": "2026-07-31",
-            "budget": 515.71
-          },
-          {
-            "id": "p2",
-            "name": "Phase 2",
-            "tasks": 100,
-            "trajectories": 3,
-            "start": "2026-08-01",
-            "end": "2026-08-15",
-            "budget": 3837.71
+            "budget": 600,
+            "tasks": 500,
+            "trajectories": 0
           }
         ],
         "items": {
-          "models": [
-            {
-              "id": "bkbhwa",
-              "modelId": "ai21.jamba-1-5-large",
-              "provider": "AWS",
-              "usageTag": "Trajectory building",
-              "costPerTask": 0.016,
-              "estCost": 9.6,
-              "platform": "AWS",
-              "meta": {
-                "id": "ai21.jamba-1-5-large",
-                "name": "Jamba 1.5 Large",
-                "provider": "AI21",
-                "modality": "Chat",
-                "pricePer1kIn": 0.002,
-                "pricePer1kOut": 0.008,
-                "platform": "AWS"
-              }
-            }
-          ],
-          "infra": [
-            {
-              "id": "2n1rkh",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 31.38,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            },
-            {
-              "id": "kq2wwx",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 30.37,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            },
-            {
-              "id": "ubcgaz",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 30.37,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            },
-            {
-              "id": "2fq7km",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 30.37,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            }
-          ],
+          "models": [],
+          "infra": [],
           "subs": [
             {
-              "id": "yqt1yd",
+              "id": "ek52ge",
               "subscription": "Claude Max",
-              "pricePerSeat": 400,
-              "seats": 1,
+              "pricePerSeat": "200",
+              "seats": "3",
               "members": [
-                "Snehil Maurya"
+                "Dhawal Bathre",
+                "Mumukshu Panchal",
+                "Kshitij Sharma",
+                "Abhay Haldia",
+                "Shubham Chaturvedi"
               ],
-              "estCost": 413.33,
-              "days": 31
+              "estCost": 600,
+              "days": 30
             }
           ],
-          "misc": [
-            {
-              "id": "gb-d6ho1o",
-              "label": "dfsd",
-              "optionLabel": "dfsd",
-              "note": "Phase 2 \u00b7 dssd \u00b7 Cost section 1: 222 \u00b7 Cost section 2: 3343",
-              "detail": "Phase 2 \u00b7 dssd",
-              "estCost": 3565,
-              "amount": 3565,
-              "phaseId": "p2",
-              "phaseName": "Phase 2",
-              "costSections": [
-                {
-                  "header": "Cost section 1",
-                  "amount": 222
-                },
-                {
-                  "header": "Cost section 2",
-                  "amount": 3343
-                }
-              ],
-              "tableMode": "custom-table",
-              "tableHeaders": [
-                "Line item",
-                "Details",
-                "Cost section 1",
-                "Cost section 2"
-              ],
-              "tableCells": {
-                "Line item": "dfsd",
-                "Details": "dssd",
-                "Cost section 1": "222",
-                "Cost section 2": "3343"
-              }
-            },
-            {
-              "id": "gb-u930w6",
-              "label": "dsf",
-              "optionLabel": "dsf",
-              "note": "Phase 1 \u00b7 efs \u00b7 Cost section 1: 232 \u00b7 Cost section 2: 11",
-              "detail": "Phase 1 \u00b7 efs",
-              "estCost": 243,
-              "amount": 243,
-              "phaseId": "p1",
-              "phaseName": "Phase 1",
-              "costSections": [
-                {
-                  "header": "Cost section 1",
-                  "amount": 232
-                },
-                {
-                  "header": "Cost section 2",
-                  "amount": 11
-                }
-              ],
-              "tableMode": "custom-table",
-              "tableHeaders": [
-                "Line item",
-                "Details",
-                "Cost section 1",
-                "Cost section 2"
-              ],
-              "tableCells": {
-                "Line item": "dsf",
-                "Details": "efs",
-                "Cost section 1": "232",
-                "Cost section 2": "11"
-              }
-            }
-          ]
+          "misc": []
         },
         "totals": {
-          "models": 9.6,
-          "infra": 122.49000000000001,
-          "subs": 413.33,
-          "general": 3808,
-          "total": 4353.42
+          "models": 0,
+          "infra": 0,
+          "subs": 600,
+          "general": 0,
+          "total": 600
         },
         "resubmitOfReviewId": null,
         "sampleIteration": 1,
         "sourceDeliveryId": null,
-        "submittedBy": "TPM Lead",
-        "submittedRole": "TPM",
-        "submittedAt": "2026-07-16T11:06:10.177Z",
-        "status": "pending-cto"
-      },
-      {
-        "id": "budget-demo-nexa-testing",
-        "projectId": "demo-rnd-foundry",
-        "budgetType": "Testing",
-        "status": "approved",
-        "submittedAt": "2026-06-03T08:00:00.000Z",
         "submittedBy": "R&D Lead",
-        "totalTasks": 220,
-        "totalTrajectories": 660,
-        "totals": {
-          "total": 9200,
-          "models": 3400,
-          "infra": 2800,
-          "subs": 0,
-          "general": 3000
-        },
-        "phases": [
-          {
-            "id": "demo-rnd-testing",
-            "name": "Testing",
-            "start": "2026-06-03",
-            "end": "2026-06-11",
-            "budget": 9200,
-            "tasks": 220,
-            "trajectories": 3
-          }
-        ]
-      },
-      {
-        "id": "budget-demo-nexa-sample",
-        "projectId": "demo-rnd-foundry",
-        "budgetType": "RnD",
+        "submittedRole": "R&D",
+        "submittedAt": "2026-07-20T12:42:59.968Z",
         "status": "approved",
-        "submittedAt": "2026-06-12T08:30:00.000Z",
-        "submittedBy": "R&D Lead",
-        "totalTasks": 140,
-        "totalTrajectories": 280,
-        "totals": {
-          "total": 6400,
-          "models": 1800,
-          "infra": 1700,
-          "subs": 40,
-          "general": 2860
+        "ctoAt": "2026-07-20T12:43:32.050Z",
+        "ctoComment": "",
+        "cfoDecision": {
+          "decision": "approve",
+          "amount": 600,
+          "comment": "Approved",
+          "at": "2026-07-20T12:44:34.094Z",
+          "by": "CFO Admin",
+          "modified": false,
+          "changeSummary": "Total $600.00 \u00b7 Subscriptions $600.00 \u00b7 1 line item"
         },
-        "phases": [
-          {
-            "id": "demo-rnd-sample-1",
-            "name": "Sample 1",
-            "start": "2026-06-12",
-            "end": "2026-06-28",
-            "budget": 6400,
-            "tasks": 140,
-            "trajectories": 2
-          }
-        ],
-        "sampleIteration": 1
-      },
-      {
-        "id": "budget-demo-orbit-prod",
-        "projectId": "demo-prod-orbit",
-        "budgetType": "Production",
-        "status": "approved",
-        "submittedAt": "2026-06-01T07:30:00.000Z",
-        "submittedBy": "TPM Lead",
-        "totalTasks": 760,
-        "totalTrajectories": 2020,
-        "totals": {
-          "total": 48000,
-          "models": 23600,
-          "infra": 12400,
-          "subs": 1890,
-          "general": 10110
-        },
-        "phases": [
-          {
-            "id": "demo-prod-discovery",
-            "name": "Discovery",
-            "start": "2026-06-01",
-            "end": "2026-06-07",
-            "budget": 12000,
-            "tasks": 120,
-            "trajectories": 2
-          },
-          {
-            "id": "demo-prod-build",
-            "name": "Build",
-            "start": "2026-06-08",
-            "end": "2026-06-22",
-            "budget": 22000,
-            "tasks": 420,
-            "trajectories": 3
-          },
-          {
-            "id": "demo-prod-qa",
-            "name": "QA",
-            "start": "2026-06-23",
-            "end": "2026-06-30",
-            "budget": 14000,
-            "tasks": 220,
-            "trajectories": 2
-          }
-        ]
-      },
-      {
-        "id": "budget-demo-lattice-prod",
-        "projectId": "demo-prod-lattice",
-        "budgetType": "Production",
-        "status": "approved",
-        "submittedAt": "2026-06-05T07:45:00.000Z",
-        "submittedBy": "TPM Lead",
-        "totalTasks": 400,
-        "totalTrajectories": 1110,
-        "totals": {
-          "total": 36000,
-          "models": 12400,
-          "infra": 13400,
-          "subs": 105,
-          "general": 10095
-        },
-        "phases": [
-          {
-            "id": "demo-lattice-enable",
-            "name": "Enablement",
-            "start": "2026-06-05",
-            "end": "2026-06-12",
-            "budget": 9000,
-            "tasks": 90,
-            "trajectories": 2
-          },
-          {
-            "id": "demo-lattice-scale",
-            "name": "Scale",
-            "start": "2026-06-13",
-            "end": "2026-06-30",
-            "budget": 27000,
-            "tasks": 310,
-            "trajectories": 3
-          }
-        ]
+        "approvedAmount": 600
       }
     ],
-    "batchDeliveries": [
-      {
-        "id": "batch-demo-nexa-1",
-        "projectId": "demo-rnd-foundry",
-        "phaseId": "demo-rnd-sample-1",
-        "sampleIteration": 1,
-        "stage": "rnd-review",
-        "status": "approved",
-        "submittedAt": "2026-06-14T16:00:00.000Z",
-        "actualRecovered": 0,
-        "proposedAmount": 0
-      }
-    ],
+    "batchDeliveries": [],
     "budgetReviews": [
       {
-        "id": "br-mrnhvcfe",
-        "projectId": "p-mrn5rhge",
-        "projectName": "as",
-        "client": "subom",
+        "id": "br-mrt8ytic",
+        "projectId": "p-mrt8ry5b",
+        "projectName": "Tron",
+        "client": "Tron",
         "tpm": "R&D Lead",
-        "submittedAt": "2026-07-16T12:37:51.146Z",
+        "submittedAt": "2026-07-20T13:15:13.764Z",
         "urgency": "Normal",
         "stage": "CTO Review",
         "status": "pending-cto",
-        "type": "Testing budget",
+        "type": "Sample budget",
         "teamType": "R&D",
-        "requestedBudget": 444.71,
+        "requestedBudget": 800,
         "currentBudget": 0,
-        "recommendedBudget": 444.71,
+        "recommendedBudget": 800,
         "bufferPct": 10,
         "recoveryType": "Internal",
-        "timeline": "2026-07-16 \u2013 2026-08-15",
-        "tasks": 0,
+        "timeline": "2026-07-09 \u2013 2026-07-31",
+        "tasks": 500,
         "phases": 1,
         "linesFlagged": 0,
-        "variance": 444.71,
+        "variance": 800,
         "aiCost": 0,
-        "infraCost": 31.38,
-        "subsCost": 413.33,
+        "infraCost": 0,
+        "subsCost": 800,
         "miscCost": 0,
-        "justification": "Testing budget submitted by R&D Lead \u00b7 R&D team \u00b7 0 tasks",
+        "justification": "Sample budget submitted by R&D Lead \u00b7 R&D team \u00b7 500 tasks",
         "items": {
-          "models": [
-            {
-              "id": "0bh3v3",
-              "modelId": "ai21.jamba-1-5-large",
-              "provider": "AWS",
-              "usageTag": "Trajectory building",
-              "costPerTask": 0.016,
-              "estCost": 0,
-              "platform": "AWS",
-              "meta": {
-                "id": "ai21.jamba-1-5-large",
-                "name": "Jamba 1.5 Large",
-                "provider": "AI21",
-                "modality": "Chat",
-                "pricePer1kIn": 0.002,
-                "pricePer1kOut": 0.008,
-                "platform": "AWS"
-              }
-            }
-          ],
-          "infra": [
-            {
-              "id": "zt889x",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 31.38,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            }
-          ],
+          "models": [],
+          "infra": [],
           "subs": [
             {
-              "id": "izg0cn",
+              "id": "dsvllh",
               "subscription": "Claude Max",
-              "pricePerSeat": 400,
-              "seats": 1,
+              "pricePerSeat": "200",
+              "seats": "4",
+              "days": 30,
               "members": [
-                "Adarsh Raghuwanshi"
+                "Akash Kumar",
+                "Kshitiz Mehta",
+                "Piyush Chandra",
+                "Shubhi Khandelwal",
+                "Viksit Kumar Chauhan"
               ],
-              "estCost": 413.33,
-              "days": 31
+              "estCost": 800
             }
           ],
           "misc": []
@@ -1834,11 +890,11 @@
         "requestedPhases": [
           {
             "id": "p1",
-            "name": "Testing budget",
-            "start": "2026-07-16",
-            "end": "2026-08-15",
-            "budget": 444.71,
-            "tasks": 0,
+            "name": "Delivery",
+            "start": "2026-07-09",
+            "end": "2026-07-31",
+            "budget": 800,
+            "tasks": 500,
             "trajectories": 0
           }
         ],
@@ -1863,237 +919,79 @@
           "promotedToProductionAt": null,
           "itProvisioningStatus": null
         },
-        "budgetType": "Testing",
+        "budgetType": "RnD",
         "sampleIteration": 1,
         "sourceDeliveryId": null,
-        "sourceBudgetId": "bud-mrnhvcfe",
+        "sourceBudgetId": "bud-mrt8ytic",
         "requesterRole": "R&D",
         "history": [
           {
-            "at": "2026-07-16T12:37:51.146Z",
+            "at": "2026-07-20T13:15:13.764Z",
             "actor": "R&D Lead \u00b7 R&D",
             "action": "Submitted budget request",
-            "detail": "Testing \u00b7 R&D \u00b7 $444.71"
+            "detail": "Sample \u00b7 R&D \u00b7 $800"
           }
         ],
         "ctoModified": false
       },
       {
-        "id": "br-mrnelfup",
-        "projectId": "p-mrne9dr3",
-        "projectName": "demo project",
-        "client": "Demo",
-        "tpm": "TPM Lead",
-        "submittedAt": "2026-07-16T11:06:10.177Z",
+        "id": "br-mrt7tddt",
+        "projectId": "p-mrt792c6",
+        "projectName": "Zoro",
+        "client": "Zoro",
+        "tpm": "R&D Lead",
+        "submittedAt": "2026-07-20T12:42:59.968Z",
         "urgency": "Normal",
-        "stage": "CTO Review",
-        "status": "pending-cto",
-        "type": "Production budget",
-        "teamType": "Technical",
-        "requestedBudget": 4353.42,
+        "stage": "Approved",
+        "status": "approved",
+        "type": "Sample budget",
+        "teamType": "R&D",
+        "requestedBudget": 600,
         "currentBudget": 0,
-        "recommendedBudget": 4353.42,
+        "recommendedBudget": 600,
         "bufferPct": 10,
         "recoveryType": "Internal",
-        "timeline": "2026-07-16 \u2013 2026-08-15",
-        "tasks": 200,
-        "phases": 2,
+        "timeline": "2026-07-09 \u2013 2026-07-31",
+        "tasks": 500,
+        "phases": 1,
         "linesFlagged": 0,
-        "variance": 4353.42,
-        "aiCost": 9.6,
-        "infraCost": 122.49000000000001,
-        "subsCost": 413.33,
-        "miscCost": 3808,
-        "justification": "Production budget submitted by TPM Lead \u00b7 Technical team \u00b7 200 tasks \u00b7 600 trajectories",
+        "variance": 600,
+        "aiCost": 0,
+        "infraCost": 0,
+        "subsCost": 600,
+        "miscCost": 0,
+        "justification": "Sample budget submitted by R&D Lead \u00b7 R&D team \u00b7 500 tasks",
         "items": {
-          "models": [
-            {
-              "id": "bkbhwa",
-              "modelId": "ai21.jamba-1-5-large",
-              "provider": "AWS",
-              "usageTag": "Trajectory building",
-              "costPerTask": 0.016,
-              "estCost": 9.6,
-              "platform": "AWS",
-              "meta": {
-                "id": "ai21.jamba-1-5-large",
-                "name": "Jamba 1.5 Large",
-                "provider": "AI21",
-                "modality": "Chat",
-                "pricePer1kIn": 0.002,
-                "pricePer1kOut": 0.008,
-                "platform": "AWS"
-              }
-            }
-          ],
-          "infra": [
-            {
-              "id": "2n1rkh",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 31.38,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            },
-            {
-              "id": "kq2wwx",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 30.37,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            },
-            {
-              "id": "ubcgaz",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 30.37,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            },
-            {
-              "id": "2fq7km",
-              "provider": "AWS",
-              "instance": "t3.medium",
-              "monthlyCost": 30.37,
-              "estCost": 30.37,
-              "days": 31,
-              "meta": {
-                "provider": "AWS",
-                "code": "t3.medium",
-                "family": "General purpose",
-                "vCPU": 2,
-                "memoryGiB": 4,
-                "hourly": 0.0416
-              }
-            }
-          ],
+          "models": [],
+          "infra": [],
           "subs": [
             {
-              "id": "yqt1yd",
+              "id": "ek52ge",
               "subscription": "Claude Max",
-              "pricePerSeat": 400,
-              "seats": 1,
+              "pricePerSeat": "200",
+              "seats": "3",
               "members": [
-                "Snehil Maurya"
+                "Dhawal Bathre",
+                "Mumukshu Panchal",
+                "Kshitij Sharma",
+                "Abhay Haldia",
+                "Shubham Chaturvedi"
               ],
-              "estCost": 413.33,
-              "days": 31
+              "estCost": 600,
+              "days": 30
             }
           ],
-          "misc": [
-            {
-              "id": "gb-d6ho1o",
-              "label": "dfsd",
-              "optionLabel": "dfsd",
-              "note": "Phase 2 \u00b7 dssd \u00b7 Cost section 1: 222 \u00b7 Cost section 2: 3343",
-              "detail": "Phase 2 \u00b7 dssd",
-              "estCost": 3565,
-              "amount": 3565,
-              "phaseId": "p2",
-              "phaseName": "Phase 2",
-              "costSections": [
-                {
-                  "header": "Cost section 1",
-                  "amount": 222
-                },
-                {
-                  "header": "Cost section 2",
-                  "amount": 3343
-                }
-              ],
-              "tableMode": "custom-table",
-              "tableHeaders": [
-                "Line item",
-                "Details",
-                "Cost section 1",
-                "Cost section 2"
-              ],
-              "tableCells": {
-                "Line item": "dfsd",
-                "Details": "dssd",
-                "Cost section 1": "222",
-                "Cost section 2": "3343"
-              }
-            },
-            {
-              "id": "gb-u930w6",
-              "label": "dsf",
-              "optionLabel": "dsf",
-              "note": "Phase 1 \u00b7 efs \u00b7 Cost section 1: 232 \u00b7 Cost section 2: 11",
-              "detail": "Phase 1 \u00b7 efs",
-              "estCost": 243,
-              "amount": 243,
-              "phaseId": "p1",
-              "phaseName": "Phase 1",
-              "costSections": [
-                {
-                  "header": "Cost section 1",
-                  "amount": 232
-                },
-                {
-                  "header": "Cost section 2",
-                  "amount": 11
-                }
-              ],
-              "tableMode": "custom-table",
-              "tableHeaders": [
-                "Line item",
-                "Details",
-                "Cost section 1",
-                "Cost section 2"
-              ],
-              "tableCells": {
-                "Line item": "dsf",
-                "Details": "efs",
-                "Cost section 1": "232",
-                "Cost section 2": "11"
-              }
-            }
-          ]
+          "misc": []
         },
         "requestedPhases": [
           {
             "id": "p1",
-            "name": "Phase 1",
-            "start": "2026-07-16",
+            "name": "Delivery",
+            "start": "2026-07-09",
             "end": "2026-07-31",
-            "budget": 515.71,
-            "tasks": 100,
-            "trajectories": 3
-          },
-          {
-            "id": "p2",
-            "name": "Phase 2",
-            "start": "2026-08-01",
-            "end": "2026-08-15",
-            "budget": 3837.71,
-            "tasks": 100,
-            "trajectories": 3
+            "budget": 600,
+            "tasks": 500,
+            "trajectories": 0
           }
         ],
         "baselineSnapshot": {
@@ -2109,452 +1007,297 @@
             "misc": []
           },
           "lastBudgetSubmission": null,
-          "status": "Ready for production budget",
-          "type": "Production",
-          "workflowStage": "tpm-budget-ready",
-          "readyForTpmBudget": true,
+          "status": "Awaiting testing budget",
+          "type": "R&D",
+          "workflowStage": "awaiting-testing-budget",
+          "readyForTpmBudget": false,
           "pendingBudgetSubmission": null,
           "promotedToProductionAt": null,
           "itProvisioningStatus": null
         },
-        "budgetType": "Production",
-        "sampleIteration": 1,
-        "sourceDeliveryId": null,
-        "sourceBudgetId": "bud-mrnelfup",
-        "requesterRole": "TPM",
-        "history": [
-          {
-            "at": "2026-07-16T11:06:10.177Z",
-            "actor": "TPM Lead \u00b7 TPM",
-            "action": "Submitted budget request",
-            "detail": "Production \u00b7 Technical \u00b7 $4,353.42"
-          }
-        ],
-        "ctoModified": false
-      },
-      {
-        "id": "review-demo-orbit-cfo",
-        "projectId": "demo-prod-orbit",
-        "projectName": "Orbit Support Console",
-        "client": "Orbit Retail",
-        "tpm": "TPM Lead",
-        "submittedAt": "2026-06-24T09:00:00.000Z",
-        "urgency": "High",
-        "stage": "CFO Review",
-        "status": "forwarded-cfo",
-        "type": "Production budget",
-        "teamType": "Technical",
-        "requestedBudget": 52000,
-        "currentBudget": 48000,
-        "recommendedBudget": 50000,
-        "bufferPct": 12,
-        "recoveryType": "Client-billable",
-        "timeline": "2026-06-24 \u2192 2026-07-12",
-        "tasks": 780,
-        "phases": 3,
-        "linesFlagged": 0,
-        "variance": 4000,
-        "aiCost": 24800,
-        "infraCost": 13200,
-        "subsCost": 2100,
-        "miscCost": 9900,
-        "justification": "Production expansion budget for escalated retailer launch scope.",
-        "items": {},
-        "requestedPhases": [],
-        "baselineSnapshot": {
-          "approvedBudget": 48000,
-          "estimatedBudget": 51200,
-          "totalTasks": 760,
-          "phases": [
-            {
-              "id": "demo-prod-discovery",
-              "name": "Discovery",
-              "dates": "2026-06-01 \u2192 2026-06-07",
-              "start": "2026-06-01",
-              "end": "2026-06-07",
-              "estimated": 12000,
-              "actual": 9500,
-              "totalTasks": 120,
-              "tasks": 120,
-              "trajectoriesPerTask": 2,
-              "health": "healthy"
-            },
-            {
-              "id": "demo-prod-build",
-              "name": "Build",
-              "dates": "2026-06-08 \u2192 2026-06-22",
-              "start": "2026-06-08",
-              "end": "2026-06-22",
-              "estimated": 22000,
-              "actual": 15000,
-              "totalTasks": 420,
-              "tasks": 420,
-              "trajectoriesPerTask": 3,
-              "health": "watch"
-            },
-            {
-              "id": "demo-prod-qa",
-              "name": "QA",
-              "dates": "2026-06-23 \u2192 2026-06-30",
-              "start": "2026-06-23",
-              "end": "2026-06-30",
-              "estimated": 14000,
-              "actual": 6200,
-              "totalTasks": 220,
-              "tasks": 220,
-              "trajectoriesPerTask": 2,
-              "health": "healthy"
-            }
-          ],
-          "budgetItems": {
-            "models": [
-              {
-                "id": "prod-model-1",
-                "modelId": "openai.gpt-4o",
-                "provider": "OpenAI",
-                "usageTag": "Agent responses",
-                "estCost": 18200
-              },
-              {
-                "id": "prod-model-2",
-                "modelId": "google.gemini-2-5-pro",
-                "provider": "GCP",
-                "usageTag": "Long-context validation",
-                "estCost": 5400
-              }
-            ],
-            "infra": [
-              {
-                "id": "prod-infra-1",
-                "provider": "AWS",
-                "instance": "g5.2xlarge",
-                "estCost": 9800
-              },
-              {
-                "id": "prod-infra-2",
-                "provider": "OpenAI",
-                "instance": "priority-processing",
-                "estCost": 2600
-              }
-            ],
-            "subs": [
-              {
-                "id": "prod-sub-1",
-                "subscription": "ChatGPT Team",
-                "seats": 6,
-                "estCost": 1800
-              },
-              {
-                "id": "prod-sub-2",
-                "subscription": "Figma Organization",
-                "seats": 2,
-                "estCost": 90
-              }
-            ],
-            "misc": [
-              {
-                "id": "prod-misc-1",
-                "label": "Prompt QA coverage",
-                "estCost": 10310
-              }
-            ]
-          },
-          "status": "Production active",
-          "type": "Production",
-          "workflowStage": "production-active",
-          "readyForTpmBudget": true,
-          "pendingBudgetSubmission": null
-        },
-        "budgetType": "Production",
-        "sampleIteration": 1,
-        "sourceDeliveryId": null,
-        "sourceBudgetId": "budget-demo-orbit-prod",
-        "requesterRole": "TPM",
-        "ctoModified": false,
-        "history": [
-          {
-            "at": "2026-06-24T09:00:00.000Z",
-            "actor": "TPM Lead \u00b7 TPM",
-            "action": "Submitted budget request",
-            "detail": "Production \u00b7 Technical \u00b7 $52,000"
-          },
-          {
-            "at": "2026-06-24T16:20:00.000Z",
-            "actor": "CTO Admin \u00b7 CTO",
-            "action": "Approved by CTO and forwarded to CFO",
-            "detail": "Forwarded at $52,000"
-          }
-        ]
-      },
-      {
-        "id": "review-demo-nexa-returned",
-        "projectId": "demo-rnd-foundry",
-        "projectName": "Nexa Copilot Foundry",
-        "client": "Nexa Health",
-        "tpm": "R&D Lead",
-        "submittedAt": "2026-06-10T08:15:00.000Z",
-        "urgency": "Normal",
-        "stage": "CTO Review",
-        "status": "returned-to-tpm",
-        "type": "Sample budget",
-        "teamType": "R&D",
-        "requestedBudget": 6800,
-        "currentBudget": 6400,
-        "recommendedBudget": 6600,
-        "bufferPct": 8,
-        "recoveryType": "Internal",
-        "timeline": "2026-06-12 \u2192 2026-06-28",
-        "tasks": 140,
-        "phases": 1,
-        "linesFlagged": 1,
-        "variance": 400,
-        "aiCost": 1900,
-        "infraCost": 1750,
-        "subsCost": 40,
-        "miscCost": 3110,
-        "justification": "Returned sample budget after line-rate review.",
-        "items": {},
-        "requestedPhases": [],
-        "baselineSnapshot": {
-          "approvedBudget": 6400,
-          "estimatedBudget": 16800,
-          "totalTasks": 140,
-          "phases": [
-            {
-              "id": "demo-rnd-testing",
-              "name": "Testing",
-              "dates": "2026-06-03 \u2192 2026-06-11",
-              "start": "2026-06-03",
-              "end": "2026-06-11",
-              "estimated": 9200,
-              "actual": 4100,
-              "totalTasks": 220,
-              "tasks": 220,
-              "trajectoriesPerTask": 3,
-              "health": "healthy"
-            },
-            {
-              "id": "demo-rnd-sample-1",
-              "name": "Sample 1",
-              "dates": "2026-06-12 \u2192 2026-06-28",
-              "start": "2026-06-12",
-              "end": "2026-06-28",
-              "estimated": 6400,
-              "actual": 2300,
-              "totalTasks": 140,
-              "tasks": 140,
-              "trajectoriesPerTask": 2,
-              "health": "watch"
-            }
-          ],
-          "budgetItems": {
-            "models": [
-              {
-                "id": "rnd-model-1",
-                "modelId": "anthropic.claude-sonnet-5",
-                "provider": "AWS",
-                "usageTag": "Evaluation runs",
-                "estCost": 5200
-              }
-            ],
-            "infra": [
-              {
-                "id": "rnd-infra-1",
-                "provider": "AWS",
-                "instance": "g5.2xlarge",
-                "estCost": 4300
-              }
-            ],
-            "subs": [
-              {
-                "id": "rnd-sub-1",
-                "subscription": "Cursor Pro",
-                "seats": 3,
-                "estCost": 120
-              }
-            ],
-            "misc": [
-              {
-                "id": "rnd-misc-1",
-                "label": "Annotator support",
-                "estCost": 5980
-              }
-            ]
-          },
-          "status": "Sampling active",
-          "type": "R&D",
-          "workflowStage": "sample-active",
-          "readyForTpmBudget": false,
-          "pendingBudgetSubmission": null
-        },
         "budgetType": "RnD",
         "sampleIteration": 1,
-        "sourceDeliveryId": "batch-demo-nexa-1",
-        "sourceBudgetId": "budget-demo-nexa-sample",
+        "sourceDeliveryId": null,
+        "sourceBudgetId": "bud-mrt7tdds",
         "requesterRole": "R&D",
-        "returnedTo": "R&D",
-        "ctoComment": "Keep the same Moonshot cluster but reduce general support padding.",
-        "ctoAt": "2026-06-10T14:10:00.000Z",
-        "ctoModified": true,
         "history": [
           {
-            "at": "2026-06-10T08:15:00.000Z",
+            "at": "2026-07-20T12:42:59.968Z",
             "actor": "R&D Lead \u00b7 R&D",
             "action": "Submitted budget request",
-            "detail": "Sample \u00b7 R&D \u00b7 $6,800"
+            "detail": "Sample \u00b7 R&D \u00b7 $600"
           },
           {
-            "at": "2026-06-10T14:10:00.000Z",
+            "at": "2026-07-20T12:43:32.050Z",
             "actor": "CTO Admin \u00b7 CTO",
-            "action": "Returned to R&D",
-            "detail": "Keep the same Moonshot cluster but reduce general support padding."
+            "action": "Approved by CTO and forwarded to CFO",
+            "detail": "Total $600.00 \u00b7 Subscriptions $600.00 \u00b7 1 line item"
+          },
+          {
+            "at": "2026-07-20T12:44:34.094Z",
+            "actor": "CFO Admin \u00b7 CFO",
+            "action": "CFO approved",
+            "detail": "Total $600.00 \u00b7 Subscriptions $600.00 \u00b7 1 line item \u00b7 Approved"
           }
-        ]
+        ],
+        "modifiedPhases": [
+          {
+            "id": "p1",
+            "name": "Delivery",
+            "infra": 0,
+            "model": 0,
+            "subs": 600
+          }
+        ],
+        "modifiedItems": {
+          "models": [],
+          "infra": [],
+          "subs": [
+            {
+              "id": "ek52ge",
+              "subscription": "Claude Max",
+              "pricePerSeat": "200",
+              "seats": "3",
+              "members": [
+                "Dhawal Bathre",
+                "Mumukshu Panchal",
+                "Kshitij Sharma",
+                "Abhay Haldia",
+                "Shubham Chaturvedi"
+              ],
+              "estCost": 600,
+              "days": 30
+            }
+          ],
+          "misc": []
+        },
+        "modifiedTotal": 600,
+        "ctoComment": "",
+        "ctoChangeSummary": "Total $600.00 \u00b7 Subscriptions $600.00 \u00b7 1 line item",
+        "ctoBy": "CTO Admin",
+        "ctoAt": "2026-07-20T12:43:32.050Z",
+        "ctoModified": false,
+        "cfoDecision": {
+          "decision": "approve",
+          "amount": 600,
+          "comment": "Approved",
+          "at": "2026-07-20T12:44:34.094Z",
+          "by": "CFO Admin",
+          "modified": false,
+          "changeSummary": "Total $600.00 \u00b7 Subscriptions $600.00 \u00b7 1 line item"
+        },
+        "cfoModified": false,
+        "cfoChangeSummary": "Total $600.00 \u00b7 Subscriptions $600.00 \u00b7 1 line item"
       }
     ],
     "changeRequests": [
       {
-        "id": "cr-demo-lattice-scale",
-        "projectId": "demo-prod-lattice",
-        "projectName": "Lattice Vision Rollout",
+        "id": "cr-zoro-claude-max",
+        "projectId": "zoro",
+        "projectName": "Zoro",
         "type": "Budget change",
-        "amount": 6200,
-        "currentBudget": 36000,
-        "requestedBudget": 42200,
-        "requester": "TPM Lead",
-        "requesterRole": "TPM",
-        "urgency": "High",
-        "stage": "CTO Review",
-        "status": "pending",
-        "createdAt": "2026-06-25T11:05:00.000Z",
-        "reason": "Scale phase needs larger GCP GPU coverage and OpenRouter fallback to meet the inspection backlog.",
-        "expectedTasks": "410",
-        "timelineDelta": "Extend by 4 days",
-        "affectedPhase": "Scale",
+        "amount": 600,
+        "currentBudget": 0,
+        "requestedBudget": 600,
+        "requester": "Dhawal Bathre",
+        "requesterRole": "R&D",
+        "urgency": "Normal",
+        "stage": "Approved",
+        "status": "approved",
+        "createdAt": "2026-07-13T09:34:00.000Z",
+        "reason": "Claude Code Max 20x (3 subscriptions) to be shared among the 5 pod members for research, engineering, and baselining against the latest SOTA model (Claude Opus 4.8).",
+        "expectedTasks": "500",
+        "timelineDelta": "",
+        "affectedPhase": "Sampling",
         "breakdown": {
           "models": {
-            "amount": 2200,
-            "optionLabel": "Kimi 1.5 Vision \u00b7 Moonshot AI",
-            "note": "Longer vision context window",
-            "entries": [
-              {
-                "id": "cr-lattice-model-1",
-                "optionId": "moonshot.kimi-1-5-vision",
-                "optionLabel": "Kimi 1.5 Vision \u00b7 Moonshot AI",
-                "provider": "Moonshot",
-                "note": "Longer vision context window",
-                "amount": 2200
-              }
-            ]
+            "amount": 0,
+            "optionLabel": "",
+            "note": "",
+            "entries": []
           },
           "infra": {
-            "amount": 3700,
-            "optionLabel": "a2-highgpu-1g \u00b7 GPU \u00b7 12 vCPU \u00b7 85 GiB | priority-routing \u00b7 Priority routing \u00b7 0 vCPU \u00b7 0 GiB",
-            "note": "Higher parallel image throughput | Fallback during traffic spikes",
-            "entries": [
-              {
-                "id": "cr-lattice-infra-1",
-                "optionId": "a2-highgpu-1g",
-                "optionLabel": "a2-highgpu-1g \u00b7 GPU \u00b7 12 vCPU \u00b7 85 GiB",
-                "provider": "GCP",
-                "note": "Higher parallel image throughput",
-                "amount": 3100
-              },
-              {
-                "id": "cr-lattice-infra-2",
-                "optionId": "priority-routing",
-                "optionLabel": "priority-routing \u00b7 Priority routing \u00b7 0 vCPU \u00b7 0 GiB",
-                "provider": "OpenRouter",
-                "note": "Fallback during traffic spikes",
-                "amount": 600
-              }
-            ]
+            "amount": 0,
+            "optionLabel": "",
+            "note": "",
+            "entries": []
           },
           "subs": {
-            "amount": 300,
-            "optionLabel": "GitHub Enterprise \u00b7 $21/month",
-            "note": "Temporary contractor seats",
+            "amount": 600,
+            "optionLabel": "Claude Code Max 20x \u00b7 3 subscriptions",
+            "note": "Shared among 5 pod members \u00b7 baselining vs Claude Opus 4.8",
             "entries": [
               {
-                "id": "cr-lattice-sub-1",
-                "optionId": "github-enterprise",
-                "optionLabel": "GitHub Enterprise \u00b7 $21/month",
-                "note": "Temporary contractor seats",
-                "amount": 300,
+                "id": "cr-zoro-sub-claude",
+                "optionId": "claude-code-max-20x",
+                "optionLabel": "Claude Code Max 20x \u00b7 3 subscriptions",
+                "note": "Shared among 5 pod members \u00b7 baselining vs Claude Opus 4.8",
+                "amount": 600,
                 "billingUnit": "per month"
               }
             ],
             "billingUnit": "per month"
           }
         },
+        "ctoDecision": {
+          "decision": "approve",
+          "amount": 600,
+          "comment": "",
+          "at": "2026-07-13T15:00:00.000Z",
+          "by": "CTO Admin"
+        },
+        "cfoDecision": {
+          "decision": "approve",
+          "amount": 600,
+          "comment": "Approved",
+          "at": "2026-07-13T17:01:00.000Z",
+          "by": "Shubham Garg"
+        },
         "history": [
           {
-            "at": "2026-06-25T11:05:00.000Z",
-            "actor": "TPM Lead \u00b7 TPM",
-            "action": "Submitted change request",
-            "detail": "$6,200 \u00b7 Extend by 4 days"
+            "at": "2026-07-13T09:34:00.000Z",
+            "actor": "Dhawal Bathre \u00b7 R&D",
+            "action": "Submitted additional request",
+            "detail": "Claude Code Max 20x (3 subs) \u00b7 $600"
+          },
+          {
+            "at": "2026-07-13T15:00:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "CTO approved",
+            "detail": "Forwarded to CFO at $600"
+          },
+          {
+            "at": "2026-07-13T17:01:00.000Z",
+            "actor": "Shubham Garg \u00b7 CFO",
+            "action": "CFO approved",
+            "detail": "Approved at $600"
           }
         ]
       },
       {
-        "id": "cr-demo-nexa-approved",
-        "projectId": "demo-rnd-foundry",
-        "projectName": "Nexa Copilot Foundry",
-        "type": "Scope / timeline change",
-        "amount": 900,
-        "currentBudget": 15600,
-        "requestedBudget": 16500,
-        "requester": "R&D Lead",
+        "id": "cr-zoro-codex-pro",
+        "projectId": "zoro",
+        "projectName": "Zoro",
+        "type": "Budget change",
+        "amount": 715,
+        "currentBudget": 600,
+        "requestedBudget": 1315,
+        "requester": "Dhawal Bathre",
         "requesterRole": "R&D",
         "urgency": "Normal",
         "stage": "Approved",
         "status": "approved",
-        "createdAt": "2026-06-18T08:20:00.000Z",
-        "reason": "Added one QA acceptance pass before R&D handoff.",
-        "expectedTasks": "155",
-        "timelineDelta": "Add 2 days",
-        "affectedPhase": "Sample 1",
+        "createdAt": "2026-07-20T09:00:00.000Z",
+        "reason": "Three (3) GPT Codex Pro 20x accounts to support baselining for GPT-5.6. High-volume, long-running software engineering and evaluation tasks \u2014 distributes workload across the team and avoids session limits.",
+        "expectedTasks": "500",
+        "timelineDelta": "",
+        "affectedPhase": "Sampling",
         "breakdown": {
           "models": {
-            "amount": 300,
-            "optionLabel": "Claude Sonnet 5 \u00b7 Anthropic",
-            "note": "Acceptance reruns",
-            "entries": [
-              {
-                "id": "cr-nexa-model-1",
-                "optionId": "anthropic.claude-sonnet-5",
-                "optionLabel": "Claude Sonnet 5 \u00b7 Anthropic",
-                "provider": "AWS",
-                "note": "Acceptance reruns",
-                "amount": 300
-              }
-            ]
+            "amount": 0,
+            "optionLabel": "",
+            "note": "",
+            "entries": []
           },
           "infra": {
-            "amount": 400,
-            "optionLabel": "g5.2xlarge \u00b7 GPU \u00b7 8 vCPU \u00b7 32 GiB",
-            "note": "Short QA replay window",
+            "amount": 0,
+            "optionLabel": "",
+            "note": "",
+            "entries": []
+          },
+          "subs": {
+            "amount": 715,
+            "optionLabel": "GPT Codex Pro 20x \u00b7 3 accounts \u00b7 INR 59,700 (~$715)",
+            "note": "Baselining GPT-5.6 \u00b7 distribute load, avoid session limits",
             "entries": [
               {
-                "id": "cr-nexa-infra-1",
-                "optionId": "g5.2xlarge",
-                "optionLabel": "g5.2xlarge \u00b7 GPU \u00b7 8 vCPU \u00b7 32 GiB",
-                "provider": "AWS",
-                "note": "Short QA replay window",
-                "amount": 400
+                "id": "cr-zoro-sub-codex",
+                "optionId": "gpt-codex-pro-20x",
+                "optionLabel": "GPT Codex Pro 20x \u00b7 3 accounts \u00b7 INR 59,700 (~$715)",
+                "note": "Baselining GPT-5.6 \u00b7 distribute load, avoid session limits",
+                "amount": 715,
+                "billingUnit": "per month"
               }
-            ]
+            ],
+            "billingUnit": "per month"
+          }
+        },
+        "ctoDecision": {
+          "decision": "approve",
+          "amount": 715,
+          "comment": "",
+          "at": "2026-07-20T10:30:00.000Z",
+          "by": "CTO Admin"
+        },
+        "cfoDecision": {
+          "decision": "approve",
+          "amount": 715,
+          "comment": "Approved",
+          "at": "2026-07-20T11:51:00.000Z",
+          "by": "Shubham Garg"
+        },
+        "history": [
+          {
+            "at": "2026-07-20T09:00:00.000Z",
+            "actor": "Dhawal Bathre \u00b7 R&D",
+            "action": "Submitted additional request",
+            "detail": "GPT Codex Pro 20x (3 accounts) \u00b7 INR 59,700 (~$715)"
+          },
+          {
+            "at": "2026-07-20T10:30:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "CTO approved",
+            "detail": "Forwarded to CFO at ~$715"
+          },
+          {
+            "at": "2026-07-20T11:51:00.000Z",
+            "actor": "Shubham Garg \u00b7 CFO",
+            "action": "CFO approved",
+            "detail": "Approved at ~$715"
+          }
+        ]
+      },
+      {
+        "id": "cr-tron-claude-1",
+        "projectId": "tron",
+        "projectName": "Tron",
+        "type": "Budget change",
+        "amount": 200,
+        "currentBudget": 0,
+        "requestedBudget": 200,
+        "requester": "Piyush Chandra",
+        "requesterRole": "R&D",
+        "urgency": "Normal",
+        "stage": "Approved",
+        "status": "approved",
+        "createdAt": "2026-07-09T12:29:00.000Z",
+        "reason": "Claude Code Max 20x (1 subscription) for the 5 pod members to support R&D efforts on the RL environment, along with testing Claude Opus 4.8.",
+        "expectedTasks": "500",
+        "timelineDelta": "",
+        "affectedPhase": "Sampling",
+        "breakdown": {
+          "models": {
+            "amount": 0,
+            "optionLabel": "",
+            "note": "",
+            "entries": []
+          },
+          "infra": {
+            "amount": 0,
+            "optionLabel": "",
+            "note": "",
+            "entries": []
           },
           "subs": {
             "amount": 200,
-            "optionLabel": "Cursor Pro \u00b7 $40/month",
-            "note": "One extra seat",
+            "optionLabel": "Claude Code Max 20x \u00b7 1 subscription",
+            "note": "Shared by 5 pod members \u00b7 R&D efforts + testing Opus 4.8",
             "entries": [
               {
-                "id": "cr-nexa-sub-1",
-                "optionId": "cursor-pro",
-                "optionLabel": "Cursor Pro \u00b7 $40/month",
-                "note": "One extra seat",
+                "id": "cr-tron-sub-1",
+                "optionId": "claude-code-max-20x",
+                "optionLabel": "Claude Code Max 20x \u00b7 1 subscription",
+                "note": "Shared by 5 pod members \u00b7 R&D efforts + testing Opus 4.8",
                 "amount": 200,
                 "billingUnit": "per month"
               }
@@ -2564,169 +1307,197 @@
         },
         "ctoDecision": {
           "decision": "approve",
-          "amount": 900,
+          "amount": 200,
           "comment": "",
-          "at": "2026-06-18T12:00:00.000Z",
+          "at": "2026-07-09T15:30:00.000Z",
           "by": "CTO Admin"
         },
         "cfoDecision": {
           "decision": "approve",
-          "amount": 900,
-          "comment": "",
-          "at": "2026-06-19T09:00:00.000Z",
-          "by": "CFO Admin"
+          "amount": 200,
+          "comment": "Approved",
+          "at": "2026-07-09T16:16:00.000Z",
+          "by": "Shubham Garg"
         },
         "history": [
           {
-            "at": "2026-06-18T08:20:00.000Z",
-            "actor": "R&D Lead \u00b7 R&D",
-            "action": "Submitted change request",
-            "detail": "$900 \u00b7 Add 2 days"
+            "at": "2026-07-09T12:29:00.000Z",
+            "actor": "Piyush Chandra \u00b7 R&D",
+            "action": "Submitted additional request",
+            "detail": "Claude Code Max 20x (1 sub) \u00b7 $200"
           },
           {
-            "at": "2026-06-18T12:00:00.000Z",
+            "at": "2026-07-09T15:30:00.000Z",
             "actor": "CTO Admin \u00b7 CTO",
             "action": "CTO approved",
-            "detail": "Forwarded to CFO at $900"
+            "detail": "Forwarded to CFO at $200"
           },
           {
-            "at": "2026-06-19T09:00:00.000Z",
-            "actor": "CFO Admin \u00b7 CFO",
+            "at": "2026-07-09T16:16:00.000Z",
+            "actor": "Shubham Garg \u00b7 CFO",
             "action": "CFO approved",
-            "detail": "Approved at $900"
+            "detail": "Approved at $200"
+          }
+        ]
+      },
+      {
+        "id": "cr-tron-claude-2",
+        "projectId": "tron",
+        "projectName": "Tron",
+        "type": "Budget change",
+        "amount": 400,
+        "currentBudget": 200,
+        "requestedBudget": 600,
+        "requester": "Piyush Chandra",
+        "requesterRole": "R&D",
+        "urgency": "Normal",
+        "stage": "Approved",
+        "status": "approved",
+        "createdAt": "2026-07-14T11:17:00.000Z",
+        "reason": "Two (2) additional Claude Code Max 20x subscriptions (Opus 4.8) solely for trajectory generation to baseline the tasks we create \u2014 maintains dataset quality and difficulty and avoids exhausting the session limit during simultaneous development.",
+        "expectedTasks": "500",
+        "timelineDelta": "",
+        "affectedPhase": "Sampling",
+        "breakdown": {
+          "models": {
+            "amount": 0,
+            "optionLabel": "",
+            "note": "",
+            "entries": []
+          },
+          "infra": {
+            "amount": 0,
+            "optionLabel": "",
+            "note": "",
+            "entries": []
+          },
+          "subs": {
+            "amount": 400,
+            "optionLabel": "Claude Code Max 20x \u00b7 2 subscriptions",
+            "note": "Trajectory generation \u00b7 Opus 4.8 baselining",
+            "entries": [
+              {
+                "id": "cr-tron-sub-2",
+                "optionId": "claude-code-max-20x",
+                "optionLabel": "Claude Code Max 20x \u00b7 2 subscriptions",
+                "note": "Trajectory generation \u00b7 Opus 4.8 baselining",
+                "amount": 400,
+                "billingUnit": "per month"
+              }
+            ],
+            "billingUnit": "per month"
+          }
+        },
+        "ctoDecision": {
+          "decision": "approve",
+          "amount": 400,
+          "comment": "",
+          "at": "2026-07-14T14:00:00.000Z",
+          "by": "CTO Admin"
+        },
+        "cfoDecision": {
+          "decision": "approve",
+          "amount": 400,
+          "comment": "Approved",
+          "at": "2026-07-14T16:00:00.000Z",
+          "by": "Shubham Garg"
+        },
+        "history": [
+          {
+            "at": "2026-07-14T11:17:00.000Z",
+            "actor": "Piyush Chandra \u00b7 R&D",
+            "action": "Submitted additional request",
+            "detail": "Claude Code Max 20x (2 subs) \u00b7 $400"
+          },
+          {
+            "at": "2026-07-14T14:00:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "CTO approved",
+            "detail": "Forwarded to CFO at $400"
+          },
+          {
+            "at": "2026-07-14T16:00:00.000Z",
+            "actor": "Shubham Garg \u00b7 CFO",
+            "action": "CFO approved",
+            "detail": "Approved at $400"
           }
         ]
       }
     ],
     "teamRemovals": {},
     "modelKeyRecords": [],
-    "itProvisioningRequests": [],
-    "itMonthlyActuals": {
-      "demo-prod-orbit": {
-        "monthKey": "2026-06",
-        "updatedAt": "2026-06-30T18:00:00.000Z",
-        "modelActual": 12460,
-        "infraActual": 9460,
-        "subsActual": 1890,
-        "monthEndActual": 23810,
-        "dailyActuals": [
+    "itProvisioningRequests": [
+      {
+        "id": "it-br-mrt7tddt",
+        "sourceReviewId": "br-mrt7tddt",
+        "sourceType": "budget-review",
+        "projectId": "p-mrt792c6",
+        "projectName": "Zoro",
+        "approvedAmount": 600,
+        "status": "pending-it",
+        "approvedAt": "2026-07-20T12:44:34.094Z",
+        "approvedBy": "CFO Admin",
+        "approvedRole": "CFO",
+        "budgetType": "RnD",
+        "requestedModels": [
           {
-            "date": "2026-06-25",
-            "modelActual": 620,
-            "infraActual": 340,
-            "subsActual": 90
-          },
-          {
-            "date": "2026-06-26",
-            "modelActual": 680,
-            "infraActual": 360,
-            "subsActual": 90
-          },
-          {
-            "date": "2026-06-27",
-            "modelActual": 710,
-            "infraActual": 380,
-            "subsActual": 90
-          },
-          {
-            "date": "2026-06-28",
-            "modelActual": 690,
-            "infraActual": 360,
-            "subsActual": 90
-          },
-          {
-            "date": "2026-06-29",
-            "modelActual": 720,
-            "infraActual": 390,
-            "subsActual": 90
-          },
-          {
-            "date": "2026-06-30",
-            "modelActual": 760,
-            "infraActual": 420,
-            "subsActual": 90
+            "id": "p-mrt792c6-default-model",
+            "modelId": "",
+            "label": "\u2014",
+            "provider": "Anthropic",
+            "amount": 0,
+            "usageTag": ""
           }
         ],
-        "modelUsage": [
+        "requestedInfra": [],
+        "requestedSubs": [
           {
-            "id": "it-orbit-model-1",
-            "modelId": "openai.gpt-4o",
-            "modelName": "GPT-4o",
-            "cost": 8120,
-            "inputTokens": 2400000,
-            "outputTokens": 710000
-          },
-          {
-            "id": "it-orbit-model-2",
-            "modelId": "google.gemini-2-5-pro",
-            "modelName": "Gemini 2.5 Pro",
-            "cost": 4340,
-            "inputTokens": 1220000,
-            "outputTokens": 388000
+            "id": "ek52ge",
+            "modelId": "",
+            "label": "Claude Max",
+            "provider": "Anthropic",
+            "amount": 600,
+            "usageTag": ""
           }
         ],
-        "note": "Month-end actuals loaded from vendor invoices.",
-        "updatedBy": "IT Admin"
-      },
-      "demo-prod-lattice": {
-        "monthKey": "2026-06",
-        "updatedAt": "2026-06-30T18:10:00.000Z",
-        "modelActual": 11120,
-        "infraActual": 11880,
-        "subsActual": 105,
-        "monthEndActual": 23105,
-        "dailyActuals": [
+        "members": [
           {
-            "date": "2026-06-25",
-            "modelActual": 540,
-            "infraActual": 520,
-            "subsActual": 5
+            "id": "emp-0268",
+            "name": "Dhawal Bathre",
+            "role": "R&D",
+            "email": "dhawal.bathre@ethara.ai"
           },
           {
-            "date": "2026-06-26",
-            "modelActual": 610,
-            "infraActual": 610,
-            "subsActual": 5
+            "id": "emp-0493",
+            "name": "Mumukshu Panchal",
+            "role": "R&D",
+            "email": "mumukshu.panchal@ethara.ai"
           },
           {
-            "date": "2026-06-27",
-            "modelActual": 640,
-            "infraActual": 650,
-            "subsActual": 5
+            "id": "emp-0424",
+            "name": "Kshitij Sharma",
+            "role": "Engineer",
+            "email": "kshitij.sharma@ethara.ai"
           },
           {
-            "date": "2026-06-28",
-            "modelActual": 620,
-            "infraActual": 640,
-            "subsActual": 5
+            "id": "emp-0016",
+            "name": "Abhay Haldia",
+            "role": "Engineer",
+            "email": "abhay.haldiya@ethara.ai"
           },
           {
-            "date": "2026-06-29",
-            "modelActual": 670,
-            "infraActual": 700,
-            "subsActual": 5
-          },
-          {
-            "date": "2026-06-30",
-            "modelActual": 720,
-            "infraActual": 760,
-            "subsActual": 5
+            "id": "emp-0772",
+            "name": "Shubham Chaturvedi",
+            "role": "Engineer",
+            "email": "shubham.chaturvedi@ethara.ai"
           }
         ],
-        "modelUsage": [
-          {
-            "id": "it-lattice-model-1",
-            "modelId": "moonshot.kimi-1-5-vision",
-            "modelName": "Kimi 1.5 Vision",
-            "cost": 11120,
-            "inputTokens": 2050000,
-            "outputTokens": 574000
-          }
-        ],
-        "note": "Vendor and cloud-invoice actuals synchronized.",
-        "updatedBy": "IT Admin"
+        "note": "Approved",
+        "gatewayRoute": "/api/gateway/execute",
+        "lines": []
       }
-    }
+    ],
+    "itMonthlyActuals": {}
   },
-  "app_state_updated_at": "2026-07-19T13:17:49.829150+00:00"
+  "app_state_updated_at": "2026-07-20T19:51:00.130268+00:00"
 }

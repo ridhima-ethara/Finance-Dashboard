@@ -567,7 +567,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
             data-testid="drawer-btn-topup"
             className="h-9 rounded-lg border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-300 hover:bg-fuchsia-500/20 gap-1.5"
           >
-            <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise change request
+            <ArrowUpRightSquare className="w-3.5 h-3.5" /> Raise additional request
           </Button>
           <Button
             onClick={() => setDeliverOpen(true)}

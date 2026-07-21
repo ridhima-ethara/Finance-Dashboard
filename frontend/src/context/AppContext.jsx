@@ -80,6 +80,15 @@ const readJSON = (key, fallback) => {
   }
 };
 
+// Ensure canonical seed records (e.g. mapped project approvals) always load,
+// even when localStorage already holds a persisted list. Stored entries win on id
+// collision so user edits are preserved; new seed entries are appended.
+const mergeSeedById = (seed = [], stored = []) => {
+  const storedList = Array.isArray(stored) ? stored : [];
+  const storedIds = new Set(storedList.map((entry) => entry?.id));
+  return [...seed.filter((entry) => !storedIds.has(entry?.id)), ...storedList];
+};
+
 const normalizeModelRecord = (model = {}, index = 0) => ({
   id: String(model.id || buildCustomModelId(model) || `custom.model.${index + 1}`),
   name: String(model.name || `Custom model ${index + 1}`).trim(),
@@ -1022,10 +1031,10 @@ export const AppProvider = ({ children }) => {
   const [customProjects, setCustomProjects] = useState(() => readJSON(CUSTOM_PROJECTS_KEY, []));
   const [taskLogs, setTaskLogs] = useState(() => readJSON(TASK_LOGS_KEY, DEMO_TASK_LOGS));
   const [topupRequests, setTopupRequests] = useState(() => readJSON(TOPUP_REQ_KEY, DEMO_TOPUP_REQUESTS));
-  const [budgets, setBudgets] = useState(() => readJSON(BUDGETS_KEY, DEMO_BUDGETS));
+  const [budgets, setBudgets] = useState(() => mergeSeedById(DEMO_BUDGETS, readJSON(BUDGETS_KEY, [])));
   const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, DEMO_BATCH_DELIVERIES));
   const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, DEMO_BUDGET_REVIEWS).map(normalizeBudgetReviewRecord));
-  const [changeRequests, setChangeRequests] = useState(() => readJSON(CHANGE_REQUESTS_KEY, DEMO_CHANGE_REQUESTS).map(normalizeChangeRequest));
+  const [changeRequests, setChangeRequests] = useState(() => mergeSeedById(DEMO_CHANGE_REQUESTS, readJSON(CHANGE_REQUESTS_KEY, [])).map(normalizeChangeRequest));
   const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, DEMO_TEAM_REMOVALS));
   const [modelKeyRecords, setModelKeyRecords] = useState(() => (
     (Array.isArray(readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS)) ? readJSON(MODEL_KEYS_KEY, DEMO_MODEL_KEYS) : DEMO_MODEL_KEYS)
@@ -1423,10 +1432,15 @@ export const AppProvider = ({ children }) => {
   // Merge overrides + apply approved top-ups / change requests into project budgets
   const projects = useMemo(() => {
     const baseIds = new Set(PROJECTS.map((project) => project.id));
+    // Seed projects are canonical: drop any custom project that duplicates a seed one by
+    // name (e.g. a Zoro/Tron created manually before it was seeded) so it never shows twice.
+    const baseNames = new Set(PROJECTS.map((project) => String(project.name || "").trim().toLowerCase()));
     const overrides = new Map(customProjects.map((project) => [project.id, project]));
     const merged = [
       ...PROJECTS.map((project) => ({ ...project, ...(overrides.get(project.id) || {}) })),
-      ...customProjects.filter((project) => !baseIds.has(project.id)),
+      ...customProjects.filter(
+        (project) => !baseIds.has(project.id) && !baseNames.has(String(project.name || "").trim().toLowerCase())
+      ),
     ].map((p) => ({
       ...p,
       buffer: buffers[p.id] ?? p.buffer,
@@ -1583,6 +1597,19 @@ export const AppProvider = ({ children }) => {
     return list;
   }, [projects, user]);
 
+  // The client project name is visible only to the CFO. Mask it on the projects exposed to the
+  // rest of the app; the internal `projects`/`visibleProjects` stay intact for edits and aggregation.
+  const canViewClientName = user?.role === "CFO";
+  const maskClientName = (project) => ({ ...project, client: "", clientProjectName: "" });
+  const exposedProjects = useMemo(
+    () => (canViewClientName ? projects : projects.map(maskClientName)),
+    [projects, canViewClientName]
+  );
+  const exposedVisibleProjects = useMemo(
+    () => (canViewClientName ? visibleProjects : visibleProjects.map(maskClientName)),
+    [visibleProjects, canViewClientName]
+  );
+
   const setBuffer = (projectId, pct) => setBuffers((b) => ({ ...b, [projectId]: Number(pct) }));
   const setRecovery = (projectId, amount) => setRecoveries((r) => ({ ...r, [projectId]: Number(amount) }));
   const applyBufferAction = ({ projectId, pct, action }) => {
@@ -1659,6 +1686,32 @@ export const AppProvider = ({ children }) => {
       const updated = { ...updater(base), __custom: true };
       return [updated, ...current.filter((project) => project.id !== projectId)];
     });
+
+  // Edit core project details from the project view. Client name may only be changed by the CFO.
+  const updateProjectDetails = (projectId, updates = {}) => {
+    upsertProjectOverride(projectId, (project) => {
+      const next = { ...project };
+      if (typeof updates.name === "string" && updates.name.trim()) next.name = updates.name.trim();
+      if (typeof updates.goal === "string") next.goal = updates.goal;
+      if (typeof updates.startDate === "string" && updates.startDate) next.startDate = updates.startDate;
+      if (typeof updates.estimatedEndDate === "string") next.estimatedEndDate = updates.estimatedEndDate;
+      if (typeof updates.client === "string" && user?.role === "CFO") {
+        next.client = updates.client;
+        next.clientProjectName = updates.client;
+      }
+      next.auditLog = [
+        {
+          id: `a-${projectId}-${Date.now().toString(36)}-edit`,
+          ts: new Date().toISOString(),
+          actor: `${user?.name || "User"} · ${user?.role || "User"}`,
+          action: "Project details updated",
+          detail: Object.keys(updates).filter((key) => updates[key] !== undefined && updates[key] !== "").join(", ") || "Details edited",
+        },
+        ...(project.auditLog || []),
+      ];
+      return next;
+    });
+  };
 
   const addProjectTeamMembers = (projectId, members = [], source = "Budget Builder") => {
     if (!members.length) return;
@@ -3518,15 +3571,16 @@ export const AppProvider = ({ children }) => {
     setNotifOpen,
     scope,
     setScope,
-    projects,
+    projects: exposedProjects,
     modelCatalog,
     addCustomModel,
-    visibleProjects,
+    visibleProjects: exposedVisibleProjects,
     bufferOverview,
     teamRemovals,
     removeProjectTeamMember,
     addProjectTeamMembers,
     updateProjectCoreMembers,
+    updateProjectDetails,
     archiveProject,
     deleteProject,
     setBuffer,

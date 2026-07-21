@@ -143,7 +143,7 @@ const emptyInfraItem = (days = 30) => {
 };
 const emptySubItem = () => {
   const s = SUBSCRIPTION_CATALOG[0];
-  return { id: uid(), subscription: s.name, pricePerSeat: s.monthly, seats: 1, members: [], estCost: s.monthly };
+  return { id: uid(), subscription: s.name, pricePerSeat: s.monthly, seats: 1, days: null, members: [], estCost: s.monthly };
 };
 const emptyGeneralItem = () => ({
   id: uid(),
@@ -367,6 +367,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
             subscription: line.subscription || meta?.name || SUBSCRIPTION_CATALOG[0].name,
             pricePerSeat: Number(line.pricePerSeat || meta?.monthly || line.estCost || line.amount || 0),
             seats: Number(line.seats || Math.max(line.members?.length || 0, 1)),
+            days: line.days == null ? null : Number(line.days),
             members: Array.isArray(line.members) ? line.members : [],
             estCost: Number(line.estCost || line.amount || 0),
           };
@@ -555,7 +556,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     }));
     setSubs((rows) => rows.map((row) => ({
       ...row,
-      estCost: Math.round((Number(row.pricePerSeat || 0) * Number(row.seats || 1) * budgetDurationDays / 30) * 100) / 100,
+      estCost: Math.round((Number(row.pricePerSeat || 0) * Number(row.seats || 1) * Number(row.days ?? budgetDurationDays) / 30) * 100) / 100,
     })));
   }, [budgetDurationDays]);
 
@@ -691,8 +692,8 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
         const s = SUBSCRIPTION_CATALOG.find((x) => x.name === next.subscription) || SUBSCRIPTION_CATALOG[0];
         next.pricePerSeat = s.monthly;
       }
-      if (["subscription", "seats", "pricePerSeat"].includes(key)) {
-        next.estCost = Math.round((Number(next.pricePerSeat || 0) * Number(next.seats || 1) * budgetDurationDays / 30) * 100) / 100;
+      if (["subscription", "seats", "pricePerSeat", "days"].includes(key)) {
+        next.estCost = Math.round((Number(next.pricePerSeat || 0) * Number(next.seats || 1) * Number(next.days ?? budgetDurationDays) / 30) * 100) / 100;
       }
       return next;
     }));
@@ -700,7 +701,13 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   const updateSubMembers = (id, members) => {
     setSubs((rows) => rows.map((r) => {
       if (r.id !== id) return r;
-      return { ...r, members, seats: Math.max(members.length, 1) };
+      const seats = Math.max(members.length, 1);
+      return {
+        ...r,
+        members,
+        seats,
+        estCost: Math.round((Number(r.pricePerSeat || 0) * seats * Number(r.days ?? budgetDurationDays) / 30) * 100) / 100,
+      };
     }));
   };
   const updateGeneralRow = (id, key, v) => {
@@ -925,7 +932,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
           },
         };
       }) : [],
-      subs: selectedTypes.subs ? subs.map((entry) => ({ ...entry, days: budgetDurationDays })) : [],
+      subs: selectedTypes.subs ? subs.map((entry) => ({ ...entry, days: Number(entry.days ?? budgetDurationDays) })) : [],
       misc: selectedTypes.general ? generalTablePreviewLines : [],
     };
     submitBudget({
@@ -1491,7 +1498,16 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                       </select>
                       <input type="number" min="0" step="1" value={r.pricePerSeat} onChange={(e) => updateSubRow(r.id, "pricePerSeat", e.target.value)} data-testid={`bb-sub-price-${r.id}`} className={rowInp + " tabular text-right"} title="$ per seat / month" />
                       <input type="number" min="1" value={r.seats} onChange={(e) => updateSubRow(r.id, "seats", e.target.value)} className={rowInp + " tabular text-right"} title="Seats" />
-                      <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{budgetDurationDays.toLocaleString()}</div>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={r.days ?? budgetDurationDays}
+                        onChange={(e) => updateSubRow(r.id, "days", e.target.value)}
+                        data-testid={`bb-sub-days-${r.id}`}
+                        className={rowInp + " tabular text-right"}
+                        title="Subscription days"
+                      />
                       <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{fmtCurrency(r.estCost, { compact: false })}</div>
                       <div data-testid={`bb-sub-members-${r.id}`}>
                         {subscriptionMemberPool.length === 0 ? (
