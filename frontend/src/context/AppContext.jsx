@@ -1238,7 +1238,20 @@ export const AppProvider = ({ children }) => {
     (async () => {
       try {
         const remote = await fetchWorkspaceFromBackend();
-        const remoteHasData = remote && WORKSPACE_SLICE_KEYS.some((key) => {
+        // Only treat backend as populated if it has actual user-generated content.
+        // Cosmetic slices like bufferPool are always seeded with demo defaults and
+        // must not be treated as "backend already has data" — otherwise we'd apply
+        // empty content arrays over the live DEMO_* defaults and lose them.
+        const CONTENT_SLICES = [
+          "customProjects",
+          "budgets",
+          "budgetReviews",
+          "changeRequests",
+          "topupRequests",
+          "batchDeliveries",
+          "taskLogs",
+        ];
+        const remoteHasData = remote && CONTENT_SLICES.some((key) => {
           const val = remote[key];
           if (val === undefined || val === null) return false;
           if (Array.isArray(val)) return val.length > 0;
