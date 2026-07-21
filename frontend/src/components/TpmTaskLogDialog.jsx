@@ -306,7 +306,6 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
   const [successfulRows, setSuccessfulRows] = useState(() => buildInitialSuccessfulRows(editingLog, modelCatalog));
   const [failedRows, setFailedRows] = useState(() => buildInitialFailedRows(editingLog, modelCatalog));
   const [successImportMeta, setSuccessImportMeta] = useState(null);
-  const [failedImportMeta, setFailedImportMeta] = useState(null);
   const approvedGeneralBudgetLines = useMemo(() => {
     const projectLines = Array.isArray(activeProject?.budgetItems?.misc) ? activeProject.budgetItems.misc : [];
     if (projectLines.length) return projectLines;
@@ -344,7 +343,6 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
       setSuccessfulRows(buildInitialSuccessfulRows(editingLog, modelCatalog));
       setFailedRows(buildInitialFailedRows(editingLog, modelCatalog));
       setSuccessImportMeta(null);
-      setFailedImportMeta(null);
       setLogMode(editingLog?.logType === "general-actual" ? "general" : "model");
       setGeneralActualRows(buildInitialGeneralActualRows(editingLog, generalActualHeaders));
       setGeneralImportMeta(null);
@@ -404,10 +402,6 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     () => allRows.reduce((sum, row) => sum + Number(row.outputTokens || 0), 0),
     [allRows]
   );
-  const llmCallTotal = useMemo(
-    () => allRows.reduce((sum, row) => sum + Number(row.llmCalls || 0), 0),
-    [allRows]
-  );
   const approvedDailyAllocation = useMemo(
     () => Math.round(Number(activeProject?.approvedBudget || 0) / 30 * 100) / 100,
     [activeProject?.approvedBudget]
@@ -427,14 +421,12 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
         successfulCost: 0,
         failedCost: 0,
         totalCost: 0,
-        llmCalls: 0,
         inputTokens: 0,
         outputTokens: 0,
       };
       const cost = Number(row.cost || 0);
       acc[key].tasks += getRowTaskQuantity(row);
       acc[key].totalCost += cost;
-      acc[key].llmCalls += Number(row.llmCalls || 0);
       acc[key].inputTokens += Number(row.inputTokens || 0);
       acc[key].outputTokens += Number(row.outputTokens || 0);
       if (populatedSuccessRows.some((entry) => entry.id === row.id)) {
@@ -552,7 +544,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
       }
 
       const setter = type === "success" ? setSuccessfulRows : setFailedRows;
-      const setMeta = type === "success" ? setSuccessImportMeta : setFailedImportMeta;
+      const setMeta = setSuccessImportMeta;
       setter((rows) => {
         const current = rows.filter(rowHasData);
         return [...current, ...parsed];
@@ -622,7 +614,6 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
     setSuccessfulRows([buildSheetRow(modelCatalog)]);
     setFailedRows([]);
     setSuccessImportMeta(null);
-    setFailedImportMeta(null);
     setGeneralActualRows([buildGeneralActualRow(generalActualHeaders)]);
     setGeneralImportMeta(null);
   };
@@ -889,21 +880,7 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
             onUpdateRow={(id, key, value) => updateSheetRow(setSuccessfulRows, id, key, value)}
             onRemoveRow={(id) => removeSheetRow(setSuccessfulRows, id)}
             testidPrefix="success"
-            helper="Upload the successful-task CSV / Excel sheet with columns: Model, Task, Stage, Input Tokens, Input Tokens (M), Output Tokens, Output Tokens (M), LLM Calls, Cost ($). The uploaded rows appear below in the manual editor."
-          />
-
-          <TaskSheetSection
-            title="Failed task log"
-            accent="amber"
-            rows={failedRows}
-            modelOptions={modelOptions}
-            importMeta={failedImportMeta}
-            onFileImport={(file) => importSheetFile("failed", file)}
-            onAddRow={() => addSheetRow(setFailedRows)}
-            onUpdateRow={(id, key, value) => updateSheetRow(setFailedRows, id, key, value)}
-            onRemoveRow={(id) => removeSheetRow(setFailedRows, id)}
-            testidPrefix="failed"
-            helper="Upload the failed-task CSV / Excel sheet separately so the daily burn, token usage, and utilization view keeps failed effort visible too. You can still add manual rows below."
+            helper="Upload the successful-task CSV / Excel sheet with columns: Model, Task, Runs, Input Tokens, Input Tokens (M), Output Tokens, Output Tokens (M), Cost ($). The uploaded rows appear below in the manual editor."
           />
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -917,16 +894,6 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                 className={`${summaryInp} tabular`}
               />
             </Field>
-            <Field label="Failed tasks">
-              <input
-                type="number"
-                min="0"
-                value={failedTasks === "" ? displayDraftNumber(failedTasksFromRows) : failedTasks}
-                onChange={(e) => setFailedTasks(e.target.value)}
-                data-testid="task-failed-count"
-                className={`${summaryInp} tabular`}
-              />
-            </Field>
             <Field label="Successful trajectories">
               <input
                 type="number"
@@ -937,30 +904,11 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                 className={`${summaryInp} tabular`}
               />
             </Field>
-            <Field label="Failed trajectories">
-              <input
-                type="number"
-                min="0"
-                value={failedTrajectories}
-                onChange={(e) => setFailedTrajectories(e.target.value)}
-                data-testid="task-failed-trajectories"
-                className={`${summaryInp} tabular`}
-              />
-            </Field>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Field label="Successful cost">
               <div className={`${summaryInp} text-emerald-300`} data-testid="task-successful-cost">{fmtCurrency(successCost, { compact: false })}</div>
             </Field>
-            <Field label="Failed cost">
-              <div className={`${summaryInp} text-amber-300`} data-testid="task-failed-cost">{fmtCurrency(failedCost, { compact: false })}</div>
-            </Field>
             <Field label="Total cost">
               <div className={`${summaryInp} text-fuchsia-300`} data-testid="task-total-cost">{fmtCurrency(costTotal, { compact: false })}</div>
-            </Field>
-            <Field label="LLM calls">
-              <div className={`${summaryInp} text-zinc-200`} data-testid="task-total-llm-calls">{llmCallTotal.toLocaleString()}</div>
             </Field>
           </div>
 
@@ -985,9 +933,6 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                 Success cost / task: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(successCost / Math.max(derivedSuccessfulTasks, 1), { compact: false })}</span>
               </div>
               <div>
-                Failed cost / task: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(failedCost / Math.max(derivedFailedTasks, 1), { compact: false })}</span>
-              </div>
-              <div>
                 Total trajectories: <span className="text-fuchsia-300 font-semibold tabular">{(derivedSuccessTrajectories + derivedFailedTrajectories).toLocaleString()}</span>
               </div>
               <div>
@@ -1005,16 +950,14 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                 </div>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[920px] text-sm">
+                <table className="w-full min-w-[820px] text-sm">
                   <thead>
                     <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
                       <th className="text-left py-2 px-3">Model</th>
                       <th className="text-right py-2 px-3">Tasks</th>
                       <th className="text-right py-2 px-3">Success ($)</th>
-                      <th className="text-right py-2 px-3">Failed ($)</th>
                       <th className="text-right py-2 px-3">Total ($)</th>
                       <th className="text-right py-2 px-3">Day share</th>
-                      <th className="text-right py-2 px-3">LLM calls</th>
                       <th className="text-right py-2 px-3">Input tokens</th>
                       <th className="text-right py-2 px-3">Output tokens</th>
                     </tr>
@@ -1025,10 +968,8 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                         <td className="py-2 px-3 text-white font-medium">{row.modelName}</td>
                         <td className="py-2 px-3 text-right tabular text-zinc-300">{row.tasks.toLocaleString()}</td>
                         <td className="py-2 px-3 text-right tabular text-emerald-300">{fmtCurrency(row.successfulCost, { compact: false })}</td>
-                        <td className="py-2 px-3 text-right tabular text-amber-300">{fmtCurrency(row.failedCost, { compact: false })}</td>
                         <td className="py-2 px-3 text-right tabular text-fuchsia-300 font-semibold">{fmtCurrency(row.totalCost, { compact: false })}</td>
                         <td className="py-2 px-3 text-right tabular text-zinc-200">{row.sharePct}%</td>
-                        <td className="py-2 px-3 text-right tabular text-zinc-300">{row.llmCalls.toLocaleString()}</td>
                         <td className="py-2 px-3 text-right tabular text-zinc-300">{row.inputTokens.toLocaleString()}</td>
                         <td className="py-2 px-3 text-right tabular text-zinc-300">{row.outputTokens.toLocaleString()}</td>
                       </tr>
@@ -1039,10 +980,8 @@ const TpmTaskLogDialog = ({ open, onOpenChange, project, phase, editingLog }) =>
                       <td className="py-3 px-3 text-fuchsia-300 uppercase text-[10px] tracking-widest font-semibold">Day total</td>
                       <td className="py-3 px-3 text-right tabular text-zinc-300">{modelConsumptionRows.reduce((sum, row) => sum + row.tasks, 0).toLocaleString()}</td>
                       <td className="py-3 px-3 text-right tabular text-emerald-300">{fmtCurrency(successCost, { compact: false })}</td>
-                      <td className="py-3 px-3 text-right tabular text-amber-300">{fmtCurrency(failedCost, { compact: false })}</td>
                       <td className="py-3 px-3 text-right tabular text-fuchsia-300 font-bold">{fmtCurrency(costTotal, { compact: false })}</td>
                       <td className="py-3 px-3 text-right tabular text-zinc-200">{costTotal > 0 ? "100%" : "0%"}</td>
-                      <td className="py-3 px-3 text-right tabular text-zinc-300">{llmCallTotal.toLocaleString()}</td>
                       <td className="py-3 px-3 text-right tabular text-zinc-300">{inputTokenTotal.toLocaleString()}</td>
                       <td className="py-3 px-3 text-right tabular text-zinc-300">{outputTokenTotal.toLocaleString()}</td>
                     </tr>
@@ -1237,24 +1176,23 @@ const TaskSheetSection = ({
       )}
 
       <div className="overflow-x-auto">
-        <div className="min-w-[1180px] space-y-2">
+        <div className="min-w-[1060px] space-y-2">
           <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
             Manual input section
           </div>
-          <div className="grid grid-cols-[1.35fr_1.1fr_.9fr_.9fr_.9fr_.9fr_.9fr_.8fr_.8fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
+          <div className="grid grid-cols-[1.35fr_1.1fr_.9fr_.9fr_.9fr_.9fr_.9fr_.8fr_28px] gap-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500 pb-1 border-b border-white/5">
             <span>Model</span>
             <span>Task</span>
-            <span>Stage</span>
+            <span>Runs</span>
             <span className="text-right">Input tokens</span>
             <span className="text-right">Input tokens (M)</span>
             <span className="text-right">Output tokens</span>
             <span className="text-right">Output tokens (M)</span>
-            <span className="text-right">LLM calls</span>
             <span className="text-right">Cost ($)</span>
             <span />
           </div>
           {rows.map((row) => (
-            <div key={row.id} className="grid grid-cols-[1.35fr_1.1fr_.9fr_.9fr_.9fr_.9fr_.9fr_.8fr_.8fr_28px] gap-2 items-center">
+            <div key={row.id} className="grid grid-cols-[1.35fr_1.1fr_.9fr_.9fr_.9fr_.9fr_.9fr_.8fr_28px] gap-2 items-center">
               <select
                 value={row.modelId}
                 onChange={(e) => onUpdateRow(row.id, "modelId", e.target.value)}
@@ -1283,7 +1221,7 @@ const TaskSheetSection = ({
                 onChange={(e) => onUpdateRow(row.id, "stage", e.target.value)}
                 data-testid={`${testidPrefix}-stage-${row.id}`}
                 className={rowInp}
-                placeholder="Stage"
+                placeholder="Runs"
               />
               <input
                 type="number"
@@ -1319,15 +1257,6 @@ const TaskSheetSection = ({
                 value={displayDraftNumber(row.outputTokensM, { decimals: 3 })}
                 onChange={(e) => onUpdateRow(row.id, "outputTokensM", e.target.value)}
                 data-testid={`${testidPrefix}-output-m-${row.id}`}
-                className={`${rowInp} text-right tabular`}
-              />
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={displayDraftNumber(row.llmCalls)}
-                onChange={(e) => onUpdateRow(row.id, "llmCalls", e.target.value)}
-                data-testid={`${testidPrefix}-calls-${row.id}`}
                 className={`${rowInp} text-right tabular`}
               />
               <input
