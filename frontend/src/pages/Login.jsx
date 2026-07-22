@@ -3,9 +3,8 @@ import { useNavigate, Navigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
 import { USERS } from "../data/mockData";
 import { Button } from "../components/ui/button";
-import { ArrowRight, Lock, Mail, ShieldCheck, HelpCircle } from "lucide-react";
+import { ArrowRight, Lock, Mail, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
-import WorkflowGuideDialog from "../components/WorkflowGuideDialog";
 
 const roleAccent = {
   CTO: { border: "border-fuchsia-500/40", text: "text-fuchsia-300", dot: "bg-fuchsia-400", glow: "hover:shadow-[0_0_24px_rgba(232,25,184,0.35)]" },
@@ -70,7 +69,6 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const [showCreds, setShowCreds] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [guideOpen, setGuideOpen] = useState(false);
 
   if (isAuth) return <Navigate to="/" replace />;
 
@@ -196,23 +194,8 @@ const Login = () => {
           <p className="mt-6 text-center text-[11px] text-zinc-600">
             Role shortcut sign-in is available in this local workspace. Session stored in your browser.
           </p>
-
-          {/* 1st-time user helper */}
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setGuideOpen(true)}
-              data-testid="btn-how-it-works"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-fuchsia-500/30 bg-fuchsia-500/[0.06] hover:bg-fuchsia-500/[0.12] text-[11px] font-medium text-fuchsia-200 transition-colors"
-            >
-              <HelpCircle className="w-3.5 h-3.5" />
-              1st time here? See how it works
-            </button>
-          </div>
         </div>
       </div>
-
-      <WorkflowGuideDialog open={guideOpen} onOpenChange={setGuideOpen} />
     </div>
   );
 };

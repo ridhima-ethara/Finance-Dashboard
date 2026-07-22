@@ -1110,11 +1110,13 @@ export const AppProvider = ({ children }) => {
     if (snapshot.customProjects !== undefined) setCustomProjects(snapshot.customProjects || []);
     if (snapshot.taskLogs !== undefined) setTaskLogs(snapshot.taskLogs || {});
     if (snapshot.topupRequests !== undefined) setTopupRequests(snapshot.topupRequests || []);
-    if (snapshot.budgets !== undefined) setBudgets(snapshot.budgets || []);
+    if (snapshot.budgets !== undefined) setBudgets(mergeSeedById(DEMO_BUDGETS, snapshot.budgets || []));
     if (snapshot.batchDeliveries !== undefined) setBatchDeliveries(snapshot.batchDeliveries || []);
-    if (snapshot.budgetReviews !== undefined) setBudgetReviews(dropStaleSeededReviews(snapshot.budgetReviews || []));
+    if (snapshot.budgetReviews !== undefined) {
+      setBudgetReviews(dropStaleSeededReviews(mergeSeedById(DEMO_BUDGET_REVIEWS, snapshot.budgetReviews || [])).map(normalizeBudgetReviewRecord));
+    }
     if (snapshot.changeRequests !== undefined) {
-      setChangeRequests(dropRetiredChangeRequests(snapshot.changeRequests || []).map(normalizeChangeRequest));
+      setChangeRequests(dropRetiredChangeRequests(mergeSeedById(DEMO_CHANGE_REQUESTS, snapshot.changeRequests || [])).map(normalizeChangeRequest));
     }
     if (snapshot.teamRemovals !== undefined) setTeamRemovals(snapshot.teamRemovals || {});
     if (snapshot.modelKeys !== undefined) setModelKeyRecords(snapshot.modelKeys || []);
