@@ -237,8 +237,8 @@ const getProjectBudgetCardState = (project, review) => {
   }
 
   if (!review) {
-    return Number(project.approvedBudget || 0) > 0
-      ? { label: "Approved", amount: Number(project.approvedBudget || 0), valueClass: "text-white", labelClass: "text-zinc-500" }
+    return Number(project?.approvedBudget || 0) > 0
+      ? { label: "Approved", amount: Number(project.approvedBudget), valueClass: "text-white", labelClass: "text-zinc-500" }
       : { label: "Pending", amount: null, valueClass: "text-zinc-500", labelClass: "text-zinc-500" };
   }
 
@@ -269,6 +269,16 @@ const getProjectBudgetCardState = (project, review) => {
       valueClass: "text-zinc-500",
       labelClass: "text-red-300",
       Icon: XCircle,
+    };
+  }
+
+  const approvedBudget = Number(project?.approvedBudget || 0);
+  if (approvedBudget > 0) {
+    return {
+      label: "Approved",
+      amount: approvedBudget,
+      valueClass: "text-white",
+      labelClass: "text-zinc-500",
     };
   }
 

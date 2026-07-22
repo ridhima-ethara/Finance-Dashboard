@@ -428,7 +428,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
 
       {/* Phase detail drawer */}
       <Sheet open={!!drawer} onOpenChange={(o) => !o && setDrawer(null)}>
-        <SheetContent className="bg-[#0F0F16] border-white/10 text-zinc-100 w-full sm:max-w-lg overflow-y-auto" data-testid="phase-drawer">
+        <SheetContent className={`bg-[#0F0F16] border-white/10 text-zinc-100 w-full overflow-y-auto ${isCfo ? "sm:max-w-2xl" : "sm:max-w-lg"}`} data-testid="phase-drawer">
           {drawer && <PhaseDrawerContent project={drawer.project} phase={drawer.phase} logLane={drawer.logLane || "all"} />}
         </SheetContent>
       </Sheet>
@@ -621,20 +621,22 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
       )}
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-5">
         <DrawerStat label={budgetLabel} value={fmtCurrency(submittedPhaseBudget, { compact: false })} />
         <DrawerStat label={spendLabel} value={fmtCurrency(displaySpend, { compact: false })} tone="magenta" />
         <DrawerStat label="Remaining" value={fmtCurrency(remainingBudget, { compact: false })} tone={remainingBudget < 0 ? "negative" : "positive"} />
         <DrawerStat label="Utilization" value={fmtPct(utilization)} tone={utilization >= 100 ? "negative" : utilization >= 85 ? "warning" : "positive"} />
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
         <DrawerStat label="Tasks done" value={`${loggedTasks}/${targetTasks}`} />
         <DrawerStat label="Input tokens" value={loggedInputTokens.toLocaleString()} />
         <DrawerStat label="Output tokens" value={loggedOutputTokens.toLocaleString()} />
       </div>
 
-      <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4" data-testid="drawer-submitted-budget-view">
+      <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-5" data-testid="drawer-submitted-budget-view">
           <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Submitted task budget view</div>
-          <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="mt-4 grid grid-cols-2 gap-3">
             <DrawerStat label="Target tasks" value={targetTasks.toLocaleString()} />
             <DrawerStat label="Deliverables completed" value={loggedTasks.toLocaleString()} />
             <DrawerStat label="Per task cost" value={targetTasks > 0 ? fmtCurrency(plannedCostPerTask, { compact: false }) : "—"} tone="magenta" />
@@ -644,13 +646,13 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
             <DrawerStat label="Actual / task" value={loggedTasks > 0 ? fmtCurrency(actualPerTask, { compact: false }) : "—"} tone={isCFO ? "warning" : "neutral"} />
             <DrawerStat label="Variance" value={loggedTasks > 0 ? fmtCurrency(deliverableVariance, { compact: false }) : "—"} tone={deliverableVariance > 0 ? "negative" : deliverableVariance < 0 ? "positive" : "neutral"} />
           </div>
-          <div className="mt-3 text-[11px] text-zinc-500">
+          <div className="mt-4 text-[11px] leading-relaxed text-zinc-500">
             Submitted budget {activeBudgetTrack?.budgetType ? `· ${activeBudgetTrack.budgetType}` : ""} {activeBudgetTrack?.submittedAt ? `· ${new Date(activeBudgetTrack.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
           </div>
         </div>
-        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4" data-testid="drawer-budget-related-detail">
+        <div className="rounded-xl border border-white/5 bg-white/[0.02] p-5" data-testid="drawer-budget-related-detail">
           <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Budget-related detail</div>
-          <div className="mt-3 space-y-2 text-sm">
+          <div className="mt-4 divide-y divide-white/5 text-sm">
             <BudgetActivityRow label="Allocated budget" value={fmtCurrency(submittedPhaseBudget, { compact: false })} />
             <BudgetActivityRow label="Current total" value={fmtCurrency(currentBudgetTotal, { compact: false })} />
             <BudgetActivityRow label="Consumed amount" value={fmtCurrency(displaySpend, { compact: false })} />
@@ -844,17 +846,17 @@ const ChangeRequestCard = ({ request }) => {
 const DrawerStat = ({ label, value, tone = "neutral" }) => {
   const tones = { positive: "text-emerald-300", negative: "text-red-300", warning: "text-amber-300", neutral: "text-white", magenta: "text-fuchsia-300" };
   return (
-    <div className="rounded-lg bg-white/[0.03] border border-white/5 p-2.5">
-      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
-      <div className={`text-base font-display font-semibold tabular mt-0.5 ${tones[tone]}`}>{value}</div>
+    <div className="min-h-[76px] rounded-xl bg-white/[0.03] border border-white/5 px-3.5 py-3 flex flex-col justify-between gap-2">
+      <div className="text-[10px] uppercase tracking-[0.14em] leading-4 font-semibold text-zinc-500">{label}</div>
+      <div className={`text-base font-display font-semibold leading-none tabular ${tones[tone]}`}>{value}</div>
     </div>
   );
 };
 
 const BudgetActivityRow = ({ label, value }) => (
-  <div className="flex items-center justify-between gap-3">
-    <span className="text-zinc-400">{label}</span>
-    <span className="text-white font-semibold tabular text-right">{value}</span>
+  <div className="grid grid-cols-[minmax(0,1fr)_minmax(92px,auto)] items-start gap-x-5 py-2.5 first:pt-0 last:pb-0">
+    <span className="text-zinc-400 leading-5">{label}</span>
+    <span className="text-white font-semibold tabular text-right leading-5">{value}</span>
   </div>
 );
 
