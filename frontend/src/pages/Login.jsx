@@ -18,10 +18,20 @@ const roleAccent = {
 const roleLabel = {
   CTO: "Chief Technology Officer",
   CFO: "Chief Financial Officer",
-  TPM: "Technical Program Manager",
-  "R&D": "R&D Team · TPM view",
+  TPM: "Production Program Manager",
+  "R&D": "RL Environment Team",
   PL: "Project Lead",
   IT: "IT Access Administration",
+};
+
+// Display name shown in the role chip (internal role key stays the same).
+const roleDisplayName = {
+  CTO: "CTO",
+  CFO: "CFO",
+  TPM: "Production",
+  "R&D": "RL env",
+  PL: "PL",
+  IT: "IT",
 };
 
 // Ethara.AI logo — provided by user
@@ -127,7 +137,7 @@ const Login = () => {
                 >
                   <div className="flex items-center gap-2">
                     <span className={`w-1.5 h-1.5 rounded-full ${a.dot}`} />
-                    <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${a.text}`}>{u.role}</span>
+                    <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${a.text}`}>{roleDisplayName[u.role] || u.role}</span>
                     <ArrowRight className="w-3 h-3 text-zinc-500 ml-auto group-hover:text-white transition-colors" />
                   </div>
                   <div className="mt-3 text-sm font-semibold text-white truncate">{u.name}</div>

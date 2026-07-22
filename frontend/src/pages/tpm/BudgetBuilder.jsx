@@ -43,7 +43,20 @@ const splitPhaseDates = (value = "") => String(value).split("→").map((part) =>
 const HOURS_PER_MONTH = 730; // AWS standard
 const MS_PER_DAY = 86400000;
 const DIRECT_COST_BUDGET_TYPES = ["Testing"];
-const TEAM_TYPE_OPTIONS = ["Technical", "Generalist", "R&D"];
+const TEAM_TYPE_OPTIONS = ["RL env", "Production", "Tooling"];
+// Legacy "R&D" and "Technical" are accepted for backward compatibility when reading
+// existing budgets/reviews that were saved before the label rename.
+const isRLEnvTeam = (t) => t === "RL env" || t === "R&D";
+const normalizeTeamType = (t) => {
+  if (t === "R&D") return "RL env";
+  if (t === "Technical" || t === "Generalist") return "Production";
+  if (TEAM_TYPE_OPTIONS.includes(t)) return t;
+  return "Production";
+};
+// UI helpers to project between the new visible category/subtype and the internal
+// budgetType values ("Testing" | "RnD" | "Production" | "Rework") that drive the flow.
+const budgetTypeToCategory = (bt) => (bt === "Production" ? "Production" : "RFP");
+const budgetTypeToRfpSubtype = (bt) => (bt === "RnD" ? "Sampling" : "Testing");
 const MODEL_PLATFORM_PRIORITY = PLATFORM_PROVIDERS;
 const MODEL_PLATFORM_MAP = {
   AWS: new Set(["AI21", "Amazon", "Anthropic", "Cohere", "DeepSeek", "Meta", "Mistral", "Stability AI"]),
@@ -207,27 +220,31 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     || ""
   );
   const [priority, setPriority] = useState("Medium");
-  const [teamType, setTeamType] = useState(returnedReview?.teamType || (isRnd ? "R&D" : "Technical"));
+  const [teamType, setTeamType] = useState(normalizeTeamType(returnedReview?.teamType || (isRnd ? "RL env" : "Production")));
   const showReworkOption = requestedBudgetType === "Rework" || normalizeBudgetType(returnedReview?.budgetType) === "Rework";
+  // Budget-type dropdown options — both RL env and Production teams get the same options:
+  // "RFP" (which has a subtype: Testing / Sampling) and "Production". Rework is only surfaced
+  // when a review was returned with rework asked.
   const budgetTypeOptions = useMemo(
     () => (
-      teamType === "R&D"
-        ? ["Testing", "RnD", ...(showReworkOption ? ["Rework"] : [])]
-        : ["Production"]
+      isRLEnvTeam(teamType) || teamType === "Production"
+        ? ["Testing", "RnD", "Production", ...(showReworkOption ? ["Rework"] : [])]
+        : []
     ),
     [showReworkOption, teamType]
   );
   const initialBudgetType =
     returnedReview?.budgetType
     || (["Testing", "RnD", "Rework", "Production"].includes(requestedBudgetType) ? requestedBudgetType : null)
-    || (teamType === "R&D" ? "Testing" : "Production");
+    || (isRLEnvTeam(teamType) ? "Testing" : "Production");
   const [budgetType, setBudgetType] = useState(initialBudgetType);
-  const effectiveBudgetType = teamType === "R&D"
-    ? (budgetTypeOptions.includes(budgetType) ? budgetType : (budgetTypeOptions[0] || "Testing"))
-    : "Production";
+  const effectiveBudgetType = budgetTypeOptions.includes(budgetType) ? budgetType : (budgetTypeOptions[0] || "Testing");
   const isDirectCostBudget = DIRECT_COST_BUDGET_TYPES.includes(effectiveBudgetType);
   const isReworkBudget = effectiveBudgetType === "Rework";
-  const usesRndWorkflow = teamType === "R&D";
+  // The R&D workflow (single-phase, direct-cost sample budgets) is driven by the budget
+  // type, not the team type. Testing/RnD/Rework use it; Production doesn't.
+  const usesRndWorkflow = effectiveBudgetType === "Testing" || effectiveBudgetType === "RnD" || effectiveBudgetType === "Rework";
+  const isToolingTeam = teamType === "Tooling";
   // R&D locked to single phase
   const [deliveryMode, setDeliveryMode] = useState("single");
 
@@ -287,7 +304,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     if (proj) setProjectId(proj.id);
     const hydratedBudgetType = normalizeBudgetType(returnedReview.budgetType || initialBudgetType);
     if (budgetTypeOptions.includes(hydratedBudgetType)) setBudgetType(hydratedBudgetType);
-    if (returnedReview.teamType && TEAM_TYPE_OPTIONS.includes(returnedReview.teamType)) setTeamType(returnedReview.teamType);
+    if (returnedReview.teamType && TEAM_TYPE_OPTIONS.includes(normalizeTeamType(returnedReview.teamType))) setTeamType(normalizeTeamType(returnedReview.teamType));
     setPriority(
       returnedReview.urgency === "High"
         ? "High"
@@ -451,10 +468,10 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   }, [embeddedProjectId, projectId, visibleProjects]);
 
   useEffect(() => {
-    if (teamType !== "R&D") return;
+    if (isToolingTeam) return;
     if (budgetTypeOptions.includes(budgetType)) return;
     setBudgetType(budgetTypeOptions[0] || "Testing");
-  }, [budgetType, budgetTypeOptions, teamType]);
+  }, [budgetType, budgetTypeOptions, teamType, isToolingTeam]);
 
   useEffect(() => {
     if (!project || returnedReview || !requestedPhaseId) return;
@@ -908,6 +925,10 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   };
 
   const doSubmit = () => {
+    if (isToolingTeam) {
+      toast.error("Tooling budgets coming soon", { description: "Pick RL env or Production to continue." });
+      return;
+    }
     const items = {
       models: selectedTypes.models ? models.map((m) => {
         const meta = modelCatalog.find((x) => x.id === m.modelId);
@@ -1075,40 +1096,55 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
             </Field>
           </div>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-            {teamType === "R&D" ? (
-              <Field label="Budget type *" hint="Testing first, then Sample delivery. Rework appears only after changes are asked.">
-                <select
-                  value={budgetType}
-                  onChange={(e) => setBudgetType(e.target.value)}
-                  data-testid="bb-budget-type"
-                  className={ipStyle}
-                >
-                  {budgetTypeOptions.map((b) => <option key={b} value={b}>{formatBudgetTypeOptionLabel(b)}</option>)}
-                </select>
-              </Field>
-            ) : (
-              <Field label="Budget type" hint={!isRnd ? "Choose R&D budget to switch this request into the R&D budget flow." : undefined}>
-                <select
-                  value="Production"
-                  onChange={(e) => {
-                    if (e.target.value === "RnD") {
-                      setTeamType("R&D");
-                      setBudgetType("Testing");
-                      return;
-                    }
+            <Field label="Budget type *" hint="RFP splits into Testing (direct-cost sample) and Sampling. Production is the phased delivery budget.">
+              <select
+                value={budgetTypeToCategory(effectiveBudgetType)}
+                onChange={(e) => {
+                  if (e.target.value === "Production") {
                     setBudgetType("Production");
-                  }}
-                  data-testid="bb-budget-type"
+                  } else {
+                    // Switching to RFP — preserve the current subtype if it's Testing or RnD,
+                    // otherwise default to Testing.
+                    const currentSubtype = budgetTypeToRfpSubtype(effectiveBudgetType);
+                    setBudgetType(currentSubtype === "Sampling" ? "RnD" : "Testing");
+                  }
+                }}
+                data-testid="bb-budget-type"
+                className={ipStyle}
+                disabled={isToolingTeam}
+              >
+                <option value="RFP">RFP</option>
+                <option value="Production">Production</option>
+              </select>
+            </Field>
+            {budgetTypeToCategory(effectiveBudgetType) === "RFP" && (
+              <Field label="RFP subtype *" hint="Testing = direct-cost sample. Sampling = R&D sample delivery.">
+                <select
+                  value={budgetTypeToRfpSubtype(effectiveBudgetType)}
+                  onChange={(e) => setBudgetType(e.target.value === "Sampling" ? "RnD" : "Testing")}
+                  data-testid="bb-budget-subtype"
                   className={ipStyle}
+                  disabled={isToolingTeam}
                 >
-                  <option value="Production">Production</option>
-                  {!isRnd && <option value="RnD">R&D budget</option>}
+                  <option value="Testing">Testing</option>
+                  <option value="Sampling">Sampling</option>
                 </select>
               </Field>
             )}
           </div>
 
-          {!usesRndWorkflow && (
+          {isToolingTeam && (
+            <div
+              className="mt-5 rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-5 text-center"
+              data-testid="bb-tooling-coming-soon"
+            >
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300 mb-1">Tooling pool</div>
+              <div className="text-lg font-semibold text-amber-100">Coming soon</div>
+              <div className="text-xs text-amber-200/80 mt-1">Budget requests for the Tooling delivery pool are not yet enabled. Pick RL env or Production to continue.</div>
+            </div>
+          )}
+
+          {!isToolingTeam && !usesRndWorkflow && (
             <div className="mt-5">
               <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project delivery</div>
               <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
@@ -1906,8 +1942,8 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
             <Button onClick={() => setStep(2)} variant="outline" data-testid="bb-back-3" className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-1.5">
               <ArrowLeft className="w-3.5 h-3.5" /> Previous
             </Button>
-            <Button onClick={doSubmit} data-testid="bb-submit" className="h-10 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)] px-5">
-              <Send className="w-4 h-4" /> {returnedReview ? "Resubmit budget" : "Submit budget"}
+            <Button onClick={doSubmit} disabled={isToolingTeam} data-testid="bb-submit" className="h-10 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-2 shadow-[0_0_20px_rgba(232,25,184,0.35)] px-5 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none">
+              <Send className="w-4 h-4" /> {isToolingTeam ? "Tooling coming soon" : returnedReview ? "Resubmit budget" : "Submit budget"}
             </Button>
           </div>
         </div>
