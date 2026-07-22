@@ -4,6 +4,7 @@
 // including its members, kickoff mail, subscriptions, and the two CFO-approved
 // additional (subscription) requests. Everything else starts empty and is populated
 // from real user activity persisted in localStorage. Export names/shapes are preserved.
+import { CSV_DEMO_PROJECTS } from "./csvProjects";
 
 const buildKickoffMail = ({ subject, goal, sentBy, sentByRole, sentAt, recipients, requirements }) => ({
   sentAt,
@@ -343,7 +344,7 @@ const tronProject = (() => {
   };
 })();
 
-export const DEMO_PROJECTS = [zoroProject, tronProject];
+export const DEMO_PROJECTS = [zoroProject, tronProject, ...CSV_DEMO_PROJECTS];
 
 export const DEMO_PORTFOLIO = {
   approvedBudget: 0,
