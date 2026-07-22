@@ -859,6 +859,170 @@
     "batchDeliveries": [],
     "budgetReviews": [
       {
+        "id": "review-zoro-rnd",
+        "projectId": "zoro",
+        "projectName": "Zoro",
+        "client": "RetailBench RL Environment",
+        "tpm": "Dhawal Bathre",
+        "submittedAt": "2026-07-13T09:34:00.000Z",
+        "urgency": "Normal",
+        "stage": "CFO Review",
+        "status": "forwarded-cfo",
+        "type": "Sample budget",
+        "teamType": "R&D",
+        "requestedBudget": 1315,
+        "currentBudget": 0,
+        "recommendedBudget": 1315,
+        "bufferPct": 0,
+        "recoveryType": "Internal",
+        "timeline": "2026-07-09 \u2192 2026-07-31",
+        "tasks": 500,
+        "phases": 1,
+        "linesFlagged": 0,
+        "variance": 0,
+        "aiCost": 0,
+        "infraCost": 0,
+        "subsCost": 1315,
+        "miscCost": 0,
+        "justification": "Subscription budget for Zoro baselining \u2014 Claude Code Max 20x (3 subscriptions) shared across the pod, and GPT Codex Pro 20x (3 accounts) for GPT-5.6 baselining.",
+        "items": {
+          "models": [],
+          "infra": [],
+          "subs": [
+            {
+              "id": "review-zoro-sub-claude",
+              "subscription": "Claude Code Max 20x",
+              "optionLabel": "Claude Code Max 20x \u00b7 3 subscriptions",
+              "seats": 3,
+              "amount": 600,
+              "estCost": 600,
+              "billingUnit": "per month"
+            },
+            {
+              "id": "review-zoro-sub-codex",
+              "subscription": "GPT Codex Pro 20x",
+              "optionLabel": "GPT Codex Pro 20x \u00b7 3 accounts \u00b7 INR 59,700 (~$715)",
+              "seats": 3,
+              "amount": 715,
+              "estCost": 715,
+              "billingUnit": "per month"
+            }
+          ],
+          "misc": []
+        },
+        "requestedPhases": [],
+        "budgetType": "RnD",
+        "sampleIteration": 1,
+        "sourceDeliveryId": null,
+        "sourceBudgetId": "budget-zoro-rnd",
+        "requesterRole": "R&D",
+        "ctoModified": false,
+        "ctoDecision": {
+          "decision": "approve",
+          "amount": 1315,
+          "comment": "",
+          "at": "2026-07-20T10:30:00.000Z",
+          "by": "CTO Admin"
+        },
+        "cfoDecision": null,
+        "history": [
+          {
+            "at": "2026-07-13T09:34:00.000Z",
+            "actor": "Dhawal Bathre \u00b7 R&D",
+            "action": "Submitted budget request",
+            "detail": "Sample \u00b7 R&D \u00b7 $1,315"
+          },
+          {
+            "at": "2026-07-20T10:30:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "Approved by CTO and forwarded to CFO",
+            "detail": "Forwarded at $1,315"
+          }
+        ]
+      },
+      {
+        "id": "review-tron-rnd",
+        "projectId": "tron",
+        "projectName": "Tron",
+        "client": "RL Environment Creation",
+        "tpm": "Piyush Chandra",
+        "submittedAt": "2026-07-09T12:29:00.000Z",
+        "urgency": "Normal",
+        "stage": "CFO Review",
+        "status": "forwarded-cfo",
+        "type": "Sample budget",
+        "teamType": "R&D",
+        "requestedBudget": 600,
+        "currentBudget": 0,
+        "recommendedBudget": 600,
+        "bufferPct": 0,
+        "recoveryType": "Internal",
+        "timeline": "2026-07-09 \u2192 2026-07-31",
+        "tasks": 500,
+        "phases": 1,
+        "linesFlagged": 0,
+        "variance": 0,
+        "aiCost": 0,
+        "infraCost": 0,
+        "subsCost": 600,
+        "miscCost": 0,
+        "justification": "Subscription budget for Tron \u2014 Claude Code Max 20x (1 subscription) for the pod, plus 2 additional Claude Code Max 20x subscriptions for trajectory generation (Opus 4.8 baselining).",
+        "items": {
+          "models": [],
+          "infra": [],
+          "subs": [
+            {
+              "id": "review-tron-sub-claude-1",
+              "subscription": "Claude Code Max 20x",
+              "optionLabel": "Claude Code Max 20x \u00b7 1 subscription",
+              "seats": 1,
+              "amount": 200,
+              "estCost": 200,
+              "billingUnit": "per month"
+            },
+            {
+              "id": "review-tron-sub-claude-2",
+              "subscription": "Claude Code Max 20x",
+              "optionLabel": "Claude Code Max 20x \u00b7 2 subscriptions",
+              "seats": 2,
+              "amount": 400,
+              "estCost": 400,
+              "billingUnit": "per month"
+            }
+          ],
+          "misc": []
+        },
+        "requestedPhases": [],
+        "budgetType": "RnD",
+        "sampleIteration": 1,
+        "sourceDeliveryId": null,
+        "sourceBudgetId": "budget-tron-rnd",
+        "requesterRole": "R&D",
+        "ctoModified": false,
+        "ctoDecision": {
+          "decision": "approve",
+          "amount": 600,
+          "comment": "",
+          "at": "2026-07-14T14:00:00.000Z",
+          "by": "CTO Admin"
+        },
+        "cfoDecision": null,
+        "history": [
+          {
+            "at": "2026-07-09T12:29:00.000Z",
+            "actor": "Piyush Chandra \u00b7 R&D",
+            "action": "Submitted budget request",
+            "detail": "Sample \u00b7 R&D \u00b7 $600"
+          },
+          {
+            "at": "2026-07-14T14:00:00.000Z",
+            "actor": "CTO Admin \u00b7 CTO",
+            "action": "Approved by CTO and forwarded to CFO",
+            "detail": "Forwarded at $600"
+          }
+        ]
+      },
+      {
         "id": "br-mrt8ytic",
         "projectId": "p-mrt8ry5b",
         "projectName": "Tron",
@@ -1186,5 +1350,5 @@
     ],
     "itMonthlyActuals": {}
   },
-  "app_state_updated_at": "2026-07-21T08:58:41.996588+00:00"
+  "app_state_updated_at": "2026-07-22T06:41:05.847725+00:00"
 }

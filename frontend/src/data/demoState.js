@@ -458,7 +458,114 @@ export const DEMO_BUDGETS = [
 
 export const DEMO_BATCH_DELIVERIES = [];
 
-export const DEMO_BUDGET_REVIEWS = [];
+// CFO-facing review records for the subscription budgets, so the CFO approval queue shows each
+// project's subscription request in full detail and the CFO can approve / partially approve /
+// reject it. They sit at the CFO-review stage; the working total is carried by DEMO_BUDGETS, and
+// approving a review updates that same budget (by sourceBudgetId) — no double-count.
+export const DEMO_BUDGET_REVIEWS = [
+  {
+    id: "review-zoro-rnd",
+    projectId: "zoro",
+    projectName: "Zoro",
+    client: "RetailBench RL Environment",
+    tpm: "Dhawal Bathre",
+    submittedAt: "2026-07-13T09:34:00.000Z",
+    urgency: "Normal",
+    stage: "CFO Review",
+    status: "forwarded-cfo",
+    type: "Sample budget",
+    teamType: "R&D",
+    requestedBudget: ZORO_APPROVED_BUDGET,
+    currentBudget: 0,
+    recommendedBudget: ZORO_APPROVED_BUDGET,
+    bufferPct: 0,
+    recoveryType: "Internal",
+    timeline: "2026-07-09 → 2026-07-31",
+    tasks: 500,
+    phases: 1,
+    linesFlagged: 0,
+    variance: 0,
+    aiCost: 0,
+    infraCost: 0,
+    subsCost: ZORO_APPROVED_BUDGET,
+    miscCost: 0,
+    justification:
+      "Subscription budget for Zoro baselining — Claude Code Max 20x (3 subscriptions) shared across the pod, and GPT Codex Pro 20x (3 accounts) for GPT-5.6 baselining.",
+    items: {
+      models: [],
+      infra: [],
+      subs: [
+        { id: "review-zoro-sub-claude", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 3 subscriptions", seats: 3, amount: ZORO_CLAUDE_SUB_COST, estCost: ZORO_CLAUDE_SUB_COST, billingUnit: "per month" },
+        { id: "review-zoro-sub-codex", subscription: "GPT Codex Pro 20x", optionLabel: "GPT Codex Pro 20x · 3 accounts · INR 59,700 (~$715)", seats: 3, amount: ZORO_CODEX_SUB_COST, estCost: ZORO_CODEX_SUB_COST, billingUnit: "per month" },
+      ],
+      misc: [],
+    },
+    requestedPhases: [],
+    budgetType: "RnD",
+    sampleIteration: 1,
+    sourceDeliveryId: null,
+    sourceBudgetId: "budget-zoro-rnd",
+    requesterRole: "R&D",
+    ctoModified: false,
+    ctoDecision: { decision: "approve", amount: ZORO_APPROVED_BUDGET, comment: "", at: "2026-07-20T10:30:00.000Z", by: "CTO Admin" },
+    cfoDecision: null,
+    history: [
+      { at: "2026-07-13T09:34:00.000Z", actor: "Dhawal Bathre · R&D", action: "Submitted budget request", detail: "Sample · R&D · $1,315" },
+      { at: "2026-07-20T10:30:00.000Z", actor: "CTO Admin · CTO", action: "Approved by CTO and forwarded to CFO", detail: "Forwarded at $1,315" },
+    ],
+  },
+  {
+    id: "review-tron-rnd",
+    projectId: "tron",
+    projectName: "Tron",
+    client: "RL Environment Creation",
+    tpm: "Piyush Chandra",
+    submittedAt: "2026-07-09T12:29:00.000Z",
+    urgency: "Normal",
+    stage: "CFO Review",
+    status: "forwarded-cfo",
+    type: "Sample budget",
+    teamType: "R&D",
+    requestedBudget: TRON_APPROVED_BUDGET,
+    currentBudget: 0,
+    recommendedBudget: TRON_APPROVED_BUDGET,
+    bufferPct: 0,
+    recoveryType: "Internal",
+    timeline: "2026-07-09 → 2026-07-31",
+    tasks: 500,
+    phases: 1,
+    linesFlagged: 0,
+    variance: 0,
+    aiCost: 0,
+    infraCost: 0,
+    subsCost: TRON_APPROVED_BUDGET,
+    miscCost: 0,
+    justification:
+      "Subscription budget for Tron — Claude Code Max 20x (1 subscription) for the pod, plus 2 additional Claude Code Max 20x subscriptions for trajectory generation (Opus 4.8 baselining).",
+    items: {
+      models: [],
+      infra: [],
+      subs: [
+        { id: "review-tron-sub-claude-1", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 1 subscription", seats: 1, amount: 200, estCost: 200, billingUnit: "per month" },
+        { id: "review-tron-sub-claude-2", subscription: "Claude Code Max 20x", optionLabel: "Claude Code Max 20x · 2 subscriptions", seats: 2, amount: 400, estCost: 400, billingUnit: "per month" },
+      ],
+      misc: [],
+    },
+    requestedPhases: [],
+    budgetType: "RnD",
+    sampleIteration: 1,
+    sourceDeliveryId: null,
+    sourceBudgetId: "budget-tron-rnd",
+    requesterRole: "R&D",
+    ctoModified: false,
+    ctoDecision: { decision: "approve", amount: TRON_APPROVED_BUDGET, comment: "", at: "2026-07-14T14:00:00.000Z", by: "CTO Admin" },
+    cfoDecision: null,
+    history: [
+      { at: "2026-07-09T12:29:00.000Z", actor: "Piyush Chandra · R&D", action: "Submitted budget request", detail: "Sample · R&D · $600" },
+      { at: "2026-07-14T14:00:00.000Z", actor: "CTO Admin · CTO", action: "Approved by CTO and forwarded to CFO", detail: "Forwarded at $600" },
+    ],
+  },
+];
 
 // Seeded subscription asks are consolidated into DEMO_BUDGETS; no seed change requests remain.
 // New additional requests raised in-app still create change requests and stack on the budget.

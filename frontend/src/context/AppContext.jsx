@@ -81,6 +81,20 @@ const RETIRED_CHANGE_REQUEST_IDS = new Set([
 ]);
 const dropRetiredChangeRequests = (list = []) => list.filter((entry) => !RETIRED_CHANGE_REQUEST_IDS.has(entry?.id));
 
+// The canonical Zoro/Tron budget reviews are seeded in DEMO_BUDGET_REVIEWS. Drop stale/leftover
+// reviews from localStorage: (a) any review for a removed demo project (id starts with "demo-"),
+// which opens blank in the approval queue and clutters the CTO budget-review list; and (b) any
+// non-canonical review for zoro/tron. This keeps only the correct, non-blank reviews.
+const SEEDED_REVIEW_PROJECT_IDS = new Set(["zoro", "tron"]);
+const CANONICAL_REVIEW_IDS = new Set(["review-zoro-rnd", "review-tron-rnd"]);
+const isRemovedDemoRef = (entry) => String(entry?.projectId || "").startsWith("demo-");
+const dropStaleSeededReviews = (list = []) =>
+  list.filter((entry) => {
+    if (isRemovedDemoRef(entry)) return false;
+    if (SEEDED_REVIEW_PROJECT_IDS.has(entry?.projectId)) return CANONICAL_REVIEW_IDS.has(entry?.id);
+    return true;
+  });
+
 const toAppStateUrl = (base = "") => `${String(base || "").replace(/\/$/, "")}/api/app-state`;
 
 const normalizeModelRecord = (model = {}, index = 0) => ({
@@ -1027,7 +1041,7 @@ export const AppProvider = ({ children }) => {
   const [topupRequests, setTopupRequests] = useState(() => readJSON(TOPUP_REQ_KEY, DEMO_TOPUP_REQUESTS));
   const [budgets, setBudgets] = useState(() => mergeSeedById(DEMO_BUDGETS, readJSON(BUDGETS_KEY, [])));
   const [batchDeliveries, setBatchDeliveries] = useState(() => readJSON(BATCH_DELIVERIES_KEY, DEMO_BATCH_DELIVERIES));
-  const [budgetReviews, setBudgetReviews] = useState(() => readJSON(BUDGET_REVIEWS_KEY, DEMO_BUDGET_REVIEWS).map(normalizeBudgetReviewRecord));
+  const [budgetReviews, setBudgetReviews] = useState(() => dropStaleSeededReviews(mergeSeedById(DEMO_BUDGET_REVIEWS, readJSON(BUDGET_REVIEWS_KEY, []))).map(normalizeBudgetReviewRecord));
   const [changeRequests, setChangeRequests] = useState(() => dropRetiredChangeRequests(mergeSeedById(DEMO_CHANGE_REQUESTS, readJSON(CHANGE_REQUESTS_KEY, []))).map(normalizeChangeRequest));
   const [teamRemovals, setTeamRemovals] = useState(() => readJSON(TEAM_REMOVALS_KEY, DEMO_TEAM_REMOVALS));
   const [modelKeyRecords, setModelKeyRecords] = useState(() => (
@@ -1053,7 +1067,7 @@ export const AppProvider = ({ children }) => {
     setTopupRequests(snapshot.topupRequests ?? DEMO_TOPUP_REQUESTS);
     setBudgets(mergeSeedById(DEMO_BUDGETS, snapshot.budgets ?? []));
     setBatchDeliveries(snapshot.batchDeliveries ?? DEMO_BATCH_DELIVERIES);
-    setBudgetReviews((snapshot.budgetReviews ?? DEMO_BUDGET_REVIEWS).map(normalizeBudgetReviewRecord));
+    setBudgetReviews(dropStaleSeededReviews(mergeSeedById(DEMO_BUDGET_REVIEWS, snapshot.budgetReviews ?? [])).map(normalizeBudgetReviewRecord));
     setChangeRequests(dropRetiredChangeRequests(mergeSeedById(DEMO_CHANGE_REQUESTS, snapshot.changeRequests ?? [])).map(normalizeChangeRequest));
     setTeamRemovals(snapshot.teamRemovals ?? DEMO_TEAM_REMOVALS);
     setModelKeyRecords((snapshot.modelKeyRecords ?? DEMO_MODEL_KEYS).map(normalizeModelKeyRecord));
