@@ -77,6 +77,164 @@ const buildPhases = (internal, phasesInput = [], projectStart, projectEnd) => {
 const DEFAULT_START = "2026-05-15";
 const DEFAULT_END = "2026-07-20";
 
+// -----------------------------------------------------------------------------
+// Actuals (from App Sheet · Ethara Actuals CSV)
+// -----------------------------------------------------------------------------
+// Approved = TPM-raised amount that CTO+CFO approved.
+// Consumed = IT-reported actual usage.
+// Delta positive => under budget (savings). Delta negative => over budget.
+// Phase rows are ordered as they appear in the sheet so we can align them with
+// each project's existing phase list.
+const ACTUALS_BY_INTERNAL = {
+  talos: {
+    approvedBudget: 46640.13,
+    actualSpend: 32988.97,
+    delta: 13651.16,
+    phaseActuals: [
+      { label: "Phase 1", approved: 46590.13, consumed: 32972.40 },
+      { label: "Phase 1 (Rework)", approved: 50.00, consumed: 16.57 },
+    ],
+  },
+  skoll: {
+    approvedBudget: 416.00,
+    actualSpend: 723.94,
+    delta: -307.94,
+    phaseActuals: [{ label: "Phase 1", approved: 416.00, consumed: 723.94 }],
+  },
+  kensei: {
+    approvedBudget: 31923.08,
+    actualSpend: 6503.41,
+    delta: 25419.67,
+    phaseActuals: [
+      { label: "Phase 1", approved: 28000.00, consumed: 6143.92 },
+      { label: "Phase 1 (Development)", approved: 1000.00, consumed: 227.13 },
+      { label: "Phase 1 (Production)", approved: 2923.08, consumed: 132.36 },
+    ],
+  },
+  vegeta: {
+    approvedBudget: 200.00, actualSpend: 163.89, delta: 36.11,
+    phaseActuals: [{ label: "Phase 1", approved: 200.00, consumed: 163.89 }],
+  },
+  fenrir: {
+    approvedBudget: 0, actualSpend: 0, delta: 0,
+    phaseActuals: [{ label: "Fiverr", approved: 0, consumed: 0 }],
+  },
+  goku: {
+    approvedBudget: 300.00, actualSpend: 8.86, delta: 291.14,
+    phaseActuals: [{ label: "Phase 2", approved: 300.00, consumed: 8.86 }],
+  },
+  freya: {
+    approvedBudget: 0, actualSpend: 0, delta: 0,
+    phaseActuals: [{ label: "Phase 1", approved: 0, consumed: 0 }],
+  },
+  raiden: {
+    approvedBudget: 1300.00, actualSpend: 499.43, delta: 800.57,
+    phaseActuals: [
+      { label: "Phase 1", approved: 300.00, consumed: 152.36 },
+      { label: "Phase 1 (Development)", approved: 1000.00, consumed: 347.07 },
+    ],
+  },
+  kaiju: {
+    approvedBudget: 1500.00, actualSpend: 1122.05, delta: 377.95,
+    phaseActuals: [
+      { label: "Phase 1", approved: 500.00, consumed: 209.67 },
+      { label: "Phase 1 (Development)", approved: 1000.00, consumed: 912.38 },
+    ],
+  },
+  aurora: {
+    approvedBudget: 1050.00, actualSpend: 1536.19, delta: -486.19,
+    phaseActuals: [
+      { label: "Phase 1", approved: 50.00, consumed: 47.13 },
+      { label: "Phase 1 (Development)", approved: 1000.00, consumed: 1489.06 },
+    ],
+  },
+  // Jaeger maps to the "Jaeger-SWE" project seed.
+  "jaeger-swe": {
+    approvedBudget: 878582.33,
+    actualSpend: 626677.46,
+    delta: 251904.87,
+    phaseActuals: [
+      { label: "Phase 1 (96)", approved: 6778.00, consumed: 4216.65 },
+      { label: "Phase 2 (10004)", approved: 457434.27, consumed: 325390.65 },
+      { label: "Phase 3 (10000)", approved: 414370.06, consumed: 297070.16 },
+    ],
+  },
+  "arc-agents": {
+    approvedBudget: 0, actualSpend: 0, delta: 0,
+    phaseActuals: [{ label: "Interactive Puzzle Environment Data Collection", approved: 0, consumed: 0 }],
+  },
+  caesar: {
+    approvedBudget: 300.00, actualSpend: 288.82, delta: 11.18,
+    phaseActuals: [{ label: "Phase 1", approved: 300.00, consumed: 288.82 }],
+  },
+  // ---- Projects that appear only in the Actuals CSV (no mapping row) ----
+  valkyrie: {
+    approvedBudget: 745.00, actualSpend: 1023.82, delta: -278.82,
+    phaseActuals: [{ label: "Phase 1", approved: 745.00, consumed: 1023.82 }],
+  },
+  kraken: {
+    approvedBudget: 55.51, actualSpend: 8.76, delta: 46.75,
+    phaseActuals: [{ label: "Phase 1", approved: 55.51, consumed: 8.76 }],
+  },
+  crowley: {
+    approvedBudget: 29093.58, actualSpend: 31000.00, delta: -1906.42,
+    phaseActuals: [{ label: "Phase 1 (Sourcing)", approved: 29093.58, consumed: 31000.00 }],
+  },
+  "crawley-bedrock": {
+    approvedBudget: 0, actualSpend: 516.00, delta: -516.00,
+    phaseActuals: [{ label: "Phase 1", approved: 0, consumed: 516.00 }],
+  },
+  agon: {
+    approvedBudget: 19.50, actualSpend: 13.81, delta: 5.69,
+    phaseActuals: [{ label: "Phase 1 (Development)", approved: 19.50, consumed: 13.81 }],
+  },
+};
+
+const applyActualsToPhases = (basePhases, phaseActuals = []) => {
+  // Zip actuals row-by-row into the project's phase list. Any extra actuals rows
+  // that don't have a matching phase become synthesized phases so nothing gets lost.
+  const out = basePhases.map((phase, i) => {
+    const a = phaseActuals[i];
+    if (!a) return phase;
+    const delta = a.approved - a.consumed;
+    return {
+      ...phase,
+      name: a.label || phase.name,
+      estimated: a.approved,
+      actual: a.consumed,
+      variance: delta,
+      health: delta >= 0 ? "healthy" : "over",
+    };
+  });
+  // Append any actuals rows beyond basePhases as extra phases.
+  phaseActuals.slice(basePhases.length).forEach((a, idx) => {
+    const delta = a.approved - a.consumed;
+    out.push({
+      id: `${basePhases[0]?.id?.split("-phase-")[0] || "phase"}-actuals-${idx + 1}`,
+      name: a.label,
+      dates: `${DEFAULT_START} → ${DEFAULT_END}`,
+      start: DEFAULT_START,
+      end: DEFAULT_END,
+      totalTasks: 0,
+      tasks: 0,
+      trajectoriesPerTask: 1,
+      estimated: a.approved,
+      actual: a.consumed,
+      variance: delta,
+      health: delta >= 0 ? "healthy" : "over",
+    });
+  });
+  return out;
+};
+
+const projectHealthFromDelta = (approved, delta) => {
+  if (!approved) return delta < 0 ? "over" : "healthy";
+  const utilPct = ((approved - delta) / approved) * 100;
+  if (delta < 0) return "over";
+  if (utilPct >= 90) return "watch";
+  return "healthy";
+};
+
 const buildCsvProject = ({
   internal,
   client,
@@ -120,6 +278,15 @@ const buildCsvProject = ({
   const targetTasks = Number(targetVolume || projectPhases.reduce((s, p) => s + p.tasks, 0) || 0);
 
   const id = slugify(internal);
+  const actuals = ACTUALS_BY_INTERNAL[id];
+  const enrichedPhases = actuals ? applyActualsToPhases(projectPhases, actuals.phaseActuals) : projectPhases;
+  const approvedBudget = actuals?.approvedBudget || 0;
+  const actualSpend = actuals?.actualSpend || 0;
+  const remaining = approvedBudget - actualSpend;
+  const variance = actuals?.delta ?? remaining;
+  const utilization = approvedBudget > 0 ? Number(((actualSpend / approvedBudget) * 100).toFixed(1)) : 0;
+  const projHealth = actuals ? projectHealthFromDelta(approvedBudget, variance) : "healthy";
+
   return {
     id,
     name: internal,
@@ -148,16 +315,16 @@ const buildCsvProject = ({
     buffer: 10,
     recoverableFromClient: isTpmVisible,
     recoveredAmount: 0,
-    approvedBudget: 0,
-    estimatedBudget: 0,
-    actualSpend: 0,
-    remaining: 0,
-    variance: 0,
-    utilization: 0,
+    approvedBudget,
+    estimatedBudget: approvedBudget,
+    actualSpend,
+    remaining,
+    variance,
+    utilization,
     burnRate: 0,
-    forecast: 0,
+    forecast: actualSpend,
     infrastructureCost: 0,
-    aiModelCost: 0,
+    aiModelCost: actualSpend,
     employeeCost: 0,
     purchaseCost: 0,
     reimbursements: 0,
@@ -165,9 +332,9 @@ const buildCsvProject = ({
     miscExpenses: 0,
     topupsTotal: 0,
     changeRequestsTotal: 0,
-    health: "healthy",
+    health: projHealth,
     topModel: "",
-    phases: projectPhases,
+    phases: enrichedPhases,
     budgetItems: { models: [], infra: [], subs: [], misc: [] },
     expenses: [],
     budgetHistory: [],
@@ -402,6 +569,13 @@ const CSV_MAPPING = [
     phases: [{ name: "Delivered", target_count: 129 }],
     members: ["Arth Pathak", "Abhishek Mishra", "Supriya Verma"],
   },
+
+  // ---------- Actuals-only projects (present in the Actuals CSV, not in the May mapping) ----------
+  { internal: "Valkyrie", client: "Model bench / OTS", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "Kraken", client: "Model bench / OTS", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "Crowley", client: "Task sourcing pipeline", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "Crawley-Bedrock", client: "Bedrock provisioning", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "Agon", client: "Internal tooling · Development", phaseTag: "Production", teamType: "Technical", members: [] },
 ];
 
 export const CSV_DEMO_PROJECTS = CSV_MAPPING.map(buildCsvProject);
