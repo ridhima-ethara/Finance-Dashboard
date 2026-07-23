@@ -70,19 +70,20 @@ const seedTeam = (project) => {
 };
 
 const statusMap = {
-  "pending-cto": { label: "Pending · CTO", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
-  "pending-cfo": { label: "Pending · CFO", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
-  "forwarded-cfo": { label: "Pending · CFO", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
+  "pending-cto": { label: "Pending", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "pending-cfo": { label: "Pending", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
+  "forwarded-cfo": { label: "Pending", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   "testing-submitted": { label: "Testing submitted", cls: "bg-sky-500/10 text-sky-300 border-sky-500/25", Icon: PackageCheck },
+  "feedback-pending": { label: "Awaiting client feedback", cls: "bg-sky-500/10 text-sky-300 border-sky-500/25", Icon: Clock3 },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
-  partial: { label: "Partially Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
+  partial: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
-  "rejected-by-cto": { label: "Rejected · CTO", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
+  "rejected-by-cto": { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
   "returned-to-tpm": { label: "Returned", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
   recovered: { label: "Recovered · full", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "partial-recovered": { label: "Recovered · partial", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   "non-recoverable": { label: "Non-recoverable", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30", Icon: Lock },
-  "changes-requested": { label: "Changes requested", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
+  "changes-requested": { label: "Returned", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
   "sample-approved": { label: "Sample accepted", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "sample-rejected": { label: "Sample rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
 };
@@ -110,6 +111,7 @@ const ProjectDetail = () => {
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
   const [deliverPhase, setDeliverPhase] = useState(null); // {project, phase} or null
+  const [feedbackDelivery, setFeedbackDelivery] = useState(null);
   const [taskLogPhase, setTaskLogPhase] = useState(null); // phase for log dialog
   const [editingLog, setEditingLog] = useState(null);
   const [teamSearch, setTeamSearch] = useState("");
@@ -1952,6 +1954,16 @@ const projectBudgetBuilderHref = useMemo(() => {
                         >
                           <PackageCheck className="w-3 h-3" /> {delivery?.status === "changes-requested" ? "Deliver revised sample" : isSubmitted ? "Delivered" : getDeliverButtonLabel(isRndProject, delivery, p)}
                         </Button>
+                        {delivery?.status === "feedback-pending" && role === "R&D" && (
+                          <Button
+                            size="sm"
+                            onClick={() => setFeedbackDelivery({ phase: ph, delivery })}
+                            data-testid={`btn-batch-feedback-${ph.id}`}
+                            className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1"
+                          >
+                            <MessageSquare className="w-3 h-3" /> Add client feedback
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2190,10 +2202,11 @@ const projectBudgetBuilderHref = useMemo(() => {
       <TopupRequestDialog open={topupOpen} onOpenChange={setTopupOpen} project={p} defaultPhaseId={topupPhaseId} />
       <EditProjectDialog open={editDetailsOpen} onOpenChange={setEditDetailsOpen} project={p} />
       <DeliverBatchDialog
-        open={!!deliverPhase}
-        onOpenChange={(o) => !o && setDeliverPhase(null)}
+        open={!!deliverPhase || !!feedbackDelivery}
+        onOpenChange={(o) => { if (!o) { setDeliverPhase(null); setFeedbackDelivery(null); } }}
         project={p}
-        phase={deliverPhase}
+        phase={feedbackDelivery?.phase || deliverPhase}
+        delivery={feedbackDelivery?.delivery || null}
       />
       <TpmTaskLogDialog
         open={!!taskLogPhase}
@@ -2797,18 +2810,18 @@ const budgetRequestStatusMap = {
   submitted: { label: "Submitted", cls: "bg-white/[0.04] text-zinc-300 border-white/10", Icon: Clock3 },
   resubmitted: { label: "Resubmitted", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   forwarded: { label: "Forwarded", cls: "bg-fuchsia-500/15 text-fuchsia-300 border-fuchsia-500/30", Icon: ChevronRight },
-  "pending-cto": { label: "Pending · CTO", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
-  "pending-cfo": { label: "Pending · CFO", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
-  "CTO Review": { label: "CTO review", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "pending-cto": { label: "Pending", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "pending-cfo": { label: "Pending", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
+  "CTO Review": { label: "L2 review", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   "COO Approval": { label: "COO approval", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
-  partial: { label: "Partially approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
+  partial: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
   returned: { label: "Returned", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
 };
 
 const changeRequestStatusMap = {
-  "CTO Review": { label: "CTO review", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "CTO Review": { label: "L2 review", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   "COO Approval": { label: "COO approval", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
@@ -2816,13 +2829,14 @@ const changeRequestStatusMap = {
 
 const taskApprovalStatusMap = {
   logged: { label: "Logged", cls: "bg-white/[0.04] text-zinc-300 border-white/10", Icon: FileText },
+  submitted: { label: "Batch submitted", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: PackageCheck },
   "testing-submitted": { label: "Testing submitted", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: PackageCheck },
-  "pending-cfo": { label: "Pending approval", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "pending-cfo": { label: "Pending", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
-  partial: { label: "Partially approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
+  partial: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
   "non-recoverable": { label: "Closed · non-recoverable", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30", Icon: Lock },
-  "changes-requested": { label: "Changes requested", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
+  "changes-requested": { label: "Returned", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: ChevronRight },
 };
 
 const normalizePhaseLabel = (value = "") => String(value).toLowerCase().replace(/\s+/g, " ").trim();
@@ -2954,7 +2968,7 @@ const getWorkflowLockMessage = ({ project, workflowStage, latestBudgetReviewMeta
   }
 
   if (project?.pendingBudgetSubmission) {
-    const approver = pendingStage === "pending-cfo" || pendingStage === "Pending · CFO" ? "CFO" : "CTO and CFO";
+    const approver = pendingStage === "pending-cfo" || pendingStage === "Pending · L3" ? "L3" : "L2 and L3";
     return `${pendingLabel} request is awaiting ${approver} approval. Tasks, budget changes, and delivery unlock after approval.`;
   }
   if (workflowStage === "awaiting-testing-budget") {
@@ -2985,6 +2999,7 @@ const getChangeRequestMeta = (request) => changeRequestStatusMap[request.stage] 
 const getTaskApprovalState = (log, delivery) => {
   if (log?.approvalStatus && taskApprovalStatusMap[log.approvalStatus]) return taskApprovalStatusMap[log.approvalStatus];
   if (!delivery) return taskApprovalStatusMap.logged;
+  if (delivery.status === "feedback-pending") return taskApprovalStatusMap.submitted;
   if (delivery.status === "testing-submitted") return taskApprovalStatusMap["testing-submitted"];
   if (delivery.status === "non-recoverable") return taskApprovalStatusMap["non-recoverable"];
   if (delivery.actualRecovered === 0) return taskApprovalStatusMap.rejected;

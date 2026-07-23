@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 const statusMap = {
-  "pending-cfo": { label: "Pending · CFO action", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "pending-cfo": { label: "Pending", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   recovered: { label: "Recovered · full", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "partial-recovered": { label: "Recovered · partial", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: AlertTriangle },
   "non-recoverable": { label: "Non-recoverable", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30", Icon: AlertTriangle },

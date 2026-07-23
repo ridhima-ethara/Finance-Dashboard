@@ -255,7 +255,7 @@ const CtoDashboard = () => {
       <Panel
         testid="cto-watchlist"
         title="Projects needing attention"
-        subtitle="Project monitoring is consolidated here so CTO can track risk, logged burn, and delivery progress without a separate tab."
+        subtitle="Project monitoring is consolidated here so L2 can track risk, logged burn, and delivery progress without a separate tab."
       >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {watchlistProjects.slice(0, 6).map(({ project, usage }) => {
@@ -358,7 +358,7 @@ const CtoDashboard = () => {
               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
                 <th className="text-left py-2 px-3">Project</th>
                 <th className="text-left py-2 px-3">Client</th>
-                <th className="text-left py-2 px-3">TPM</th>
+                <th className="text-left py-2 px-3">Projects</th>
                 <th className="text-left py-2 px-3">Status</th>
                 <th className="text-right py-2 px-3">Approved</th>
                 <th className="text-right py-2 px-3">Logged</th>

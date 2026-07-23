@@ -56,9 +56,11 @@ const KpiCard = ({ label, value, sublabel, delta, tone = "neutral", icon: Icon, 
   );
 };
 
-const KpiGrid = () => {
+const KpiGrid = ({ projectsOverride = null }) => {
   const { role, visibleProjects, budgetReviews, topupRequests, changeRequests, taskLogs } = useApp();
-  const summary = visibleProjects.reduce((acc, project) => {
+  const dashboardProjects = projectsOverride || visibleProjects;
+  const dashboardProjectIds = new Set(dashboardProjects.map((project) => project.id));
+  const summary = dashboardProjects.reduce((acc, project) => {
     const usage = summarizeLoggedProject(project, taskLogs);
     const spend = Number(project.cfoActualSpend || project.actualSpend || usage.loggedSpend || 0);
     acc.approvedBudget += Number(project.approvedBudget || 0);
@@ -77,12 +79,15 @@ const KpiGrid = () => {
   const utilization = summary.approvedBudget > 0 ? Math.round((summary.actualSpend / summary.approvedBudget) * 100) : 0;
   const cpi = summary.actualSpend > 0 ? Number((summary.approvedBudget / summary.actualSpend).toFixed(2)) : 0;
   const cashRunwayDays = summary.burnRate > 0 ? Math.round(summary.remaining / summary.burnRate) : 0;
-  const pendingApprovals = budgetReviews.filter((review) => ["pending-cto", "forwarded-cfo", "returned"].includes(review.status) || review.stage === "CTO Review" || review.stage === "CFO Review").length
-    + topupRequests.filter((request) => request.status === "pending-cto" || request.status === "pending-cfo").length
-    + changeRequests.filter((request) => request.stage === "CTO Review" || request.stage === "CFO Review").length;
-  const pendingApprovalValue = budgetReviews.reduce((sum, review) => sum + Number(review.modifiedTotal || review.requestedBudget || 0), 0)
-    + topupRequests.reduce((sum, request) => sum + Number(request.amount || 0), 0)
-    + changeRequests.reduce((sum, request) => sum + Number(request.amount || 0), 0);
+  const scopedBudgetReviews = budgetReviews.filter((review) => dashboardProjectIds.has(review.projectId));
+  const scopedTopups = topupRequests.filter((request) => dashboardProjectIds.has(request.projectId));
+  const scopedChangeRequests = changeRequests.filter((request) => dashboardProjectIds.has(request.projectId));
+  const pendingApprovals = scopedBudgetReviews.filter((review) => ["pending-cto", "forwarded-cfo", "returned"].includes(review.status) || review.stage === "CTO Review" || review.stage === "CFO Review").length
+    + scopedTopups.filter((request) => request.status === "pending-cto" || request.status === "pending-cfo").length
+    + scopedChangeRequests.filter((request) => request.stage === "CTO Review" || request.stage === "CFO Review").length;
+  const pendingApprovalValue = scopedBudgetReviews.reduce((sum, review) => sum + Number(review.modifiedTotal || review.requestedBudget || 0), 0)
+    + scopedTopups.reduce((sum, request) => sum + Number(request.amount || 0), 0)
+    + scopedChangeRequests.reduce((sum, request) => sum + Number(request.amount || 0), 0);
   const cpiTone = cpi >= 1 ? "positive" : "negative";
   const runwayTone = cashRunwayDays >= 30 ? "positive" : cashRunwayDays >= 14 ? "warning" : "negative";
   const hideCfoCards = role === "CFO";

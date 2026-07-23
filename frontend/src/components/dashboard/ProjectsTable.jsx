@@ -572,11 +572,11 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
           <Button
             onClick={() => setDeliverOpen(true)}
             variant="outline"
-            disabled={!!delivery || isPhaseLocked}
+            disabled={(!!delivery && delivery.status !== "feedback-pending") || isPhaseLocked}
             data-testid="drawer-btn-deliver"
             className="h-9 rounded-lg border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-60 gap-1.5"
           >
-            <PackageCheck className="w-3.5 h-3.5" /> {delivery ? "Batch delivered" : "Deliver batch"}
+            <PackageCheck className="w-3.5 h-3.5" /> {delivery?.status === "feedback-pending" ? "Add client feedback" : delivery ? "Batch delivered" : "Deliver batch"}
           </Button>
         </div>
       )}
@@ -800,6 +800,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         onOpenChange={setDeliverOpen}
         project={project}
         phase={phase}
+        delivery={delivery?.status === "feedback-pending" ? delivery : null}
       />
     </>
   );

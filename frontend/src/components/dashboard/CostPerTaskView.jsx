@@ -17,8 +17,9 @@ const getRequestedTaskCount = (project, review) => {
   return Number(project?.totalTasks || phaseTaskTotal || review?.tasks || 0);
 };
 
-const CostPerTaskView = () => {
+const CostPerTaskView = ({ projectsOverride = null }) => {
   const { projects, budgetReviews, taskLogs, itMonthlyActuals } = useApp();
+  const dashboardProjects = projectsOverride || projects;
   const [sort, setSort] = useState("variance");
   const latestReviewByProject = useMemo(() => (
     budgetReviews.reduce((map, review) => {
@@ -43,7 +44,7 @@ const CostPerTaskView = () => {
   ), [budgetReviews]);
 
   const rows = useMemo(
-    () => projects.map((project) => {
+    () => dashboardProjects.map((project) => {
       const review = latestReviewByProject.get(project.id);
       const usage = summarizeLoggedProject(project, taskLogs);
       const itActualSummary = summarizeItProjectActuals(itMonthlyActuals[project.id] || {});
@@ -88,7 +89,7 @@ const CostPerTaskView = () => {
       || row.totalBudgetRequested > 0
       || row.actualCost > 0
     )),
-    [projects, latestReviewByProject, taskLogs, itMonthlyActuals]
+    [dashboardProjects, latestReviewByProject, taskLogs, itMonthlyActuals]
   );
 
   const filtered = useMemo(() => {

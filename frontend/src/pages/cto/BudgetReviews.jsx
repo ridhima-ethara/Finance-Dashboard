@@ -1,268 +1,264 @@
 import { Link } from "react-router-dom";
-import { useState, useMemo } from "react";
-import { fmtCurrency } from "../../lib/format";
+import { useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import {
-  ClipboardCheck,
-  Clock3,
-  User,
-  AlertTriangle,
+  ArrowUpRightSquare,
   ChevronRight,
-  Filter,
+  Circle,
+  ClipboardCheck,
+  FileText,
+  GitPullRequest,
   Search,
-  CheckCircle2,
 } from "lucide-react";
 
-const urgencyColor = {
-  High: { bg: "bg-red-500/10", text: "text-red-300", border: "border-red-500/30" },
-  Normal: { bg: "bg-sky-500/10", text: "text-sky-300", border: "border-sky-500/30" },
-  Low: { bg: "bg-emerald-500/10", text: "text-emerald-300", border: "border-emerald-500/30" },
+const TYPE_LABELS = {
+  Budget: "Budget",
+  "Budget Change": "Budget Change",
+  "Change Request": "Change Request",
 };
 
-const statusTabs = [
-  { id: "all", label: "All" },
-  { id: "pending", label: "Pending" },
-  { id: "sent-to-cfo", label: "Sent to CFO" },
-  { id: "action-required", label: "Action Required" },
-  { id: "rejected", label: "Rejected" },
-];
+const TYPE_ICONS = {
+  Budget: FileText,
+  "Budget Change": ArrowUpRightSquare,
+  "Change Request": GitPullRequest,
+};
 
-const statusMeta = {
-  pending: { label: "Pending", chip: "bg-amber-500/10 text-amber-300 border-amber-500/30" },
-  "sent-to-cfo": { label: "Sent to CFO", chip: "bg-sky-500/10 text-sky-300 border-sky-500/30" },
-  "action-required": { label: "Action Required", chip: "bg-orange-500/10 text-orange-300 border-orange-500/30" },
-  rejected: { label: "Rejected", chip: "bg-red-500/10 text-red-300 border-red-500/30" },
+const STATUS_CHIP = {
+  Pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  Approved: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  Returned: "bg-orange-500/15 text-orange-300 border-orange-500/30",
+  Rejected: "bg-red-500/15 text-red-300 border-red-500/30",
+};
+
+const ROW_TINT = {
+  Pending: "bg-amber-500/[0.025] hover:bg-amber-500/[0.055]",
+  Returned: "bg-orange-500/[0.025] hover:bg-orange-500/[0.055]",
+  Rejected: "hover:bg-red-500/[0.04]",
+};
+
+const formatDate = (value) => {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+};
+
+const getBudgetStatus = (review = {}) => {
+  const status = String(review.status || "").toLowerCase();
+  if (status === "approved" || status === "partial") return "Approved";
+  if (status === "rejected" || status === "rejected-by-cto") return "Rejected";
+  if (status === "returned" || status === "returned-to-tpm") return "Returned";
+  return "Pending";
+};
+
+const getAdditionalStatus = (request = {}) => {
+  const status = String(request.status || "").toLowerCase();
+  const stage = String(request.stage || "").toLowerCase();
+  if (status === "approved" || stage === "approved") return "Approved";
+  if (status === "partial") return "Approved";
+  if (status === "rejected" || stage === "rejected") return "Rejected";
+  if (status === "returned" || stage === "returned") return "Returned";
+  return "Pending";
+};
+
+const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
+  const budgets = budgetReviews.map((review, index) => ({
+    id: review.id,
+    href: `/budget-reviews/${review.id}`,
+    requestId: review.requestId || `BBR/${String(index + 1).padStart(5, "0")}`,
+    category: "budgets",
+    type: "Budget",
+    title: review.type || `${review.budgetType || "Project"} budget`,
+    project: review.projectName || "Unknown project",
+    raisedBy: review.tpm || review.requester || "Project team",
+    raisedRole: review.requesterRole || (review.teamType === "R&D" ? "R&D" : "TPM"),
+    raisedAt: review.submittedAt,
+    status: getBudgetStatus(review),
+    amount: Number(review.cfoDecision?.amount || review.modifiedTotal || review.requestedBudget || 0),
+  }));
+
+  const budgetChanges = topupRequests.map((request, index) => ({
+    id: request.id,
+    href: `/topup-requests/${request.id}`,
+    requestId: request.requestId || `BCR/${String(index + 1).padStart(5, "0")}`,
+    category: "additional",
+    type: "Budget Change",
+    title: request.phaseName ? `${request.phaseName} additional request` : "Additional budget request",
+    project: request.projectName || "Unknown project",
+    raisedBy: request.requester || "Project team",
+    raisedRole: request.requesterRole || "TPM",
+    raisedAt: request.requestedAt || request.createdAt,
+    status: getAdditionalStatus(request),
+    amount: Number(request.ctoDecision?.amount || request.amount || 0),
+  }));
+
+  const changes = changeRequests.map((request, index) => ({
+    id: request.id,
+    href: `/change-requests?request=${encodeURIComponent(request.id)}`,
+    requestId: request.requestId || `CRQ/${String(index + 1).padStart(5, "0")}`,
+    category: "additional",
+    type: "Change Request",
+    title: request.type || "Project change request",
+    project: request.projectName || "Unknown project",
+    raisedBy: request.requester || "Project team",
+    raisedRole: request.requesterRole || "TPM",
+    raisedAt: request.createdAt,
+    status: getAdditionalStatus(request),
+    amount: Number(request.ctoDecision?.amount || request.amount || 0),
+  }));
+
+  return [...budgets, ...budgetChanges, ...changes].sort(
+    (left, right) => new Date(right.raisedAt || 0).getTime() - new Date(left.raisedAt || 0).getTime()
+  );
 };
 
 const BudgetReviews = () => {
-  const { budgetReviews } = useApp();
+  const { budgetReviews, topupRequests, changeRequests } = useApp();
+  const [category, setCategory] = useState("budgets");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [search, setSearch] = useState("");
-  const [urgencyFilter, setUrgencyFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("pending");
-  const records = useMemo(
-    () => [...budgetReviews].sort((left, right) => getReviewTimestamp(right) - getReviewTimestamp(left)),
-    [budgetReviews]
+
+  const queue = useMemo(
+    () => buildQueue(budgetReviews, topupRequests, changeRequests),
+    [budgetReviews, topupRequests, changeRequests]
   );
+  const categoryItems = useMemo(() => queue.filter((item) => item.category === category), [queue, category]);
+  const statusCounts = useMemo(() => ({
+    All: categoryItems.length,
+    Pending: categoryItems.filter((item) => item.status === "Pending").length,
+    Approved: categoryItems.filter((item) => item.status === "Approved").length,
+    Returned: categoryItems.filter((item) => item.status === "Returned").length,
+    Rejected: categoryItems.filter((item) => item.status === "Rejected").length,
+  }), [categoryItems]);
 
   const filtered = useMemo(() => {
-    return records.filter((r) => {
-      const statusGroup = getStatusGroup(r);
-      if (statusFilter !== "all" && statusGroup !== statusFilter) return false;
-      if (urgencyFilter !== "all" && r.urgency !== urgencyFilter) return false;
-      if (search) {
-        const s = search.toLowerCase();
-        if (!r.projectName.toLowerCase().includes(s) && !r.tpm.toLowerCase().includes(s) && !r.client.toLowerCase().includes(s))
-          return false;
-      }
-      return true;
+    const needle = search.trim().toLowerCase();
+    return categoryItems.filter((item) => {
+      if (statusFilter !== "All" && item.status !== statusFilter) return false;
+      if (!needle) return true;
+      return [item.requestId, item.title, item.project, item.raisedBy, item.type]
+        .some((value) => String(value || "").toLowerCase().includes(needle));
     });
-  }, [records, search, urgencyFilter, statusFilter]);
+  }, [categoryItems, search, statusFilter]);
 
-  const totalRequested = records.reduce((s, r) => s + Number(r.requestedBudget || 0), 0);
-  const statusCounts = useMemo(() => records.reduce((acc, review) => {
-    const key = getStatusGroup(review);
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, { pending: 0, "sent-to-cfo": 0, "action-required": 0, rejected: 0 }), [records]);
-  const highUrgency = records.filter((r) => r.urgency === "High").length;
+  const changeCategory = (nextCategory) => {
+    setCategory(nextCategory);
+    setStatusFilter("All");
+  };
 
   return (
     <div className="space-y-6" data-testid="page-budget-reviews">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
-            <ClipboardCheck className="w-3 h-3" />
-            CTO Portal
-          </div>
-          <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Budget reviews</h1>
-          <p className="text-sm text-zinc-400 mt-1">
-            {records.length} budget record{records.length === 1 ? "" : "s"} across pending, sent-to-CFO, action-required, and rejected states · {highUrgency} high urgency
-          </p>
+      <div>
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
+          <ClipboardCheck className="w-3 h-3" /> CTO Portal
         </div>
+        <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Budget reviews</h1>
+        <p className="mt-1 text-sm text-zinc-400">Review budgets and additional project requests from one approval queue.</p>
       </div>
 
-      {/* Summary stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Pending" value={String(statusCounts.pending)} icon={Clock3} tone="warning" testid="stat-pending" />
-        <StatCard label="Sent to CFO" value={String(statusCounts["sent-to-cfo"])} icon={ClipboardCheck} tone="magenta" testid="stat-sent-cfo" />
-        <StatCard label="Action required" value={String(statusCounts["action-required"])} icon={AlertTriangle} tone="neutral" testid="stat-action-required" />
-        <StatCard label="Rejected" value={String(statusCounts.rejected)} icon={CheckCircle2} tone={statusCounts.rejected > 0 ? "negative" : "neutral"} testid="stat-rejected" sub={fmtCurrency(totalRequested)} />
+      <div className="flex items-center gap-7 border-b border-white/5">
+        {[
+          { id: "budgets", label: "Budgets", count: queue.filter((item) => item.category === "budgets").length },
+          { id: "additional", label: "Additional Requests", count: queue.filter((item) => item.category === "additional").length },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => changeCategory(tab.id)}
+            data-testid={`review-category-${tab.id}`}
+            className={`pb-3 -mb-px inline-flex items-center gap-2 border-b-2 text-sm font-medium transition-colors ${
+              category === tab.id ? "border-fuchsia-400 text-white" : "border-transparent text-zinc-400 hover:text-zinc-200"
+            }`}
+          >
+            {tab.label}
+            <span className="rounded-full bg-fuchsia-500/15 px-1.5 py-0.5 text-[10px] font-semibold tabular text-fuchsia-300">{tab.count}</span>
+          </button>
+        ))}
       </div>
 
-      {/* Filters */}
-      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4 space-y-3">
+      <div className="space-y-4">
         <div className="flex items-center gap-2 flex-wrap">
-          {statusTabs.map((tab) => (
+          {["All", "Pending", "Approved", "Returned", "Rejected"].map((status) => (
             <button
-              key={tab.id}
-              onClick={() => setStatusFilter(tab.id)}
-              data-testid={`filter-status-${tab.id}`}
-              className={`px-3 py-1.5 rounded-lg border text-xs font-medium ${
-                statusFilter === tab.id
-                  ? "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300"
-                  : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              data-testid={`review-status-${status.toLowerCase().replace(/\s+/g, "-")}`}
+              className={`px-4 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                statusFilter === status
+                  ? "bg-fuchsia-500 text-white border-fuchsia-500"
+                  : "bg-transparent text-zinc-400 border-white/15 hover:text-zinc-100 hover:border-white/25"
               }`}
             >
-              {tab.label} ({tab.id === "all" ? records.length : statusCounts[tab.id] || 0})
+              {status} ({statusCounts[status] || 0})
             </button>
           ))}
         </div>
-        <div className="flex flex-col md:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by project, TPM, or client..."
-              data-testid="reviews-search"
-              className="w-full h-10 pl-10 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Filter className="w-3.5 h-3.5 text-zinc-500" />
-            {["all", "High", "Normal", "Low"].map((u) => (
-              <button
-                key={u}
-                onClick={() => setUrgencyFilter(u)}
-                data-testid={`filter-urgency-${u}`}
-                className={`px-3 py-1.5 rounded-lg border text-xs font-medium capitalize ${
-                  urgencyFilter === u
-                    ? "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300"
-                    : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"
-                }`}
-              >
-                {u === "all" ? `All urgency (${records.length})` : u}
-              </button>
-            ))}
-          </div>
+
+        <div className="relative">
+          <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by request, project, or requester..."
+            data-testid="reviews-search"
+            className="w-full h-10 pl-10 pr-3 rounded-lg bg-[#12121A] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+          />
         </div>
       </div>
 
-      {/* Reviews list */}
-      <div className="space-y-3">
-        {filtered.map((r) => {
-          const uc = urgencyColor[r.urgency] || urgencyColor.Normal;
-          const requesterLabel = r.requesterRole === "R&D" || ["Testing", "RnD", "Rework"].includes(r.budgetType) ? "R&D" : "TPM";
-          const status = statusMeta[getStatusGroup(r)];
-          const stageAmount = Number(r.modifiedTotal || r.cfoDecision?.amount || r.recommendedBudget || r.requestedBudget || 0);
-          const stageAmountLabel = getStatusGroup(r) === "sent-to-cfo" ? "Forwarded amount" : "Submitted amount";
-          return (
-            <Link
-              to={`/budget-reviews/${r.id}`}
-              key={r.id}
-              data-testid={`review-${r.id}`}
-              className="bg-[#12121A] rounded-2xl border border-white/5 hover:border-fuchsia-500/30 p-5 block card-hover transition-all"
-            >
-              <div className="flex items-start justify-between gap-4 flex-wrap">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${uc.bg} ${uc.text} ${uc.border}`}>
-                      <AlertTriangle className="w-3 h-3" />
-                      {r.urgency}
-                    </span>
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${status.chip}`}>
-                      {status.label}
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
-                      {String(r.type || "").replace(/\bSampling\b/g, "Sample").replace(/\bR&D\b/g, "Sample")}
-                    </span>
-                    {r.teamType && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
-                        {r.teamType} team
+      <div className="bg-[#12121A] rounded-2xl border border-white/5 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[920px] text-sm">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.02]">
+                <th className="text-left py-3 px-4">Type</th>
+                <th className="text-left py-3 px-4">Request ID</th>
+                <th className="text-left py-3 px-4">Request · Project</th>
+                <th className="text-left py-3 px-4">Raised by</th>
+                <th className="text-left py-3 px-4">Status</th>
+                <th className="text-right py-3 px-4">Amount</th>
+                <th className="w-9" />
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((item) => {
+                const Icon = TYPE_ICONS[item.type] || FileText;
+                return (
+                  <tr key={`${item.type}-${item.id}`} className={`border-b border-white/5 transition-colors ${ROW_TINT[item.status] || "hover:bg-white/[0.03]"}`} data-testid={`review-row-${item.id}`}>
+                    <td className="py-3 px-4">
+                      <Link to={item.href} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold bg-fuchsia-500/10 border border-fuchsia-500/25 text-fuchsia-200">
+                        <Icon className="w-3 h-3" /> {TYPE_LABELS[item.type]}
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4 text-xs tabular text-zinc-300">{item.requestId}</td>
+                    <td className="py-3 px-4">
+                      <Link to={item.href} className="block hover:text-fuchsia-300">
+                        <div className="font-medium text-white">{item.title}</div>
+                        <div className="text-[11px] text-zinc-500">{item.project}</div>
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="text-zinc-200">{item.raisedBy}</div>
+                      <div className="text-[11px] text-zinc-500">{item.raisedRole} · {formatDate(item.raisedAt)}</div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold border ${STATUS_CHIP[item.status] || STATUS_CHIP.Pending}`}>
+                        <Circle className="w-2 h-2 fill-current" /> {item.status}
                       </span>
-                    )}
-                    <span className="inline-flex items-center gap-1 text-[10px] text-zinc-500">
-                      <Clock3 className="w-3 h-3" />
-                      {new Date(r.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    </span>
-                  </div>
-                  <div className="mt-2 font-display font-semibold text-lg text-white">{r.projectName}</div>
-                  <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-3 flex-wrap">
-                    <span className="inline-flex items-center gap-1">
-                      <User className="w-3 h-3" /> Requested by {requesterLabel} · {r.tpm}
-                    </span>
-                    <span>·</span>
-                    <span>{r.client}</span>
-                    <span>·</span>
-                    <span>{["Testing"].includes(r.budgetType) ? `${r.phases} phase${r.phases === 1 ? "" : "s"}` : `${r.tasks} tasks · ${r.phases} phases`}</span>
-                    {r.linesFlagged > 0 && (
-                      <>
-                        <span>·</span>
-                        <span className="text-amber-300 font-semibold">{r.linesFlagged} lines flagged</span>
-                      </>
-                    )}
-                  </div>
-                  <div className="mt-3 text-xs text-zinc-300 leading-relaxed line-clamp-2">{r.justification}</div>
-                </div>
-
-                <div className="text-right">
-                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{stageAmountLabel}</div>
-                  <div className="font-display text-2xl font-semibold text-white tabular">{fmtCurrency(stageAmount, { compact: false })}</div>
-                  <div className="text-[11px] text-zinc-500 mt-0.5 tabular">
-                    vs current {fmtCurrency(r.currentBudget, { compact: false })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-end">
-                <div className="inline-flex items-center gap-1 text-[11px] text-fuchsia-300 font-medium">
-                  Open review workspace <ChevronRight className="w-3 h-3" />
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-
-        {filtered.length === 0 && (
-          <div className="bg-[#12121A] rounded-2xl border border-white/5 p-8 text-center">
-            <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-            <div className="text-sm text-zinc-400">No budget records match your filters</div>
-          </div>
-        )}
+                    </td>
+                    <td className="py-3 px-4 text-right font-semibold tabular text-white">${item.amount.toLocaleString()}</td>
+                    <td className="py-3 px-2">
+                      <Link to={item.href} aria-label={`Open ${item.requestId}`}><ChevronRight className="w-4 h-4 text-zinc-500 hover:text-fuchsia-300" /></Link>
+                    </td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && (
+                <tr><td colSpan={7} className="py-12 text-center text-sm text-zinc-500">No requests match these filters.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-    </div>
-  );
-};
-
-const StatCard = ({ label, value, sub, icon: Icon, tone = "neutral", testid }) => {
-  const tones = {
-    positive: "text-emerald-300",
-    negative: "text-red-300",
-    warning: "text-amber-300",
-    neutral: "text-white",
-    magenta: "text-fuchsia-300",
-  };
-  return (
-    <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4" data-testid={testid}>
-      <div className="flex items-center justify-between">
-        <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
-        {Icon && (
-          <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center">
-            <Icon className={`w-3.5 h-3.5 ${tones[tone]}`} />
-          </div>
-        )}
-      </div>
-      <div className={`mt-2 font-display font-semibold text-xl tabular ${tones[tone]}`}>{value}</div>
-      {sub && <div className="mt-1 text-[11px] text-zinc-500">{sub}</div>}
     </div>
   );
 };
 
 export default BudgetReviews;
-
-const getReviewTimestamp = (review) => new Date(
-  review?.cfoDecision?.at
-  || review?.ctoAt
-  || review?.submittedAt
-  || 0
-).getTime();
-
-const getStatusGroup = (review = {}) => {
-  const status = String(review.status || "").trim().toLowerCase();
-  if (status === "rejected-by-cto" || status === "rejected") return "rejected";
-  if (status === "returned-to-tpm") return "action-required";
-  if (status === "forwarded-cfo" || status === "pending-cfo" || status === "approved" || status === "partial") return "sent-to-cfo";
-  return "pending";
-};

@@ -98,7 +98,7 @@ const Reports = () => {
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 flex items-start gap-3" data-testid="reports-tpm-notice">
           <Lock className="w-4 h-4 text-zinc-400 mt-0.5 flex-shrink-0" />
           <div className="text-sm text-zinc-300">
-            Reports have been consolidated under the <span className="text-white font-semibold">CFO</span> and <span className="text-white font-semibold">CTO</span> portals. Reach out to them if you need a specific export.
+            Reports have been consolidated under the <span className="text-white font-semibold">L3</span> and <span className="text-white font-semibold">L2</span> portals. Reach out to them if you need a specific export.
           </div>
         </div>
       )}

@@ -18,10 +18,10 @@ import {
 } from "lucide-react";
 
 const statusMeta = {
-  "pending-cto": { label: "Pending · CTO", tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
-  "pending-cfo": { label: "Pending · CFO", tone: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+  "pending-cto": { label: "Pending", tone: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+  "pending-cfo": { label: "Pending", tone: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
   approved: { label: "Approved", tone: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  partial: { label: "Partially Approved", tone: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25" },
+  partial: { label: "Approved", tone: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25" },
   rejected: { label: "Rejected", tone: "bg-red-500/15 text-red-300 border-red-500/30" },
 };
 

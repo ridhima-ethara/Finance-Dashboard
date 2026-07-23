@@ -178,7 +178,7 @@ const TpmDashboard = () => {
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-sky-300">
             <span className="w-6 h-px bg-sky-400" />
-            {isRnd ? "R&D Portal" : "TPM Portal"}
+            {isRnd ? "RL Environment Portal" : "Projects Portal"}
           </div>
           <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">
             Welcome back, {user?.name?.split(" ")[0]}
@@ -359,8 +359,8 @@ const TpmDashboard = () => {
       {!isRnd && (
         <Panel
           testid="widget-under-rnd-projects"
-          title="Projects under R&D currently"
-          subtitle="Assigned TPMs can track kickoff context here. These become budgetable after R&D sample acceptance."
+          title="Projects under RL Environment currently"
+          subtitle="Assigned Projects members can track kickoff context here. These become budgetable after RL Environment sample acceptance."
           right={underRndProjects.length > 0 ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-sky-500/15 text-sky-300 border border-sky-500/30">
               {underRndProjects.length} waiting

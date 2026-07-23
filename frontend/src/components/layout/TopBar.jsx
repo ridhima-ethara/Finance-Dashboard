@@ -11,6 +11,7 @@ import {
 } from "../ui/dropdown-menu";
 import { NOTIFICATIONS } from "../../data/mockData";
 import { initials } from "../../lib/format";
+import { roleDisplayName } from "../../lib/roles";
 
 const TopBar = () => {
   const { user, setNotifOpen, logout } = useApp();
@@ -54,7 +55,7 @@ const TopBar = () => {
               )}
               <div className="hidden md:block text-left">
                 <div className="text-[11px] text-zinc-500 leading-none">Signed in as</div>
-                <div className="text-xs font-semibold text-zinc-100 mt-0.5">{user.role}</div>
+                <div className="text-xs font-semibold text-zinc-100 mt-0.5">{roleDisplayName(user.role)}</div>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
             </button>

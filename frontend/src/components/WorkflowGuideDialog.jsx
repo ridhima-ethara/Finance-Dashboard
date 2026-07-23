@@ -12,55 +12,55 @@ import {
 const ROLE_TABS = [
   {
     id: "CTO",
-    label: "CTO",
+    label: "L2",
     icon: Crown,
     accent: "fuchsia",
     tagline: "Portfolio oversight & approvals",
     steps: [
-      { title: "Create a new project", detail: "Click New project on the CTO dashboard, assign a TPM and R&D leads, and set priority." },
-      { title: "Review incoming budgets", detail: "Open Budget Reviews to approve, partially approve, or return TPM budget submissions." },
-      { title: "Handle change requests & top-ups", detail: "Approve or return TPM change requests and top-up asks from the alert strip tiles." },
+      { title: "Create a new project", detail: "Click New project on the L2 dashboard, assign Projects and RL Environment leads, and set priority." },
+      { title: "Review incoming budgets", detail: "Open Budget Reviews to approve, partially approve, or return Projects budget submissions." },
+      { title: "Handle change requests & top-ups", detail: "Approve or return Projects change requests and top-up asks from the alert strip tiles." },
       { title: "Monitor portfolio health", detail: "Track utilization, high-risk projects, and delivery progress from the monitoring panels." },
     ],
   },
   {
     id: "CFO",
-    label: "CFO",
+    label: "L3",
     icon: Wallet,
     accent: "emerald",
     tagline: "Financial gatekeeper & recovery",
     steps: [
-      { title: "Work the Approval Queue", detail: "Review budgets, top-ups, and change requests already cleared by the CTO." },
-      { title: "Sign off Batch Deliveries", detail: "Approve TPM-submitted delivery batches so invoices can be raised to clients." },
+      { title: "Work the Approval Queue", detail: "Review budgets, top-ups, and change requests already cleared by L2." },
+      { title: "Sign off Batch Deliveries", detail: "Approve Projects-submitted delivery batches so invoices can be raised to clients." },
       { title: "Track Client Recovery", detail: "Monitor outstanding recovery and follow-ups from the Client Recovery page." },
       { title: "Watch the Contingency Buffer", detail: "Use Financial Monitoring & Early Warning to catch overruns before they hurt margin." },
     ],
   },
   {
     id: "TPM",
-    label: "TPM",
+    label: "Projects",
     icon: ClipboardCheck,
     accent: "sky",
     tagline: "Delivery lead & daily execution",
     steps: [
-      { title: "Open your assigned project", detail: "Once R&D finishes testing, the project is promoted to \"Ready for production budget\"." },
-      { title: "Build the production budget", detail: "Use Budget Builder to plan tasks, models, tokens, and phase costs. Submit for CTO review." },
+      { title: "Open your assigned project", detail: "Once RL Environment finishes testing, the project is promoted to \"Ready for production budget\"." },
+      { title: "Build the production budget", detail: "Use Budget Builder to plan tasks, models, tokens, and phase costs. Submit for L2 review." },
       { title: "Log daily consumption", detail: "Record model usage, tasks completed, and trajectories on the Consumption page every day." },
-      { title: "Raise Change Requests / Top-ups", detail: "If scope or cost shifts, submit a CR or top-up to CTO → CFO for approval." },
-      { title: "Deliver batches", detail: "When a milestone completes, submit a batch delivery so CFO can sign off and invoice." },
+      { title: "Raise Change Requests / Top-ups", detail: "If scope or cost shifts, submit a CR or top-up to L2 → L3 for approval." },
+      { title: "Deliver batches", detail: "When a milestone completes, submit a batch delivery so L3 can sign off and invoice." },
     ],
   },
   {
     id: "R&D",
-    label: "R&D",
+    label: "RL Environment",
     icon: FlaskConical,
     accent: "violet",
     tagline: "Research, testing & sample delivery",
     steps: [
-      { title: "Get invited to a project", detail: "The TPM adds you as R&D Lead when a new engagement starts." },
-      { title: "Request a testing budget", detail: "Submit a small R&D testing budget so you can spin up prototypes and sample runs." },
+      { title: "Get invited to a project", detail: "Projects adds you as RL Environment Lead when a new engagement starts." },
+      { title: "Request a testing budget", detail: "Submit a small RL Environment testing budget so you can spin up prototypes and sample runs." },
       { title: "Log testing runs & sample results", detail: "Track models tried, tokens used, and outcomes from the project workspace." },
-      { title: "Mark testing complete", detail: "Once samples look good, submit \"Accept\" so TPM can start the production budget cycle." },
+      { title: "Mark testing complete", detail: "Once samples look good, submit \"Accept\" so Projects can start the production budget cycle." },
     ],
   },
   {
@@ -72,8 +72,8 @@ const ROLE_TABS = [
     steps: [
       { title: "Provision model keys", detail: "For every approved project, create scoped Bedrock/model API keys from the IT dashboard." },
       { title: "Rotate & revoke", detail: "Rotate keys periodically and revoke access instantly when a project closes." },
-      { title: "Track provisioning steps", detail: "Mark provisioning tasks complete so TPM/R&D can start logging usage without blockers." },
-      { title: "Own IT monthly actuals", detail: "Reconcile IT infra & subscription costs monthly so CFO's numbers stay accurate." },
+      { title: "Track provisioning steps", detail: "Mark provisioning tasks complete so Projects/RL Environment can start logging usage without blockers." },
+      { title: "Own IT monthly actuals", detail: "Reconcile IT infra & subscription costs monthly so L3 numbers stay accurate." },
     ],
   },
 ];
@@ -106,7 +106,7 @@ export const WorkflowGuideDialog = ({ open, onOpenChange, defaultRole = "CTO" })
             How to use Ethara.AI Command Center
           </DialogTitle>
           <DialogDescription className="text-sm text-zinc-400">
-            Pick your role to see a short workflow. Every project moves through these steps in order — from R&amp;D testing to CFO sign-off.
+            Pick your role to see a short workflow. Every project moves through these steps in order — from RL Environment testing to L3 sign-off.
           </DialogDescription>
         </DialogHeader>
 
@@ -162,7 +162,7 @@ export const WorkflowGuideDialog = ({ open, onOpenChange, defaultRole = "CTO" })
 
           <div className="mt-5 flex items-center gap-2 text-[11px] text-zinc-500">
             <ArrowRight className="w-3 h-3" />
-            Every project follows this order: <span className="text-zinc-300">R&amp;D testing → TPM production budget → CTO review → CFO sign-off → Delivery.</span>
+            Every project follows this order: <span className="text-zinc-300">RL Environment testing → Projects production budget → L2 review → L3 sign-off → Delivery.</span>
           </div>
         </div>
       </DialogContent>

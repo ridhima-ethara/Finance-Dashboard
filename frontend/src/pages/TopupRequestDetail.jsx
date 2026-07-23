@@ -21,10 +21,10 @@ import {
 } from "lucide-react";
 
 const stageChip = {
-  "pending-cto": { label: "Pending · CTO", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
-  "pending-cfo": { label: "Pending · CFO", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
+  "pending-cto": { label: "Pending", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30" },
+  "pending-cfo": { label: "Pending", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30" },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" },
-  partial: { label: "Partially Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25" },
+  partial: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25" },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30" },
 };
 
@@ -322,7 +322,7 @@ const TopupRequestDetail = () => {
                 <div className={`flex items-center gap-2 mb-1 ${req.status === "rejected" ? "text-red-300" : "text-emerald-300"}`}>
                   {req.status === "rejected" ? <XCircle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
                   <span className="text-sm font-semibold">
-                    {req.status === "approved" ? "Approved · baseline updated" : req.status === "partial" ? "Partially approved" : "Rejected"}
+                    {req.status === "approved" ? "Approved · baseline updated" : req.status === "partial" ? "Approved" : "Rejected"}
                   </span>
                 </div>
                 {req.cfoDecision?.amount ? (
@@ -395,7 +395,7 @@ const TopupRequestDetail = () => {
               </div>
             ) : (
               <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs text-zinc-400">
-                {isCTOStage ? "Awaiting CTO review. Only CTO can act at this stage." : isCFOStage ? "Awaiting CFO sign-off. Only CFO can act at this stage." : "Read-only."}
+                {isCTOStage ? "Awaiting L2 review. Only L2 can act at this stage." : isCFOStage ? "Awaiting L3 sign-off. Only L3 can act at this stage." : "Read-only."}
               </div>
             )}
           </div>

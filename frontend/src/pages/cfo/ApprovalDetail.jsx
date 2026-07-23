@@ -992,11 +992,11 @@ const ApprovalDetail = () => {
                   )}
                   <span className="text-sm font-semibold">
                     {decision === "rejected"
-                      ? "Rejected by CFO"
+                      ? "Rejected"
                       : decision === "returned"
-                        ? "Returned to CTO"
+                        ? "Returned"
                         : decision === "partial"
-                          ? "Partially approved"
+                          ? "Approved"
                           : "Approved"}
                   </span>
                 </div>

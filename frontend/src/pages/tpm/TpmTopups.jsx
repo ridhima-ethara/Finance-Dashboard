@@ -10,10 +10,10 @@ import {
 } from "lucide-react";
 
 const stageChip = {
-  "pending-cto": { label: "Pending · CTO", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
-  "pending-cfo": { label: "Pending · CFO", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
+  "pending-cto": { label: "Pending", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
+  "pending-cfo": { label: "Pending", cls: "bg-sky-500/15 text-sky-300 border-sky-500/30", Icon: Clock3 },
   approved: { label: "Approved", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
-  partial: { label: "Partially Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
+  partial: { label: "Approved", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: Percent },
   rejected: { label: "Rejected", cls: "bg-red-500/15 text-red-300 border-red-500/30", Icon: XCircle },
 };
 
@@ -55,7 +55,7 @@ const TpmTopups = () => {
             <ArrowUpRightSquare className="w-3 h-3" /> TPM Portal
           </div>
           <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">My change requests</h1>
-          <p className="text-sm text-zinc-400 mt-1">Phase-wise change requests with model, infra, subscription, or budget asks · CTO reviews first, CFO finalizes</p>
+          <p className="text-sm text-zinc-400 mt-1">Phase-wise change requests with model, infra, subscription, or budget asks · L2 reviews first, L3 finalizes</p>
         </div>
         <Button
           onClick={() => setOpenDialog(true)}

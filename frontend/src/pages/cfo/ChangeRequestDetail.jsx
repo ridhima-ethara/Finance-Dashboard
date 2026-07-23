@@ -58,14 +58,14 @@ const ChangeRequestDetail = () => {
   const canAct = role === "CFO" && request.stage === "CFO Review";
   const finalAmount = request.finalDecision?.amount || request.cfoDecision?.amount || request.ctoDecision?.amount || request.amount;
   const decisionStatus = request.status === "partial"
-    ? "Partially approved"
+    ? "Approved"
     : request.status === "approved" || request.stage === "Approved"
       ? "Approved"
       : request.status === "rejected" || request.stage === "Rejected"
         ? "Rejected"
         : request.status === "returned"
-          ? "Returned to CTO"
-          : "Pending CFO review";
+          ? "Returned"
+          : "Pending";
 
   const breakdown = [
     {
@@ -181,7 +181,7 @@ const ChangeRequestDetail = () => {
           <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3">
             <Sparkles className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
             <div className="text-xs text-zinc-200 leading-relaxed">
-              <span className="text-fuchsia-200 font-semibold">CFO insight: </span>
+              <span className="text-fuchsia-200 font-semibold">L3 insight: </span>
               Review the requested delta against the line-item change scope, then decide whether the full amount, a reduced amount, or a return to CTO is the right path before IT provisioning follows.
             </div>
           </div>
@@ -202,7 +202,7 @@ const ChangeRequestDetail = () => {
 
         <div className="space-y-4">
           <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="change-request-decision-card">
-            <div className="font-display font-semibold text-[15px] text-white mb-3">CFO decision</div>
+            <div className="font-display font-semibold text-[15px] text-white mb-3">L3 decision</div>
             {canAct ? (
               <div className="space-y-3">
                 <div>
@@ -223,7 +223,7 @@ const ChangeRequestDetail = () => {
                     onChange={(event) => setComment(event.target.value)}
                     rows={4}
                     data-testid="cr-comment"
-                    placeholder="Add CFO guidance, conditions, or return notes"
+                    placeholder="Add L3 guidance, conditions, or return notes"
                     className="w-full px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 resize-none"
                   />
                 </div>
@@ -261,7 +261,7 @@ const ChangeRequestDetail = () => {
             <div className="space-y-2 text-sm">
               <ImpactRow label="Current approved" value={fmtCurrency(project?.approvedBudget || request.currentBudget, { compact: false })} />
               <ImpactRow label="Requested delta" value={fmtCurrency(request.amount, { compact: false })} />
-              <ImpactRow label="CFO amount" value={fmtCurrency(canAct ? approvedAmt : finalAmount, { compact: false })} />
+              <ImpactRow label="L3 amount" value={fmtCurrency(canAct ? approvedAmt : finalAmount, { compact: false })} />
               <ImpactRow label="Projected total" value={fmtCurrency((project?.approvedBudget || request.currentBudget) + (canAct ? approvedAmt : finalAmount), { compact: false })} />
             </div>
           </div>
@@ -276,7 +276,7 @@ const ChangeRequestDetail = () => {
               </div>
             ) : (
               <div className="text-xs text-zinc-500">
-                IT provisioning is created once the CFO approves or partially approves this change request.
+                IT provisioning is created once L3 approves or partially approves this change request.
               </div>
             )}
           </div>

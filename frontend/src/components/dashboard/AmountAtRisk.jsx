@@ -3,9 +3,10 @@ import { fmtCurrency, fmtPct } from "../../lib/format";
 import { useApp } from "../../context/AppContext";
 import { summarizeLoggedProject } from "../../lib/projectMetrics";
 
-const AmountAtRisk = () => {
+const AmountAtRisk = ({ projectsOverride = null }) => {
   const { visibleProjects, taskLogs } = useApp();
-  const portfolio = visibleProjects.reduce((acc, project) => {
+  const dashboardProjects = projectsOverride || visibleProjects;
+  const portfolio = dashboardProjects.reduce((acc, project) => {
     const usage = summarizeLoggedProject(project, taskLogs);
     const spend = Number(project.cfoActualSpend || project.actualSpend || usage.loggedSpend || 0);
     const approved = Number(project.approvedBudget || 0);
@@ -22,11 +23,11 @@ const AmountAtRisk = () => {
     healthScore: 0,
     accuracy: 0,
   });
-  const projectCount = visibleProjects.length || 1;
+  const projectCount = dashboardProjects.length || 1;
   const metrics = {
     ...portfolio,
-    healthScore: visibleProjects.length ? Math.round(portfolio.healthScore / projectCount) : 0,
-    accuracy: visibleProjects.length ? Math.round(portfolio.accuracy / projectCount) : 0,
+    healthScore: dashboardProjects.length ? Math.round(portfolio.healthScore / projectCount) : 0,
+    accuracy: dashboardProjects.length ? Math.round(portfolio.accuracy / projectCount) : 0,
   };
 
   return (

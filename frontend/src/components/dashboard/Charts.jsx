@@ -78,8 +78,9 @@ const getProjectLabel = (name = "") => {
   return parts.slice(0, 2).join(" ") || "Project";
 };
 
-export const BudgetActualChart = () => {
-  const { projects } = useApp();
+export const BudgetActualChart = ({ projectsOverride = null }) => {
+  const { projects: contextProjects } = useApp();
+  const projects = projectsOverride || contextProjects;
   const data = useMemo(
     () => projects.slice(0, 6).map((project) => ({
       name: getProjectLabel(project.name),
@@ -94,7 +95,7 @@ export const BudgetActualChart = () => {
     <CardShell
       testid="chart-budget-actual"
       title="Actual · Budget · Estimated"
-      subtitle="Per project · CFO actuals from IT filing"
+      subtitle="Per project · L3 actuals from IT filing"
     >
       <div className="h-[280px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -123,8 +124,9 @@ export const BudgetActualChart = () => {
   );
 };
 
-export const ModelExpensesChart = () => {
-  const { projects, taskLogs, itMonthlyActuals } = useApp();
+export const ModelExpensesChart = ({ projectsOverride = null }) => {
+  const { projects: contextProjects, taskLogs, itMonthlyActuals } = useApp();
+  const projects = projectsOverride || contextProjects;
   const data = useMemo(() => {
     const byModel = {};
 
@@ -179,8 +181,9 @@ export const ModelExpensesChart = () => {
   );
 };
 
-export const InfraStackedChart = () => {
-  const { projects } = useApp();
+export const InfraStackedChart = ({ projectsOverride = null }) => {
+  const { projects: contextProjects } = useApp();
+  const projects = projectsOverride || contextProjects;
   const data = useMemo(
     () => projects.slice(0, 6).map((project) => ({
       name: getProjectLabel(project.name),
@@ -218,8 +221,9 @@ export const InfraStackedChart = () => {
   );
 };
 
-export const MonthlySpendChart = () => {
-  const { projects, itMonthlyActuals } = useApp();
+export const MonthlySpendChart = ({ projectsOverride = null }) => {
+  const { projects: contextProjects, itMonthlyActuals } = useApp();
+  const projects = projectsOverride || contextProjects;
   const data = useMemo(() => {
     const rows = buildItActualDailyRows(projects, itMonthlyActuals);
     return Array.from(rows.reduce((map, row) => {
@@ -295,8 +299,9 @@ export const MonthlySpendChart = () => {
   );
 };
 
-export const MonthEndActualChart = () => {
-  const { projects, itMonthlyActuals } = useApp();
+export const MonthEndActualChart = ({ projectsOverride = null }) => {
+  const { projects: contextProjects, itMonthlyActuals } = useApp();
+  const projects = projectsOverride || contextProjects;
   const data = useMemo(
     () => buildItMonthEndRows(projects, itMonthlyActuals).slice(-6).map((row) => ({
       name: getProjectLabel(row.projectName),
@@ -354,8 +359,9 @@ export const MonthEndActualChart = () => {
   );
 };
 
-export const CategoryDonut = () => {
-  const { projects } = useApp();
+export const CategoryDonut = ({ projectsOverride = null }) => {
+  const { projects: contextProjects } = useApp();
+  const projects = projectsOverride || contextProjects;
   const breakdown = useMemo(() => {
     const totals = projects.reduce((sum, project) => ({
       models: sum.models + Number(project.itActuals?.modelActual || 0),
@@ -439,14 +445,15 @@ export const CategoryDonut = () => {
   );
 };
 
-export const UtilizationBars = () => {
-  const { projects } = useApp();
+export const UtilizationBars = ({ projectsOverride = null }) => {
+  const { projects: contextProjects } = useApp();
+  const projects = projectsOverride || contextProjects;
   const data = useMemo(
     () => projects
       .map((project) => ({
         name: project.name,
         util: Number(project.cfoUtilization || project.utilization || 0),
-        buffer: Number(project.buffer || 10),
+        buffer: Number(project.buffer || 0),
       }))
       .sort((left, right) => right.util - left.util)
       .slice(0, 6),
@@ -457,13 +464,15 @@ export const UtilizationBars = () => {
     <CardShell
       testid="chart-utilization"
       title="Budget utilization"
-      subtitle="Top utilization projects · CFO actuals with buffer guardrails"
+      subtitle="Top utilization projects · L3 actuals with buffer guardrails"
     >
       <div className="space-y-3">
         {data.map((row) => {
           const color = row.util >= 100 ? "#EF4444" : row.util >= 85 ? "#F59E0B" : "#10B981";
           const bg = row.util >= 100 ? "#FEE2E2" : row.util >= 85 ? "#FEF3C7" : "#D1FAE5";
-          const scaleMax = 100 + Number(row.buffer || 0);
+          const buffer = Number(row.buffer || 0);
+          const hasBuffer = buffer > 0;
+          const scaleMax = 100 + buffer;
           const utilLeft = Math.min((Math.min(row.util, scaleMax) / scaleMax) * 100, 100);
           const bufferStartPct = (100 / scaleMax) * 100;
           const bufferWidthPct = 100 - bufferStartPct;
@@ -473,23 +482,25 @@ export const UtilizationBars = () => {
                 <span className="text-zinc-200 font-medium">{row.name}</span>
                 <span className="font-semibold tabular flex items-center gap-2">
                   <span style={{ color }}>{fmtPct(row.util)}</span>
-                  <span className="text-[9px] text-zinc-500 font-medium">buffer +{row.buffer}%</span>
+                  {hasBuffer && <span className="text-[9px] text-zinc-500 font-medium">buffer +{buffer}%</span>}
                 </span>
               </div>
               <div className="relative h-2.5 rounded-full" style={{ background: bg }}>
-                <div
-                  className="absolute inset-y-0 rounded-r-full"
-                  style={{
-                    left: `${bufferStartPct}%`,
-                    width: `${bufferWidthPct}%`,
-                    backgroundImage: "repeating-linear-gradient(45deg, rgba(0,0,0,0.14) 0 3px, transparent 3px 6px)",
-                  }}
-                />
+                {hasBuffer && (
+                  <div
+                    className="absolute inset-y-0 rounded-r-full"
+                    style={{
+                      left: `${bufferStartPct}%`,
+                      width: `${bufferWidthPct}%`,
+                      backgroundImage: "repeating-linear-gradient(45deg, rgba(0,0,0,0.14) 0 3px, transparent 3px 6px)",
+                    }}
+                  />
+                )}
                 <div
                   className="absolute inset-y-0 left-0 rounded-full transition-all"
                   style={{ width: `${utilLeft}%`, background: color }}
                 />
-                <div className="absolute inset-y-0 w-px bg-zinc-800" style={{ left: `${bufferStartPct}%` }} />
+                {hasBuffer && <div className="absolute inset-y-0 w-px bg-zinc-800" style={{ left: `${bufferStartPct}%` }} />}
               </div>
             </div>
           );
@@ -499,8 +510,9 @@ export const UtilizationBars = () => {
   );
 };
 
-export const SubscriptionsPanel = () => {
-  const { projects } = useApp();
+export const SubscriptionsPanel = ({ projectsOverride = null }) => {
+  const { projects: contextProjects } = useApp();
+  const projects = projectsOverride || contextProjects;
   const subscriptions = useMemo(() => {
     const map = new Map();
     projects.forEach((project) => {
@@ -610,8 +622,8 @@ export const SubscriptionsPanel = () => {
 
 const STAGES = [
   { key: "req", label: "Budget Request", done: true },
-  { key: "cto", label: "CTO Review", done: true },
-  { key: "cfo", label: "CFO Approval", done: true, current: true },
+  { key: "cto", label: "L2 Review", done: true },
+  { key: "cfo", label: "L3 Approval", done: true, current: true },
   { key: "it", label: "IT Provisioning", done: false },
   { key: "exec", label: "Execution", done: false },
   { key: "rec", label: "Recovery", done: false },
@@ -621,7 +633,7 @@ export const WorkflowStrip = () => (
   <CardShell
     testid="workflow-strip"
     title="Budget approval workflow"
-    subtitle="Project → CTO → CFO → IT → Execution → Recovery"
+    subtitle="Project → L2 → L3 → IT → Execution → Recovery"
   >
     <div className="flex items-center gap-2 overflow-x-auto pb-1">
       {STAGES.map((stage, index) => (

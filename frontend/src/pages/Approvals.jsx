@@ -24,15 +24,15 @@ const stageColor = (s) =>
 // Map raw statuses to a unified display status + tone.
 const STATUS_MAP = {
   pending: { label: "Pending", tone: "amber", Icon: Clock3 },
-  "pending-cto": { label: "Pending · CTO Review", tone: "amber", Icon: Clock3 },
-  "pending-cfo": { label: "Pending · CFO Sign-off", tone: "sky", Icon: Clock3 },
-  "forwarded-cfo": { label: "Pending · CFO Sign-off", tone: "sky", Icon: Clock3 },
+  "pending-cto": { label: "Pending", tone: "amber", Icon: Clock3 },
+  "pending-cfo": { label: "Pending", tone: "sky", Icon: Clock3 },
+  "forwarded-cfo": { label: "Pending", tone: "sky", Icon: Clock3 },
   approved: { label: "Approved", tone: "emerald", Icon: CheckCircle2 },
-  partial: { label: "Partially Approved", tone: "emerald-soft", Icon: Percent },
+  partial: { label: "Approved", tone: "emerald-soft", Icon: Percent },
   "partial-recovered": { label: "Partially Recovered", tone: "emerald-soft", Icon: Percent },
   recovered: { label: "Approved · Recovered", tone: "emerald", Icon: CheckCircle2 },
   rejected: { label: "Rejected", tone: "red", Icon: XCircle },
-  returned: { label: "Returned for Changes", tone: "amber", Icon: Undo2 },
+  returned: { label: "Returned", tone: "amber", Icon: Undo2 },
 };
 
 const toneClasses = {
@@ -69,12 +69,12 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       const decisions = [];
       if (r.ctoAt) {
         decisions.push({
-          actor: "CTO",
+          actor: "L2",
           decision: r.status === "rejected-by-cto" ? "reject" : r.status === "returned-to-tpm" ? "return" : ctoModified ? "modify" : "approve",
           label: r.status === "rejected-by-cto"
             ? "Rejected"
             : r.status === "returned-to-tpm"
-              ? "Returned for changes"
+              ? "Returned"
               : getCtoForwardLabel(r),
           amount: r.status === "rejected-by-cto" ? 0 : (r.modifiedTotal ?? r.requestedBudget),
           comment: [r.ctoChangeSummary, r.ctoComment].filter(Boolean).join(" · "),
@@ -83,7 +83,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       }
       if (r.cfoDecision) {
         decisions.push({
-          actor: "CFO",
+          actor: "L3",
           decision: r.cfoDecision.decision,
           amount: r.cfoDecision.amount,
           comment: [r.cfoDecision.changeSummary, r.cfoDecision.comment].filter(Boolean).join(" · "),
@@ -117,7 +117,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
             : (r.cfoDecision?.amount ?? r.modifiedTotal),
         reason: r.status === "forwarded-cfo"
           ? ctoModified
-            ? `CTO modified to ${r.modifiedTotal ? "$" + Number(r.modifiedTotal).toLocaleString() : "—"} — awaiting CFO sign-off`
+            ? `L2 modified to ${r.modifiedTotal ? "$" + Number(r.modifiedTotal).toLocaleString() : "—"} — awaiting L3 sign-off`
             : `Approved by CTO and forwarded to CFO${r.ctoComment ? ` — ${r.ctoComment}` : ""}`
           : (r.ctoComment || r.justification || ""),
         submittedAt: r.submittedAt || r.ctoAt,
@@ -134,7 +134,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       const decisions = [];
       if (r.ctoDecision) {
         decisions.push({
-          actor: "CTO",
+          actor: "L2",
           decision: r.ctoDecision.decision,
           amount: r.ctoDecision.amount,
           comment: r.ctoDecision.comment,
@@ -143,7 +143,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       }
       if (r.cfoDecision) {
         decisions.push({
-          actor: "CFO",
+          actor: "L3",
           decision: r.cfoDecision.decision,
           amount: r.cfoDecision.amount,
           comment: r.cfoDecision.comment,
@@ -173,7 +173,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       const decisions = [];
       if (d.actualRecovered != null) {
         decisions.push({
-          actor: "CFO",
+          actor: "L3",
           decision: d.status === "recovered" ? "approve" : d.actualRecovered === 0 ? "reject" : "partial",
           amount: d.actualRecovered,
           comment: d.cfoNote,
@@ -387,7 +387,7 @@ const TpmMyRequests = () => {
                             <span className="text-white font-semibold">{d.actor}</span>
                             <span className="text-zinc-500">·</span>
                             <span className="text-zinc-300 capitalize">
-                              {d.label || (d.decision === "approve" ? "Approved" : d.decision === "partial" ? "Partially approved" : d.decision === "reject" ? "Rejected" : d.decision === "modify" ? "Modified & forwarded to CFO" : d.decision === "return" ? "Returned for changes" : d.decision)}
+                              {d.label || (d.decision === "approve" ? "Approved" : d.decision === "partial" ? "Approved" : d.decision === "reject" ? "Rejected" : d.decision === "modify" ? "Modified & forwarded to CFO" : d.decision === "return" ? "Returned" : d.decision)}
                             </span>
                             {d.amount != null && d.decision !== "pending" && d.decision !== "reject" && (
                               <>

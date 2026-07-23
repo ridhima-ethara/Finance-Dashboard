@@ -16,9 +16,9 @@ const roleAccent = {
 };
 
 const roleLabel = {
-  CTO: "Chief Technology Officer",
-  CFO: "Chief Financial Officer",
-  TPM: "Production Program Manager",
+  CTO: "L2 · Technical Approver",
+  CFO: "L3 · Financial Approver",
+  TPM: "Projects Program Manager",
   "R&D": "RL Environment Team",
   PL: "Project Lead",
   IT: "IT Access Administration",
@@ -26,10 +26,10 @@ const roleLabel = {
 
 // Display name shown in the role chip (internal role key stays the same).
 const roleDisplayName = {
-  CTO: "CTO",
-  CFO: "CFO",
-  TPM: "Production",
-  "R&D": "RL env",
+  CTO: "L2",
+  CFO: "L3",
+  TPM: "Projects",
+  "R&D": "RL Environment",
   PL: "PL",
   IT: "IT",
 };

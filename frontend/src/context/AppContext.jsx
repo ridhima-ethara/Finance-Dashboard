@@ -2683,6 +2683,7 @@ export const AppProvider = ({ children }) => {
     const id = `bd-${Date.now().toString(36)}`;
     const stage = details.rnd ? "rnd-review" : "cfo-recovery";
     const rndDecision = details.rnd?.decision || null;
+    const isRndSubmissionOnly = stage === "rnd-review" && details.rnd?.submissionOnly === true;
     const isRecoverable = details.isRecoverable !== false;
     const budgetType = normalizeBudgetType(proj?.lastBudgetSubmission?.budgetType || proj?.type || (details.rnd ? "RnD" : "Production"));
     const isTestingDelivery = stage === "rnd-review" && budgetType === "Testing";
@@ -2690,6 +2691,8 @@ export const AppProvider = ({ children }) => {
       stage === "rnd-review"
         ? isTestingDelivery
           ? "testing-submitted"
+          : isRndSubmissionOnly
+            ? "feedback-pending"
           : rndDecision === "accept"
             ? "sample-approved"
             : rndDecision === "reject"
@@ -2726,6 +2729,8 @@ export const AppProvider = ({ children }) => {
               actor: `${user?.name || "R&D"} · ${user?.role || "R&D"}`,
               action: isTestingDelivery
                 ? "Submitted testing sample"
+                : isRndSubmissionOnly
+                  ? "Submitted sample batch"
                 : rndDecision === "accept"
                   ? "Accepted sample delivery"
                   : rndDecision === "reject"
@@ -2749,6 +2754,8 @@ export const AppProvider = ({ children }) => {
       stage === "rnd-review"
         ? isTestingDelivery
           ? "testing-submitted"
+          : isRndSubmissionOnly
+            ? "submitted"
           : rndDecision === "accept"
             ? "approved"
             : rndDecision === "reject"
@@ -2759,11 +2766,13 @@ export const AppProvider = ({ children }) => {
     if (stage === "rnd-review") {
       upsertProjectOverride(projectId, (project) => ({
         ...project,
-        type: !isTestingDelivery && rndDecision === "accept" ? "Production" : "R&D",
-        readyForTpmBudget: !isTestingDelivery && rndDecision === "accept",
+        type: !isTestingDelivery && !isRndSubmissionOnly && rndDecision === "accept" ? "Production" : "R&D",
+        readyForTpmBudget: !isTestingDelivery && !isRndSubmissionOnly && rndDecision === "accept",
         pendingBudgetSubmission: null,
         workflowStage: isTestingDelivery
           ? "awaiting-rnd-budget"
+          : isRndSubmissionOnly
+            ? "awaiting-client-feedback"
           : rndDecision === "accept"
             ? "tpm-budget-ready"
             : rndDecision === "reject"
@@ -2771,6 +2780,8 @@ export const AppProvider = ({ children }) => {
               : "awaiting-rework-budget",
         status: isTestingDelivery
           ? "Awaiting Sample budget"
+          : isRndSubmissionOnly
+            ? "Sample submitted · awaiting client feedback"
           : rndDecision === "accept"
             ? "Ready for TPM budget"
             : rndDecision === "reject"
@@ -2786,6 +2797,8 @@ export const AppProvider = ({ children }) => {
             actor: `${user?.name || "R&D"} · ${user?.role || "R&D"}`,
             action: isTestingDelivery
               ? "Testing sample submitted"
+              : isRndSubmissionOnly
+                ? "Sample batch submitted"
               : rndDecision === "accept"
                 ? "Sample accepted"
                 : rndDecision === "reject"
@@ -2798,6 +2811,54 @@ export const AppProvider = ({ children }) => {
       }));
     }
     return entry;
+  };
+
+  const recordRndBatchFeedback = (deliveryId, { decision, comment }) => {
+    const target = batchDeliveries.find((delivery) => delivery.id === deliveryId && delivery.stage === "rnd-review");
+    if (!target) return null;
+    const at = new Date().toISOString();
+    const nextStatus = decision === "accept" ? "sample-approved" : decision === "reject" ? "sample-rejected" : "changes-requested";
+    setBatchDeliveries((arr) => arr.map((delivery) => (
+      delivery.id === deliveryId
+        ? {
+            ...delivery,
+            status: nextStatus,
+            clientComment: comment || "",
+            feedbackAt: at,
+            feedbackBy: user?.name || "R&D",
+            rnd: { ...(delivery.rnd || {}), decision },
+            history: [
+              {
+                at,
+                actor: `${user?.name || "R&D"} · ${user?.role || "R&D"}`,
+                action: decision === "accept" ? "Recorded client acceptance" : decision === "reject" ? "Recorded client rejection" : "Recorded client changes requested",
+                detail: comment || "No feedback note provided",
+              },
+              ...(delivery.history || []),
+            ],
+          }
+        : delivery
+    )));
+    setPhaseLogApprovalStatus(target.projectId, target.phaseId, decision === "accept" ? "approved" : decision === "reject" ? "rejected" : "changes-requested");
+    upsertProjectOverride(target.projectId, (project) => ({
+      ...project,
+      type: decision === "accept" ? "Production" : "R&D",
+      readyForTpmBudget: decision === "accept",
+      workflowStage: decision === "accept" ? "tpm-budget-ready" : decision === "reject" ? "sample-rejected" : "awaiting-rework-budget",
+      status: decision === "accept" ? "Ready for TPM budget" : decision === "reject" ? "Sample rejected" : "Awaiting rework budget",
+      promotedToProductionAt: decision === "accept" ? at : project.promotedToProductionAt || null,
+      auditLog: [
+        {
+          id: `a-${target.projectId}-${Date.now().toString(36)}-feedback`,
+          ts: at,
+          actor: `${user?.name || "R&D"} · ${user?.role || "R&D"}`,
+          action: decision === "accept" ? "Client accepted sample" : decision === "reject" ? "Client rejected sample" : "Client requested sample changes",
+          detail: comment || "No feedback note provided",
+        },
+        ...(project.auditLog || []),
+      ],
+    }));
+    return { ...target, status: nextStatus, clientComment: comment || "" };
   };
 
   const recordActualRecovery = (id, { actualRecovered, cfoNote }) => {
@@ -3648,6 +3709,7 @@ export const AppProvider = ({ children }) => {
     submitBudget,
     batchDeliveries,
     deliverBatch,
+    recordRndBatchFeedback,
     recordActualRecovery,
     // CTO budget review modifications
     budgetReviews,

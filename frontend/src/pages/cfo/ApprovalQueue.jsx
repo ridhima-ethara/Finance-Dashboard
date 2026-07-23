@@ -12,30 +12,26 @@ import {
 
 const topupStatusLabel = (status) => {
   switch (status) {
-    case "pending-cto": return "CTO Review";
-    case "pending-cfo": return "Pending";
     case "approved": return "Approved";
-    case "partial": return "Partially Approved";
+    case "partial": return "Approved";
     case "rejected": return "Rejected";
     default: return "Pending";
   }
 };
 
 const budgetStatusLabel = (review) => {
-  if (review.status === "approved") return "Approved";
-  if (review.status === "partial") return "Partially Approved";
+  if (review.status === "approved" || review.status === "partial") return "Approved";
   if (review.status === "rejected" || review.status === "rejected-by-cto") return "Rejected";
-  if (review.status === "returned" || review.status === "returned-to-tpm") return "Changes Required";
-  if (review.status === "forwarded-cfo" || review.stage === "CFO Review" || review.stage === "COO Approval") return "Pending";
-  return "CTO Review";
+  if (review.status === "returned" || review.status === "returned-to-tpm") return "Returned";
+  return "Pending";
 };
 
 const changeRequestStatusLabel = (request) => {
   if (request.status === "approved" || request.stage === "Approved") return "Approved";
-  if (request.status === "partial") return "Partially Approved";
+  if (request.status === "partial") return "Approved";
   if (request.status === "rejected" || request.stage === "Rejected") return "Rejected";
-  if (request.status === "returned") return "Changes Required";
-  return request.stage === "CTO Review" ? "CTO Review" : "Pending";
+  if (request.status === "returned") return "Returned";
+  return "Pending";
 };
 
 // Merge budget reviews + budget change requests + change requests into one unified queue
@@ -120,17 +116,14 @@ const typeIcons = { Budget: FileText, "Top-up": ArrowUpRightSquare, "Change Requ
 const typeLabels = { Budget: "Budget", "Top-up": "Budget Change", "Change Request": "Change Request", All: "All" };
 const statusChip = {
   Pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
-  "CTO Review": "bg-amber-500/15 text-amber-300 border-amber-500/30",
   Approved: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
-  "Partially Approved": "bg-emerald-500/10 text-emerald-300 border-emerald-500/25",
   Rejected: "bg-red-500/15 text-red-300 border-red-500/30",
-  "Changes Required": "bg-red-500/10 text-red-300 border-red-500/25",
+  Returned: "bg-amber-500/10 text-amber-300 border-amber-500/25",
 };
 
 const rowTint = {
   Pending: "hover:bg-fuchsia-500/[0.04]",
-  "CTO Review": "bg-amber-500/[0.03] hover:bg-amber-500/[0.06]",
-  "Changes Required": "hover:bg-red-500/[0.04]",
+  Returned: "hover:bg-amber-500/[0.04]",
 };
 
 const ApprovalQueue = () => {
@@ -160,8 +153,8 @@ const ApprovalQueue = () => {
     if (typeFilter !== "All" && q.type !== typeFilter) return false;
     if (statusFilter !== "All") {
       if (statusFilter === "Pending" && q.status !== "Pending") return false;
-      if (statusFilter === "Approved" && !["Approved", "Partially Approved"].includes(q.status)) return false;
-      if (statusFilter === "Rejected" && !["Rejected", "Changes Required"].includes(q.status)) return false;
+      if (statusFilter === "Approved" && q.status !== "Approved") return false;
+      if (statusFilter === "Rejected" && q.status !== "Rejected") return false;
     }
     return true;
   });

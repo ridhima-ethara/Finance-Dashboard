@@ -68,14 +68,10 @@ const Dashboard = () => {
   const [requestOpen, setRequestOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState("all");
   const isPL = role === "PL";
   const isCTO = role === "CTO";
   const isCFO = role === "CFO";
-
-  const pendingBatchDeliveries = useMemo(
-    () => batchDeliveries.filter((d) => d.status === "pending-cfo").length,
-    [batchDeliveries]
-  );
 
   // TPM gets a dedicated portal dashboard
   if (isTpmView(role)) return <TpmDashboard />;
@@ -84,14 +80,22 @@ const Dashboard = () => {
   if (role === "IT") return <ItDashboard />;
   if (!isCFO) return <LeadDashboardView />;
 
-  const pendingBudgetApprovals = budgetReviews.filter((review) => review.status === "forwarded-cfo").length;
-  const pendingCRs = changeRequests.filter((request) => request.stage === "CFO Review").length;
-  const highRisk = visibleProjects.filter((project) => project.utilization >= 90).length;
-  const overBudget = visibleProjects.filter((project) => project.utilization >= 100).length;
+  const cfoProjects = selectedProjectId === "all"
+    ? visibleProjects
+    : visibleProjects.filter((project) => project.id === selectedProjectId);
+  const selectedProjectIds = new Set(cfoProjects.map((project) => project.id));
+  const pendingBatchDeliveries = batchDeliveries.filter(
+    (delivery) => delivery.status === "pending-cfo" && selectedProjectIds.has(delivery.projectId)
+  ).length;
+
+  const pendingBudgetApprovals = budgetReviews.filter((review) => review.status === "forwarded-cfo" && selectedProjectIds.has(review.projectId)).length;
+  const pendingCRs = changeRequests.filter((request) => request.stage === "CFO Review" && selectedProjectIds.has(request.projectId)).length;
+  const highRisk = cfoProjects.filter((project) => project.utilization >= 90).length;
+  const overBudget = cfoProjects.filter((project) => project.utilization >= 100).length;
   const bufferUtil = bufferOverview.total > 0 ? Math.round((bufferOverview.consumed / bufferOverview.total) * 100) : 0;
-  const pendingTopups = topupRequests.filter((request) => request.status === "pending-cfo").length;
+  const pendingTopups = topupRequests.filter((request) => request.status === "pending-cfo" && selectedProjectIds.has(request.projectId)).length;
   const pendingReviews = pendingBudgetApprovals + pendingTopups + pendingCRs;
-  const outstandingRecovery = visibleProjects
+  const outstandingRecovery = cfoProjects
     .filter((project) => project.recoverableFromClient)
     .reduce((sum, project) => sum + Math.max(0, Number(project.cfoActualSpend || project.actualSpend || 0) - Number(project.recoveredAmount || 0)), 0);
 
@@ -106,7 +110,7 @@ const Dashboard = () => {
 
   const handleExport = () => {
     setIsExporting(true);
-    const rows = visibleProjects.map((project) => {
+    const rows = cfoProjects.map((project) => {
       const usage = summarizeLoggedProject(project, taskLogs);
       const actualSpend = Number(project.cfoActualSpend || project.actualSpend || usage.loggedSpend || 0);
       const approvedBudget = Number(project.approvedBudget || 0);
@@ -169,6 +173,20 @@ const Dashboard = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <label className="relative" data-testid="cfo-project-filter">
+            <span className="sr-only">Filter dashboard by project</span>
+            <select
+              value={selectedProjectId}
+              onChange={(event) => setSelectedProjectId(event.target.value)}
+              className="h-9 min-w-[220px] max-w-[300px] rounded-lg border border-white/10 bg-[#12121A] px-3 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+              data-testid="cfo-project-filter-select"
+            >
+              <option value="all">All projects ({visibleProjects.length})</option>
+              {visibleProjects.map((project) => (
+                <option key={project.id} value={project.id}>{project.name}</option>
+              ))}
+            </select>
+          </label>
           {isPL && (
             <Button
               size="sm"
@@ -329,34 +347,34 @@ const Dashboard = () => {
       {/* Hero + KPIs */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-stretch animate-fade-up">
         <div className="lg:col-span-1">
-          <AmountAtRisk />
+          <AmountAtRisk projectsOverride={cfoProjects} />
         </div>
         <div className="lg:col-span-2 h-full">
-          <KpiGrid />
+          <KpiGrid projectsOverride={cfoProjects} />
         </div>
       </div>
 
       {/* Charts grid */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         <div className="xl:col-span-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <BudgetActualChart />
-          <ModelExpensesChart />
-          <InfraStackedChart />
-          <SubscriptionsPanel />
-          <MonthlySpendChart />
-          <MonthEndActualChart />
+          <BudgetActualChart projectsOverride={cfoProjects} />
+          <ModelExpensesChart projectsOverride={cfoProjects} />
+          <InfraStackedChart projectsOverride={cfoProjects} />
+          <SubscriptionsPanel projectsOverride={cfoProjects} />
+          <MonthlySpendChart projectsOverride={cfoProjects} />
+          <MonthEndActualChart projectsOverride={cfoProjects} />
         </div>
         <div className="xl:col-span-4 grid grid-cols-1 gap-4 auto-rows-fr">
-          <CategoryDonut />
-          <UtilizationBars />
+          <CategoryDonut projectsOverride={cfoProjects} />
+          <UtilizationBars projectsOverride={cfoProjects} />
         </div>
       </div>
 
       {/* Projects table */}
-      <ProjectsTable />
+      <ProjectsTable projectsOverride={cfoProjects} />
 
       {/* CFO — cost per task/trajectory breakdown */}
-      {isCFO && <CostPerTaskView />}
+      {isCFO && <CostPerTaskView projectsOverride={cfoProjects} />}
 
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
     </div>

@@ -6,7 +6,24 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/tabs";
 import { toast } from "sonner";
 import { useApp } from "../context/AppContext";
 import { findProjectDirectoryMember, getProjectMembersForSection } from "../data/employeeDirectory";
-import { FolderPlus, User, Calendar as CalIcon, Link2, FileText, Users, Beaker, Upload, X, Plus } from "lucide-react";
+import { FolderPlus, Calendar as CalIcon, Link2, FileText, Users, Upload, X, ChevronDown, Check, ShieldCheck } from "lucide-react";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuItem, DropdownMenuLabel } from "./ui/dropdown-menu";
+import { USERS, TEAM } from "../data/mockData";
+import { roleDisplayName } from "../lib/roles";
+
+// Upper-hierarchy approvers (L2 / L3 / Leadership). Record-only — selecting one is stored on the
+// project as the requested approver and does not change the existing approval routing.
+const APPROVER_OPTIONS = (() => {
+  const seen = new Set();
+  return [...USERS, ...TEAM]
+    .filter((u) => ["CTO", "CFO", "COO"].includes(u.role))
+    .filter((u) => {
+      const key = String(u.email || "").toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+})();
 
 const MAX_ATTACHMENTS = 3;
 const MAX_ATTACHMENT_SIZE = 750 * 1024;
@@ -22,6 +39,7 @@ const buildEmptyForm = (today, user) => ({
   plQlEmails: [],
   rndEmails: [],
   engineeringEmails: [],
+  approverEmail: "",
   attachments: [],
 });
 
@@ -60,13 +78,6 @@ const formatNameFromEmail = (email = "") => {
     })
     .join(" ") || email;
 };
-
-const parseEmailTokens = (value = "") => (
-  String(value || "")
-    .split(/[\s,;\n]+/)
-    .map((entry) => entry.trim().toLowerCase())
-    .filter(Boolean)
-);
 
 const resolveMemberFromEmail = (email, sectionRole) => {
   const normalizedEmail = String(email || "").trim().toLowerCase();
@@ -117,6 +128,40 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
 
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const isRndDepartmentEmail = (email = "") => rndSuggestionEmails.has(String(email || "").trim().toLowerCase());
+
+  // One consolidated directory: every eligible member, tagged with the role group they route to.
+  const memberSections = useMemo(() => ([
+    { key: "tpmEmails", label: "TPM", pool: tpmSuggestions },
+    { key: "plQlEmails", label: "PL / QL", pool: plQlSuggestions },
+    { key: "rndEmails", label: "R&D", pool: rndSuggestions },
+    { key: "engineeringEmails", label: "Engineering", pool: engineeringSuggestions },
+  ]), [tpmSuggestions, plQlSuggestions, rndSuggestions, engineeringSuggestions]);
+
+  const directoryMembers = useMemo(() => {
+    const byEmail = new Map();
+    memberSections.forEach((section) => {
+      section.pool.forEach((member) => {
+        const key = String(member.email || "").trim().toLowerCase();
+        if (!key || byEmail.has(key)) return;
+        byEmail.set(key, { ...member, sectionKey: section.key, sectionLabel: section.label });
+      });
+    });
+    return Array.from(byEmail.values());
+  }, [memberSections]);
+
+  const selectedMemberEmails = useMemo(() => {
+    const set = new Set();
+    memberSections.forEach((section) => (form[section.key] || []).forEach((email) => set.add(String(email).toLowerCase())));
+    return set;
+  }, [memberSections, form]);
+
+  const toggleDirectoryMember = (member) => {
+    const current = form[member.sectionKey] || [];
+    const exists = current.some((email) => email.toLowerCase() === String(member.email).toLowerCase());
+    update(member.sectionKey, exists
+      ? current.filter((email) => email.toLowerCase() !== String(member.email).toLowerCase())
+      : dedupeEmails([...current, member.email]));
+  };
 
   useEffect(() => {
     if (open) setActiveTab("basic");
@@ -365,58 +410,42 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
           </TabsContent>
 
           <TabsContent value="members" className="space-y-3 mt-0">
-            <Field label="Assign TPM" hint={isRndCreator ? "Optional during R&D kickoff" : "Owns budget building &amp; delivery"}>
-              <EmailRecipientsInput
-                icon={User}
-                emails={form.tpmEmails}
-                onChange={(emails) => update("tpmEmails", emails)}
-                placeholder="tpm@ethara.ai"
-                dataTestId="input-tpm"
-                helperText={
-                  isRndCreator
-                    ? "TPM is optional for R&D kickoff. If you add TPM here, they receive kickoff and see the project as under R&D currently until sample handoff."
-                    : "Enter one or more TPM emails. The first email becomes the primary TPM owner; all listed emails receive kickoff."
-                }
-                suggestions={tpmSuggestions}
+            <Field label="Members allocation" hint="One directory · filter by department">
+              <MembersDirectoryPicker
+                members={directoryMembers}
+                selectedEmails={selectedMemberEmails}
+                onToggle={toggleDirectoryMember}
               />
             </Field>
 
-            <Field label="Assign PL / QL" hint={isRndCreator ? "Optional kickoff recipients" : "Added to project members + kickoff"}>
-              <EmailRecipientsInput
-                icon={Users}
-                emails={form.plQlEmails}
-                onChange={(emails) => update("plQlEmails", emails)}
-                placeholder="pl@ethara.ai, quality.1@ethara.ai"
-                dataTestId="plql-multi-picker"
-                helperText="Enter one or more PL / QL emails. Matching employee directory emails are auto-mapped to Project Lead or Quality Lead."
-                suggestions={plQlSuggestions}
-              />
-            </Field>
-
-            <Field label="Assign R&amp;D members" hint="Project appears on their dashboard">
-              <EmailRecipientsInput
-                icon={Beaker}
-                emails={form.rndEmails}
-                onChange={(emails) => update("rndEmails", emails)}
-                placeholder="rd@ethara.ai, engineer.1@ethara.ai"
-                dataTestId="rnd-multi-picker"
-                helperText="Only employees from the R&D department can be added here. Everyone listed here gets kickoff access and the kickoff mail."
-                suggestions={rndSuggestions}
-                validateEmail={isRndDepartmentEmail}
-                invalidEmailTitle="Only R&D department members can be assigned here"
-              />
-            </Field>
-
-            <Field label="Assign Engineering members" hint="Added to project members + kickoff">
-              <EmailRecipientsInput
-                icon={Users}
-                emails={form.engineeringEmails}
-                onChange={(emails) => update("engineeringEmails", emails)}
-                placeholder="engineer@ethara.ai"
-                dataTestId="engineering-multi-picker"
-                helperText="Select Engineering department members. Everyone listed here gets project access and receives the kickoff mail."
-                suggestions={engineeringSuggestions}
-              />
+            <Field label="Approval requested from" hint="Upper hierarchy · L2 / L3 / Leadership">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button type="button" data-testid="input-approver" className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm flex items-center justify-between hover:bg-white/[0.06]">
+                    <span className="flex items-center gap-2 text-zinc-300">
+                      <ShieldCheck className="w-3.5 h-3.5 text-zinc-500" />
+                      {(() => {
+                        const sel = APPROVER_OPTIONS.find((a) => a.email === form.approverEmail);
+                        return sel ? `${sel.name} · ${roleDisplayName(sel.role)}` : "Select approver (L2 / L3 / Leadership)";
+                      })()}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-[320px]">
+                  <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-zinc-500">Upper hierarchy approvers</DropdownMenuLabel>
+                  {APPROVER_OPTIONS.map((a) => (
+                    <DropdownMenuItem key={a.email} onClick={() => update("approverEmail", form.approverEmail === a.email ? "" : a.email)} className="items-start gap-2 py-2 text-xs">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-zinc-100">{a.name}</div>
+                        <div className="truncate text-[10px] text-zinc-500">{roleDisplayName(a.role)} · {a.email}</div>
+                      </div>
+                      {form.approverEmail === a.email && <Check className="w-3.5 h-3.5 text-fuchsia-300" />}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <div className="mt-2 text-[10px] text-zinc-500">Recorded on the project as the requested approver — does not change the existing L2 → L3 approval routing.</div>
             </Field>
           </TabsContent>
         </Tabs>
@@ -454,130 +483,76 @@ const Field = ({ label, hint, children }) => (
   </div>
 );
 
-const EmailRecipientsInput = ({
-  icon: Icon,
-  emails = [],
-  onChange,
-  placeholder,
-  dataTestId,
-  helperText,
-  suggestions = [],
-  validateEmail,
-  invalidEmailTitle,
-}) => {
-  const [draft, setDraft] = useState("");
-  const suggestionListId = `${dataTestId}-directory`;
-
-  const addDraftEmails = () => {
-    const parsed = parseEmailTokens(draft);
-    if (!parsed.length) return;
-
-    const valid = [];
-    const invalid = [];
-    const disallowed = [];
-    parsed.forEach((email) => {
-      if (!ETHARA_EMAIL_REGEX.test(email)) {
-        invalid.push(email);
-        return;
-      }
-      if (validateEmail && !validateEmail(email)) {
-        disallowed.push(email);
-        return;
-      }
-      valid.push(email);
-    });
-
-    if (valid.length) {
-      onChange(dedupeEmails([...emails, ...valid]));
-    }
-    if (invalid.length) {
-      toast.error("Only @ethara.ai emails are allowed", {
-        description: invalid.join(", "),
-      });
-    }
-    if (disallowed.length) {
-      toast.error(invalidEmailTitle || "Some emails cannot be added here", {
-        description: disallowed.join(", "),
-      });
-    }
-    setDraft("");
-  };
-
-  const removeEmail = (email) => {
-    onChange(emails.filter((entry) => entry !== email));
-  };
+const MembersDirectoryPicker = ({ members, selectedEmails, onToggle }) => {
+  const [dept, setDept] = useState("All");
+  const [query, setQuery] = useState("");
+  const departments = useMemo(
+    () => ["All", ...Array.from(new Set(members.map((m) => m.department).filter(Boolean)))],
+    [members]
+  );
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return members.filter(
+      (m) =>
+        (dept === "All" || m.department === dept) &&
+        (!q || String(m.searchLabel || "").toLowerCase().includes(q))
+    );
+  }, [members, dept, query]);
+  const selectedMembers = useMemo(
+    () => members.filter((m) => selectedEmails.has(String(m.email).toLowerCase())),
+    [members, selectedEmails]
+  );
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3" data-testid={dataTestId}>
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Icon className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="email"
-            list={suggestions.length ? suggestionListId : undefined}
-            data-testid={`${dataTestId}-input`}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === ",") {
-                event.preventDefault();
-                addDraftEmails();
-              }
-            }}
-            onBlur={() => {
-              if (draft.trim()) addDraftEmails();
-            }}
-            placeholder={placeholder}
-            className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-          />
-          {suggestions.length > 0 && (
-            <datalist id={suggestionListId}>
-              {suggestions.map((member) => (
-                <option key={member.id} value={member.email}>
-                  {member.searchLabel}
-                </option>
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3" data-testid="members-directory-picker">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button type="button" data-testid="members-directory-trigger" className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-300 flex items-center justify-between hover:bg-white/[0.06]">
+            <span className="flex items-center gap-2"><Users className="w-4 h-4 text-zinc-500" /> Select members · filter by department</span>
+            <ChevronDown className="w-3.5 h-3.5 text-zinc-500" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[380px] p-0 overflow-hidden">
+          <div className="p-2 border-b border-white/5">
+            <div className="flex flex-wrap gap-1 mb-2">
+              {departments.map((d) => (
+                <button key={d} type="button" onClick={() => setDept(d)} className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${dept === d ? "border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-200" : "border-white/10 text-zinc-400 hover:text-zinc-200"}`}>{d}</button>
               ))}
-            </datalist>
-          )}
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={addDraftEmails}
-          className="h-10 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-1.5"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add
-        </Button>
-      </div>
-      <div className="mt-2 space-y-1">
-        <div className="text-[10px] text-zinc-500">{helperText}</div>
-        {suggestions.length > 0 && (
-          <div className="text-[10px] text-zinc-600">
-            {suggestions.length} directory member{suggestions.length === 1 ? "" : "s"} available in this section. Start typing to use the employee sheet-backed suggestions.
+            </div>
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search name or email…" className="w-full h-8 px-2 rounded-md bg-white/[0.04] border border-white/10 text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-fuchsia-500/40" />
           </div>
-        )}
-      </div>
-      {emails.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-2">
-          {emails.map((email) => (
-            <span
-              key={email}
-              className="inline-flex items-center gap-1 rounded-full border border-fuchsia-500/25 bg-fuchsia-500/10 px-2.5 py-1 text-[11px] text-fuchsia-100"
-            >
-              {email}
-              <button
-                type="button"
-                onClick={() => removeEmail(email)}
-                className="text-fuchsia-200 hover:text-white"
-                aria-label={`Remove ${email}`}
-              >
+          <div className="max-h-[260px] overflow-y-auto py-1">
+            {filtered.length === 0 ? (
+              <div className="px-3 py-4 text-center text-[11px] text-zinc-500">No members match.</div>
+            ) : filtered.map((member) => {
+              const checked = selectedEmails.has(String(member.email).toLowerCase());
+              return (
+                <DropdownMenuCheckboxItem key={member.id} checked={checked} onSelect={(e) => e.preventDefault()} onCheckedChange={() => onToggle(member)} className="items-start gap-2 py-1.5 text-xs">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-zinc-100">{member.name}</div>
+                    <div className="truncate text-[10px] text-zinc-500">{member.designation || member.role} · {member.department || "—"}</div>
+                  </div>
+                  <span className="text-[9px] uppercase tracking-wide text-fuchsia-300/70 flex-shrink-0 mt-0.5">{member.sectionLabel}</span>
+                </DropdownMenuCheckboxItem>
+              );
+            })}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      {selectedMembers.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5" data-testid="members-directory-selected">
+          {selectedMembers.map((member) => (
+            <span key={member.id} className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/30 text-[11px] text-fuchsia-100">
+              {member.name}
+              <span className="text-[9px] uppercase tracking-wide text-fuchsia-300/70">{member.sectionLabel}</span>
+              <button type="button" onClick={() => onToggle(member)} className="w-4 h-4 rounded-full hover:bg-fuchsia-500/20 flex items-center justify-center text-fuchsia-300" aria-label={`Remove ${member.name}`}>
                 <X className="w-3 h-3" />
               </button>
             </span>
           ))}
         </div>
       )}
+      <div className="mt-2 text-[10px] text-zinc-500">{members.length} directory members · filter by department and pick anyone; each is routed to their role group automatically.</div>
     </div>
   );
 };

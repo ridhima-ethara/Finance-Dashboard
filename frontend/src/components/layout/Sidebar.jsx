@@ -11,7 +11,6 @@ import {
   LogOut,
   Calendar,
   ClipboardCheck,
-  GitPullRequest,
   Bell,
   Activity,
   Bot,
@@ -20,12 +19,12 @@ import {
 } from "lucide-react";
 import { useApp } from "../../context/AppContext";
 import { initials } from "../../lib/format";
+import { roleDisplayName } from "../../lib/roles";
 
 const NAV_CTO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/budget-reviews", label: "Budget Reviews", icon: ClipboardCheck, testid: "nav-budget-reviews" },
-  { to: "/change-requests", label: "Change Requests", icon: GitPullRequest, testid: "nav-change-requests" },
   { to: "/audit", label: "Audit Log", icon: ScrollText, testid: "nav-audit" },
 ];
 
@@ -149,7 +148,7 @@ const Sidebar = () => {
           )}
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-zinc-100 truncate">{user.name}</div>
-            <div className="text-xs text-zinc-500 truncate">{user.role} · Ethara.AI</div>
+            <div className="text-xs text-zinc-500 truncate">{roleDisplayName(user.role)} · Ethara.AI</div>
           </div>
           <button
             onClick={handleLogout}

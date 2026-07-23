@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { fmtCurrency } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
@@ -23,23 +24,41 @@ import {
   CreditCard,
 } from "lucide-react";
 
-const STAGES = ["CTO Review", "CFO Review", "Approved", "Rejected"];
-
 const stageColor = {
-  "CTO Review": { bg: "bg-fuchsia-500/10", text: "text-fuchsia-300", border: "border-fuchsia-500/30" },
-  "CFO Review": { bg: "bg-sky-500/10", text: "text-sky-300", border: "border-sky-500/30" },
+  "CTO Review": { bg: "bg-amber-500/10", text: "text-amber-300", border: "border-amber-500/30" },
+  "CFO Review": { bg: "bg-amber-500/10", text: "text-amber-300", border: "border-amber-500/30" },
   Approved: { bg: "bg-emerald-500/10", text: "text-emerald-300", border: "border-emerald-500/30" },
   Rejected: { bg: "bg-red-500/10", text: "text-red-300", border: "border-red-500/30" },
 };
 
+// Standard status labels (Approved / Pending / Returned / Rejected). Both review stages are
+// "Pending" from the queue's perspective.
+const STAGE_DISPLAY = { "CTO Review": "Pending", "CFO Review": "Pending", Approved: "Approved", Rejected: "Rejected" };
+const stageLabel = (s) => STAGE_DISPLAY[s] || s;
+const STANDARD_FILTERS = ["all", "Pending", "Approved", "Rejected"];
+const matchesStandardFilter = (stage, f) => {
+  if (f === "all") return true;
+  if (f === "Pending") return stage === "CTO Review" || stage === "CFO Review";
+  return stage === f;
+};
+
 const ChangeRequests = () => {
   const { changeRequests, ctoDecideChangeRequest } = useApp();
+  const [searchParams] = useSearchParams();
   const [filter, setFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
 
+  useEffect(() => {
+    const requestId = searchParams.get("request");
+    if (requestId && changeRequests.some((request) => request.id === requestId)) {
+      setFilter("all");
+      setExpanded(requestId);
+    }
+  }, [changeRequests, searchParams]);
+
   const filtered = useMemo(() => {
     if (filter === "all") return changeRequests;
-    return changeRequests.filter((c) => c.stage === filter);
+    return changeRequests.filter((c) => matchesStandardFilter(c.stage, filter));
   }, [filter, changeRequests]);
 
   const stats = useMemo(() => {
@@ -99,8 +118,8 @@ const ChangeRequests = () => {
         <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mr-2">
           <Filter className="w-3 h-3 inline mr-1" /> Stage
         </span>
-        {["all", ...STAGES].map((s) => {
-          const count = s === "all" ? changeRequests.length : changeRequests.filter((c) => c.stage === s).length;
+        {STANDARD_FILTERS.map((s) => {
+          const count = s === "all" ? changeRequests.length : changeRequests.filter((c) => matchesStandardFilter(c.stage, s)).length;
           return (
             <button
               key={s}
@@ -139,7 +158,7 @@ const ChangeRequests = () => {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${sc.bg} ${sc.text} ${sc.border}`}>
-                        {cr.stage}
+                        {stageLabel(cr.stage)}
                       </span>
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
                         {cr.type}

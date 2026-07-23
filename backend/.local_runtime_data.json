@@ -13,6 +13,107 @@
     "customModels": [],
     "customProjects": [
       {
+        "id": "p-mrw2vz0g",
+        "name": "demo 1",
+        "clientProjectName": "demo",
+        "client": "demo",
+        "createdBy": "TPM Lead",
+        "createdByRole": "TPM",
+        "goal": "abc",
+        "pl": "TPM",
+        "tpm": "TPM",
+        "rnd": null,
+        "rndMembers": [],
+        "plMembers": [],
+        "qlMembers": [],
+        "docUrl": "",
+        "docs": [],
+        "teamMembers": [
+          {
+            "id": "u3",
+            "name": "TPM",
+            "role": "TPM",
+            "email": "tpm@ethara.ai",
+            "status": "Online",
+            "tasksDone": 0
+          }
+        ],
+        "kickoffMail": {
+          "sentAt": "2026-07-22T12:48:21.761Z",
+          "subject": "demo 1 kickoff",
+          "sentBy": "TPM Lead",
+          "sentByRole": "TPM",
+          "recipients": [
+            {
+              "id": "u3",
+              "name": "TPM",
+              "role": "TPM",
+              "email": "tpm@ethara.ai"
+            }
+          ],
+          "goal": "abc",
+          "requirements": [],
+          "attachmentCount": 0
+        },
+        "startDate": "2026-07-22",
+        "estimatedEndDate": "",
+        "status": "Ready for production budget",
+        "type": "Production",
+        "workflowStage": "tpm-budget-ready",
+        "readyForTpmBudget": true,
+        "pendingBudgetSubmission": null,
+        "buffer": 10,
+        "recoverableFromClient": false,
+        "recoveredAmount": 0,
+        "approvedBudget": 0,
+        "estimatedBudget": 0,
+        "actualSpend": 0,
+        "remaining": 0,
+        "variance": 0,
+        "utilization": 0,
+        "burnRate": 0,
+        "forecast": 0,
+        "infrastructureCost": 0,
+        "aiModelCost": 0,
+        "employeeCost": 0,
+        "purchaseCost": 0,
+        "reimbursements": 0,
+        "dinnerExpenses": 0,
+        "miscExpenses": 0,
+        "topupsTotal": 0,
+        "health": "healthy",
+        "topModel": "\u2014",
+        "phases": [],
+        "budgetItems": {
+          "models": [],
+          "infra": [],
+          "subs": [],
+          "misc": []
+        },
+        "expenses": [],
+        "budgetHistory": [],
+        "topupHistory": [],
+        "budgetTrackHistory": [],
+        "auditLog": [
+          {
+            "id": "a-p-mrw2vz0g-1",
+            "ts": "2026-07-22T12:48:21.761Z",
+            "actor": "TPM Lead",
+            "action": "Project created",
+            "detail": "Assigned TPM: TPM \u00b7 Start 2026-07-22 \u00b7 Project Goal: abc"
+          },
+          {
+            "id": "a-p-mrw2vz0g-2",
+            "ts": "2026-07-22T12:48:21.761Z",
+            "actor": "TPM Lead \u00b7 TPM",
+            "action": "Kickoff mail sent",
+            "detail": "1 recipient \u00b7 tpm@ethara.ai"
+          }
+        ],
+        "comments": [],
+        "__custom": true
+      },
+      {
         "id": "p-mrt8ry5b",
         "name": "Tron",
         "clientProjectName": "Tron",
@@ -1350,5 +1451,5 @@
     ],
     "itMonthlyActuals": {}
   },
-  "app_state_updated_at": "2026-07-22T06:41:05.847725+00:00"
+  "app_state_updated_at": "2026-07-22T12:48:22.364821+00:00"
 }

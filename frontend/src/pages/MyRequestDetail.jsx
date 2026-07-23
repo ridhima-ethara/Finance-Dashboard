@@ -33,17 +33,17 @@ const statusMeta = {
     cls: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   },
   "pending-cto": {
-    label: "Pending · CTO Review",
+    label: "Pending",
     Icon: Clock3,
     cls: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   },
   "pending-cfo": {
-    label: "Pending · CFO Sign-off",
+    label: "Pending",
     Icon: Clock3,
     cls: "bg-sky-500/15 text-sky-300 border-sky-500/30",
   },
   "forwarded-cfo": {
-    label: "Pending · CFO Sign-off",
+    label: "Pending",
     Icon: Clock3,
     cls: "bg-sky-500/15 text-sky-300 border-sky-500/30",
   },
@@ -53,7 +53,7 @@ const statusMeta = {
     cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
   },
   partial: {
-    label: "Partially Approved",
+    label: "Approved",
     Icon: Percent,
     cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25",
   },
@@ -63,7 +63,7 @@ const statusMeta = {
     cls: "bg-red-500/15 text-red-300 border-red-500/30",
   },
   "rejected-by-cto": {
-    label: "Rejected · CTO",
+    label: "Rejected",
     Icon: XCircle,
     cls: "bg-red-500/15 text-red-300 border-red-500/30",
   },
@@ -95,9 +95,9 @@ const sectionTones = {
 
 const buildCfoLabel = (decision = "") => {
   if (decision === "approve") return "Approved";
-  if (decision === "partial") return "Partially approved";
+  if (decision === "partial") return "Approved";
   if (decision === "reject") return "Rejected";
-  if (decision === "return") return "Returned for changes";
+  if (decision === "return") return "Returned";
   return "Pending";
 };
 
@@ -180,17 +180,17 @@ const MyRequestDetail = () => {
   const generalTableSubtitle = review?.cfoDecision
     ? "Final approved general budget rows after review."
     : review?.ctoAt
-      ? "General budget rows after CTO review."
+      ? "Miscellaneous budget rows after L2 review."
       : "Phase-wise general budget rows included in your request.";
   const actionTrail = [
     review?.ctoAt
       ? {
-          actor: "CTO",
+          actor: "L2",
           action:
             review.status === "rejected-by-cto"
               ? "Rejected"
               : review.status === "returned-to-tpm"
-                ? "Returned for changes"
+                ? "Returned"
                 : getCtoForwardLabel(review),
           comment: buildActorComment(review.ctoChangeSummary, review.ctoComment),
           amount: review.status === "rejected-by-cto" ? 0 : ctoForwardAmount,
@@ -199,7 +199,7 @@ const MyRequestDetail = () => {
       : null,
     review?.cfoDecision
       ? {
-          actor: "CFO",
+          actor: "L3",
           action: buildCfoLabel(review.cfoDecision.decision),
           comment: buildActorComment(
             review.cfoDecision.changeSummary,

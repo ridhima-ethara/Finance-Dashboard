@@ -296,6 +296,24 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       return acc;
     }, []);
   }, [selectedProject]);
+  const activeSubscriptionAssignments = useMemo(() => {
+    const assignments = new Map();
+    const now = Date.now();
+    budgets
+      .filter((budget) => budget.projectId === projectId && ["approved", "partial"].includes(budget.status))
+      .forEach((budget) => {
+        const startedAt = new Date(budget.cfoDecision?.at || budget.approvedAt || budget.submittedAt || 0).getTime();
+        if (!Number.isFinite(startedAt) || startedAt <= 0) return;
+        (budget.items?.subs || []).forEach((subscription) => {
+          const expiresAt = startedAt + Math.max(Number(subscription.days || 30), 1) * 24 * 60 * 60 * 1000;
+          if (expiresAt <= now) return;
+          (subscription.members || []).forEach((memberName) => {
+            assignments.set(`${String(subscription.subscription || "").trim().toLowerCase()}::${String(memberName || "").trim().toLowerCase()}`, expiresAt);
+          });
+        });
+      });
+    return assignments;
+  }, [budgets, projectId]);
 
   // If prefilling from a returned review, hydrate reasonable defaults
   useEffect(() => {
@@ -704,10 +722,31 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   const updateSubRow = (id, key, v) => {
     setSubs((rows) => rows.map((r) => {
       if (r.id !== id) return r;
+      if (key === "seats" && Number(v || 0) < r.members.length) {
+        toast.warning("Seats cannot be lower than selected members", {
+          description: `${r.members.length} members are already selected. Remove members before reducing seats.`,
+        });
+        return r;
+      }
       const next = { ...r, [key]: v };
       if (key === "subscription") {
         const s = SUBSCRIPTION_CATALOG.find((x) => x.name === next.subscription) || SUBSCRIPTION_CATALOG[0];
         next.pricePerSeat = s.monthly;
+        const selectedElsewhere = new Set(
+          rows
+            .filter((other) => other.id !== id && other.subscription === next.subscription)
+            .flatMap((other) => other.members || [])
+        );
+        const eligibleMembers = next.members.filter((memberName) => (
+          !selectedElsewhere.has(memberName)
+          && !activeSubscriptionAssignments.has(`${String(next.subscription || "").trim().toLowerCase()}::${String(memberName || "").trim().toLowerCase()}`)
+        ));
+        if (eligibleMembers.length !== next.members.length) {
+          toast.warning("Some members already have this subscription", {
+            description: "Duplicate active allocations were removed. They can be selected again after the current subscription period expires.",
+          });
+          next.members = eligibleMembers;
+        }
       }
       if (["subscription", "seats", "pricePerSeat", "days"].includes(key)) {
         next.estCost = Math.round((Number(next.pricePerSeat || 0) * Number(next.seats || 1) * Number(next.days ?? budgetDurationDays) / 30) * 100) / 100;
@@ -718,11 +757,16 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   const updateSubMembers = (id, members) => {
     setSubs((rows) => rows.map((r) => {
       if (r.id !== id) return r;
-      const seats = Math.max(members.length, 1);
+      const seats = Math.max(Number(r.seats || 0), 1);
+      if (members.length > seats) {
+        toast.warning("You are adding more members than available seats", {
+          description: `This subscription has ${seats} seat${seats === 1 ? "" : "s"}. Increase seats before selecting another member.`,
+        });
+        return r;
+      }
       return {
         ...r,
         members,
-        seats,
         estCost: Math.round((Number(r.pricePerSeat || 0) * seats * Number(r.days ?? budgetDurationDays) / 30) * 100) / 100,
       };
     }));
@@ -895,6 +939,12 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
 
   const canProceedDetails = () => {
     if (!projectId) { toast.error("Select a project"); return false; }
+    if (isToolingTeam) {
+      toast.info("Tooling budgets coming soon", {
+        description: "Pick RL env or Projects to continue.",
+      });
+      return false;
+    }
     if (deliveryMode === "single") {
       if (!isDirectCostBudget) {
         if (!singlePhase.tasks || Number(singlePhase.tasks) <= 0) { toast.error("Enter number of tasks"); return false; }
@@ -1091,7 +1141,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
             </Field>
             <Field label="Team type *" hint="Which delivery pool this budget belongs to">
               <select value={teamType} onChange={(e) => setTeamType(e.target.value)} data-testid="bb-team-type" className={ipStyle}>
-                {TEAM_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                {TEAM_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option === "Production" ? "Projects" : option}</option>)}
               </select>
             </Field>
           </div>
@@ -1289,7 +1339,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                 { k: "models", label: "Models", desc: isDirectCostBudget ? "Direct model-cost estimate" : "AI models · cost = provider × trajectories" },
                 { k: "infra", label: "Infrastructure", desc: "Enter monthly $ — daily cost auto-shown" },
                 { k: "subs", label: "Subscriptions", desc: "$ per seat + assign members" },
-                { k: "general", label: "General", desc: "Freelancers, tools, APIs, datasets, licenses, and other external project costs" },
+                { k: "general", label: "Miscellaneous", desc: "Freelancers, tools, APIs, datasets, licenses, and other external project costs" },
               ].map((t) => {
                 const on = selectedTypes[t.k];
                 return (
@@ -1315,7 +1365,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
               { k: "models", label: "Models" },
               { k: "infra", label: "Infrastructure" },
               { k: "subs", label: "Subscriptions" },
-              { k: "general", label: "General" },
+              { k: "general", label: "Miscellaneous" },
             ].filter((t) => selectedTypes[t.k]).map((t) => (
               <button
                 key={t.k}
@@ -1444,6 +1494,10 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                   const provider = r.provider || infraProviderOptions[0] || getInfraProvider(EC2_INSTANCES[0]);
                   const providerInstances = getInstancesForProvider(provider);
                   const storageOptions = getStorageTypesForProvider(provider);
+                  // Fields are dynamic per instance: hosted/serverless inference endpoints (no vCPU)
+                  // have no VM disk, so storage-type / per-instance-storage do not apply to them.
+                  const selectedInstance = providerInstances.find((i) => i.code === r.instance) || providerInstances[0];
+                  const isServerlessInstance = selectedInstance ? Number(selectedInstance.vCPU || 0) === 0 : false;
                   const perDay = getInfraTotalDailyRate({
                     monthlyCost: Number(r.monthlyCost || 0),
                     instanceCount: getInfraInstanceCount(r.instanceCount || 1),
@@ -1458,7 +1512,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                         </CompactField>
                         <CompactField label="Infra instance">
                           <select value={r.instance} onChange={(e) => updateInfraRow(r.id, "instance", e.target.value)} data-testid={`bb-infra-select-${r.id}`} className={`${rowInp} w-full`}>
-                            {providerInstances.map((i) => <option key={i.code} value={i.code}>{i.code} · {i.family} · {i.vCPU} vCPU · {i.memoryGiB} GiB</option>)}
+                            {providerInstances.map((i) => <option key={i.code} value={i.code}>{Number(i.vCPU || 0) > 0 ? `${i.code} · ${i.family} · ${i.vCPU} vCPU · ${i.memoryGiB} GiB` : `${i.code} · ${i.family}`}</option>)}
                           </select>
                         </CompactField>
                         <CompactField label="Monthly cost / instance ($)">
@@ -1471,15 +1525,19 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                           <RemoveBtn onClick={() => removeRow(setInfra)(r.id)} testid={`bb-infra-remove-${r.id}`} />
                         </div>
                       </div>
-                      <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_.65fr_.8fr_.85fr] gap-2 items-end">
-                        <CompactField label="Storage type">
-                          <select value={normalizeStorageTypeForProvider(provider, r.storageType || "")} onChange={(e) => updateInfraRow(r.id, "storageType", e.target.value)} data-testid={`bb-infra-storage-type-${r.id}`} className={`${rowInp} w-full`}>
-                            {storageOptions.map((option) => <option key={option} value={option}>{option}</option>)}
-                          </select>
-                        </CompactField>
-                        <CompactField label="Per instance storage (GB)">
-                          <input type="number" min="0" step="10" value={r.perInstanceStorage ?? 100} onChange={(e) => updateInfraRow(r.id, "perInstanceStorage", e.target.value)} data-testid={`bb-infra-storage-size-${r.id}`} className={`${rowInp} w-full tabular text-right`} />
-                        </CompactField>
+                      <div className={`mt-3 grid grid-cols-1 gap-2 items-end ${isServerlessInstance ? "md:grid-cols-[.65fr_.8fr_.85fr]" : "md:grid-cols-[1fr_1fr_.65fr_.8fr_.85fr]"}`}>
+                        {!isServerlessInstance && (
+                          <CompactField label="Storage type">
+                            <select value={normalizeStorageTypeForProvider(provider, r.storageType || "")} onChange={(e) => updateInfraRow(r.id, "storageType", e.target.value)} data-testid={`bb-infra-storage-type-${r.id}`} className={`${rowInp} w-full`}>
+                              {storageOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                          </CompactField>
+                        )}
+                        {!isServerlessInstance && (
+                          <CompactField label="Per instance storage (GB)">
+                            <input type="number" min="0" step="10" value={r.perInstanceStorage ?? 100} onChange={(e) => updateInfraRow(r.id, "perInstanceStorage", e.target.value)} data-testid={`bb-infra-storage-size-${r.id}`} className={`${rowInp} w-full tabular text-right`} />
+                          </CompactField>
+                        )}
                         <CompactField label="Days">
                           <div className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-fuchsia-300 tabular text-right leading-8">{budgetDurationDays.toLocaleString()}</div>
                         </CompactField>
@@ -1526,13 +1584,21 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                   <span>Members</span>
                   <span />
                 </div>
-                {subs.map((r) => (
+                {subs.map((r) => {
+                  // A member can hold a given subscription only once — grey them out in other rows
+                  // that carry the same subscription (they stay selectable for different subs).
+                  const takenBySameSub = new Set(
+                    subs
+                      .filter((other) => other.id !== r.id && other.subscription === r.subscription)
+                      .flatMap((other) => other.members || [])
+                  );
+                  return (
                   <div key={r.id} data-testid={`bb-row-sub-${r.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                     <div className="grid grid-cols-[1.25fr_.78fr_.55fr_.72fr_.9fr_1.35fr_28px] gap-2 items-start">
                       <select value={r.subscription} onChange={(e) => updateSubRow(r.id, "subscription", e.target.value)} data-testid={`bb-sub-select-${r.id}`} className={rowInp}>
                         {SUBSCRIPTION_CATALOG.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
                       </select>
-                      <input type="number" min="0" step="1" value={r.pricePerSeat} onChange={(e) => updateSubRow(r.id, "pricePerSeat", e.target.value)} data-testid={`bb-sub-price-${r.id}`} className={rowInp + " tabular text-right"} title="$ per seat / month" />
+                      <div data-testid={`bb-sub-price-${r.id}`} className="h-8 px-2 rounded-md bg-white/[0.02] border border-white/5 text-xs text-zinc-300 tabular text-right leading-8" title="Fetched from the subscription catalog">{Number(r.pricePerSeat || 0).toLocaleString()}</div>
                       <input type="number" min="1" value={r.seats} onChange={(e) => updateSubRow(r.id, "seats", e.target.value)} className={rowInp + " tabular text-right"} title="Seats" />
                       <input
                         type="number"
@@ -1571,11 +1637,18 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                               >
                                 {subscriptionMemberPool.map((member) => {
                                   const checked = r.members.includes(member.name);
-                                  const subtitle = member.email || member.role || "Project member";
+                                  const activeUntil = activeSubscriptionAssignments.get(`${String(r.subscription || "").trim().toLowerCase()}::${String(member.name || "").trim().toLowerCase()}`);
+                                  const alreadyTaken = !checked && (takenBySameSub.has(member.name) || Boolean(activeUntil));
+                                  const subtitle = alreadyTaken
+                                    ? activeUntil
+                                      ? `Active ${r.subscription} until ${new Date(activeUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+                                      : `Already selected for ${r.subscription}`
+                                    : (member.email || member.role || "Project member");
                                   return (
                                     <DropdownMenuCheckboxItem
                                       key={member.id}
                                       checked={checked}
+                                      disabled={alreadyTaken}
                                       onSelect={(event) => event.preventDefault()}
                                       onCheckedChange={(nextChecked) => updateSubMembers(
                                         r.id,
@@ -1583,7 +1656,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                                           ? Array.from(new Set([...r.members, member.name]))
                                           : r.members.filter((entry) => entry !== member.name)
                                       )}
-                                      className="items-start gap-2 py-2 text-xs"
+                                      className={`items-start gap-2 py-2 text-xs ${alreadyTaken ? "opacity-40" : ""}`}
                                     >
                                       <div className="min-w-0">
                                         <div className="truncate">{member.name}</div>
@@ -1596,8 +1669,8 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                             </DropdownMenu>
                             <div className="mt-1 text-[11px] text-zinc-500 leading-relaxed">
                               {r.members.length
-                                ? `Selected: ${r.members.join(", ")}`
-                                : "Choose one or more members to allocate this subscription."}
+                                ? `Selected ${r.members.length} of ${Math.max(Number(r.seats || 0), 1)} seats: ${r.members.join(", ")}`
+                                : `Choose up to ${Math.max(Number(r.seats || 0), 1)} member${Math.max(Number(r.seats || 0), 1) === 1 ? "" : "s"}. Active duplicate subscriptions are unavailable until they expire.`}
                             </div>
                           </>
                         )}
@@ -1607,7 +1680,8 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="mt-2 text-[11px] text-zinc-500">
                 Total subscriptions: <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.subs, { compact: false })}</span>
@@ -1924,7 +1998,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                 <GeneralBudgetTableCard
                   lines={generalTablePreviewLines}
                   title="General budget table preview"
-                  subtitle="This phase-wise table is what CTO and CFO will review."
+                  subtitle="This phase-wise table is what L2 and L3 will review."
                   testid="bb-general-table-preview"
                 />
               </div>

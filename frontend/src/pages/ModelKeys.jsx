@@ -191,7 +191,7 @@ const ModelKeys = () => {
           </div>
           <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">Model Keys</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            CTO review no longer exposes project keys directly. IT provisions them after CFO sign-off, and TPM / R&amp;D members see the allocations once they are assigned.
+            L2 review no longer exposes project keys directly. IT provisions them after L3 sign-off, and Projects / RL Environment members see the allocations once they are assigned.
           </p>
         </div>
 
@@ -265,7 +265,7 @@ const ModelKeys = () => {
           <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
             <div>
               <div className="font-display font-semibold text-[15px] text-white">Budget approvals waiting for model access</div>
-              <div className="text-xs text-zinc-500 mt-0.5">Approved budgets move here after CFO sign-off so IT can add and allocate keys.</div>
+              <div className="text-xs text-zinc-500 mt-0.5">Approved budgets move here after L3 sign-off so IT can add and allocate keys.</div>
             </div>
           </div>
           <div className="space-y-3">
@@ -459,7 +459,7 @@ const ModelKeys = () => {
         <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-4 flex items-start gap-3 text-xs text-amber-200">
           <AlertCircle className="w-4 h-4 text-amber-400 flex-shrink-0 mt-0.5" />
           <div>
-            Keys are masked. Only <span className="font-semibold">CFO</span> and <span className="font-semibold">IT</span> can reveal or copy full keys. Members still see which project allocations belong to them.
+            Keys are masked. Only <span className="font-semibold">L3</span> and <span className="font-semibold">IT</span> can reveal or copy full keys. Members still see which project allocations belong to them.
           </div>
         </div>
       )}

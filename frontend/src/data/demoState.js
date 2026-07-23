@@ -51,7 +51,7 @@ const buildProject = ({
   recoverableFromClient = false,
   topupsTotal = 0,
   changeRequestsTotal = 0,
-  buffer = 10,
+  buffer = 0,
 }) => {
   const remaining = approvedBudget - actualSpend;
   return {

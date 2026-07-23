@@ -16,6 +16,7 @@ import {
   Trash2,
   AlertTriangle,
   Upload,
+  Download,
   FileText,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +35,33 @@ import {
 } from "../lib/generalBudget";
 
 const uid = (prefix = "row") => `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
+
+const TASK_LOG_TEMPLATE_HEADERS = [
+  "Model",
+  "Task",
+  "Runs/Trajectories",
+  "Input Tokens",
+  "Input Tokens (M)",
+  "Output Tokens",
+  "Output Tokens (M)",
+  "Cost ($)",
+];
+
+const downloadTaskLogTemplate = () => {
+  const sampleRow = ["Jamba 1.5 Large", "100", "3", "1000000", "1", "250000", "0.25", "125.50"];
+  const csv = [TASK_LOG_TEMPLATE_HEADERS, sampleRow]
+    .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "task_logging_template.csv";
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+};
 
 const findModelMeta = (modelCatalog = [], value = "") => {
   const needle = String(value || "").trim().toLowerCase();
@@ -166,7 +194,7 @@ const parseSheetGrid = (grid = [], modelCatalog = []) => {
       const cell = cells[index] ?? "";
       if (column === "model" || column === "modelname") record.model = String(cell || "").trim();
       if (column === "task") record.task = String(cell || "").trim();
-      if (column === "stage") record.stage = String(cell || "").trim();
+      if (["stage", "runs", "runstrajectories", "trajectories"].includes(column)) record.stage = String(cell || "").trim();
       if (column === "inputtokens") record.inputTokens = parseNumericCell(cell);
       if (column === "inputtokensm") record.inputTokensM = parseNumericCell(cell);
       if (column === "outputtokens") record.outputTokens = parseNumericCell(cell);
@@ -1077,7 +1105,7 @@ const TaskSheetSection = ({
         </Button>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-[1fr_auto] mb-3">
+      <div className="grid gap-2 md:grid-cols-[1fr_auto_auto] mb-3">
         <label
           className="h-11 rounded-lg border border-dashed border-white/15 bg-white/[0.03] px-3 text-sm text-zinc-200 flex items-center gap-2 cursor-pointer hover:bg-white/[0.06]"
           data-testid={`${testidPrefix}-upload-label`}
@@ -1096,6 +1124,15 @@ const TaskSheetSection = ({
             className="hidden"
           />
         </label>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={downloadTaskLogTemplate}
+          data-testid={`${testidPrefix}-download-template`}
+          className="h-11 rounded-lg border-white/10 bg-white/[0.04] px-3 text-xs text-zinc-200 hover:bg-white/[0.08] gap-2"
+        >
+          <Download className="w-4 h-4 text-fuchsia-300" /> Export template
+        </Button>
         <div className="text-[11px] text-zinc-500 self-center">
           First sheet is extracted and loaded into the editable manual section below.
         </div>

@@ -312,7 +312,7 @@ const buildCsvProject = ({
     workflowStage: isRnD ? "sample-active" : isProduction ? "production-active" : "delivered",
     readyForTpmBudget: false,
     pendingBudgetSubmission: null,
-    buffer: 10,
+    buffer: 0,
     recoverableFromClient: isTpmVisible,
     recoveredAmount: 0,
     approvedBudget,
