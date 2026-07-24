@@ -110,12 +110,13 @@ const ProjectDetail = () => {
 
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
+  const [budgetBatchFilter, setBudgetBatchFilter] = useState("all"); // Budget tab · batch filter
   const [deliverPhase, setDeliverPhase] = useState(null); // {project, phase} or null
   const [feedbackDelivery, setFeedbackDelivery] = useState(null);
   const [taskLogPhase, setTaskLogPhase] = useState(null); // phase for log dialog
   const [editingLog, setEditingLog] = useState(null);
   const [teamSearch, setTeamSearch] = useState("");
-  const [selectedPhaseId, setSelectedPhaseId] = useState(() => p?.phases?.[0]?.id || "");
+  const [selectedPhaseId, setSelectedPhaseId] = useState("");
   const [revealedProjectKeys, setRevealedProjectKeys] = useState({});
   const [activeProvisionRequest, setActiveProvisionRequest] = useState(null);
   const [memberDrawerOpen, setMemberDrawerOpen] = useState(false);
@@ -250,7 +251,7 @@ const ProjectDetail = () => {
   const projectUsage = useMemo(() => summarizeLoggedProject(p, taskLogs), [p, taskLogs]);
   const projectChangeRequests = useMemo(() => changeRequests.filter((request) => request.projectId === id), [changeRequests, id]);
   const selectedPhase = useMemo(
-    () => (p?.phases || []).find((phase) => phase.id === selectedPhaseId) || p?.phases?.[0] || null,
+    () => (p?.phases || []).find((phase) => phase.id === selectedPhaseId) || null,
     [p, selectedPhaseId]
   );
   const selectedPhaseTopups = useMemo(
@@ -261,17 +262,9 @@ const ProjectDetail = () => {
     () => (selectedPhase ? projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, selectedPhase)) : []),
     [projectChangeRequests, selectedPhase]
   );
-  const selectedPhaseBudgetItems = useMemo(
-    () => (selectedPhase ? projectBudgetRequests.filter((request) => requestMatchesPhase(request, selectedPhase)) : []),
-    [projectBudgetRequests, selectedPhase]
-  );
   const selectedPhaseLogs = useMemo(
     () => (selectedPhase ? getPhaseLogs(p.id, selectedPhase.id) : []),
     [selectedPhase, getPhaseLogs, p]
-  );
-  const selectedPhaseDelivery = useMemo(
-    () => (selectedPhase ? projectBatches.find((batch) => batch.phaseId === selectedPhase.id) || null : null),
-    [selectedPhase, projectBatches]
   );
   const currentRndTrackKey = useMemo(() => {
     if (!isRndProject) return null;
@@ -340,7 +333,6 @@ const canManageExecution = isExecutionOwner && executionUnlocked;
     [activeBatchPhaseId, batchPhases]
   );
   const isTaskLogDisabled = !canManageExecution || !activeBatchPhaseId;
-  const canRequestTopup = canManageExecution;
   const approvalLockMessage = getWorkflowLockMessage({ project: p, workflowStage, latestBudgetReviewMeta, role });
   const taskLogDisabledReason = !activeBatchPhaseId && batchPhases.length
     ? "Tasks for this batch have already been submitted."
@@ -410,16 +402,6 @@ const projectBudgetBuilderHref = useMemo(() => {
 
   const prjCode = `PRJ${String(Math.abs((p.id || "").split("").reduce((a, c) => a + c.charCodeAt(0), 0)) % 100000).padStart(5, "0")}`;
   const startDate = p.phases?.[0]?.dates?.split(" ")[0] || p.status;
-  const projectDocs = (Array.isArray(p.docs) && p.docs.length)
-    ? p.docs
-    : p.docUrl
-      ? [{ id: `${p.id}-legacy-doc`, name: "Project brief link", url: p.docUrl, kind: "link" }]
-      : [];
-  const kickoffRecipients = p.kickoffMail?.recipients || team;
-  const kickoffSentAt = p.kickoffMail?.sentAt
-    ? new Date(p.kickoffMail.sentAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
-    : null;
-
   const toggleProjectKeyReveal = (keyId) => {
     if (!canRevealProjectKeys) {
       toast.error("Access denied", { description: `Only CFO or IT can reveal keys. You are signed in as ${role}.` });
@@ -615,40 +597,6 @@ const projectBudgetBuilderHref = useMemo(() => {
           {approvalLockMessage}
         </div>
       )}
-
-      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4" data-testid="project-setup-grid">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <div className="font-display font-semibold text-[15px] text-white">Project setup summary</div>
-            <div className="text-xs text-zinc-500 mt-0.5">Docs, kickoff, and member roster are kept compact here; full member detail stays in the Team tab.</div>
-          </div>
-          {projectDocs[0]?.url && (
-            <a href={projectDocs[0].url} target="_blank" rel="noreferrer" className="text-xs text-fuchsia-300 hover:text-fuchsia-200 inline-flex items-center gap-1">
-              Open primary doc <ChevronRight className="w-3 h-3" />
-            </a>
-          )}
-        </div>
-        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-          <CompactSetupStat
-            title="Docs & attachments"
-            value={String(projectDocs.length)}
-            meta={projectDocs[0]?.name || "No docs added"}
-            icon={FileText}
-          />
-          <CompactSetupStat
-            title="Kickoff mail"
-            value={kickoffSentAt ? "Sent" : "Pending"}
-            meta={kickoffSentAt || `${kickoffRecipients.length} recipient${kickoffRecipients.length === 1 ? "" : "s"}`}
-            icon={Mail}
-          />
-          <CompactSetupStat
-            title="Assigned members"
-            value={String(team.length)}
-            meta={team.slice(0, 3).map((member) => member.name).join(", ") || "No members yet"}
-            icon={Users}
-          />
-        </div>
-      </div>
 
       {/* Tabs */}
       <Tabs value={activeProjectTab} onValueChange={handleProjectTabChange} className="w-full">
@@ -1162,7 +1110,7 @@ const projectBudgetBuilderHref = useMemo(() => {
           {(() => {
             const spent = Number(isCFO ? p.cfoActualSpend || p.actualSpend || 0 : projectUsage.loggedSpend || 0);
             const cap = Number(p.approvedBudget || 0);
-            const remaining = Number(isCFO ? (p.cfoRemaining || p.remaining || (cap - spent)) : (projectUsage.remainingBudget || (cap - spent)));
+            const remaining = Number(isCFO ? (cap - spent) : (projectUsage.remainingBudget || (cap - spent)));
             const utilPct = cap > 0 ? Math.round((spent / cap) * 100) : 0;
             const remainingPct = cap > 0 ? Math.round((remaining / cap) * 100) : 0;
             const budgetCount = showRndBudgetTracks ? Math.max(budgetTracks.entries.length, 1) : ((p.phases || []).length || 1);
@@ -1170,7 +1118,6 @@ const projectBudgetBuilderHref = useMemo(() => {
             const runwayDays = burnRate > 0 && remaining > 0 ? Math.floor(remaining / burnRate) : 0;
             const spendLabel = isCFO ? "Actual / Cap" : "Logged / Cap";
             const totalSpendLabel = isCFO ? "Total Actual" : "Total Logged";
-            const latestBudgetEntry = budgetTracks.entries[0] || null;
             const totalTopupAmount = projectTopups.reduce((sum, request) => sum + getResolvedTopupAmount(request), 0);
             const totalChangeAmount = projectChangeRequests.reduce((sum, request) => sum + Number(request.amount || 0), 0);
             // Every subscription asked for this project — from the approved base budget and from
@@ -1180,23 +1127,65 @@ const projectBudgetBuilderHref = useMemo(() => {
                 id: sub.id || `${track.key}-${sub.optionId || sub.subscription}`,
                 label: sub.optionLabel || sub.subscription || "Subscription",
                 amount: Number(sub.amount ?? sub.estCost ?? 0),
-                source: `${track.label} budget · approved`,
+                members: Array.isArray(sub.members) ? sub.members : [],
+                seats: Number(sub.seats || 0),
+                source: `${track.label} budget`,
               }))),
               ...projectChangeRequests.flatMap((request) => (request.breakdown?.subs?.entries || []).map((sub) => ({
                 id: sub.id || `${request.id}-${sub.optionId}`,
                 label: sub.optionLabel || sub.subscription || "Subscription",
                 amount: Number(sub.amount || 0),
+                members: Array.isArray(sub.members) ? sub.members : [],
+                seats: Number(sub.seats || 0),
                 source: "Additional request · approved",
               }))),
               ...projectTopups.flatMap((request) => (request.breakdown?.subs?.entries || []).map((sub) => ({
                 id: sub.id || `${request.id}-${sub.optionId}`,
                 label: sub.optionLabel || sub.subscription || "Subscription",
                 amount: Number(sub.amount || 0),
+                members: Array.isArray(sub.members) ? sub.members : [],
+                seats: Number(sub.seats || 0),
                 source: "Top-up request",
               }))),
             ];
             const subscriptionAsksTotal = subscriptionAsks.reduce((sum, sub) => sum + sub.amount, 0);
             const currentBudgetEnvelope = cap + totalTopupAmount + totalChangeAmount;
+            // Subscriptions + infrastructure with their timelines (duration in days).
+            const projectWindow = [p.startDate, p.estimatedEndDate].filter(Boolean).join(" → ");
+            const buildResourceRows = (subs = [], infra = [], source) => ([
+              ...(subs || []).map((sub) => ({
+                id: sub.id || `sub-${sub.optionId || sub.subscription}-${source}`,
+                type: "Subscription",
+                label: sub.optionLabel || sub.subscription || "Subscription",
+                amount: Number(sub.amount ?? sub.estCost ?? 0),
+                days: Number(sub.days || 0),
+                source,
+              })),
+              ...(infra || []).map((infra) => ({
+                id: infra.id || `infra-${infra.optionId || infra.instance || infra.provider}-${source}`,
+                type: "Infrastructure",
+                label: infra.optionLabel || [infra.provider, infra.instance].filter(Boolean).join(" · ") || "Infrastructure",
+                amount: Number(infra.amount ?? infra.estCost ?? 0),
+                days: Number(infra.days || 0),
+                source,
+              })),
+            ]);
+            const resourceTimelines = [
+              ...budgetTracks.ordered.flatMap((track) => buildResourceRows(track.latest?.items?.subs, track.latest?.items?.infra, `${track.label} budget · approved`)),
+              ...projectChangeRequests.flatMap((request) => buildResourceRows(request.breakdown?.subs?.entries, request.breakdown?.infra?.entries, "Additional request · approved")),
+              ...projectTopups.flatMap((request) => buildResourceRows(request.breakdown?.subs?.entries, request.breakdown?.infra?.entries, "Additional request")),
+            ].filter((entry) => entry.amount > 0 || entry.label);
+            const infrastructureTimelines = resourceTimelines.filter((entry) => entry.type === "Infrastructure");
+            // Allocation ledger — initial budget + every top-up / additional request.
+            const allocationLedger = [
+              cap > 0 ? { id: "initial", action: "Budget", amount: cap, at: p.startDate ? `${p.startDate}T00:00:00.000Z` : null } : null,
+              ...projectTopups.map((request) => ({ id: request.id, action: "Additional request", amount: getResolvedTopupAmount(request), at: request.requestedAt || request.createdAt || null })),
+              ...projectChangeRequests.map((request) => ({ id: request.id, action: "Additional request", amount: Number(request.amount || 0), at: request.decidedAt || request.createdAt || request.requestedAt || null })),
+            ].filter((entry) => entry && entry.amount > 0).sort((left, right) => new Date(right.at || 0).getTime() - new Date(left.at || 0).getTime());
+            // Batches for this project + the filter state.
+            const batchStatusLabelMap = { approved: "Approved", recovered: "Approved", "pending-cfo": "Pending", "pending-cto": "Pending", "feedback-pending": "Pending", "rnd-review": "Pending", "changes-requested": "Returned", rejected: "Rejected" };
+            const budgetBatchStatuses = Array.from(new Set(projectBatches.map((batch) => batch.status).filter(Boolean)));
+            const filteredBudgetBatches = projectBatches.filter((batch) => budgetBatchFilter === "all" || batch.status === budgetBatchFilter);
             const seriesByDate = projectUsage.logs.reduce((map, log) => {
               if (!log.date) return map;
               map.set(log.date, (map.get(log.date) || 0) + getTaskLogRecordedCost(log));
@@ -1212,21 +1201,50 @@ const projectBudgetBuilderHref = useMemo(() => {
               total: Math.round(day.spend * fallbackScale),
             }));
             const displaySeries = burnSeries.length ? burnSeries : fallbackSeries;
+            // Cumulative available budget vs consumption over the same window.
+            const consumptionSeries = (() => {
+              let consumed = 0;
+              return displaySeries.map((entry) => {
+                consumed += Number(entry.total || 0);
+                return {
+                  date: entry.date,
+                  Consumed: Math.round(consumed),
+                  Available: Math.max(0, Math.round(currentBudgetEnvelope - consumed)),
+                };
+              });
+            })();
             return (
               <>
-                <div>
-                  <h2 className="font-display font-semibold text-xl text-white">Budget</h2>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    {isCFO ? "Budget usage, approvals, and actuals for this project." : "Owned budget usage, logged spend, and delivery progress for this project."}
-                  </p>
+                <div className="flex items-end justify-between gap-4 flex-wrap">
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-fuchsia-300">Financial overview</div>
+                    <h2 className="mt-1 font-display font-semibold text-2xl text-white">Budget control center</h2>
+                    <p className="text-xs text-zinc-500 mt-1">
+                      {isCFO ? "Budget usage, approvals, and actuals for this project." : "Owned budget usage, logged spend, and delivery progress for this project."}
+                    </p>
+                  </div>
                 </div>
 
-                {/* KPI grid — Spent/Cap card spans 2 rows */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {cap > 0 && remainingPct <= 20 && (
+                  <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3" data-testid="budget-low-balance-alert">
+                    <div className="flex items-start gap-3">
+                      <Wallet className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-300" />
+                      <div>
+                        <div className="text-xs font-semibold text-amber-200">Budget is running low</div>
+                        <div className="mt-0.5 text-[11px] text-amber-200/60">Only {remainingPct}% remains at the current spend rate.</div>
+                      </div>
+                    </div>
+                    <div className="text-sm font-semibold tabular text-amber-200">{fmtCurrency(remaining, { compact: false })}</div>
+                  </div>
+                )}
+
+                {/* Primary budget summary */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_repeat(4,minmax(0,1fr))] gap-3">
                   <div
-                    className="md:row-span-2 rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-500/[0.14] via-fuchsia-500/[0.05] to-transparent p-5 flex flex-col justify-between min-h-[220px]"
+                    className="relative overflow-hidden rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-500/[0.18] via-violet-500/[0.07] to-transparent p-4 flex flex-col justify-between min-h-[132px] sm:col-span-2 lg:col-span-1"
                     data-testid="budget-kpi-spent-cap"
                   >
+                    <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-fuchsia-500/10 blur-3xl" />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-200">{spendLabel}</span>
@@ -1234,31 +1252,110 @@ const projectBudgetBuilderHref = useMemo(() => {
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-semibold bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-500/30">No Budget</span>
                         )}
                       </div>
-                      <div className="mt-4 font-display font-semibold text-white text-3xl tabular leading-tight">
+                      <div className="mt-3 flex items-baseline gap-2 whitespace-nowrap font-display font-semibold text-white text-3xl tabular leading-tight">
                         {fmtCurrency(spent, { compact: false })}
-                        <span className="text-fuchsia-200/60 text-xl"> / {fmtCurrency(cap, { compact: false })}</span>
+                        <span className="text-fuchsia-200/55 text-base">of {fmtCurrency(cap, { compact: false })}</span>
                       </div>
                     </div>
-                    <div className="mt-6">
-                      <div className="h-2 rounded-full bg-white/[0.08] overflow-hidden">
+                    <div className="mt-4">
+                      <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
                         <div
                           className={`h-full transition-all ${utilPct >= 100 ? "bg-red-400" : utilPct >= 90 ? "bg-amber-400" : "bg-fuchsia-400"}`}
                           style={{ width: `${Math.min(utilPct, 100)}%` }}
                           data-testid="budget-kpi-spent-cap-bar"
                         />
                       </div>
-                      <div className="mt-2 text-[11px] text-fuchsia-200/70">
-                        {cap === 0 ? "awaiting budget setup" : `${utilPct}% consumed · ${fmtCurrency(remaining, { compact: false })} left`}
+                      <div className="mt-2 flex items-center justify-between gap-3 text-[11px]">
+                        <span className="text-fuchsia-200/70">{cap === 0
+                            ? "awaiting budget setup"
+                            : `${utilPct}% consumed · ${remaining >= 0 ? `${fmtCurrency(remaining, { compact: false })} left` : `${fmtCurrency(Math.abs(remaining), { compact: false })} over cap`}`}</span>
+                        {isCFO && <span className="whitespace-nowrap text-zinc-500">Total logged <span className="font-semibold tabular text-zinc-300">{fmtCurrency(projectUsage.loggedSpend || 0, { compact: false })}</span></span>}
                       </div>
                     </div>
                   </div>
 
-                  <MiniKpi testid="budget-kpi-count" label="Budget Count" value={String(budgetCount)} />
-                  <MiniKpi testid="budget-kpi-total" label="Total Budget" value={fmtCurrency(cap, { compact: false })} sub={`${cap > 0 ? "100" : "0"}%`} />
-                  <MiniKpi testid="budget-kpi-consumed" label={totalSpendLabel} value={fmtCurrency(spent, { compact: false })} sub={`${utilPct}%`} accent={utilPct >= 90 ? "text-red-300" : "text-white"} />
-                  <MiniKpi testid="budget-kpi-remaining" label="Total Remaining" value={fmtCurrency(remaining, { compact: false })} sub={`${remainingPct}%`} accent={remaining >= 0 ? "text-emerald-300" : "text-red-300"} />
-                  <MiniKpi testid="budget-kpi-burn-rate" label={isCFO ? "Daily Burn Rate" : "Daily Log Rate"} value={fmtCurrency(burnRate, { compact: false })} sub={cap > 0 ? `${Math.round((burnRate / cap) * 100 * 100) / 100}% of cap/day` : "0%"} />
-                  <MiniKpi testid="budget-kpi-runway" label="Runway Days" value={String(runwayDays)} sub={burnRate > 0 ? "at current burn" : "—"} />
+                  <div className="grid grid-cols-2 gap-3 sm:col-span-2 lg:contents">
+                    <MiniKpi testid="budget-kpi-remaining" label="Remaining" value={fmtCurrency(remaining, { compact: false })} sub={`${remainingPct}% available`} accent={remaining >= 0 ? "text-emerald-300" : "text-red-300"} />
+                    <MiniKpi testid="budget-kpi-runway" label="Runway" value={`${runwayDays} days`} sub={burnRate > 0 ? "at current burn" : "No active burn"} />
+                    <MiniKpi testid="budget-kpi-burn-rate" label={isCFO ? "Daily burn" : "Daily log rate"} value={fmtCurrency(burnRate, { compact: false })} sub={cap > 0 ? `${Math.round((burnRate / cap) * 10000) / 100}% of cap/day` : "0% of cap"} />
+                    <MiniKpi testid="budget-kpi-count" label="Batches delivered" value={String(projectBatches.length)} sub={`${budgetCount} budget record${budgetCount === 1 ? "" : "s"}`} />
+                  </div>
+                </div>
+
+                {/* Model-wise spend cards */}
+                {projectUsage.models && projectUsage.models.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3" data-testid="budget-model-cards">
+                    {projectUsage.models.slice(0, 6).map((m, idx) => {
+                      const modelsTotal = projectUsage.models.reduce((sum, entry) => sum + Number(entry.cost || 0), 0) || 1;
+                      const pct = Math.round((Number(m.cost || 0) / modelsTotal) * 100);
+                      const runs = Number(m.tasksDone || 0);
+                      const avgPerRun = runs > 0 ? Number(m.cost || 0) / runs : 0;
+                      const dot = ["bg-fuchsia-400", "bg-sky-400", "bg-violet-400", "bg-emerald-400", "bg-amber-400", "bg-cyan-400"][idx % 6];
+                      return (
+                        <div key={m.modelId || m.modelName || idx} className="bg-[#12121A] rounded-2xl border border-white/5 p-4" data-testid="budget-model-card">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`w-2 h-2 rounded-full ${dot}`} />
+                              <span className="text-sm text-white font-medium truncate">{m.modelName || "Model"}</span>
+                            </div>
+                            <span className="text-[10px] font-semibold text-zinc-400 bg-white/[0.04] border border-white/10 rounded-md px-1.5 py-0.5">{pct}%</span>
+                          </div>
+                          <div className="mt-3 font-display font-semibold text-2xl text-white tabular">{fmtCurrency(m.cost || 0, { compact: false })}</div>
+                          <div className="mt-3 flex items-center justify-between text-[10px] text-zinc-500">
+                            <div>
+                              <div className="uppercase tracking-wide">API hits</div>
+                              <div className="text-zinc-300 tabular mt-0.5">{runs.toLocaleString()}</div>
+                            </div>
+                            <div className="text-right">
+                              <div className="uppercase tracking-wide">Avg $/task</div>
+                              <div className="text-zinc-300 tabular mt-0.5">{fmtCurrency(avgPerRun, { compact: false })}</div>
+                            </div>
+                          </div>
+                          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
+                            <div className={`h-full rounded-full ${dot}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                          </div>
+                          <div className="mt-1.5 flex items-center justify-between text-[9px] uppercase tracking-wider text-zinc-600">
+                            <span>Model utilization</span><span>{pct}%</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {/* Budget Added & Consumption Over Time */}
+                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="budget-consumption-chart">
+                  <div className="mb-3">
+                    <div className="font-display font-semibold text-[15px] text-white">Budget Added &amp; Consumption Over Time</div>
+                    <div className="text-xs text-zinc-500 mt-0.5">Available budget vs cumulative consumption</div>
+                  </div>
+                  <div className="h-[220px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={consumptionSeries}>
+                        <defs>
+                          <linearGradient id={`avail-${p.id}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.3} />
+                            <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id={`cons-${p.id}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#10B981" stopOpacity={0.25} />
+                            <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`)} />
+                        <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => fmtCurrency(v, { compact: false })} />
+                        <Area type="monotone" dataKey="Available" name="Available" stroke="#8B5CF6" strokeWidth={2.5} fill={`url(#avail-${p.id})`} />
+                        <Area type="monotone" dataKey="Consumed" name="Consumed" stroke="#10B981" strokeWidth={2.5} fill={`url(#cons-${p.id})`} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                  <div className="mt-2 flex items-center gap-4 text-[10px] text-zinc-400">
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-violet-400" /> Available (Additional requests + initial)</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Consumption</span>
+                  </div>
                 </div>
 
                 {/* Daily Burn rate chart */}
@@ -1273,7 +1370,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                       Total
                     </div>
                   </div>
-                  <div className="h-[240px]">
+                  <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={displaySeries}>
                         <defs>
@@ -1291,42 +1388,14 @@ const projectBudgetBuilderHref = useMemo(() => {
                     </ResponsiveContainer>
                   </div>
                 </div>
-
-                {!showRndBudgetTracks && (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    <MiniKpi
-                      testid="budget-kpi-last-proposed"
-                      label="Last Proposed Budget"
-                      value={fmtCurrency(latestBudgetEntry?.total || 0, { compact: false })}
-                      sub={latestBudgetEntry ? `${formatBudgetTabLabel(latestBudgetEntry.budgetType)} · ${new Date(latestBudgetEntry.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : "No budget submission yet"}
-                    />
-                    <MiniKpi
-                      testid="budget-kpi-topups-total"
-                      label="Budget Changes Logged"
-                      value={fmtCurrency(totalTopupAmount, { compact: false })}
-                      sub={`${projectTopups.length} request${projectTopups.length === 1 ? "" : "s"}`}
-                    />
-                    <MiniKpi
-                      testid="budget-kpi-changes-total"
-                      label="Change Asks"
-                      value={fmtCurrency(totalChangeAmount, { compact: false })}
-                      sub={`${projectChangeRequests.length} change${projectChangeRequests.length === 1 ? "" : "s"}`}
-                    />
-                    <MiniKpi
-                      testid="budget-kpi-current-envelope"
-                      label="Current Budget Envelope"
-                      value={fmtCurrency(currentBudgetEnvelope, { compact: false })}
-                      sub="Budget + budget changes + change requests"
-                      accent="text-fuchsia-300"
-                    />
-                  </div>
-                )}
+                </div>
 
                 {showRndBudgetTracks ? (
+                  <>
                   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="rnd-budget-tracks">
-                    <div className="mb-3">
-                    <div className="font-display font-semibold text-[15px] text-white">Testing, Sample, and Rework budget tracks</div>
-                    <div className="text-xs text-zinc-500 mt-0.5">Raise the required R&amp;D budget track directly from this project whenever Testing, Sample, or Rework work needs to be budgeted.</div>
+                    <div className="mb-4">
+                    <div><div className="font-display font-semibold text-[15px] text-white">Budget Track</div>
+                    <div className="text-xs text-zinc-500 mt-0.5">Testing, Sample, and Rework allocations with delivery progress and approved resources.</div></div>
                     </div>
                     {!executionUnlocked && isExecutionOwner && (
                       <div className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
@@ -1342,64 +1411,40 @@ const projectBudgetBuilderHref = useMemo(() => {
                             key={track.key}
                             track={track}
                             deliveries={projectBatches}
+                            logs={projectUsage.logs}
+                            showActual={isCFO}
+                            actualSpend={spent}
+                            topups={projectTopups}
+                            changes={projectChangeRequests}
                             topupCount={projectTopups.length}
                             changeCount={projectChangeRequests.length}
                           />
                         ))}
                       </div>
                     )}
-                    {subscriptionAsks.length > 0 && (
-                      <div className="mt-4" data-testid="rnd-subscriptions">
-                        <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
-                              <Wallet className="w-3 h-3" /> Subscriptions ({subscriptionAsks.length})
-                            </div>
-                            <div className="text-[11px] text-zinc-400">Total <span className="text-white font-semibold tabular">{fmtCurrency(subscriptionAsksTotal, { compact: false })}</span></div>
-                          </div>
-                          <div className="space-y-1.5">
-                            {subscriptionAsks.map((sub) => (
-                              <div key={sub.id} className="flex items-center justify-between gap-2 p-2 rounded-lg border border-white/5 bg-white/[0.02]" data-testid="rnd-subscription-line">
-                                <div className="min-w-0">
-                                  <div className="text-[11px] text-white font-medium truncate">{sub.label}</div>
-                                  <div className="text-[10px] text-zinc-500">{sub.source}</div>
-                                </div>
-                                <div className="text-[11px] text-white font-semibold tabular flex-shrink-0">{fmtCurrency(sub.amount, { compact: false })}</div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
+                  </>
                 ) : (
                   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="burn-per-phase-table">
                     <div className="mb-3">
-                      <div className="font-display font-semibold text-[15px] text-white">{isTPM ? "Budget records by phase" : "Burn per phase"}</div>
+                      <div className="font-display font-semibold text-[15px] text-white">Budget Track</div>
                       <div className="text-xs text-zinc-500 mt-0.5">
-                        {isTPM ? "Phase budget, logged progress, requested models, budget changes, change requests, and the latest ask are connected here." : "Batch-level breakdown of tasks, burn, approval, and feedback."}
+                        Phase budget, logged cost, completed tasks, additional requests, and approval details.
                       </div>
                     </div>
                     {(p.phases || []).length === 0 ? (
                       <div className="text-xs text-zinc-500 py-6 text-center">No phases defined yet.</div>
                     ) : (
-                      <>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                                <th className="text-left py-2 px-3">Batch</th>
-                                <th className="text-right py-2 px-3">Base budget</th>
-                                <th className="text-right py-2 px-3">Current total</th>
-                                <th className="text-right py-2 px-3">{isCFO ? "Actual" : "Logged"}</th>
-                                <th className="text-left py-2 px-3">Progress</th>
-                                <th className="text-left py-2 px-3">Models asked</th>
-                                <th className="text-left py-2 px-3">Requests</th>
-                                <th className="w-10" />
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(p.phases || []).map((ph) => {
+                      <div className="flex flex-col overflow-x-auto">
+                        <div className="order-0 grid min-w-[760px] grid-cols-[1.5fr_1fr_1fr_1.4fr_1fr_40px] border-b border-white/5 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+                          <div className="py-2 px-3">Batch</div>
+                          <div className="py-2 px-3 text-right">Base budget</div>
+                          <div className="py-2 px-3 text-right">Logged</div>
+                          <div className="py-2 px-3">Task Done</div>
+                          <div className="py-2 px-3 text-center">Additional requests</div>
+                          <div />
+                        </div>
+                              {(p.phases || []).map((ph, phaseIndex) => {
                                 const plannedTasks = Number(ph.totalTasks || ph.tasks || 0);
                                 const phaseLogs = getPhaseLogs(p.id, ph.id);
                                 const generalActualCost = phaseLogs.reduce(
@@ -1418,221 +1463,156 @@ const projectBudgetBuilderHref = useMemo(() => {
                                 const progress = plannedTasks > 0
                                   ? Math.min(100, Math.round((phaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0) / plannedTasks) * 100))
                                   : 0;
-                                const phaseModelNames = collectResourceNames([
-                                  ...phaseLogs.flatMap((log) => getLogModelNames(log)),
-                                  ...phaseTopups.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
-                                  ...phaseChanges.map((request) => request.breakdown?.models?.optionLabel).filter(Boolean),
-                                  ...getPhaseTasks(p.id, ph.id).map((task) => task.model).filter(Boolean),
-                                ]);
-                                const requestSummary = `${phaseTopups.length} budget change${phaseTopups.length === 1 ? "" : "s"} · ${phaseChanges.length} scope change${phaseChanges.length === 1 ? "" : "s"}`;
+                                const completedTasks = phaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0);
                                 return (
-                                  <tr
+                                  <div
                                     key={ph.id}
                                     data-testid={`burn-phase-${ph.id}`}
-                                    onClick={() => setSelectedPhaseId(ph.id)}
-                                    className={`border-b border-white/5 last:border-0 hover:bg-white/[0.03] cursor-pointer transition-colors ${isSelected ? "bg-fuchsia-500/[0.06]" : ""}`}
+                                    onClick={() => setSelectedPhaseId((current) => current === ph.id ? "" : ph.id)}
+                                    style={{ order: phaseIndex * 2 + 1 }}
+                                    className={`grid min-w-[760px] grid-cols-[1.5fr_1fr_1fr_1.4fr_1fr_40px] items-center border-b border-white/5 hover:bg-white/[0.03] cursor-pointer transition-colors ${isSelected ? "bg-fuchsia-500/[0.06]" : ""}`}
                                   >
-                                    <td className="py-3 px-3 text-white font-medium">{ph.name}</td>
-                                    <td className="py-3 px-3 text-right tabular text-zinc-200">{fmtCurrency(phaseBudget.base, { compact: false })}</td>
-                                    <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(phaseBudget.currentTotal, { compact: false })}</td>
-                                    <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(burn, { compact: false })}</td>
-                                    <td className="py-3 px-3">
-                                      <div className="text-[11px] text-zinc-200">{plannedTasks > 0 ? `${progress}% · ${phaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0)}/${plannedTasks} tasks` : `${apprPct}% budget util`}</div>
-                                      <div className="mt-1 h-1.5 rounded-full bg-white/[0.05] overflow-hidden">
+                                    <div className="py-3 px-3 text-white font-medium">{ph.name}</div>
+                                    <div className="py-3 px-3 text-right tabular text-zinc-200">{fmtCurrency(phaseBudget.base, { compact: false })}</div>
+                                    <div className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(burn, { compact: false })}</div>
+                                    <div className="py-4 px-3">
+                                      <div className="text-sm text-zinc-200 tabular">{plannedTasks > 0 ? `${completedTasks}/${plannedTasks} tasks · ${progress}%` : `${apprPct}% budget util`}</div>
+                                      <div className="mt-2 h-1.5 w-full rounded-full bg-white/[0.07] overflow-hidden">
                                         <div className={`h-full ${progress >= 100 ? "bg-emerald-500" : "bg-fuchsia-500"}`} style={{ width: `${plannedTasks > 0 ? progress : Math.min(apprPct, 100)}%` }} />
                                       </div>
-                                    </td>
-                                    <td className="py-3 px-3 text-[11px] text-zinc-300">
-                                      {phaseModelNames.length ? phaseModelNames.slice(0, 2).join(", ") : "No model ask yet"}
-                                    </td>
-                                    <td className="py-3 px-3 text-[11px] text-zinc-400">
-                                      {requestSummary}
-                                      <div className="text-zinc-500 mt-0.5">
-                                        +{fmtCurrency(phaseBudget.topupsTotal + phaseBudget.changesTotal, { compact: false })}
-                                      </div>
-                                    </td>
-                                    <td className="py-3 px-3 text-right">
-                                      <Link
-                                        to={`/projects/${p.id}/phase/${ph.id}`}
-                                        onClick={(event) => event.stopPropagation()}
-                                        className="text-zinc-500 hover:text-fuchsia-300 inline-flex"
-                                      >
-                                        <ChevronRight className="w-4 h-4" />
-                                      </Link>
-                                    </td>
-                                  </tr>
+                                    </div>
+                                    <div className="py-3 px-3 text-center text-sm font-semibold tabular text-white">{phaseTopups.length + phaseChanges.length}</div>
+                                    <div className="py-3 px-3 text-right text-zinc-500"><ChevronRight className={`w-4 h-4 transition-transform ${isSelected ? "rotate-90 text-fuchsia-300" : ""}`} /></div>
+                                  </div>
                                 );
                               })}
-                            </tbody>
-                          </table>
-                        </div>
 
                         {selectedPhase && (
-                            <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-4" data-testid={`phase-detail-${selectedPhase.id}`}>
-                            <div className="flex items-start justify-between gap-3 flex-wrap">
-                              <div>
-                                <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Phase request drill-down</div>
-                                <div className="mt-1 font-display text-lg font-semibold text-white">{selectedPhase.name}</div>
-                                <div className="text-xs text-zinc-500 mt-0.5">
-                                  Budget requests, budget changes, change requests, and logged tasks for this phase.
-                                </div>
-                              </div>
-                              <Link to={`/projects/${p.id}/phase/${selectedPhase.id}`} className="text-xs text-fuchsia-300 hover:text-fuchsia-200 inline-flex items-center gap-1">
-                                Open full phase
-                                <ChevronRight className="w-3.5 h-3.5" />
-                              </Link>
-                            </div>
+                            <details open style={{ order: ((p.phases || []).findIndex((phase) => phase.id === selectedPhase.id) * 2) + 2 }} className="group min-w-[760px] border-b border-fuchsia-500/20 bg-fuchsia-500/[0.04] overflow-hidden" data-testid={`phase-detail-${selectedPhase.id}`}>
+                            <summary className="hidden">{selectedPhase.name} details</summary>
 
-                            <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
-                              {(() => {
-                                const phaseBudget = summarizePhaseBudget(selectedPhase, selectedPhaseTopups, selectedPhaseChanges);
-                                const selectedProgress = Number(selectedPhase.totalTasks || selectedPhase.tasks || 0) > 0
-                                  ? Math.min(100, Math.round((selectedPhaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0) / Number(selectedPhase.totalTasks || selectedPhase.tasks || 0)) * 100))
-                                  : 0;
-                                return (
-                                  <>
-                                    <MiniKpi label="Base budget" value={fmtCurrency(phaseBudget.base, { compact: false })} sub="Submitted phase budget" />
-                                    <MiniKpi label="Current total" value={fmtCurrency(phaseBudget.currentTotal, { compact: false })} sub={`Budget changes ${fmtCurrency(phaseBudget.topupsTotal, { compact: false })} · Change requests ${fmtCurrency(phaseBudget.changesTotal, { compact: false })}`} accent="text-fuchsia-300" />
-                                    <MiniKpi label="Progress" value={`${selectedProgress}%`} sub={`${selectedPhaseLogs.reduce((sum, log) => sum + Number(log.tasksDone || 0), 0)} of ${Number(selectedPhase.totalTasks || selectedPhase.tasks || 0) || 0} tasks`} />
-                                  </>
-                                );
-                              })()}
-                            </div>
-
-                            <div className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
-                              <RequestSummaryCard
-                                title={`Budget requests (${selectedPhaseBudgetItems.length})`}
-                                icon={Wallet}
-                                empty="No budget requests mapped to this phase."
-                                testid={`phase-budget-requests-${selectedPhase.id}`}
-                              >
-                                {selectedPhaseBudgetItems.map((request) => {
-                                  const status = getBudgetRequestMeta(request);
-                                  return (
-                                    <div key={request.id} className="p-2.5 rounded-lg border border-white/5 bg-white/[0.02]">
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div>
-                                          <div className="text-[11px] text-white font-medium">{request.title}</div>
-                                          <div className="text-[10px] text-zinc-500 mt-0.5">{request.scope}</div>
-                                        </div>
-                                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
-                                          <status.Icon className="w-2.5 h-2.5" />
-                                          {status.label}
-                                        </span>
-                                      </div>
-                                      <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-500">
-                                        <span>{request.when}</span>
-                                        <span className="text-white font-semibold tabular">{fmtCurrency(request.amount, { compact: false })}</span>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </RequestSummaryCard>
-
-                              <RequestSummaryCard
-                                title={`Change requests (${selectedPhaseTopups.length})`}
-                                icon={ArrowUpRightSquare}
-                                empty="No change requests mapped to this phase."
-                                testid={`phase-topup-requests-${selectedPhase.id}`}
-                              >
-                                {selectedPhaseTopups.map((request) => (
-                                  <TopupRequestCard key={request.id} request={request} />
-                                ))}
-                              </RequestSummaryCard>
-
-                              <RequestSummaryCard
-                                title={`Changes (${selectedPhaseChanges.length})`}
-                                icon={Shield}
-                                empty="No change requests mapped to this phase."
-                                testid={`phase-change-requests-${selectedPhase.id}`}
-                              >
-                                {selectedPhaseChanges.map((request) => (
-                                  <ChangeRequestCard key={request.id} request={request} />
-                                ))}
-                              </RequestSummaryCard>
-                            </div>
-
-                            <div className="mt-4 rounded-lg border border-white/5 bg-[#12121A] overflow-hidden">
-                              <div className="px-4 py-3 border-b border-white/5">
-                                <div className="font-display font-semibold text-[15px] text-white">Logged tasks &amp; approval status</div>
-                                <div className="text-xs text-zinc-500 mt-0.5">
-                                  {selectedPhaseLogs.length} logged task{selectedPhaseLogs.length === 1 ? "" : "s"} · approvals reflect current phase delivery state
-                                </div>
-                              </div>
-                              {selectedPhaseLogs.length === 0 ? (
-                                <div className="py-8 text-center text-xs text-zinc-500">No tasks have been logged for this phase yet.</div>
-                              ) : (
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-sm">
-                                    <thead>
-                                      <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.02]">
-                                        <th className="text-left py-2.5 px-3">Task</th>
-                                        <th className="text-left py-2.5 px-3">Assignee</th>
-                                        <th className="text-right py-2.5 px-3">Tasks</th>
-                                        <th className="text-right py-2.5 px-3">Trajectories</th>
-                                        <th className="text-right py-2.5 px-3">Cost</th>
-                                        <th className="text-left py-2.5 px-3">Approval status</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {selectedPhaseLogs.map((log) => {
-                                        const approval = getTaskApprovalState(log, selectedPhaseDelivery);
-                                        return (
-                                          <tr key={log.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
-                                            <td className="py-3 px-3">
-                                              <div className="text-white font-medium">{log.name}</div>
-                                              {log.notes && <div className="text-[11px] text-zinc-500 mt-0.5 line-clamp-1">{log.notes}</div>}
-                                            </td>
-                                            <td className="py-3 px-3 text-xs text-zinc-300">{log.assignee}</td>
-                                            <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.tasksDone || 0).toLocaleString()}</td>
-                                            <td className="py-3 px-3 text-right tabular text-white font-semibold">{Number(log.trajectories || 0).toLocaleString()}</td>
-                                            <td className="py-3 px-3 text-right tabular text-white font-semibold">{fmtCurrency(getTaskLogRecordedCost(log), { compact: false })}</td>
-                                            <td className="py-3 px-3">
-                                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold border ${approval.cls}`}>
-                                                <approval.Icon className="w-3 h-3" />
-                                                {approval.label}
-                                              </span>
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
-                            </div>
+                            <div className="p-4">
+                            {(() => {
+                              const phaseEntries = budgetTracks.entries.filter((entry) => (entry.phases || []).some((phase) => phase.id === selectedPhase.id));
+                              const baseItems = phaseEntries.flatMap((entry) => [entry.items || {}]);
+                              const requestBreakdowns = [...selectedPhaseTopups, ...selectedPhaseChanges].map((request) => request.breakdown || {});
+                              const modelTotals = selectedPhaseLogs.flatMap((log) => log.modelUsage || []).reduce((map, model) => {
+                                const key = model.modelId || model.modelName || "Model";
+                                const current = map.get(key) || { id: key, label: model.modelName || model.modelLabel || "Model", amount: 0, detail: "Logged utilization" };
+                                current.amount += Number(model.cost || 0);
+                                map.set(key, current);
+                                return map;
+                              }, new Map());
+                              baseItems.flatMap((items) => items.models || []).forEach((model) => {
+                                const key = model.optionId || model.id || model.optionLabel;
+                                if (!modelTotals.has(key)) modelTotals.set(key, { id: key, label: model.optionLabel || model.model || "Model", amount: Number(model.amount || model.estCost || 0), detail: "Approved allocation" });
+                              });
+                              const subscriptions = [
+                                ...baseItems.flatMap((items) => items.subs || []),
+                                ...requestBreakdowns.flatMap((breakdown) => breakdown.subs?.entries || []),
+                              ].map((item, index) => ({ id: item.id || `sub-${index}`, label: item.optionLabel || item.subscription || "Subscription", amount: Number(item.amount || item.estCost || 0), detail: `${Number(item.seats || 0)} seat${Number(item.seats || 0) === 1 ? "" : "s"}`, members: item.members || [] }));
+                              const infrastructure = [
+                                ...baseItems.flatMap((items) => items.infra || []),
+                                ...requestBreakdowns.flatMap((breakdown) => breakdown.infra?.entries || []),
+                              ].map((item, index) => ({ id: item.id || `infra-${index}`, label: item.optionLabel || [item.provider, item.instance].filter(Boolean).join(" · ") || "Infrastructure", amount: Number(item.amount || item.estCost || 0), detail: item.days ? `${item.days} days` : "Approved allocation" }));
+                              return <div className="grid grid-cols-1 xl:grid-cols-4 gap-3">
+                                <RequestSummaryCard title={`Additional request (${selectedPhaseTopups.length + selectedPhaseChanges.length})`} icon={ArrowUpRightSquare} empty="No additional request mapped to this phase." testid={`phase-additional-requests-${selectedPhase.id}`}>
+                                  {[...selectedPhaseTopups.map((request) => <TopupRequestCard key={request.id} request={request} />), ...selectedPhaseChanges.map((request) => <ChangeRequestCard key={request.id} request={request} />)]}
+                                </RequestSummaryCard>
+                                <PhaseResourceCard title="Models" icon={Layers} entries={Array.from(modelTotals.values())} empty="No models allocated to this phase." />
+                                <PhaseResourceCard title="Subscriptions" icon={Wallet} entries={subscriptions} empty="No subscriptions allocated to this phase." />
+                                <PhaseResourceCard title="Infrastructure" icon={Archive} entries={infrastructure} empty="No infrastructure allocated to this phase." />
+                              </div>;
+                            })()}
                           </div>
+                          </details>
                         )}
-                      </>
+                      </div>
                     )}
                   </div>
                 )}
 
-                {/* Top-up requests — only shown when there are any (the empty card is hidden) */}
-                {projectTopups.length > 0 && (
-                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <ArrowUpRightSquare className="w-4 h-4 text-fuchsia-300" />
-                        <div className="font-display font-semibold text-[15px] text-white">Change requests</div>
-                      </div>
-                    {canRequestTopup && (
-                      <Button size="sm" onClick={() => { setTopupPhaseId(""); setTopupOpen(true); }} className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1" data-testid="btn-raise-topup-project">
-                        <Plus className="w-3 h-3" /> Raise additional request
-                      </Button>
-                    )}
-                  </div>
-                  {projectTopups.length === 0 ? (
-                    <div className="text-xs text-zinc-500 py-4 text-center">No change requests raised for this project.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {projectTopups.map((request) => (
-                        <TopupRequestCard key={request.id} request={request} />
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 items-start">
+                {/* Batches with filter */}
+                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="budget-batches">
+                  <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+                    <div>
+                      <div className="text-[15px] font-semibold text-white font-display">Batches</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Delivered batches for this project</div>
+                    </div>
+                    <div className="flex items-center gap-1 flex-wrap">
+                      {["all", ...budgetBatchStatuses].map((status) => (
+                        <button
+                          key={status}
+                          type="button"
+                          onClick={() => setBudgetBatchFilter(status)}
+                          data-testid={`budget-batch-filter-${status}`}
+                          className={`px-2.5 py-1 rounded-lg border text-[11px] font-medium ${budgetBatchFilter === status ? "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-zinc-100"}`}
+                        >
+                          {status === "all" ? "All" : (batchStatusLabelMap[status] || status)} ({status === "all" ? projectBatches.length : projectBatches.filter((batch) => batch.status === status).length})
+                        </button>
                       ))}
+                    </div>
+                  </div>
+                  {filteredBudgetBatches.length === 0 ? (
+                    <div className="text-center text-[11px] text-zinc-500 py-6">No batches match this filter.</div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[10px] uppercase tracking-widest text-zinc-500 border-b border-white/5">
+                            <th className="text-left font-semibold py-2 pr-3">Batch</th>
+                            <th className="text-left font-semibold py-2 px-3">Status</th>
+                            <th className="text-left font-semibold py-2 px-3">Delivered</th>
+                            <th className="text-right font-semibold py-2 pl-3">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredBudgetBatches.map((batch) => (
+                            <tr key={batch.id} className="border-b border-white/[0.04]">
+                              <td className="py-2.5 pr-3 text-zinc-100">{batch.phaseName || batch.id}</td>
+                              <td className="py-2.5 px-3">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">{batchStatusLabelMap[batch.status] || batch.status || "—"}</span>
+                              </td>
+                              <td className="py-2.5 px-3 text-zinc-400 tabular">{batch.deliveredAt ? new Date(batch.deliveredAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—"}</td>
+                              <td className="py-2.5 pl-3 text-right text-zinc-100 tabular">{fmtCurrency(Number(batch.proposedAmount || batch.amount || 0), { compact: false })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
+
+                {/* Allocation Ledger */}
+                {allocationLedger.length > 0 && (
+                  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="budget-allocation-ledger">
+                    <div className="text-[15px] font-semibold text-white font-display mb-4">Allocation Ledger</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="text-[10px] uppercase tracking-widest text-zinc-500 border-b border-white/5">
+                            <th className="text-left font-semibold py-2 pr-3">Date</th>
+                            <th className="text-left font-semibold py-2 px-3">Action</th>
+                            <th className="text-right font-semibold py-2 pl-3">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {allocationLedger.map((entry) => (
+                            <tr key={entry.id} className="border-b border-white/[0.04]">
+                              <td className="py-2.5 pr-3 text-zinc-400 tabular">{entry.at ? new Date(entry.at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "—"}</td>
+                              <td className="py-2.5 px-3">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border ${entry.action === "Budget" ? "bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/30" : "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"}`}>{entry.action}</span>
+                              </td>
+                              <td className="py-2.5 pl-3 text-right text-emerald-300 tabular font-semibold">+{fmtCurrency(entry.amount, { compact: false })}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 )}
+                </div>
               </>
             );
           })()}
@@ -2295,19 +2275,6 @@ const EmptySetupState = ({ message }) => (
   </div>
 );
 
-const CompactSetupStat = ({ title, value, meta, icon: Icon }) => (
-  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-    <div className="flex items-center justify-between gap-2">
-      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{title}</div>
-      <div className="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.03] flex items-center justify-center">
-        <Icon className="w-3.5 h-3.5 text-fuchsia-300" />
-      </div>
-    </div>
-    <div className="mt-3 font-display text-2xl font-semibold text-white tabular">{value}</div>
-    <div className="mt-1 text-[11px] text-zinc-500 leading-relaxed">{meta}</div>
-  </div>
-);
-
 const ipStyle = "w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40";
 
 const Field = ({ label, children }) => (
@@ -2402,12 +2369,10 @@ const ProjectKeyStat = ({ label, value }) => (
   </div>
 );
 
-const BudgetTrackCard = ({ track, deliveries = [], topupCount, changeCount }) => {
+const BudgetTrackCard = ({ track, deliveries = [], logs = [], showActual = false, actualSpend = 0, topups = [], changes = [], topupCount, changeCount }) => {
   const latest = track.latest || {};
   const status = getBudgetReviewMeta(latest.status);
   const trackLabel = formatBudgetTabLabel(track.key || latest.budgetType || track.label);
-  const raisedFrom = latest.submittedRole || latest.requesterRole || "";
-  const teamType = latest.teamType || "";
   const sourceDelivery = latest.sourceDeliveryId
     ? deliveries.find((delivery) => delivery.id === latest.sourceDeliveryId)
     : track.key === "Testing"
@@ -2416,10 +2381,17 @@ const BudgetTrackCard = ({ track, deliveries = [], topupCount, changeCount }) =>
         .sort((left, right) => new Date(right.deliveredAt || 0).getTime() - new Date(left.deliveredAt || 0).getTime())[0]
       : null;
   const trackedTasks = Number(sourceDelivery?.rnd?.taskCount || latest.totalTasks || 0);
+  const completedTasks = logs.reduce((sum, log) => sum + Number(log.tasksDone || log.successfulTasks || 0), 0);
+  const loggedCost = logs.reduce((sum, log) => sum + getTaskLogRecordedCost(log), 0);
+  const progress = trackedTasks > 0 ? Math.min(100, Math.round((completedTasks / trackedTasks) * 100)) : 0;
+  const models = (latest.items?.models || []).map((item, index) => ({ id: item.id || `model-${index}`, label: item.optionLabel || item.model || "Model", amount: Number(item.amount || item.estCost || 0), detail: "Approved allocation" }));
+  const infrastructure = (latest.items?.infra || []).map((item, index) => ({ id: item.id || `infra-${index}`, label: item.optionLabel || [item.provider, item.instance].filter(Boolean).join(" · ") || "Infrastructure", amount: Number(item.amount || item.estCost || 0), detail: item.days ? `${item.days} days` : "Approved allocation" }));
+  const subscriptions = (latest.items?.subs || []).map((item, index) => ({ id: item.id || `sub-${index}`, label: item.optionLabel || item.subscription || "Subscription", amount: Number(item.amount || item.estCost || 0), seats: Number(item.seats || 0), members: Array.isArray(item.members) ? item.members : [] }));
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3">
-      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_repeat(5,minmax(0,0.7fr))] gap-3 items-center">
+    <details className="group rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden">
+      <summary className="list-none cursor-pointer px-4 py-3 [&::-webkit-details-marker]:hidden">
+      <div className={`grid grid-cols-1 sm:grid-cols-2 ${showActual ? "lg:grid-cols-[1.4fr_1fr_1fr_1fr_1.4fr_1fr_32px]" : "lg:grid-cols-[1.5fr_1fr_1fr_1.4fr_1fr_32px]"} gap-3 items-center`}>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">{trackLabel}</span>
@@ -2427,28 +2399,25 @@ const BudgetTrackCard = ({ track, deliveries = [], topupCount, changeCount }) =>
               <status.Icon className="w-3 h-3" />
               {status.label}
             </span>
-            {raisedFrom && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border border-sky-500/30 bg-sky-500/10 text-sky-200">
-                Raised from {raisedFrom}
-              </span>
-            )}
-            {teamType && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold border border-white/10 bg-white/[0.04] text-zinc-300">
-                {teamType} team
-              </span>
-            )}
           </div>
         </div>
-        <BudgetTrackMetric label="Budget" value={fmtCurrency(latest.total || 0, { compact: false })} />
-        <BudgetTrackMetric label="Tracked task" value={trackedTasks.toLocaleString()} />
-        <BudgetTrackMetric label="Trajectories" value={Number(latest.totalTrajectories || 0).toLocaleString()} />
-        <BudgetTrackMetric label="Requests" value={`${topupCount} / ${changeCount}`} />
-        <BudgetTrackMetric
-          label="Latest submit"
-          value={latest.submittedAt ? new Date(latest.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
-        />
+        <BudgetTrackMetric label="Base budget" value={fmtCurrency(latest.total || 0, { compact: false })} />
+        <BudgetTrackMetric label="Logged" value={fmtCurrency(loggedCost, { compact: false })} />
+        {showActual && <BudgetTrackMetric label="Actual" value={fmtCurrency(actualSpend, { compact: false })} />}
+        <div className="min-w-0"><div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Task Done</div><div className="mt-1 text-sm text-white tabular">{completedTasks.toLocaleString()}/{trackedTasks.toLocaleString()} tasks · {progress}%</div><div className="mt-2 h-1.5 rounded-full bg-white/[0.07] overflow-hidden"><div className={`h-full ${progress >= 100 ? "bg-emerald-500" : "bg-fuchsia-500"}`} style={{ width: `${progress}%` }} /></div></div>
+        <BudgetTrackMetric label="Additional requests" value={Number(topupCount + changeCount).toLocaleString()} />
+        <ChevronRight className="w-4 h-4 text-zinc-500 transition-transform group-open:rotate-90" />
       </div>
-    </div>
+      </summary>
+      <div className="border-t border-white/5 p-4 grid grid-cols-1 xl:grid-cols-4 gap-3">
+        <RequestSummaryCard title={`Additional request (${topups.length + changes.length})`} icon={ArrowUpRightSquare} empty="No additional request mapped to this track.">
+          {[...topups.map((request) => <TopupRequestCard key={request.id} request={request} />), ...changes.map((request) => <ChangeRequestCard key={request.id} request={request} />)]}
+        </RequestSummaryCard>
+        <PhaseResourceCard title="Models" icon={Layers} entries={models} empty="No models allocated to this track." />
+        <SubscriptionResourceCard entries={subscriptions} />
+        <PhaseResourceCard title="Infrastructure" icon={Archive} entries={infrastructure} empty="No infrastructure allocated to this track." />
+      </div>
+    </details>
   );
 };
 
@@ -2461,7 +2430,7 @@ const BudgetTrackMetric = ({ label, value }) => (
 
 // KPI card used in the Budget tab redesign (Spent/Cap + smaller stat cells)
 const MiniKpi = ({ label, value, sub, accent = "text-white", testid }) => (
-  <div className="rounded-2xl border border-white/5 bg-white/[0.02] p-4" data-testid={testid}>
+  <div className="h-full min-h-[132px] rounded-2xl border border-white/5 bg-white/[0.02] p-4 flex flex-col justify-center" data-testid={testid}>
     <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
     <div className={`mt-2 font-display text-2xl font-semibold tabular ${accent}`}>{value}</div>
     {sub && <div className="text-[11px] text-zinc-500 mt-1 tabular">{sub}</div>}
@@ -2479,6 +2448,39 @@ const RequestSummaryCard = ({ title, icon: Icon, children, empty, testid }) => {
     </div>
   );
 };
+
+const PhaseResourceCard = ({ title, icon: Icon, entries = [], empty }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+    <div className="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+      <Icon className="w-3 h-3" /> {title} ({entries.length})
+    </div>
+    {entries.length === 0 ? <div className="text-[11px] text-zinc-600 italic">{empty}</div> : (
+      <div className="space-y-1.5">
+        {entries.map((entry) => (
+          <div key={entry.id} className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0"><div className="text-[11px] font-medium text-white truncate">{entry.label}</div><div className="mt-0.5 text-[10px] text-zinc-500">{entry.detail}</div></div>
+              <div className="text-[11px] font-semibold tabular text-white">{fmtCurrency(entry.amount || 0, { compact: false })}</div>
+            </div>
+            {entry.members?.length > 0 && <div className="mt-2 text-[10px] text-zinc-500">{entry.members.map((member) => typeof member === "string" ? member : member.name).filter(Boolean).join(", ")}</div>}
+          </div>
+        ))}
+      </div>
+    )}
+  </div>
+);
+
+const SubscriptionResourceCard = ({ entries = [] }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+    <div className="flex items-center gap-1.5 mb-2 text-[10px] uppercase tracking-widest font-semibold text-zinc-500"><Wallet className="w-3 h-3" /> Subscriptions ({entries.length})</div>
+    {entries.length === 0 ? <div className="text-[11px] text-zinc-600 italic">No subscriptions allocated to this track.</div> : <div className="space-y-1.5">
+      {entries.map((entry) => <details key={entry.id} className="group/sub rounded-lg border border-white/5 bg-white/[0.02]">
+        <summary className="list-none cursor-pointer p-2.5 [&::-webkit-details-marker]:hidden"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="text-[11px] font-medium text-white truncate">{entry.label}</div><div className="mt-0.5 text-[10px] text-zinc-500">{entry.members.length}/{entry.seats || entry.members.length} seats allocated</div></div><div className="flex items-center gap-2"><span className="text-[11px] font-semibold tabular text-white">{fmtCurrency(entry.amount || 0, { compact: false })}</span><ChevronRight className="w-3.5 h-3.5 text-zinc-500 transition-transform group-open/sub:rotate-90" /></div></div></summary>
+        <div className="border-t border-white/5 px-2.5 py-2"><div className="text-[9px] uppercase tracking-widest text-zinc-600">Allocated members</div><div className="mt-1.5 flex flex-wrap gap-1">{entry.members.length ? entry.members.map((member) => <span key={typeof member === "string" ? member : member.id || member.name} className="rounded-md border border-fuchsia-500/15 bg-fuchsia-500/[0.07] px-2 py-1 text-[10px] text-fuchsia-200">{typeof member === "string" ? member : member.name || member.email}</span>) : <span className="text-[10px] text-zinc-500">No members allocated.</span>}</div></div>
+      </details>)}
+    </div>}
+  </div>
+);
 
 // Change requests and top-ups are both "additional requests" — render them with the same card look.
 const ChangeRequestCard = ({ request }) => {
@@ -2498,19 +2500,21 @@ const ChangeRequestCard = ({ request }) => {
             </span>
           </div>
           <div className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{request.reason}</div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <TopupBreakdownPill label="Models" value={breakdown.models} />
-            <TopupBreakdownPill label="Infra" value={breakdown.infra} />
-            <TopupBreakdownPill label="Subs" value={breakdown.subs} />
-          </div>
+          {hasBreakdown && <div className="mt-2 flex flex-wrap gap-1.5">
+              <TopupBreakdownPill label="Models" value={breakdown.models} />
+              <TopupBreakdownPill label="Infra" value={breakdown.infra} />
+              <TopupBreakdownPill label="Subs" value={breakdown.subs} />
+            </div>}
           {breakdownSelections.length > 0 && (
             <div className="mt-2 text-[10px] text-zinc-400 leading-relaxed">
               {breakdownSelections.join(" · ")}
             </div>
           )}
           {!hasBreakdown && (
-            <div className="mt-2 text-[10px] text-zinc-600">
-              Line-item breakdown was not captured on the request.
+            <div className="mt-2 rounded-md border border-fuchsia-500/15 bg-fuchsia-500/[0.05] p-2">
+              <div className="text-[9px] uppercase tracking-widest font-semibold text-fuchsia-300/70">Request specification</div>
+              <div className="mt-1 text-[10px] text-zinc-300">{request.reason || request.description || request.type || "Additional project scope"}</div>
+              {request.affectedPhase && <div className="mt-0.5 text-[10px] text-zinc-500">Phase: {request.affectedPhase}</div>}
             </div>
           )}
         </div>
@@ -2544,19 +2548,21 @@ const TopupRequestCard = ({ request }) => {
             </span>
           </div>
           <div className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{request.reason}</div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            <TopupBreakdownPill label="Models" value={breakdown.models} />
-            <TopupBreakdownPill label="Infra" value={breakdown.infra} />
-            <TopupBreakdownPill label="Subs" value={breakdown.subs} />
-          </div>
+          {hasBreakdown && <div className="mt-2 flex flex-wrap gap-1.5">
+              <TopupBreakdownPill label="Models" value={breakdown.models} />
+              <TopupBreakdownPill label="Infra" value={breakdown.infra} />
+              <TopupBreakdownPill label="Subs" value={breakdown.subs} />
+            </div>}
           {breakdownSelections.length > 0 && (
             <div className="mt-2 text-[10px] text-zinc-400 leading-relaxed">
               {breakdownSelections.join(" · ")}
             </div>
           )}
           {!hasBreakdown && (
-            <div className="mt-2 text-[10px] text-zinc-600">
-              Line-item breakdown was not captured on this request.
+            <div className="mt-2 rounded-md border border-fuchsia-500/15 bg-fuchsia-500/[0.05] p-2">
+              <div className="text-[9px] uppercase tracking-widest font-semibold text-fuchsia-300/70">Request specification</div>
+              <div className="mt-1 text-[10px] text-zinc-300">{request.reason || request.description || request.type || "Additional budget"}</div>
+              <div className="mt-0.5 text-[10px] text-zinc-500">For {request.phaseName || "the selected project phase"}</div>
             </div>
           )}
         </div>

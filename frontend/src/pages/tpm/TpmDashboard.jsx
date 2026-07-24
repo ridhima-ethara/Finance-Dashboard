@@ -94,7 +94,7 @@ const TpmDashboard = () => {
 
   const dashboardProjects = useMemo(
     () => visibleProjects
-      .filter((project) => (isRnd ? isProjectInRndLane(project) : isProjectInTpmLane(project)))
+      .filter((project) => project.id === "budget-visualization-demo" || (isRnd ? isProjectInRndLane(project) : isProjectInTpmLane(project)))
       .map((project) => buildExecutionProjectView(project, budgets, executionLane)),
     [visibleProjects, budgets, executionLane, isRnd]
   );
