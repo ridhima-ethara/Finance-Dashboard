@@ -150,7 +150,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
             <div>
               <DialogTitle className="font-display text-lg text-white">Raise additional request</DialogTitle>
               <DialogDescription className="text-xs text-zinc-400">
-                One request for model changes, infra changes, subscription changes, or budget changes · CTO reviews first, CFO gives final sign-off
+                One additional request for model, infrastructure, subscription, or budget updates · CTO reviews first, CFO gives final sign-off
               </DialogDescription>
             </div>
           </div>

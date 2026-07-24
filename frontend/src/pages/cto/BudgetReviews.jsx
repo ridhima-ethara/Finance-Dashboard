@@ -13,8 +13,8 @@ import {
 
 const TYPE_LABELS = {
   Budget: "Budget",
-  "Budget Change": "Budget Change",
-  "Change Request": "Change Request",
+  "Budget Change": "Additional Request",
+  "Change Request": "Additional Request",
 };
 
 const TYPE_ICONS = {
@@ -96,7 +96,7 @@ const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
     requestId: request.requestId || `CRQ/${String(index + 1).padStart(5, "0")}`,
     category: "additional",
     type: "Change Request",
-    title: request.type || "Project change request",
+    title: request.type || "Project additional request",
     project: request.projectName || "Unknown project",
     raisedBy: request.requester || "Project team",
     raisedRole: request.requesterRole || "TPM",

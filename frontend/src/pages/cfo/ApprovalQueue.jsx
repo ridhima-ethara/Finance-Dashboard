@@ -72,7 +72,7 @@ const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
       href: `/topup-requests/${r.id}`,
       requestId: `TUR/2026/00${seq}`,
       type: "Top-up",
-      title: `${r.phaseName} change request`,
+      title: `${r.phaseName} additional request`,
       project: r.projectName,
       subLabel: r.phaseName,
       raisedBy: r.requester,
@@ -113,7 +113,13 @@ const buildQueue = (budgetReviews, topupRequests, changeRequests) => {
 };
 
 const typeIcons = { Budget: FileText, "Top-up": ArrowUpRightSquare, "Change Request": GitPullRequest };
-const typeLabels = { Budget: "Budget", "Top-up": "Budget Change", "Change Request": "Change Request", All: "All" };
+const typeLabels = {
+  Budget: "Budget",
+  "Top-up": "Additional Request",
+  "Change Request": "Additional Request",
+  "Additional Request": "Additional Request",
+  All: "All",
+};
 const statusChip = {
   Pending: "bg-amber-500/15 text-amber-300 border-amber-500/30",
   Approved: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
@@ -136,7 +142,7 @@ const ApprovalQueue = () => {
   useEffect(() => {
     const type = searchParams.get("type");
     const status = searchParams.get("status");
-    setTypeFilter(type && ["Budget", "Top-up", "Change Request"].includes(type) ? type : "All");
+    setTypeFilter(type === "Top-up" || type === "Change Request" ? "Additional Request" : type === "Budget" ? "Budget" : "All");
     setStatusFilter(status && ["Pending", "Approved", "Rejected"].includes(status) ? status : "All");
   }, [searchParams]);
 
@@ -144,13 +150,13 @@ const ApprovalQueue = () => {
     return {
       All: queue.length,
       Budget: queue.filter((q) => q.type === "Budget").length,
-      "Top-up": queue.filter((q) => q.type === "Top-up").length,
-      "Change Request": queue.filter((q) => q.type === "Change Request").length,
+      "Additional Request": queue.filter((q) => q.type === "Top-up" || q.type === "Change Request").length,
     };
   }, [queue]);
 
   const filtered = queue.filter((q) => {
-    if (typeFilter !== "All" && q.type !== typeFilter) return false;
+    if (typeFilter === "Budget" && q.type !== "Budget") return false;
+    if (typeFilter === "Additional Request" && q.type !== "Top-up" && q.type !== "Change Request") return false;
     if (statusFilter !== "All") {
       if (statusFilter === "Pending" && q.status !== "Pending") return false;
       if (statusFilter === "Approved" && q.status !== "Approved") return false;
@@ -170,7 +176,7 @@ const ApprovalQueue = () => {
 
       {/* Type tabs */}
       <div className="flex items-center gap-6 border-b border-white/5">
-        {["All", "Budget", "Top-up", "Change Request"].map((t) => (
+        {["All", "Budget", "Additional Request"].map((t) => (
           <button
             key={t}
             onClick={() => setTypeFilter(t)}

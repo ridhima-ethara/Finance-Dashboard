@@ -35,6 +35,7 @@ const Buffer = () => {
   const [pct, setPct] = useState("5"); // percentage input
   const [selectedProject, setSelectedProject] = useState(bufferOverview.perProject[0]?.id || "");
   const [expanded, setExpanded] = useState({});
+  const [lifecyclePage, setLifecyclePage] = useState(1);
 
   const total = bufferOverview.total;
   const available = bufferOverview.available;
@@ -47,6 +48,11 @@ const Buffer = () => {
   const amountFromPctProject = proj ? Math.round((proj.approved * pctValue) / 100) : 0;
 
   const lifecycle = useMemo(() => buildLifecycle(bufferOverview.perProject, bufferOverview.policyPct), [bufferOverview]);
+  const lifecyclePageSize = 10;
+  const lifecycleTotalPages = Math.max(1, Math.ceil(lifecycle.length / lifecyclePageSize));
+  const currentLifecyclePage = Math.min(lifecyclePage, lifecycleTotalPages);
+  const lifecyclePageStart = (currentLifecyclePage - 1) * lifecyclePageSize;
+  const paginatedLifecycle = lifecycle.slice(lifecyclePageStart, lifecyclePageStart + lifecyclePageSize);
 
   const validPct = (v) => v > 0 && v <= 100;
 
@@ -80,28 +86,33 @@ const Buffer = () => {
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
   return (
-    <div className="space-y-6" data-testid="page-buffer">
+    <div className="space-y-5" data-testid="page-buffer">
       {/* Header */}
-      <div>
-        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-emerald-400">
-          <ShieldCheck className="w-3 h-3" />
-          CFO Portal · Confidential
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-emerald-400">
+            <ShieldCheck className="w-3 h-3" /> CFO Portal
+          </div>
+          <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white flex items-center gap-2">
+            Contingency buffer <Lock className="w-5 h-5 text-fuchsia-300" />
+          </h1>
+          <p className="text-sm text-zinc-400 mt-1">
+            Hidden safety cushion for overruns and emergency additional requests.
+          </p>
         </div>
-        <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white flex items-center gap-2">
-          Contingency buffer <Lock className="w-5 h-5 text-fuchsia-300" />
-        </h1>
-        <p className="text-sm text-zinc-400 mt-1">
-          Hidden safety cushion. Not visible to TPM, PL, or CTO. Used for over-runs and emergency budget changes.
-        </p>
+        <div className="inline-flex items-center gap-2 rounded-full border border-fuchsia-500/25 bg-fuchsia-500/[0.08] px-3 py-1.5 text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">
+          <Lock className="w-3 h-3" /> CFO confidential
+        </div>
       </div>
 
       {/* Buffer overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="bg-gradient-to-br from-fuchsia-500/20 via-fuchsia-500/[0.05] to-transparent rounded-2xl border border-fuchsia-500/25 p-5" data-testid="buffer-overview">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="relative overflow-hidden md:col-span-2 bg-gradient-to-br from-fuchsia-500/20 via-fuchsia-500/[0.06] to-transparent rounded-2xl border border-fuchsia-500/25 p-5" data-testid="buffer-overview">
+          <div className="absolute -right-12 -top-16 w-40 h-40 rounded-full border border-fuchsia-400/10" />
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300 mb-2">
             <Wallet className="w-3 h-3" /> Total pool
           </div>
-          <div className="font-display text-4xl font-semibold text-white tabular">{fmtCurrency(total)}</div>
+          <div className="font-display text-4xl font-semibold text-white tabular relative">{fmtCurrency(total)}</div>
           <div className="mt-4 h-2 rounded-full bg-white/[0.05] overflow-hidden">
             <div className="h-full bg-gradient-to-r from-fuchsia-500 to-pink-500" style={{ width: `${utilizationPct}%` }} />
           </div>
@@ -137,15 +148,15 @@ const Buffer = () => {
       )}
 
       {/* Actions — percentage based */}
-      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="buffer-actions">
+      <div className="bg-[#12121A] rounded-2xl border border-white/10 p-5 shadow-[0_18px_50px_rgba(0,0,0,0.12)]" data-testid="buffer-actions">
         <div className="flex items-baseline justify-between mb-3">
-          <div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
             <div className="font-display font-semibold text-[15px] text-white">Buffer actions</div>
             <div className="text-xs text-zinc-500 mt-0.5">Buffer allocation is expressed as a percentage. Pool actions use % of total pool · project actions use % of the project&apos;s approved budget.</div>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-          <div>
+          <div className="rounded-xl border border-white/5 bg-white/[0.02] p-3">
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Project (for allocate/release)</div>
             <select
               value={selectedProject}
@@ -214,17 +225,22 @@ const Buffer = () => {
       </div>
 
       {/* Projects using buffer — lifecycle view */}
-      <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="buffer-projects">
-        <div className="mb-3">
-          <div className="font-display font-semibold text-[15px] text-white">Projects using buffer · lifecycle</div>
-          <div className="text-xs text-zinc-500 mt-0.5">
-            Initial approved → Additional requested → Buffer approved → Consumed → Remaining
+      <div className="bg-[#12121A] rounded-2xl border border-white/10 p-6 shadow-[0_18px_50px_rgba(0,0,0,0.12)]" data-testid="buffer-projects">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <div className="font-display font-semibold text-lg text-white">Projects using buffer · lifecycle</div>
+            <div className="text-xs text-zinc-500 mt-0.5">
+              Initial approved → Additional requested → Buffer approved → Consumed → Remaining
+            </div>
           </div>
+          <span className="inline-flex items-center rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[10px] font-semibold text-zinc-300 tabular">
+            {lifecycle.length} projects
+          </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="overflow-x-auto rounded-xl border border-white/5">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead>
-              <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
+              <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.025]">
                 <th className="text-left py-2 px-3 w-8" />
                 <th className="text-left py-2 px-3">Project</th>
                 <th className="text-right py-2 px-3">Initial buffer</th>
@@ -236,14 +252,14 @@ const Buffer = () => {
               </tr>
             </thead>
             <tbody>
-              {lifecycle.map((p) => {
+              {paginatedLifecycle.map((p) => {
                 const isOpen = !!expanded[p.id];
                 const consumedPct = p.bufferApproved ? Math.round((p.consumed / p.bufferApproved) * 100) : 0;
                 return (
                   <Fragment key={p.id}>
                     <tr
                       data-testid={`buffer-project-${p.id}`}
-                      className="border-b border-white/5 hover:bg-white/[0.03] cursor-pointer"
+                      className="border-b border-white/5 last:border-0 hover:bg-fuchsia-500/[0.035] cursor-pointer transition-colors"
                       onClick={() => toggle(p.id)}
                     >
                       <td className="py-3 px-3 text-zinc-500">
@@ -265,8 +281,8 @@ const Buffer = () => {
                     </tr>
                     {isOpen && (
                       <tr data-testid={`buffer-project-detail-${p.id}`} className="bg-white/[0.02]">
-                        <td colSpan={8} className="px-3 py-3">
-                          <div className="pl-6 pr-2">
+                        <td colSpan={8} className="px-4 py-5">
+                          <div className="pl-8 pr-3">
                             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">Lifecycle timeline</div>
                             <LifecycleBar row={p} />
                             <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
@@ -285,6 +301,36 @@ const Buffer = () => {
             </tbody>
           </table>
         </div>
+        {lifecycle.length > lifecyclePageSize && (
+          <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-4" data-testid="buffer-lifecycle-pagination">
+            <div className="text-xs text-zinc-500 tabular">
+              Showing {lifecyclePageStart + 1}–{Math.min(lifecyclePageStart + lifecyclePageSize, lifecycle.length)} of {lifecycle.length} projects
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={currentLifecyclePage === 1}
+                onClick={() => setLifecyclePage(Math.max(1, currentLifecyclePage - 1))}
+                className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-xs text-zinc-300 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                data-testid="buffer-lifecycle-previous"
+              >
+                Previous
+              </button>
+              <span className="min-w-[76px] text-center text-xs text-zinc-400 tabular">
+                Page {currentLifecyclePage} of {lifecycleTotalPages}
+              </span>
+              <button
+                type="button"
+                disabled={currentLifecyclePage === lifecycleTotalPages}
+                onClick={() => setLifecyclePage(Math.min(lifecycleTotalPages, currentLifecyclePage + 1))}
+                className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-xs text-zinc-300 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                data-testid="buffer-lifecycle-next"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

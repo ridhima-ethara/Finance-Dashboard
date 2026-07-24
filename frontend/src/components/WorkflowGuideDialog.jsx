@@ -19,7 +19,7 @@ const ROLE_TABS = [
     steps: [
       { title: "Create a new project", detail: "Click New project on the L2 dashboard, assign Projects and RL Environment leads, and set priority." },
       { title: "Review incoming budgets", detail: "Open Budget Reviews to approve, partially approve, or return Projects budget submissions." },
-      { title: "Handle change requests & top-ups", detail: "Approve or return Projects change requests and top-up asks from the alert strip tiles." },
+      { title: "Handle additional requests", detail: "Approve or return project additional requests from the alert strip tiles." },
       { title: "Monitor portfolio health", detail: "Track utilization, high-risk projects, and delivery progress from the monitoring panels." },
     ],
   },
@@ -30,7 +30,7 @@ const ROLE_TABS = [
     accent: "emerald",
     tagline: "Financial gatekeeper & recovery",
     steps: [
-      { title: "Work the Approval Queue", detail: "Review budgets, top-ups, and change requests already cleared by L2." },
+      { title: "Work the Approval Queue", detail: "Review budgets and additional requests already cleared by L2." },
       { title: "Sign off Batch Deliveries", detail: "Approve Projects-submitted delivery batches so invoices can be raised to clients." },
       { title: "Track Client Recovery", detail: "Monitor outstanding recovery and follow-ups from the Client Recovery page." },
       { title: "Watch the Contingency Buffer", detail: "Use Financial Monitoring & Early Warning to catch overruns before they hurt margin." },
@@ -46,7 +46,7 @@ const ROLE_TABS = [
       { title: "Open your assigned project", detail: "Once RL Environment finishes testing, the project is promoted to \"Ready for production budget\"." },
       { title: "Build the production budget", detail: "Use Budget Builder to plan tasks, models, tokens, and phase costs. Submit for L2 review." },
       { title: "Log daily consumption", detail: "Record model usage, tasks completed, and trajectories on the Consumption page every day." },
-      { title: "Raise Change Requests / Top-ups", detail: "If scope or cost shifts, submit a CR or top-up to L2 → L3 for approval." },
+      { title: "Raise Additional Requests", detail: "If scope or cost shifts, submit an additional request to L2 → L3 for approval." },
       { title: "Deliver batches", detail: "When a milestone completes, submit a batch delivery so L3 can sign off and invoice." },
     ],
   },

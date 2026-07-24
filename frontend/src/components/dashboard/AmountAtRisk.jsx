@@ -33,7 +33,7 @@ const AmountAtRisk = ({ projectsOverride = null }) => {
   return (
     <div
       data-testid="hero-amount-at-risk"
-      className="relative overflow-hidden rounded-2xl p-7 grain min-h-[220px] card-hover"
+      className="relative h-full overflow-hidden rounded-2xl p-5 sm:p-6 grain min-h-[190px] card-hover"
       style={{
         background:
           "radial-gradient(120% 140% at 0% 0%, rgba(232,25,184,0.25) 0%, rgba(232,25,184,0.05) 40%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #1A0A16 0%, #12080F 50%, #0D0509 100%)",
@@ -60,8 +60,8 @@ const AmountAtRisk = ({ projectsOverride = null }) => {
           Amount at risk · portfolio exposure
         </div>
 
-        <div className="mt-4 flex items-end gap-3 flex-wrap">
-          <div className="font-display font-bold text-6xl tabular leading-none">
+        <div className="mt-3 flex items-end gap-3 flex-wrap">
+          <div className="font-display font-bold text-5xl tabular leading-none">
             {fmtCurrency(metrics.amountAtRisk)}
           </div>
           <div className="text-zinc-400 text-base font-medium tabular pb-2">
@@ -69,7 +69,7 @@ const AmountAtRisk = ({ projectsOverride = null }) => {
           </div>
         </div>
 
-        <div className="mt-7 grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-4xl" data-testid="amount-at-risk-metrics">
+        <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="amount-at-risk-metrics">
           <Metric label="Over budget" value={`${metrics.projectsOverBudget} projects`} tone="danger" />
           <Metric label="Health score" value={`${metrics.healthScore}/100`} tone="warning" />
           <Metric label="Est. accuracy" value={fmtPct(metrics.accuracy)} tone="magenta" />
@@ -83,12 +83,12 @@ const Metric = ({ label, value, tone }) => {
   const dot =
     tone === "danger" ? "bg-red-400" : tone === "warning" ? "bg-amber-400" : tone === "magenta" ? "bg-fuchsia-400" : "bg-white/60";
   return (
-    <div className="h-full rounded-xl border border-white/5 bg-white/[0.03] p-4">
-      <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+    <div className="h-full rounded-xl border border-white/5 bg-white/[0.03] px-4 py-3 text-center">
+      <div className="flex items-center justify-center gap-1.5 whitespace-nowrap text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
         <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
         {label}
       </div>
-      <div className="mt-1.5 text-2xl font-display font-semibold tabular text-white">{value}</div>
+      <div className="mt-1 text-2xl font-display font-semibold tabular whitespace-nowrap text-center text-white">{value}</div>
     </div>
   );
 };

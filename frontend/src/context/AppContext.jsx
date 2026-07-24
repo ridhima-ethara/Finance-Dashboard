@@ -647,8 +647,8 @@ const normalizeChangeRequest = (request) => ({
     : [{
         at: request?.createdAt || new Date().toISOString(),
         actor: `${request?.requester || "TPM"} · TPM`,
-        action: "Submitted change request",
-        detail: `${request?.type || "Change request"} · $${Number(request?.amount || 0).toLocaleString()}`,
+        action: "Submitted additional request",
+        detail: `${request?.type || "Additional request"} · $${Number(request?.amount || 0).toLocaleString()}`,
       }],
 });
 
@@ -2475,7 +2475,7 @@ export const AppProvider = ({ children }) => {
         {
           at: new Date().toISOString(),
           actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
-          action: "Submitted change request",
+          action: "Submitted additional request",
           detail: `${phaseName || phaseId} · $${totalAmount.toLocaleString()}${requestedBufferPct > 0 ? ` · ${requestedBufferPct}% buffer` : ""}`,
         },
       ],
@@ -3277,7 +3277,7 @@ export const AppProvider = ({ children }) => {
       id,
       projectId,
       projectName: project?.name || projectId,
-      type: amount > 0 ? "Budget change" : "Scope / timeline change",
+      type: "Additional request",
       amount,
       currentBudget: Number(project?.approvedBudget || 0),
       requestedBudget: Number(project?.approvedBudget || 0) + amount,
@@ -3293,7 +3293,7 @@ export const AppProvider = ({ children }) => {
         {
           at: now,
           actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
-          action: "Submitted change request",
+          action: "Submitted additional request",
           detail: `${amount > 0 ? `$${amount.toLocaleString()}` : "No direct budget delta"}${timelineDelta ? ` · ${timelineDelta}` : ""}`,
         },
       ],
@@ -3452,7 +3452,7 @@ export const AppProvider = ({ children }) => {
             id: `a-${currentRequest.projectId}-${Date.now().toString(36)}-cr`,
             ts: at,
             actor: `${user?.name || "CFO"} · CFO`,
-            action: "Change request approved and routed to IT",
+            action: "Additional request approved and routed to IT",
             detail: `${currentRequest.type} · $${finalAmount.toLocaleString()}${comment ? ` · ${comment}` : ""}`,
           },
           ...(projectEntry.auditLog || []),

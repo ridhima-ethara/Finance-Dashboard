@@ -85,7 +85,7 @@ export const BudgetActualChart = ({ projectsOverride = null }) => {
     () => projects.slice(0, 6).map((project) => ({
       name: getProjectLabel(project.name),
       Budget: Number(project.approvedBudget || 0),
-      Estimated: Number(project.estimatedBudget || project.approvedBudget || 0),
+      Claimed: Number(project.estimatedBudget || project.approvedBudget || 0),
       Actual: Number(project.cfoActualSpend || project.actualSpend || 0),
     })),
     [projects]
@@ -94,7 +94,7 @@ export const BudgetActualChart = ({ projectsOverride = null }) => {
   return (
     <CardShell
       testid="chart-budget-actual"
-      title="Actual · Budget · Estimated"
+      title="Actual · Budget · Claimed"
       subtitle="Per project · L3 actuals from IT filing"
     >
       <div className="h-[280px]">
@@ -115,7 +115,7 @@ export const BudgetActualChart = ({ projectsOverride = null }) => {
               formatter={(value) => <span className="text-zinc-400 text-xs">{value}</span>}
             />
             <Bar dataKey="Budget" fill={COLORS.budget} radius={[4, 4, 0, 0]} maxBarSize={18} />
-            <Bar dataKey="Estimated" fill={COLORS.amber} radius={[4, 4, 0, 0]} maxBarSize={18} />
+            <Bar dataKey="Claimed" fill={COLORS.amber} radius={[4, 4, 0, 0]} maxBarSize={18} />
             <Bar dataKey="Actual" fill={COLORS.actual} radius={[4, 4, 0, 0]} maxBarSize={18} />
           </BarChart>
         </ResponsiveContainer>

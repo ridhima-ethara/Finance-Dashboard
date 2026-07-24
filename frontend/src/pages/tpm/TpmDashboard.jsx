@@ -30,18 +30,18 @@ const KpiCard = ({ label, value, sublabel, details = [], icon: Icon, tone = "neu
   };
   const inner = (
     <>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
         {Icon && (
-          <div className="w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center">
-            <Icon className={`w-3.5 h-3.5 ${toneMap[tone]}`} />
+          <div className="w-6 h-6 rounded-md bg-white/5 flex items-center justify-center flex-shrink-0">
+            <Icon className={`w-3 h-3 ${toneMap[tone]}`} />
           </div>
         )}
       </div>
-      <div className="mt-2 font-display font-semibold text-2xl tabular text-white">{value}</div>
-      {sublabel && <div className="mt-1 text-[11px] text-zinc-500 tabular">{sublabel}</div>}
+      <div className="mt-1.5 font-display font-semibold text-xl tabular text-white">{value}</div>
+      {sublabel && <div className="mt-0.5 text-[10px] text-zinc-500 tabular">{sublabel}</div>}
       {details.length > 0 && (
-        <div className="mt-3 border-t border-white/5 pt-3 space-y-1.5">
+        <div className="mt-2 border-t border-white/5 pt-2 space-y-1">
           {details.map((detail) => (
             <div key={detail.label} className="flex items-center justify-between gap-2 text-[11px]">
               <span className="text-zinc-500">{detail.label}</span>
@@ -54,13 +54,13 @@ const KpiCard = ({ label, value, sublabel, details = [], icon: Icon, tone = "neu
   );
   if (to) {
     return (
-      <Link data-testid={testid} to={to} className="bg-[#12121A] rounded-2xl border border-white/5 p-4 card-hover block hover:border-fuchsia-500/30 transition-colors">
+      <Link data-testid={testid} to={to} className="bg-[#12121A] rounded-xl border border-white/5 p-3 card-hover block hover:border-fuchsia-500/30 transition-colors">
         {inner}
       </Link>
     );
   }
   return (
-    <div data-testid={testid} className="bg-[#12121A] rounded-2xl border border-white/5 p-4 card-hover">
+    <div data-testid={testid} className="bg-[#12121A] rounded-xl border border-white/5 p-3 card-hover">
       {inner}
     </div>
   );
@@ -172,7 +172,7 @@ const TpmDashboard = () => {
   const pendingActions = APPROVALS.filter((a) => a.requester === user?.name).slice(0, 3);
 
   return (
-    <div className="space-y-6" data-testid="page-tpm-dashboard">
+    <div className="space-y-4" data-testid="page-tpm-dashboard">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -180,10 +180,10 @@ const TpmDashboard = () => {
             <span className="w-6 h-px bg-sky-400" />
             {isRnd ? "RL Environment Portal" : "Projects Portal"}
           </div>
-          <h1 className="mt-2 font-display font-semibold text-3xl tracking-tight text-white">
+          <h1 className="mt-1.5 font-display font-semibold text-2xl tracking-tight text-white">
             Welcome back, {user?.name?.split(" ")[0]}
           </h1>
-          <p className="text-sm text-zinc-400 mt-1">
+          <p className="text-xs text-zinc-400 mt-0.5">
             {dashboardProjects.length} active project{dashboardProjects.length === 1 ? "" : "s"}
             {!isRnd && underRndProjects.length > 0 ? ` · ${underRndProjects.length} under R&D currently` : ""}
             {" · June 2026"}
@@ -192,7 +192,7 @@ const TpmDashboard = () => {
       </div>
 
       {/* KPI Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <KpiCard testid="kpi-active-projects" label="Active projects" value={String(dashboardProjects.length)} icon={FolderKanban} tone="magenta" />
         <KpiCard testid="kpi-pending-approvals" label="Pending approvals" value={String(pendingActions.length)} icon={ShieldCheck} tone="warning" />
         <KpiCard testid="kpi-util" label="Budget utilization" value={fmtPct(util)} icon={Gauge} tone={util >= 90 ? "negative" : util >= 75 ? "warning" : "positive"} />
@@ -209,7 +209,7 @@ const TpmDashboard = () => {
           ]}
           to="/consumption"
         />
-        <KpiCard testid="kpi-pending-cr" label="Pending change requests" value={String(changeRequests.filter((request) => request.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
+        <KpiCard testid="kpi-pending-cr" label="Pending additional requests" value={String(changeRequests.filter((request) => request.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
         <KpiCard testid="kpi-health" label="Budget health" value={health} icon={Heart} tone={health === "Green" ? "positive" : health === "Amber" ? "warning" : "negative"} sublabel={fmtPct(util)} />
         <KpiCard testid="kpi-burn-rate" label="Burn rate" value={fmtCurrency(burnRate, { compact: false })} icon={Flame} sublabel="Logged avg / day" />
         <KpiCard testid="kpi-over" label="Target progress" value={targetTasks > 0 ? `${doneTasks}/${targetTasks}` : `${doneTasks}`} icon={AlertTriangle} tone={doneTasks >= targetTasks && targetTasks > 0 ? "positive" : "warning"} />

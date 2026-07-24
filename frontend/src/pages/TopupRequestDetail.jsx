@@ -67,7 +67,7 @@ const TopupRequestDetail = () => {
   if (!req) {
     return (
       <div className="text-sm text-zinc-400">
-        Change request not found. <button onClick={() => nav(backHref)} className="text-fuchsia-300 underline">Back</button>
+        Additional request not found. <button onClick={() => nav(backHref)} className="text-fuchsia-300 underline">Back</button>
       </div>
     );
   }
@@ -140,7 +140,7 @@ const TopupRequestDetail = () => {
       return;
     }
     ctoDecideTopup(req.id, { comment, decision: "reject" });
-    toast.error("Change request rejected by CTO");
+    toast.error("Additional request rejected by CTO");
   };
 
   const doCfoApprove = () => {
@@ -167,7 +167,7 @@ const TopupRequestDetail = () => {
       return;
     }
     cfoDecideTopup(req.id, { comment, decision: "reject" });
-    toast.error("Change request rejected by CFO");
+    toast.error("Additional request rejected by CFO");
   };
 
   const ctoDone = !!req.ctoDecision;
@@ -190,7 +190,7 @@ const TopupRequestDetail = () => {
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="font-display font-semibold text-3xl tracking-tight text-white">{req.projectName}</h1>
         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-fuchsia-500/15 text-fuchsia-200 border border-fuchsia-500/30">
-          Change request
+          Additional request
         </span>
         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold border ${stage.cls}`}>
           {stage.label}
@@ -463,7 +463,7 @@ const BreakdownSection = ({ title, icon: Icon, color, entry, helper }) => {
               <LineItem
                 key={line.id || `${title}-${index + 1}`}
                 name={line.optionLabel || title}
-                sub={line.provider || (line.billingUnit === "per month" ? "Recurring line item" : "Budget change line item")}
+                sub={line.provider || (line.billingUnit === "per month" ? "Recurring line item" : "Additional request line item")}
                 detail={String(line.note || "").trim() || helper}
                 value={formatEntryAmount(line)}
               />

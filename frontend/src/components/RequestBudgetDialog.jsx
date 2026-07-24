@@ -111,7 +111,7 @@ const RequestBudgetDialog = ({ open, onOpenChange }) => {
               </select>
             </Field>
             <Field label="Request type">
-              <SelectPills options={["Initial budget", "Budget increase", "Budget change"]} value={type} onChange={setType} testidPrefix="rb-type" />
+              <SelectPills options={["Initial budget", "Budget increase", "Additional request"]} value={type} onChange={setType} testidPrefix="rb-type" />
             </Field>
           </div>
 

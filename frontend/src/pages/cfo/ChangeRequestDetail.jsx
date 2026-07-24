@@ -47,7 +47,7 @@ const ChangeRequestDetail = () => {
   if (!request) {
     return (
       <div className="text-sm text-zinc-400">
-        Change request not found.{" "}
+        Additional request not found.{" "}
         <button onClick={() => nav("/approval-queue")} className="text-fuchsia-300 underline">
           Back to approval queue
         </button>
@@ -99,7 +99,7 @@ const ChangeRequestDetail = () => {
 
   const approve = () => {
     cfoDecideChangeRequest(request.id, { decision: "approve", amount: request.amount, comment });
-    toast.success("Change request approved", { description: `${request.projectName} routed to IT for follow-up where required.` });
+    toast.success("Additional request approved", { description: `${request.projectName} routed to IT for follow-up where required.` });
   };
 
   const partial = () => {
@@ -108,7 +108,7 @@ const ChangeRequestDetail = () => {
       return;
     }
     cfoDecideChangeRequest(request.id, { decision: "partial", amount: approvedAmt, comment });
-    toast.success("Change request partially approved", { description: `${fmtCurrency(approvedAmt, { compact: false })} approved for ${request.projectName}.` });
+    toast.success("Additional request partially approved", { description: `${fmtCurrency(approvedAmt, { compact: false })} approved for ${request.projectName}.` });
   };
 
   const reject = () => {
@@ -117,7 +117,7 @@ const ChangeRequestDetail = () => {
       return;
     }
     cfoDecideChangeRequest(request.id, { decision: "reject", amount: 0, comment });
-    toast.error("Change request rejected");
+    toast.error("Additional request rejected");
   };
 
   const sendBack = () => {
@@ -138,7 +138,7 @@ const ChangeRequestDetail = () => {
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="font-display font-semibold text-3xl tracking-tight text-white">{request.projectName}</h1>
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-fuchsia-500/15 border border-fuchsia-500/30 text-fuchsia-200">
-          <GitPullRequest className="w-3 h-3" /> Change request
+          <GitPullRequest className="w-3 h-3" /> Additional request
         </span>
         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
           {decisionStatus}
@@ -155,7 +155,7 @@ const ChangeRequestDetail = () => {
               <Info label="Budget delta" value={fmtCurrency(request.amount, { compact: false })} />
               <Info label="Expected tasks" value={request.expectedTasks || "Not specified"} />
               <Info label="Timeline delta" value={request.timelineDelta || "No timeline change"} />
-              <Info label="Affected scope" value={request.affectedPhase || "Scope / budget change"} />
+              <Info label="Affected scope" value={request.affectedPhase || "Scope / budget update"} />
               <Info label="Current budget" value={fmtCurrency(request.currentBudget, { compact: false })} />
               <Info label="Requested total" value={fmtCurrency(request.requestedBudget, { compact: false })} />
             </div>
@@ -276,7 +276,7 @@ const ChangeRequestDetail = () => {
               </div>
             ) : (
               <div className="text-xs text-zinc-500">
-                IT provisioning is created once L3 approves or partially approves this change request.
+                IT provisioning is created once L3 approves or partially approves this additional request.
               </div>
             )}
           </div>

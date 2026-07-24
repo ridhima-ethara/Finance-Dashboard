@@ -1141,7 +1141,11 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
             </Field>
             <Field label="Team type *" hint="Which delivery pool this budget belongs to">
               <select value={teamType} onChange={(e) => setTeamType(e.target.value)} data-testid="bb-team-type" className={ipStyle}>
-                {TEAM_TYPE_OPTIONS.map((option) => <option key={option} value={option}>{option === "Production" ? "Projects" : option}</option>)}
+                {TEAM_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option === "RL env" ? "RL Environment" : option === "Production" ? "Projects" : "Tooling"}
+                  </option>
+                ))}
               </select>
             </Field>
           </div>

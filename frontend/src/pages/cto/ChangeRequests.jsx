@@ -72,19 +72,19 @@ const ChangeRequests = () => {
 
   const approveAndForward = (cr) => {
     ctoDecideChangeRequest(cr.id, { decision: "forward", amount: cr.amount });
-    toast.success("Change request approved", {
+    toast.success("Additional request approved", {
       description: `${cr.projectName} · ${fmtCurrency(cr.amount)} · Forwarded to CFO`,
     });
   };
   const rejectCR = (cr) => {
     ctoDecideChangeRequest(cr.id, { decision: "reject", comment: "Rejected by CTO during change review." });
-    toast.error("Change request rejected", {
+    toast.error("Additional request rejected", {
       description: `${cr.projectName} · TPM notified`,
     });
   };
   const approveDirect = (cr) => {
     ctoDecideChangeRequest(cr.id, { decision: "approve", amount: cr.amount });
-    toast.success("Change request approved", {
+    toast.success("Additional request approved", {
       description: `${cr.projectName} · No financial escalation needed`,
     });
   };
@@ -98,7 +98,7 @@ const ChangeRequests = () => {
             <GitPullRequest className="w-3 h-3" />
             CTO Portal
           </div>
-          <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Change requests</h1>
+          <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Additional requests</h1>
           <p className="text-sm text-zinc-400 mt-1">
             Review, modify, approve, reject, or forward to CFO with the full requested breakdown
           </p>
@@ -281,7 +281,7 @@ const ChangeRequests = () => {
         {filtered.length === 0 && (
           <div className="bg-[#12121A] rounded-2xl border border-white/5 p-8 text-center">
             <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2" />
-            <div className="text-sm text-zinc-400">No change requests in this stage</div>
+            <div className="text-sm text-zinc-400">No additional requests in this stage</div>
           </div>
         )}
       </div>

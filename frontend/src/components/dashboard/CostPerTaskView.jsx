@@ -21,6 +21,7 @@ const CostPerTaskView = ({ projectsOverride = null }) => {
   const { projects, budgetReviews, taskLogs, itMonthlyActuals } = useApp();
   const dashboardProjects = projectsOverride || projects;
   const [sort, setSort] = useState("variance");
+  const [page, setPage] = useState(1);
   const latestReviewByProject = useMemo(() => (
     budgetReviews.reduce((map, review) => {
       const current = map.get(review.projectId);
@@ -124,10 +125,15 @@ const CostPerTaskView = ({ projectsOverride = null }) => {
       perTaskCost: totalTaskCount > 0 ? claimedCost / totalTaskCount : 0,
     };
   }, [filtered]);
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const paginatedRows = filtered.slice(pageStart, pageStart + pageSize);
 
   return (
-    <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="cfo-cost-per-task-view">
-      <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+    <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4" data-testid="cfo-cost-per-task-view">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
             <Cpu className="w-3 h-3" /> Deliverable costing
@@ -142,7 +148,10 @@ const CostPerTaskView = ({ projectsOverride = null }) => {
             <Filter className="w-3 h-3 text-zinc-500 absolute left-2 top-1/2 -translate-y-1/2 pointer-events-none" />
             <select
               value={sort}
-              onChange={(event) => setSort(event.target.value)}
+              onChange={(event) => {
+                setSort(event.target.value);
+                setPage(1);
+              }}
               data-testid="cpt-sort"
               className="pl-6 pr-2 h-8 rounded-md bg-white/[0.04] border border-white/10 text-[11px] text-zinc-200 focus:outline-none focus:ring-1 focus:ring-fuchsia-500/40"
             >
@@ -155,7 +164,7 @@ const CostPerTaskView = ({ projectsOverride = null }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
         <SummaryCell icon={ListChecks} label="Total tasks" value={totals.totalTaskCount.toLocaleString()} testid="cpt-total-tasks" />
         <SummaryCell icon={Layers} label="Delivered" value={totals.completedDeliverables.toLocaleString()} testid="cpt-total-delivered" />
         <SummaryCell label="Claimed cost" value={fmtCurrency(totals.claimedCost, { compact: false })} accent="text-fuchsia-300" testid="cpt-total-claimed" />
@@ -177,19 +186,19 @@ const CostPerTaskView = ({ projectsOverride = null }) => {
           <table className="w-full text-sm">
             <thead>
               <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5">
-                <th className="text-left py-2 px-3">Project</th>
-                <th className="text-right py-2 px-3">Budget</th>
-                <th className="text-right py-2 px-3">Total tasks</th>
-                <th className="text-right py-2 px-3">Delivered</th>
-                <th className="text-right py-2 px-3">Per task cost</th>
-                <th className="text-right py-2 px-3">Claimed cost</th>
-                <th className="text-right py-2 px-3">Actual cost</th>
-                <th className="text-right py-2 px-3">Actual / task</th>
-                <th className="text-right py-2 px-3">Variance</th>
+                <th className="text-left py-1.5 px-3">Project</th>
+                <th className="text-right py-1.5 px-3">Budget</th>
+                <th className="text-right py-1.5 px-3">Total tasks</th>
+                <th className="text-right py-1.5 px-3">Delivered</th>
+                <th className="text-right py-1.5 px-3">Per task cost</th>
+                <th className="text-right py-1.5 px-3">Claimed cost</th>
+                <th className="text-right py-1.5 px-3">Actual cost</th>
+                <th className="text-right py-1.5 px-3">Actual / task</th>
+                <th className="text-right py-1.5 px-3">Variance</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((row) => {
+              {paginatedRows.map((row) => {
                 const varianceUp = row.variance > 0;
                 const varianceDown = row.variance < 0;
 
@@ -199,36 +208,36 @@ const CostPerTaskView = ({ projectsOverride = null }) => {
                     data-testid={`cpt-row-${row.projectId}`}
                     className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]"
                   >
-                    <td className="py-2.5 px-3">
+                    <td className="py-1.5 px-3">
                       <Link to={`/projects/${row.projectId}`} className="text-white font-medium hover:text-fuchsia-300">
                         {row.projectName}
                       </Link>
-                      <div className="text-[10px] text-zinc-500 mt-0.5">
+                      <div className="text-[10px] leading-4 text-zinc-500">
                         {row.projectType} · IT rows {row.dailyActualRows} · {row.latestItFile}
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular text-white font-semibold">
+                    <td className="py-1.5 px-3 text-right tabular text-white font-semibold">
                       {fmtCurrency(row.totalBudgetRequested, { compact: false })}
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">
+                    <td className="py-1.5 px-3 text-right tabular text-zinc-200">
                       {row.totalTaskCount.toLocaleString() || "—"}
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular text-fuchsia-300 font-semibold">
+                    <td className="py-1.5 px-3 text-right tabular text-fuchsia-300 font-semibold">
                       {row.completedDeliverables.toLocaleString() || "—"}
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">
+                    <td className="py-1.5 px-3 text-right tabular text-zinc-200">
                       {row.perTaskCost > 0 ? fmtCurrency(row.perTaskCost, { compact: false }) : "—"}
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">
+                    <td className="py-1.5 px-3 text-right tabular text-zinc-200">
                       {row.claimedCost > 0 ? fmtCurrency(row.claimedCost, { compact: false }) : "—"}
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular text-white font-semibold">
+                    <td className="py-1.5 px-3 text-right tabular text-white font-semibold">
                       {row.actualCost > 0 ? fmtCurrency(row.actualCost, { compact: false }) : "—"}
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular text-zinc-200">
+                    <td className="py-1.5 px-3 text-right tabular text-zinc-200">
                       {row.actualPerTaskCost > 0 ? fmtCurrency(row.actualPerTaskCost, { compact: false }) : "—"}
                     </td>
-                    <td className="py-2.5 px-3 text-right tabular">
+                    <td className="py-1.5 px-3 text-right tabular">
                       {varianceUp || varianceDown ? (
                         <span className={`inline-flex items-center gap-1 font-semibold ${varianceUp ? "text-red-300" : "text-emerald-300"}`}>
                           {varianceUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
@@ -244,6 +253,36 @@ const CostPerTaskView = ({ projectsOverride = null }) => {
               })}
             </tbody>
           </table>
+          {filtered.length > pageSize && (
+            <div className="flex items-center justify-between gap-3 border-t border-white/5 px-3 pt-2 mt-1" data-testid="cpt-pagination">
+              <div className="text-xs text-zinc-500 tabular">
+                Showing {pageStart + 1}–{Math.min(pageStart + pageSize, filtered.length)} of {filtered.length} projects
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage(Math.max(1, currentPage - 1))}
+                  className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-xs text-zinc-300 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                  data-testid="cpt-page-previous"
+                >
+                  Previous
+                </button>
+                <span className="min-w-[76px] text-center text-xs text-zinc-400 tabular">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  disabled={currentPage === totalPages}
+                  onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+                  className="h-8 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-xs text-zinc-300 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"
+                  data-testid="cpt-page-next"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

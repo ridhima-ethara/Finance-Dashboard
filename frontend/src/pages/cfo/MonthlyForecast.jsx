@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency } from "../../lib/format";
 import { buildLoggedDailyRows } from "../../lib/projectMetrics";
@@ -19,14 +19,17 @@ import { TrendingUp, Sparkles, ChevronRight, Cpu, ListChecks, Bot, Target, Zap }
 import { Button } from "../../components/ui/button";
 
 const PROJECT_TYPES = [
-  { id: "rnd", label: "R&D", overrunPct: 62 },
-  { id: "prod", label: "Production", overrunPct: 34 },
-  { id: "eval", label: "Model eval", overrunPct: 71 },
-  { id: "ingest", label: "Data ingest", overrunPct: 22 },
-  { id: "poc", label: "Client PoC", overrunPct: 48 },
+  { id: "projects", label: "Projects" },
+  { id: "rl", label: "RL Environment" },
+  { id: "tooling", label: "Tooling" },
 ];
 
-const MODELS = ["Opus 4.8", "Sonnet", "GPT-4o", "Gemini 2.5 Pro", "Kimi", "Grok-2"];
+const getProjectTypeId = (project = {}) => {
+  const value = `${project.type || ""} ${project.teamType || ""}`.toLowerCase();
+  if (value.includes("tool")) return "tooling";
+  if (value.includes("r&d") || value.includes("rnd") || value.includes("rl env")) return "rl";
+  return "projects";
+};
 
 const buildMonthlySpendRows = (projects = [], taskLogs = {}) => {
   const rows = buildLoggedDailyRows(projects, taskLogs);
@@ -59,8 +62,14 @@ const buildForecast = (monthlyRows = []) => {
         budget: 0,
         estimated: 0,
       }];
-  const trailing = seedRows.slice(-3);
-  const base = trailing.length ? trailing.reduce((sum, row) => sum + Number(row.actual || 0), 0) / trailing.length : 0;
+  const changes = seedRows.slice(1).map((row, index) => {
+    const previous = Number(seedRows[index].actual || 0);
+    return previous > 0 ? (Number(row.actual || 0) - previous) / previous : 0;
+  }).filter(Number.isFinite);
+  const observedGrowth = changes.length ? changes.reduce((sum, value) => sum + value, 0) / changes.length : 0;
+  const observedVolatility = changes.length
+    ? Math.sqrt(changes.reduce((sum, value) => sum + ((value - observedGrowth) ** 2), 0) / changes.length)
+    : 0;
   const lastRow = seedRows[seedRows.length - 1];
   const lastDate = new Date(`${lastRow.key}-01T00:00:00`);
   const rows = [
@@ -72,16 +81,17 @@ const buildForecast = (monthlyRows = []) => {
       actual: Number(lastRow.actual || 0),
     },
   ];
-  [1, 2, 3].forEach((step, index) => {
+  let prior = Number(lastRow.actual || 0);
+  [1, 2, 3].forEach((step) => {
     const monthDate = new Date(lastDate);
     monthDate.setMonth(lastDate.getMonth() + step);
-    const growth = 1.05 + index * 0.04;
-    const b = Math.round(base * growth);
+    const b = Math.max(0, Math.round(prior * (1 + observedGrowth)));
+    prior = b;
     rows.push({
       month: monthDate.toLocaleDateString("en-US", { month: "short" }),
       base: b,
-      optimistic: Math.round(b * 0.85),
-      pessimistic: Math.round(b * 1.20),
+      optimistic: Math.round(Math.max(0, b * (1 - observedVolatility))),
+      pessimistic: Math.round(b * (1 + observedVolatility)),
       actual: null,
     });
   });
@@ -89,18 +99,28 @@ const buildForecast = (monthlyRows = []) => {
 };
 
 const MonthlyForecast = () => {
-  const [projType, setProjType] = useState("rnd");
+  const [projType, setProjType] = useState("projects");
   const [tasks, setTasks] = useState(24);
-  const [selectedModel, setSelectedModel] = useState("Opus 4.8");
+  const [selectedModel, setSelectedModel] = useState("all");
+  const [nextPhaseTasks, setNextPhaseTasks] = useState(0);
+  const [nextTrajectoriesPerTask, setNextTrajectoriesPerTask] = useState(0);
   const { projects, taskLogs, budgetReviews } = useApp();
   const [selectedProjectId, setSelectedProjectId] = useState("");
-  const monthlySpend = useMemo(() => buildMonthlySpendRows(projects, taskLogs), [projects, taskLogs]);
+  const categoryProjects = useMemo(
+    () => projects.filter((project) => getProjectTypeId(project) === projType),
+    [projects, projType]
+  );
+  useEffect(() => {
+    setSelectedProjectId("");
+    setSelectedModel("all");
+  }, [projType]);
+  const monthlySpend = useMemo(() => buildMonthlySpendRows(categoryProjects, taskLogs), [categoryProjects, taskLogs]);
   const forecast = useMemo(() => buildForecast(monthlySpend), [monthlySpend]);
 
   // ------- Task-cost exponential projection -------
   // Build historical cost/task series per phase across the portfolio (or a chosen project).
   const historicalPhases = useMemo(() => {
-    const src = selectedProjectId ? projects.filter((p) => p.id === selectedProjectId) : projects;
+    const src = selectedProjectId ? categoryProjects.filter((p) => p.id === selectedProjectId) : categoryProjects;
     const out = [];
     src.forEach((p) => {
       const review = budgetReviews.find((r) => r.projectId === p.id);
@@ -114,9 +134,25 @@ const MonthlyForecast = () => {
         const key = `${p.id}::${ph.id}`;
         const logs = taskLogs[key] || [];
         const loggedTasks = logs.reduce((s, l) => s + (Number(l.tasksDone) || 0), 0);
-        const loggedCost = logs.reduce((s, l) => s + (Number(l.cost) || 0), 0);
+        const loggedTrajectories = logs.reduce((s, l) => s + (Number(l.trajectories) || 0), 0);
+        const loggedCost = logs.reduce((sum, log) => {
+          const modelCost = Array.isArray(log.modelUsage)
+            ? log.modelUsage.reduce((modelSum, usage) => modelSum + Number(usage.cost || 0), 0)
+            : 0;
+          return sum + Number(log.cost || modelCost || 0);
+        }, 0);
+        const expectedTrajectoriesPerTask = Number(
+          ph.trajectoriesPerTask
+          || ph.trajectories
+          || (review?.totalTrajectories && totalTasks ? Number(review.totalTrajectories) / totalTasks : 0)
+          || 0
+        );
         const costPerTask = planned > 0 ? Math.round((budget / planned) * 100) / 100 : 0;
         const actualPerTask = loggedTasks > 0 ? Math.round((loggedCost / loggedTasks) * 100) / 100 : null;
+        const plannedCostPerTrajectory = planned > 0 && expectedTrajectoriesPerTask > 0
+          ? budget / (planned * expectedTrajectoriesPerTask)
+          : 0;
+        const actualCostPerTrajectory = loggedTrajectories > 0 ? loggedCost / loggedTrajectories : null;
         out.push({
           key,
           idx: idx + 1,
@@ -126,16 +162,19 @@ const MonthlyForecast = () => {
           budget,
           costPerTask,
           actualPerTask,
+          expectedTrajectoriesPerTask,
+          plannedCostPerTrajectory,
+          actualCostPerTrajectory,
         });
       });
     });
     return out;
-  }, [selectedProjectId, projects, taskLogs, budgetReviews]);
+  }, [selectedProjectId, categoryProjects, taskLogs, budgetReviews]);
 
-  // Exponential fit y = a * e^(b*x)  via log-linear regression on positive y-values.
+  // Exponential fit y = a * e^(b*x), fitted to recent cost per trajectory.
   const expoFit = useMemo(() => {
     const pts = historicalPhases
-      .map((p, i) => ({ x: i + 1, y: p.actualPerTask ?? p.costPerTask }))
+      .map((p, i) => ({ x: i + 1, y: p.actualCostPerTrajectory ?? p.plannedCostPerTrajectory }))
       .filter((p) => p.y > 0);
     if (pts.length < 2) return null;
     const n = pts.length;
@@ -155,17 +194,19 @@ const MonthlyForecast = () => {
     const series = [];
     historicalPhases.forEach((p, i) => {
       const x = i + 1;
+      const fittedCostPerTrajectory = expoFit.a * Math.exp(expoFit.b * x);
       series.push({
         phase: `${p.projectName.split(" ")[0]} · ${p.phaseName}`,
         actual: p.actualPerTask ?? p.costPerTask,
-        fitted: Math.round(expoFit.a * Math.exp(expoFit.b * x) * 100) / 100,
+        fitted: Math.round(fittedCostPerTrajectory * p.expectedTrajectoriesPerTask * 100) / 100,
         projected: null,
       });
     });
     const lastX = historicalPhases.length;
     [1, 2, 3].forEach((k) => {
       const x = lastX + k;
-      const y = Math.round(expoFit.a * Math.exp(expoFit.b * x) * 100) / 100;
+      const expectedTrajectories = nextTrajectoriesPerTask || historicalPhases[historicalPhases.length - 1]?.expectedTrajectoriesPerTask || 0;
+      const y = Math.round(expoFit.a * Math.exp(expoFit.b * x) * expectedTrajectories * 100) / 100;
       series.push({
         phase: `Next +${k}`,
         actual: null,
@@ -174,31 +215,65 @@ const MonthlyForecast = () => {
       });
     });
     return series;
-  }, [historicalPhases, expoFit]);
+  }, [historicalPhases, expoFit, nextTrajectoriesPerTask]);
 
   const nextPhaseEstimate = useMemo(() => {
     if (!expoFit) return null;
     const x = historicalPhases.length + 1;
-    const perTask = Math.round(expoFit.a * Math.exp(expoFit.b * x) * 100) / 100;
-    // Assume the next phase covers a similar task count to the last phase.
-    const lastPhaseTasks = historicalPhases[historicalPhases.length - 1]?.planned || 100;
-    const totalBudget = Math.round(perTask * lastPhaseTasks);
-    return { perTask, planned: lastPhaseTasks, totalBudget };
-  }, [expoFit, historicalPhases]);
+    const costPerTrajectory = Math.round(expoFit.a * Math.exp(expoFit.b * x) * 100) / 100;
+    const perTask = costPerTrajectory * nextTrajectoriesPerTask;
+    const totalBudget = nextPhaseTasks > 0 && nextTrajectoriesPerTask > 0
+      ? Math.round(nextPhaseTasks * nextTrajectoriesPerTask * costPerTrajectory)
+      : null;
+    return { costPerTrajectory, perTask, planned: nextPhaseTasks, trajectoriesPerTask: nextTrajectoriesPerTask, totalBudget };
+  }, [expoFit, historicalPhases, nextPhaseTasks, nextTrajectoriesPerTask]);
 
-  // Recommendation engine
-  const baseEstimate = useMemo(() => {
-    const perTask = selectedModel === "Opus 4.8" ? 220 : selectedModel === "Gemini 2.5 Pro" ? 90 : selectedModel === "GPT-4o" ? 140 : 60;
-    const scale = projType === "rnd" ? 1.4 : projType === "eval" ? 1.6 : projType === "prod" ? 1.0 : projType === "poc" ? 1.2 : 0.8;
-    return Math.round(tasks * perTask * scale);
-  }, [projType, tasks, selectedModel]);
-  const buffered = Math.round(baseEstimate * 1.25);
-  const risk = projType === "rnd" || projType === "eval" ? "High" : projType === "poc" ? "Medium" : "Low";
-  const overrunProb = PROJECT_TYPES.find((t) => t.id === projType)?.overrunPct || 40;
+  // Recommendation inputs and risk are derived only from saved projects and task logs.
+  const modelObservations = useMemo(() => {
+    const map = new Map();
+    const categoryProjectIds = new Set(categoryProjects.map((project) => project.id));
+    Object.entries(taskLogs || {})
+      .filter(([key]) => categoryProjectIds.has(String(key).split("::")[0]))
+      .flatMap(([, logs]) => logs || [])
+      .forEach((log) => {
+      const usages = Array.isArray(log.modelUsage) && log.modelUsage.length ? log.modelUsage : [];
+      usages.forEach((usage) => {
+        const name = usage.modelName || usage.modelId;
+        if (!name) return;
+        const current = map.get(name) || { name, cost: 0, tasks: 0 };
+        current.cost += Number(usage.cost || 0);
+        current.tasks += Number(usage.tasksDone || 0);
+        map.set(name, current);
+      });
+    });
+    return Array.from(map.values()).filter((entry) => entry.cost > 0 && entry.tasks > 0);
+  }, [categoryProjects, taskLogs]);
+  const projectTypeStats = useMemo(() => PROJECT_TYPES.map((type) => {
+    const matching = projects.filter((project) => getProjectTypeId(project) === type.id);
+    const overrunCount = matching.filter((project) => Number(project.actualSpend || project.cfoActualSpend || 0) > Number(project.approvedBudget || 0)).length;
+    return {
+      ...type,
+      count: matching.length,
+      overrunPct: matching.length ? Math.round((overrunCount / matching.length) * 100) : 0,
+      bufferPct: matching.length ? matching.reduce((sum, project) => sum + Number(project.buffer || 0), 0) / matching.length : 0,
+    };
+  }), [projects]);
+  const selectedObservation = selectedModel === "all" ? null : modelObservations.find((entry) => entry.name === selectedModel);
+  const allObservedCost = modelObservations.reduce((sum, entry) => sum + entry.cost, 0);
+  const allObservedTasks = modelObservations.reduce((sum, entry) => sum + entry.tasks, 0);
+  const observedPerTask = selectedObservation
+    ? selectedObservation.cost / selectedObservation.tasks
+    : allObservedTasks > 0 ? allObservedCost / allObservedTasks : 0;
+  const baseEstimate = Math.round(tasks * observedPerTask);
+  const selectedTypeStats = projectTypeStats.find((type) => type.id === projType);
+  const configuredBufferPct = Math.round(selectedTypeStats?.bufferPct || 0);
+  const buffered = Math.round(baseEstimate * (1 + configuredBufferPct / 100));
+  const overrunProb = selectedTypeStats?.overrunPct || 0;
+  const risk = overrunProb >= 50 ? "High" : overrunProb > 0 ? "Medium" : "Low";
 
   const similar = useMemo(() => (
     projects
-      .filter((project) => project.id !== selectedProjectId)
+      .filter((project) => project.id !== selectedProjectId && getProjectTypeId(project) === projType)
       .slice(0, 3)
       .map((project, index) => {
         const plannedTasks = Number(
@@ -209,10 +284,10 @@ const MonthlyForecast = () => {
         return {
           name: project.name,
           desc: `${project.type || "Project"} · ${plannedTasks.toLocaleString()} planned tasks`,
-          match: index < 2 ? "high" : "partial",
+          match: "high",
         };
       })
-  ), [projects, selectedProjectId]);
+  ), [projects, projType, selectedProjectId]);
   const currentBase = Number(forecast[0]?.base || 0);
   const projectedBase = Number(forecast[3]?.base || 0);
   const projectedPessimistic = Number(forecast[3]?.pessimistic || 0);
@@ -273,8 +348,9 @@ const MonthlyForecast = () => {
                 data-testid="fc-input-model"
                 className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               >
-                {MODELS.map((m) => (
-                  <option key={m} value={m}>{m}</option>
+                <option value="all">All logged models</option>
+                {modelObservations.map((model) => (
+                  <option key={model.name} value={model.name}>{model.name}</option>
                 ))}
               </select>
             </Field>
@@ -282,14 +358,14 @@ const MonthlyForecast = () => {
 
           <div className="mt-4 grid grid-cols-3 gap-3">
             <RecommendCell label="Base estimate" value={fmtCurrency(baseEstimate, { compact: false })} color="text-sky-300" testid="rec-base" />
-            <RecommendCell label="+25% buffer" value={fmtCurrency(buffered, { compact: false })} color="text-amber-300" testid="rec-buffered" />
+            <RecommendCell label={`+${configuredBufferPct}% observed buffer`} value={fmtCurrency(buffered, { compact: false })} color="text-amber-300" testid="rec-buffered" />
             <RecommendCell label="Risk rating" value={risk} color={risk === "High" ? "text-red-300" : risk === "Medium" ? "text-amber-300" : "text-emerald-300"} testid="rec-risk" />
           </div>
 
           <div className="mt-4 text-xs text-zinc-400 leading-relaxed rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-3 flex items-start gap-2">
             <Sparkles className="w-3.5 h-3.5 text-fuchsia-300 flex-shrink-0 mt-0.5" />
             <span>
-              Based on {similar.length} historical projects matching this profile, expect ~<span className="text-fuchsia-300 font-semibold tabular">{overrunProb}%</span> probability of overrun. Consider allocating a hidden buffer of 8–12% in addition to the +25% shown here.
+              Based on {selectedTypeStats?.count || 0} current projects in this category, <span className="text-fuchsia-300 font-semibold tabular">{overrunProb}%</span> are over approved budget. The displayed buffer is the observed average configured on those projects.
             </span>
           </div>
         </div>
@@ -298,9 +374,9 @@ const MonthlyForecast = () => {
         <div className="space-y-4">
           <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="overrun-prob">
             <div className="font-display font-semibold text-[15px] text-white mb-1">Overrun probability by project type</div>
-            <div className="text-xs text-zinc-500 mb-3">Historical data · higher = more likely to exceed estimate</div>
+            <div className="text-xs text-zinc-500 mb-3">Current project data · higher = more likely to exceed approved budget</div>
             <div className="space-y-2.5">
-              {PROJECT_TYPES.map((t) => {
+              {projectTypeStats.map((t) => {
                 const color = t.overrunPct >= 60 ? "#EF4444" : t.overrunPct >= 40 ? "#F59E0B" : "#10B981";
                 return (
                   <div key={t.id} data-testid={`overrun-${t.id}`}>
@@ -352,7 +428,7 @@ const MonthlyForecast = () => {
         <div className="flex items-start justify-between mb-3">
           <div>
             <div className="font-display font-semibold text-[15px] text-white">Portfolio spend forecast · next 3 months</div>
-            <div className="text-xs text-zinc-500 mt-0.5">Base forecast vs optimistic (−15%) vs pessimistic (+20%) scenarios</div>
+            <div className="text-xs text-zinc-500 mt-0.5">Observed month-over-month trend with lower and upper ranges based on recorded volatility</div>
           </div>
         </div>
         <div className="h-[320px]">
@@ -369,9 +445,9 @@ const MonthlyForecast = () => {
               <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
               <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(v) => (v ? fmtCurrency(v) : "—")} />
               <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
-              <Area type="monotone" dataKey="pessimistic" name="Pessimistic (+20%)" stroke="#EF4444" strokeDasharray="5 3" fill="url(#pess)" strokeWidth={2} />
+              <Area type="monotone" dataKey="pessimistic" name="Observed upper range" stroke="#EF4444" strokeDasharray="5 3" fill="url(#pess)" strokeWidth={2} />
               <Line type="monotone" dataKey="base" name="Base forecast" stroke="#4F8EF7" strokeWidth={2.5} dot={{ r: 4, fill: "#4F8EF7" }} />
-              <Line type="monotone" dataKey="optimistic" name="Optimistic (−15%)" stroke="#10B981" strokeDasharray="5 3" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="optimistic" name="Observed lower range" stroke="#10B981" strokeDasharray="5 3" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="actual" name="Actual (last)" stroke="#E619B8" strokeWidth={3} dot={{ r: 5, fill: "#E619B8" }} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -383,7 +459,7 @@ const MonthlyForecast = () => {
               <span className="text-fuchsia-200 font-semibold">AI insight: </span>
               Base forecast projects <span className="text-white font-semibold tabular">{fmtCurrency(projectedBase)}</span> in the third forward month, a{" "}
               <span className="text-white font-semibold tabular">{growthPct}%</span> lift over the current logged month.
-              Pessimistic spend ({fmtCurrency(projectedPessimistic)}) would require budget changes; consider keeping a{" "}
+              Pessimistic spend ({fmtCurrency(projectedPessimistic)}) would require an additional request; consider keeping a{" "}
               <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(extraBuffer)}</span> contingency available.
             </span>
           ) : (
@@ -404,22 +480,29 @@ const MonthlyForecast = () => {
             </div>
             <div className="font-display font-semibold text-[15px] text-white mt-1">Exponential projection · cost / task</div>
             <div className="text-xs text-zinc-500 mt-0.5">
-              Log-linear fit of past phase unit costs · projects next 3 phases &amp; recommends the next phase estimate
+              Estimated next-phase budget = planned tasks × expected trajectories/task × projected recent cost/trajectory
             </div>
           </div>
-          <div>
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Scope</div>
-            <select
-              value={selectedProjectId}
-              onChange={(e) => setSelectedProjectId(e.target.value)}
-              data-testid="task-cost-project-scope"
-              className="h-9 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-            >
-              <option value="">Whole portfolio</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+          <div className="flex items-end gap-2 flex-wrap">
+            <Field label="Scope">
+              <select
+                value={selectedProjectId}
+                onChange={(e) => setSelectedProjectId(e.target.value)}
+                data-testid="task-cost-project-scope"
+                className="h-9 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+              >
+                <option value="">Whole portfolio</option>
+                {categoryProjects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Next phase tasks *">
+              <input type="number" min="0" value={nextPhaseTasks || ""} onChange={(e) => setNextPhaseTasks(Number(e.target.value) || 0)} placeholder="Define tasks" className="h-9 w-32 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-200 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" data-testid="next-phase-planned-tasks" />
+            </Field>
+            <Field label="Expected traj/task *">
+              <input type="number" min="0" step="0.1" value={nextTrajectoriesPerTask || ""} onChange={(e) => setNextTrajectoriesPerTask(Number(e.target.value) || 0)} placeholder="Define ratio" className="h-9 w-32 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-200 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40" data-testid="next-phase-trajectories-per-task" />
+            </Field>
           </div>
         </div>
 
@@ -432,8 +515,8 @@ const MonthlyForecast = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <ForecastCell label="Growth / phase" value={`${expoFit.growthPct >= 0 ? "+" : ""}${expoFit.growthPct}%`} accent={expoFit.growthPct >= 0 ? "text-amber-300" : "text-emerald-300"} testid="fc-growth" />
               <ForecastCell label="Historic phases" value={historicalPhases.length.toString()} accent="text-white" testid="fc-hist-count" />
-              <ForecastCell label="Next phase · cost/task" value={fmtCurrency(nextPhaseEstimate?.perTask || 0, { compact: false })} accent="text-fuchsia-300" testid="fc-next-cost-per-task" />
-              <ForecastCell label="Next phase · budget est." value={fmtCurrency(nextPhaseEstimate?.totalBudget || 0, { compact: false })} accent="text-fuchsia-300" testid="fc-next-budget" />
+              <ForecastCell label="Projected cost / trajectory" value={fmtCurrency(nextPhaseEstimate?.costPerTrajectory || 0, { compact: false })} accent="text-fuchsia-300" testid="fc-next-cost-per-task" />
+              <ForecastCell label="Next phase · budget est." value={nextPhaseEstimate?.totalBudget != null ? fmtCurrency(nextPhaseEstimate.totalBudget, { compact: false }) : "Define inputs"} accent="text-fuchsia-300" testid="fc-next-budget" />
             </div>
 
             <div className="h-[320px]">
@@ -465,28 +548,28 @@ const MonthlyForecast = () => {
                   <div className="text-sm font-semibold text-white">Next-phase recommendation</div>
                 </div>
                 <div className="text-xs text-zinc-300 leading-relaxed">
-                  At the current growth rate of <span className="text-amber-300 font-semibold tabular">{expoFit.growthPct >= 0 ? "+" : ""}{expoFit.growthPct}%</span> per phase, the next phase is projected to cost{" "}
-                  <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(nextPhaseEstimate?.perTask || 0, { compact: false })}</span> per task.
-                  For a comparable phase size of <span className="text-white font-semibold tabular">{(nextPhaseEstimate?.planned || 0).toLocaleString()}</span> tasks that lands at{" "}
-                  <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(nextPhaseEstimate?.totalBudget || 0, { compact: false })}</span> total budget.
+                  {nextPhaseEstimate?.totalBudget != null ? <>
+                    The projected recent cost is <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(nextPhaseEstimate.costPerTrajectory, { compact: false })}</span> per trajectory.
+                    Applying <span className="text-white font-semibold tabular">{nextPhaseEstimate.planned.toLocaleString()}</span> planned tasks × <span className="text-white font-semibold tabular">{nextPhaseEstimate.trajectoriesPerTask}</span> trajectories/task produces an estimated budget of <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(nextPhaseEstimate.totalBudget, { compact: false })}</span>.
+                  </> : <>Define the next phase’s planned tasks and expected trajectories per task above to calculate its estimated budget.</>}
                 </div>
                 <div className="mt-3 flex items-center gap-2">
                   <span className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Suggested phase budget</span>
-                  <span className="text-white font-display font-semibold text-xl tabular ml-auto">{fmtCurrency(nextPhaseEstimate?.totalBudget || 0, { compact: false })}</span>
+                  <span className="text-white font-display font-semibold text-xl tabular ml-auto">{nextPhaseEstimate?.totalBudget != null ? fmtCurrency(nextPhaseEstimate.totalBudget, { compact: false }) : "—"}</span>
                 </div>
               </div>
               <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <ListChecks className="w-4 h-4 text-fuchsia-300" />
-                  <div className="text-sm font-semibold text-white">Recent phases · cost/task</div>
+                  <div className="text-sm font-semibold text-white">Recent phases · cost/trajectory</div>
                 </div>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                   {historicalPhases.slice(-6).reverse().map((p) => (
                     <div key={p.key} className="flex items-center justify-between text-[11px] py-1 border-b border-white/5 last:border-0" data-testid={`hist-row-${p.key}`}>
                       <span className="text-zinc-300 truncate">{p.projectName} · <span className="text-fuchsia-300">{p.phaseName}</span></span>
                       <span className="text-white font-semibold tabular">
-                        {fmtCurrency(p.actualPerTask ?? p.costPerTask, { compact: false })}
-                        {p.actualPerTask ? <span className="text-emerald-300 text-[9px] ml-1">actual</span> : <span className="text-zinc-500 text-[9px] ml-1">plan</span>}
+                        {fmtCurrency(p.actualCostPerTrajectory ?? p.plannedCostPerTrajectory, { compact: false })}
+                        {p.actualCostPerTrajectory ? <span className="text-emerald-300 text-[9px] ml-1">actual</span> : <span className="text-zinc-500 text-[9px] ml-1">plan</span>}
                       </span>
                     </div>
                   ))}

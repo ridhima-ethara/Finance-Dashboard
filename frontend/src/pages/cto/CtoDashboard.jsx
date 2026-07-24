@@ -143,7 +143,7 @@ const CtoDashboard = () => {
             <GitPullRequest className="w-4 h-4 text-amber-300" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Change requests</div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Additional requests</div>
             <div className="text-white font-display font-semibold text-xl tabular">{pendingCRs} pending</div>
           </div>
           <ChevronRight className="w-4 h-4 text-amber-300" />
@@ -153,7 +153,7 @@ const CtoDashboard = () => {
               <ArrowUpRightSquare className="w-4 h-4 text-sky-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300">Budget changes in projects</div>
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300">Additional requests in projects</div>
               <div className="text-white font-display font-semibold text-xl tabular">{pendingTopups} pending</div>
             </div>
             <ChevronRight className="w-4 h-4 text-sky-300" />

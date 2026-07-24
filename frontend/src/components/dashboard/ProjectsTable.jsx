@@ -34,6 +34,7 @@ const HealthBadge = ({ h }) => {
 const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
   const [expanded, setExpanded] = useState({ "crowley-gen": true });
   const [drawer, setDrawer] = useState(null); // { project, phase }
+  const [page, setPage] = useState(1);
   const nav = useNavigate();
   const { visibleProjects, role, taskLogs, batchDeliveries, budgets, topupRequests, changeRequests } = useApp();
   const isRnd = role === "R&D";
@@ -45,6 +46,11 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
   const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
 
   const projects = projectsOverride || visibleProjects;
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(projects.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * pageSize;
+  const paginatedProjects = projects.slice(pageStart, pageStart + pageSize);
   const projectMetrics = useMemo(
     () => Object.fromEntries(projects.map((project) => [project.id, summarizeLoggedProject(project, taskLogs, usageOptions)])),
     [projects, taskLogs, usageOptions]
@@ -92,7 +98,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
               <th className="text-right py-2.5 px-2">Budget</th>
               {isCfo ? (
                 <>
-                  <th className="text-right py-2.5 px-2">Estimated</th>
+                  <th className="text-right py-2.5 px-2">Claimed</th>
                   <th className="text-right py-2.5 px-2">Actual</th>
                   <th className="text-right py-2.5 px-2">Variance</th>
                 </>
@@ -112,7 +118,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
             </tr>
           </thead>
           <tbody>
-            {projects.map((p) => {
+            {paginatedProjects.map((p) => {
               const logged = projectMetrics[p.id];
               const displayActual = isCfo ? Number(p.cfoActualSpend || p.actualSpend || 0) : logged.loggedSpend;
               const displayRemaining = isCfo ? Number(p.cfoRemaining || p.remaining || 0) : logged.remainingBudget;
@@ -271,7 +277,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
                                           </td>
                                           <td className="py-3 px-4">
                                             <div className="text-[11px] text-zinc-300">
-                                              {phaseTopups.length} change request{phaseTopups.length === 1 ? "" : "s"} · {phaseChangeRequests.length} change request{phaseChangeRequests.length === 1 ? "" : "s"}
+                                              {phaseTopups.length + phaseChangeRequests.length} additional request{phaseTopups.length + phaseChangeRequests.length === 1 ? "" : "s"}
                                             </div>
                                             <div className="text-[10px] text-zinc-500">
                                               +{fmtCurrency(budgetChangeValue + changeRequestValue, { compact: false })}
@@ -426,6 +432,41 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
         </table>
       </div>
 
+      {projects.length > pageSize && (
+        <div className="flex items-center justify-between gap-3 border-t border-white/5 px-5 py-3" data-testid="projects-pagination">
+          <div className="text-xs text-zinc-500 tabular">
+            Showing {pageStart + 1}–{Math.min(pageStart + pageSize, projects.length)} of {projects.length} projects
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={currentPage === 1}
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
+              className="h-8 rounded-lg border-white/10 bg-white/[0.03] px-3 text-xs text-zinc-300"
+              data-testid="projects-page-previous"
+            >
+              Previous
+            </Button>
+            <span className="min-w-[76px] text-center text-xs text-zinc-400 tabular">
+              Page {currentPage} of {totalPages}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={currentPage === totalPages}
+              onClick={() => setPage(Math.min(totalPages, currentPage + 1))}
+              className="h-8 rounded-lg border-white/10 bg-white/[0.03] px-3 text-xs text-zinc-300"
+              data-testid="projects-page-next"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Phase detail drawer */}
       <Sheet open={!!drawer} onOpenChange={(o) => !o && setDrawer(null)}>
         <SheetContent className={`bg-[#0F0F16] border-white/10 text-zinc-100 w-full overflow-y-auto ${isCfo ? "sm:max-w-2xl" : "sm:max-w-lg"}`} data-testid="phase-drawer">
@@ -499,6 +540,17 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
   const remainingBudget = currentBudgetTotal - displaySpend;
   const budgetLabel = isCFO ? "Budget" : "Allocated";
   const spendLabel = isCFO ? "Actual" : "Consumed";
+  const budgetItems = activeBudgetTrack?.items || project.budgetItems || {};
+  const allocationGroups = [
+    { key: "models", label: "Models", icon: Cpu, items: budgetItems.models || [] },
+    { key: "infra", label: "Infrastructure", icon: Layers, items: budgetItems.infra || [] },
+    { key: "subs", label: "Subscriptions", icon: User, items: budgetItems.subs || [] },
+    { key: "misc", label: "General", icon: FileText, items: budgetItems.misc || [] },
+  ].filter((group) => group.items.length > 0);
+  const phaseDateLabel = phase.dates || [phase.start, phase.end]
+    .filter(Boolean)
+    .map((date) => new Date(`${date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }))
+    .join(" – ");
 
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
@@ -545,7 +597,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         </div>
         <SheetTitle className="font-display text-2xl text-white">{phase.name}</SheetTitle>
         <SheetDescription className="text-xs text-zinc-400">
-          {phaseState.batchLabel || "Batch"} · {phase.dates} · TPM {project.tpm}
+          {phaseState.batchLabel || "Batch"} · {phaseDateLabel || "Dates not set"} · TPM {project.tpm}
           {isCFO && <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-400"><Lock className="w-2.5 h-2.5" /> Read-only</span>}
         </SheetDescription>
       </SheetHeader>
@@ -633,6 +685,50 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         <DrawerStat label="Output tokens" value={loggedOutputTokens.toLocaleString()} />
       </div>
 
+      {allocationGroups.length > 0 && (
+        <div className="mt-5 rounded-xl border border-white/5 bg-white/[0.02] p-4" data-testid="drawer-budget-allocation-presentation">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Budget allocation</div>
+              <div className="mt-1 text-xs text-zinc-500">Approved model, infrastructure, subscription, and general-cost presentation</div>
+            </div>
+            <div className="text-sm font-semibold tabular text-white">{fmtCurrency(submittedPhaseBudget, { compact: false })}</div>
+          </div>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {allocationGroups.map((group) => {
+              const Icon = group.icon;
+              const total = group.items.reduce((sum, item) => sum + Number(item.amount || item.estCost || 0), 0);
+              return (
+                <div key={group.key} className="rounded-xl border border-white/5 bg-[#12121A] p-3">
+                  <div className="flex items-center justify-between gap-3 border-b border-white/5 pb-2">
+                    <div className="flex items-center gap-2 text-xs font-semibold text-white">
+                      <Icon className="w-3.5 h-3.5 text-fuchsia-300" /> {group.label}
+                    </div>
+                    <span className="text-xs font-semibold tabular text-fuchsia-300">{fmtCurrency(total, { compact: false })}</span>
+                  </div>
+                  <div className="mt-2 space-y-2">
+                    {group.items.map((item, index) => {
+                      const label = item.optionLabel || item.modelName || item.subscription || item.instance || item.label || `${group.label} ${index + 1}`;
+                      const members = Array.isArray(item.members) ? item.members : [];
+                      return (
+                        <div key={item.id || `${group.key}-${index}`} className="flex items-start justify-between gap-3 text-[11px]">
+                          <div className="min-w-0">
+                            <div className="text-zinc-200">{label}</div>
+                            {members.length > 0 && <div className="mt-0.5 text-[10px] text-zinc-500">Members · {members.join(", ")}</div>}
+                            {group.key === "infra" && item.days && <div className="mt-0.5 text-[10px] text-zinc-500">{item.provider || "Infrastructure"} · {item.days} days</div>}
+                          </div>
+                          <span className="flex-shrink-0 font-semibold tabular text-white">{fmtCurrency(Number(item.amount || item.estCost || 0), { compact: false })}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-5" data-testid="drawer-submitted-budget-view">
           <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Submitted task budget view</div>
@@ -658,8 +754,8 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
             <BudgetActivityRow label="Consumed amount" value={fmtCurrency(displaySpend, { compact: false })} />
             <BudgetActivityRow label="Remaining balance" value={fmtCurrency(remainingBudget, { compact: false })} />
             <BudgetActivityRow label="Actual / trajectory" value={(loggedTrajectories || targetTrajectories) > 0 ? fmtCurrency(actualPerTrajectory, { compact: false }) : "—"} />
-            <BudgetActivityRow label="Budget change value" value={`${phaseTopups.length} · ${fmtCurrency(budgetChangeValue, { compact: false })}`} />
-            <BudgetActivityRow label="Change request value" value={`${phaseChangeRequests.length} · ${fmtCurrency(changeRequestValue, { compact: false })}`} />
+            <BudgetActivityRow label="Additional request · budget" value={`${phaseTopups.length} · ${fmtCurrency(budgetChangeValue, { compact: false })}`} />
+            <BudgetActivityRow label="Additional request · scope" value={`${phaseChangeRequests.length} · ${fmtCurrency(changeRequestValue, { compact: false })}`} />
             <BudgetActivityRow label="Delivery status" value={delivery ? delivery.status.replace(/-/g, " ") : "Not delivered"} />
           </div>
         </div>
@@ -667,9 +763,9 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
 
       <div className="mt-5 space-y-3">
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Budget changes ({phaseTopups.length})</div>
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Additional requests · budget ({phaseTopups.length})</div>
           {phaseTopups.length === 0 ? (
-            <div className="mt-3 text-[11px] text-zinc-500">No change requests for this phase.</div>
+            <div className="mt-3 text-[11px] text-zinc-500">No additional requests for this phase.</div>
           ) : (
             <div className="mt-3 space-y-2">
               {phaseTopups.map((request) => (
@@ -680,9 +776,9 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         </div>
 
         <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
-          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Change requests ({phaseChangeRequests.length})</div>
+          <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Additional requests · scope ({phaseChangeRequests.length})</div>
           {phaseChangeRequests.length === 0 ? (
-            <div className="mt-3 text-[11px] text-zinc-500">No change requests for this phase.</div>
+            <div className="mt-3 text-[11px] text-zinc-500">No additional requests for this phase.</div>
           ) : (
             <div className="mt-3 space-y-2">
               {phaseChangeRequests.map((request) => (
@@ -814,6 +910,44 @@ const getChangeRequestStatusMeta = (request) => {
   return { label, cls: "bg-sky-500/15 text-sky-300 border-sky-500/30" };
 };
 
+const TopupRequestCard = ({ request }) => {
+  const statusLabel = String(request?.cfoDecision?.decision || request?.status || "Pending")
+    .replace(/-/g, " ");
+  const isApproved = /approve/i.test(statusLabel);
+  const isRejected = /reject/i.test(statusLabel);
+  const statusClass = isApproved
+    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+    : isRejected
+      ? "bg-red-500/15 text-red-300 border-red-500/30"
+      : "bg-amber-500/15 text-amber-300 border-amber-500/30";
+  const amount = Number(request?.cfoDecision?.amount || request?.amount || 0);
+  const requestedAt = request?.requestedAt || request?.createdAt;
+
+  return (
+    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="text-[11px] text-white font-medium">{request?.phaseName || "Additional request"}</div>
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold capitalize border ${statusClass}`}>
+              {statusLabel}
+            </span>
+          </div>
+          <div className="mt-1 text-[10px] text-zinc-500 line-clamp-2">
+            {request?.reason || request?.description || "No request specification provided."}
+          </div>
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-[10px] text-zinc-500">
+            {requestedAt ? new Date(requestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}
+          </div>
+          <div className="mt-1 text-[11px] font-semibold tabular text-white">{fmtCurrency(amount, { compact: false })}</div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const ChangeRequestCard = ({ request }) => {
   const status = getChangeRequestStatusMeta(request);
   const approvedAmount = Number(request?.finalDecision?.amount || request?.amount || 0);
@@ -823,7 +957,7 @@ const ChangeRequestCard = ({ request }) => {
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="text-[11px] text-white font-medium">{request.type || "Change request"}</div>
+            <div className="text-[11px] text-white font-medium">{request.type || "Additional request"}</div>
             <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold border ${status.cls}`}>
               {status.label}
             </span>

@@ -44,7 +44,7 @@ const toneClasses = {
 };
 
 const typeConfig = {
-  Topup: { label: "Budget Change", Icon: ArrowUpRightSquare, tone: "text-fuchsia-300" },
+  Topup: { label: "Additional Request", Icon: ArrowUpRightSquare, tone: "text-fuchsia-300" },
   Budget: { label: "Budget", Icon: Wallet, tone: "text-sky-300" },
   Batch: { label: "Batch Delivery", Icon: PackageCheck, tone: "text-emerald-300" },
 };
@@ -154,7 +154,7 @@ const buildMyRequests = ({ userName, topupRequests, batchDeliveries, budgetRevie
       rows.push({
         id: r.id,
         type: "Topup",
-        title: `${r.phaseName} change request`,
+        title: `${r.phaseName} additional request`,
         subtitle: r.projectName,
         requestedAmount: r.amount,
         approvedAmount: r.status === "rejected" ? 0 : approvedAmount,
@@ -311,7 +311,7 @@ const TpmMyRequests = () => {
         <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-12 text-center" data-testid="my-req-empty">
           <Info className="w-8 h-8 mx-auto text-zinc-600 mb-3" />
           <div className="text-sm text-zinc-300 font-medium">Nothing to show here yet</div>
-          <div className="text-xs text-zinc-500 mt-1">Raise a change request or deliver a batch to see it tracked here.</div>
+          <div className="text-xs text-zinc-500 mt-1">Raise an additional request or deliver a batch to see it tracked here.</div>
         </div>
       )}
       <div className="space-y-3">
@@ -451,7 +451,7 @@ const LegacyApprovals = () => {
     <div className="space-y-6" data-testid="page-approvals-legacy">
       <div>
         <h1 className="font-display font-semibold text-3xl tracking-tight text-white">Approvals</h1>
-        <p className="text-sm text-zinc-400 mt-1">Budget requests, budget changes &amp; modifications pending decision · full / partial / reject supported</p>
+        <p className="text-sm text-zinc-400 mt-1">Budget and additional requests pending decision · full / partial / reject supported</p>
       </div>
       <div className="bg-[#12121A] rounded-2xl border border-white/5 overflow-hidden">
         <table className="w-full">

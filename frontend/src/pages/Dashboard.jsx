@@ -2,13 +2,11 @@ import AmountAtRisk from "../components/dashboard/AmountAtRisk";
 import KpiGrid from "../components/dashboard/KpiGrid";
 import {
   BudgetActualChart,
-  ModelExpensesChart,
   InfraStackedChart,
   MonthlySpendChart,
   MonthEndActualChart,
   CategoryDonut,
   UtilizationBars,
-  SubscriptionsPanel,
 } from "../components/dashboard/Charts";
 import ProjectsTable from "../components/dashboard/ProjectsTable";
 import CostPerTaskView from "../components/dashboard/CostPerTaskView";
@@ -249,7 +247,7 @@ const Dashboard = () => {
               <GitPullRequest className="w-4 h-4 text-amber-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Change requests</div>
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Additional requests</div>
               <div className="text-white font-display font-semibold text-xl tabular">{pendingCRs} pending</div>
             </div>
             <ChevronRight className="w-4 h-4 text-amber-300" />
@@ -303,7 +301,7 @@ const Dashboard = () => {
               <ArrowUpRightSquare className="w-4 h-4 text-amber-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Pending budget changes</div>
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Pending additional requests</div>
               <div className="text-white font-display font-semibold text-xl tabular">{pendingTopups}</div>
             </div>
             <ChevronRight className="w-4 h-4 text-amber-300" />
@@ -355,19 +353,13 @@ const Dashboard = () => {
       </div>
 
       {/* Charts grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
-        <div className="xl:col-span-8 grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <BudgetActualChart projectsOverride={cfoProjects} />
-          <ModelExpensesChart projectsOverride={cfoProjects} />
-          <InfraStackedChart projectsOverride={cfoProjects} />
-          <SubscriptionsPanel projectsOverride={cfoProjects} />
-          <MonthlySpendChart projectsOverride={cfoProjects} />
-          <MonthEndActualChart projectsOverride={cfoProjects} />
-        </div>
-        <div className="xl:col-span-4 grid grid-cols-1 gap-4 auto-rows-fr">
-          <CategoryDonut projectsOverride={cfoProjects} />
-          <UtilizationBars projectsOverride={cfoProjects} />
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-fr">
+        <BudgetActualChart projectsOverride={cfoProjects} />
+        <UtilizationBars projectsOverride={cfoProjects} />
+        <InfraStackedChart projectsOverride={cfoProjects} />
+        <MonthlySpendChart projectsOverride={cfoProjects} />
+        <MonthEndActualChart projectsOverride={cfoProjects} />
+        <CategoryDonut projectsOverride={cfoProjects} />
       </div>
 
       {/* Projects table */}

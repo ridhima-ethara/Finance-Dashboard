@@ -82,11 +82,11 @@ const buildAlerts = ({ projects, topupRequests, budgetReviews, changeRequests })
     alerts.push({
       id: "alert-topups",
       severity: "high",
-      type: "Budget change queue",
-      title: `${pendingTopups.length} ${pendingTopups.length === 1 ? "budget change request is" : "budget change requests are"} awaiting approval`,
+      type: "Additional request queue",
+      title: `${pendingTopups.length} additional request${pendingTopups.length === 1 ? " is" : "s are"} awaiting approval`,
       desc: `${fmtCurrency(totalRequested)} requested across active project phases`,
       project: pendingTopups[0]?.projectName || "Projects",
-      action: "Open budget changes",
+      action: "Open additional requests",
       actionLink: "/approval-queue?type=Top-up",
       ts: formatStamp(pendingTopups[0]?.requestedAt),
     });
@@ -98,8 +98,8 @@ const buildAlerts = ({ projects, topupRequests, budgetReviews, changeRequests })
     alerts.push({
       id: "alert-change-queue",
       severity: "medium",
-      type: "Change requests",
-      title: `${pendingChanges.length} ${pendingChanges.length === 1 ? "change request is" : "change requests are"} open for review`,
+      type: "Additional requests",
+      title: `${pendingChanges.length} additional request${pendingChanges.length === 1 ? " is" : "s are"} open for review`,
       desc: `${fmtCurrency(totalRequested)} is tied to scope, timeline, or cost-change asks`,
       project: pendingChanges[0]?.projectName || "Projects",
       action: "Review changes",

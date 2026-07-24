@@ -1923,7 +1923,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                           data-testid={`btn-topup-${ph.id}`}
                           className="h-8 rounded-md bg-fuchsia-500/15 hover:bg-fuchsia-500/25 border border-fuchsia-500/25 text-fuchsia-300 text-xs gap-1"
                         >
-                          <ArrowUpRightSquare className="w-3 h-3" /> Budget change
+                          <ArrowUpRightSquare className="w-3 h-3" /> Additional request
                         </Button>
                         <Button
                           size="sm"
@@ -1961,7 +1961,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                     <RequestSummaryCard
                       title={`Changes (${changesForPhase.length})`}
                       icon={Shield}
-                      empty="No change requests raised for this phase."
+                      empty="No additional requests raised for this phase."
                       testid={`sub-changes-${ph.id}`}
                     >
                       {changesForPhase.map((request) => (
@@ -2975,7 +2975,7 @@ const getWorkflowLockMessage = ({ project, workflowStage, latestBudgetReviewMeta
 
   if (project?.pendingBudgetSubmission) {
     const approver = pendingStage === "pending-cfo" || pendingStage === "Pending · L3" ? "L3" : "L2 and L3";
-    return `${pendingLabel} request is awaiting ${approver} approval. Tasks, budget changes, and delivery unlock after approval.`;
+    return `${pendingLabel} request is awaiting ${approver} approval. Tasks, additional requests, and delivery unlock after approval.`;
   }
   if (workflowStage === "awaiting-testing-budget") {
     return "Raise the required R&D budget. Testing or Sample can be submitted directly, and execution unlocks after CTO and CFO approve it.";
@@ -2995,7 +2995,7 @@ const getWorkflowLockMessage = ({ project, workflowStage, latestBudgetReviewMeta
     return "This sample was rejected. Raise a fresh budget only if the project is continuing.";
   }
   return latestBudgetReviewMeta
-    ? `Budget is ${latestBudgetReviewMeta.label.toLowerCase()}. Tasks, budget changes, and batch delivery unlock after CFO approval.`
+    ? `Budget is ${latestBudgetReviewMeta.label.toLowerCase()}. Tasks, additional requests, and batch delivery unlock after CFO approval.`
     : "Submit a budget and wait for CFO approval to unlock tasks and batch delivery.";
 };
 
