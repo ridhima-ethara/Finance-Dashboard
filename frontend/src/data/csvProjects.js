@@ -9,6 +9,8 @@
 // Helpers
 // -----------------------------------------------------------------------------
 
+import { subsSummaryFor } from "./csvSubs";
+
 const slugify = (str = "") =>
   String(str)
     .toLowerCase()
@@ -279,6 +281,7 @@ const buildCsvProject = ({
 
   const id = slugify(internal);
   const actuals = ACTUALS_BY_INTERNAL[id];
+  const subsInfo = subsSummaryFor(id);
   const enrichedPhases = actuals ? applyActualsToPhases(projectPhases, actuals.phaseActuals) : projectPhases;
   const approvedBudget = actuals?.approvedBudget || 0;
   const actualSpend = actuals?.actualSpend || 0;
@@ -335,7 +338,9 @@ const buildCsvProject = ({
     health: projHealth,
     topModel: "",
     phases: enrichedPhases,
-    budgetItems: { models: [], infra: [], subs: [], misc: [] },
+    subscriptions: subsInfo.subscriptions,
+    subscriptionTotals: { totalCost: subsInfo.totalCost, totalSeats: subsInfo.totalSeats },
+    budgetItems: { models: [], infra: [], subs: subsInfo.subsBudgetItems, misc: [] },
     expenses: [],
     budgetHistory: [],
     topupHistory: [],
@@ -576,6 +581,15 @@ const CSV_MAPPING = [
   { internal: "Crowley", client: "Task sourcing pipeline", phaseTag: "Production", teamType: "Technical", members: [] },
   { internal: "Crawley-Bedrock", client: "Bedrock provisioning", phaseTag: "Production", teamType: "Technical", members: [] },
   { internal: "Agon", client: "Internal tooling · Development", phaseTag: "Production", teamType: "Technical", members: [] },
+
+  // ---------- Subs-only projects (present in the Subs CSV, not in mapping/actuals) ----------
+  { internal: "Enyo", client: "Model bench · Multi-agent evals", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "Mephisto", client: "Adversarial safety eval", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "Kensei-SFT", client: "Kensei SFT variant", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "Tooling-Team", client: "Tooling pool", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "OTS", client: "Off-the-shelf model bench", phaseTag: "Production", teamType: "Technical", members: [] },
+  { internal: "DIU-Goku", client: "DIU experimentation", phaseTag: "R&D", teamType: "Technical", members: [] },
+  { internal: "Generalist", client: "Generalist pool", phaseTag: "Production", teamType: "Generalist", members: [] },
 ];
 
 export const CSV_DEMO_PROJECTS = CSV_MAPPING.map(buildCsvProject);
