@@ -4,6 +4,9 @@ import { AppProvider, useApp } from "./context/AppContext";
 import AppShell from "./components/layout/AppShell";
 import Dashboard from "./pages/Dashboard";
 import Projects from "./pages/Projects";
+import Subscriptions from "./pages/Subscriptions";
+import L3Subscriptions from "./pages/L3Subscriptions";
+import L3SubscriptionProjectDetail from "./pages/L3SubscriptionProjectDetail";
 import ProjectDetail from "./pages/ProjectDetail";
 import Approvals from "./pages/Approvals";
 import MyRequestDetail from "./pages/MyRequestDetail";
@@ -105,6 +108,9 @@ function App() {
               <Route path="/early-warning" element={<EarlyWarning />} />
               <Route path="/monthly-forecast" element={<MonthlyForecast />} />
               <Route path="/settings" element={<Settings />} />
+              <Route path="/subscriptions" element={<Subscriptions />} />
+              <Route path="/l3-subscriptions" element={<RoleProtected roles={["CFO"]}><L3Subscriptions /></RoleProtected>} />
+              <Route path="/l3-subscriptions/:projectName" element={<RoleProtected roles={["CFO"]}><L3SubscriptionProjectDetail /></RoleProtected>} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

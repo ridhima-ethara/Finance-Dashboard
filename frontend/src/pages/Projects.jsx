@@ -8,6 +8,7 @@ import { isTpmView } from "../lib/roles";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 import NewProjectDialog from "../components/NewProjectDialog";
 import TopupRequestDialog from "../components/TopupRequestDialog";
+import { summarizeLoggedProject } from "../lib/projectMetrics";
 
 const Projects = () => {
   const [q, setQ] = useState("");
@@ -15,7 +16,7 @@ const Projects = () => {
   const [requestOpen, setRequestOpen] = useState(false);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
-  const { role, visibleProjects, budgetReviews } = useApp();
+  const { role, visibleProjects, budgetReviews, taskLogs } = useApp();
   const isPL = role === "PL";
   const isCTO = role === "CTO";
   const isTPM = isTpmView(role);
@@ -35,10 +36,17 @@ const Projects = () => {
     }, new Map());
   }, [budgetReviews]);
 
+  const loggedUsageByProject = useMemo(() => new Map(
+    visibleProjects.map((project) => [project.id, summarizeLoggedProject(project, taskLogs)])
+  ), [visibleProjects, taskLogs]);
+
   const filtered = visibleProjects.filter((p) => {
-    if (filter === "over" && p.utilization < 100) return false;
-    if (filter === "watch" && !(p.utilization >= 85 && p.utilization < 100)) return false;
-    if (filter === "healthy" && p.utilization >= 85) return false;
+    const loggedUsage = loggedUsageByProject.get(p.id);
+    const filterUtilization = isCFO ? Number(p.cfoUtilization || 0) : Number(loggedUsage?.utilization || 0);
+    const hasRecordedAmount = isCFO ? Number(p.cfoActualSpend || 0) > 0 : Number(loggedUsage?.loggedSpend || 0) > 0;
+    if (filter === "over" && (!hasRecordedAmount || filterUtilization < 100)) return false;
+    if (filter === "watch" && (!hasRecordedAmount || !(filterUtilization >= 85 && filterUtilization < 100))) return false;
+    if (filter === "healthy" && hasRecordedAmount && filterUtilization >= 85) return false;
     return (
       p.name.toLowerCase().includes(q.toLowerCase()) ||
       p.client.toLowerCase().includes(q.toLowerCase()) ||
@@ -116,15 +124,21 @@ const Projects = () => {
       {/* Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtered.map((p) => {
-          const c = healthColor(p.health);
           const latestReview = latestBudgetReviewByProject.get(p.id);
           const budgetState = getProjectBudgetCardState(p, latestReview);
           const isLocked = Boolean(p.pendingBudgetSubmission);
           const isRejectedProject = Boolean(p.budgetRejection);
-          const displayActual = isCFO ? Number(p.cfoActualSpend || p.actualSpend || 0) : Number(p.actualSpend || 0);
-          const displayVariance = isCFO ? Number(p.cfoVariance || p.variance || 0) : Number(p.variance || 0);
-          const displayUtilization = isCFO ? Number(p.cfoUtilization || p.utilization || 0) : Number(p.utilization || 0);
+          const loggedUsage = loggedUsageByProject.get(p.id);
+          const displayActual = isCFO ? Number(p.cfoActualSpend || 0) : Number(loggedUsage?.loggedSpend || 0);
+          const hasRecordedAmount = displayActual > 0;
+          const approvedBudget = Number(p.approvedBudget || 0);
+          const displayVariance = hasRecordedAmount ? approvedBudget - displayActual : 0;
+          const displayUtilization = hasRecordedAmount && approvedBudget > 0 ? Math.round((displayActual / approvedBudget) * 100) : 0;
           const displayExceeded = Math.max(Number(-displayVariance || 0), 0);
+          const derivedHealth = !hasRecordedAmount ? "no-data" : displayUtilization >= 100 ? "over" : displayUtilization >= 85 ? "watch" : "healthy";
+          const c = derivedHealth === "no-data"
+            ? { label: "No actuals", bg: "bg-white/[0.04]", border: "border-white/10", text: "text-zinc-400" }
+            : healthColor(derivedHealth);
           return (
             <Link
               to={`/projects/${p.id}`}
@@ -185,14 +199,13 @@ const Projects = () => {
                 <div>
                   <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">{isCFO ? "Actual" : "Exceeded"}</div>
                   <div className={`text-sm font-semibold tabular ${isCFO ? "text-white" : displayExceeded > 0 ? "text-red-300" : "text-zinc-400"}`}>
-                    {fmtCurrency(isCFO ? displayActual : displayExceeded)}
+                    {hasRecordedAmount ? fmtCurrency(isCFO ? displayActual : displayExceeded) : "—"}
                   </div>
                 </div>
                 <div>
                   <div className="text-[10px] uppercase text-zinc-500 font-semibold tracking-widest">Variance</div>
                   <div className={`text-sm font-semibold tabular ${varianceColor(displayVariance)}`}>
-                    {displayVariance > 0 ? "+" : ""}
-                    {fmtCurrency(displayVariance)}
+                    {hasRecordedAmount ? <>{displayVariance > 0 ? "+" : ""}{fmtCurrency(displayVariance)}</> : "—"}
                   </div>
                 </div>
               </div>
@@ -200,13 +213,13 @@ const Projects = () => {
               <div className="mt-4">
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span className="text-zinc-400">Utilization</span>
-                  <span className={`font-semibold ${utilColor(displayUtilization)}`}>{fmtPct(displayUtilization)}</span>
+                  <span className={`font-semibold ${hasRecordedAmount ? utilColor(displayUtilization) : "text-zinc-500"}`}>{hasRecordedAmount ? fmtPct(displayUtilization) : "No logged data"}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-white/10">
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: `${Math.min(displayUtilization, 100)}%`,
+                      width: `${hasRecordedAmount ? Math.min(displayUtilization, 100) : 0}%`,
                       background: displayUtilization >= 100 ? "#EF4444" : displayUtilization >= 85 ? "#F59E0B" : "#10B981",
                     }}
                   />

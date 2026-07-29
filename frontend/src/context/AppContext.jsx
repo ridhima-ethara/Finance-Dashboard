@@ -26,6 +26,7 @@ import {
   normalizeGeneralActualRows,
 } from "../lib/generalBudget";
 import { findProjectDirectoryMember } from "../data/employeeDirectory";
+import { getProjectSubscriptionBudget } from "../lib/subscriptionTracker";
 
 // ---- Shared backend workspace sync ------------------------------------------------
 // The app now persists all workspace state to a real backend (MongoDB via FastAPI)
@@ -1564,10 +1565,18 @@ export const AppProvider = ({ children }) => {
       const topupBonus = finalizedByProject[p.id] || 0;
       const changeBonus = finalizedChangesByProject[p.id] || 0;
       const baseApprovedBudget = Math.max(
-        Number(p.approvedBudget || 0),
+        Math.max(0, Number(p.approvedBudget || 0) - Number(p.subscriptionBudgetAddition || 0)),
         Number(latestApprovedBudgetByProject[p.id]?.amount || 0)
       );
-      const approvedBudget = baseApprovedBudget + topupBonus + changeBonus;
+      const approvedSubscriptionItems = [
+        ...(p.budgetItems?.subs || []),
+        ...budgets.filter((entry) => entry.projectId === p.id && (entry.status === "approved" || entry.status === "partial")).flatMap((entry) => entry.items?.subs || []),
+        ...budgetReviews.filter((entry) => entry.projectId === p.id && (entry.status === "approved" || entry.status === "partial")).flatMap((entry) => entry.items?.subs || []),
+        ...topupRequests.filter((entry) => entry.projectId === p.id && (entry.status === "approved" || entry.status === "partial")).flatMap((entry) => entry.breakdown?.subs?.entries || []),
+        ...changeRequests.filter((entry) => entry.projectId === p.id && (entry.status === "approved" || entry.status === "partial" || entry.stage === "Approved")).flatMap((entry) => entry.breakdown?.subs?.entries || []),
+      ];
+      const subscriptionBudget = getProjectSubscriptionBudget(p, approvedSubscriptionItems);
+      const approvedBudget = baseApprovedBudget + topupBonus + changeBonus + subscriptionBudget.addition;
       const estimatedBudget = Math.max(Number(p.estimatedBudget || 0), baseApprovedBudget || 0);
       const generalActualSpend = Number(generalActualSpendByProject[p.id] || 0);
       const actualSpend = Number(p.actualSpend || 0) + generalActualSpend;
@@ -1598,6 +1607,8 @@ export const AppProvider = ({ children }) => {
         actualSpend,
         topupsTotal: (p.topupsTotal || 0) + topupBonus,
         changeRequestsTotal: (p.changeRequestsTotal || 0) + changeBonus,
+        subscriptionBudget: subscriptionBudget.total,
+        subscriptionBudgetAddition: subscriptionBudget.addition,
         remaining: approvedBudget - actualSpend,
         utilization: approvedBudget > 0 ? Math.round((actualSpend / approvedBudget) * 100) : 0,
         itActuals,
