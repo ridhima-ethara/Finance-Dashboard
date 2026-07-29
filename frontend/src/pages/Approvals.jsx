@@ -49,6 +49,24 @@ const typeConfig = {
   Batch: { label: "Batch Delivery", Icon: PackageCheck, tone: "text-emerald-300" },
 };
 
+const DEMO_MY_REQUEST = {
+  id: "demo-my-request-budget-01",
+  type: "Budget",
+  title: "Sample evaluation budget",
+  subtitle: "Budget Visualization Demo",
+  requestedAmount: 30000,
+  approvedAmount: 30000,
+  reason: "Model, infrastructure, and subscription allocation for the sample evaluation phase.",
+  submittedAt: "2026-07-24T10:00:00.000Z",
+  status: "approved",
+  decisions: [
+    { actor: "L2", decision: "approve", amount: 30000, comment: "Scope and resource allocation validated.", at: "2026-07-24T12:00:00.000Z" },
+    { actor: "L3", decision: "approve", amount: 30000, comment: "Approved for the sample evaluation run.", at: "2026-07-24T15:00:00.000Z" },
+  ],
+  href: null,
+  ctaLabel: null,
+};
+
 const buildBudgetResubmitHref = (review) => {
   return buildProjectBudgetBuilderHref(review.projectId, {
     edit: review.id,
@@ -229,11 +247,17 @@ const StatusChip = ({ status }) => {
 
 // -------------------- TPM view (read-only status tracking) --------------------
 const TpmMyRequests = () => {
-  const { user, topupRequests, batchDeliveries, budgetReviews } = useApp();
+  const { user, role, topupRequests, batchDeliveries, budgetReviews } = useApp();
   const [filter, setFilter] = useState("all");
+  const [openRequestId, setOpenRequestId] = useState(null);
   const rows = useMemo(
-    () => buildMyRequests({ userName: user?.name, topupRequests, batchDeliveries, budgetReviews }),
-    [user, topupRequests, batchDeliveries, budgetReviews]
+    () => {
+      const liveRows = buildMyRequests({ userName: user?.name, topupRequests, batchDeliveries, budgetReviews });
+      return isTpmView(role) && !liveRows.some((row) => row.id === DEMO_MY_REQUEST.id)
+        ? [DEMO_MY_REQUEST, ...liveRows]
+        : liveRows;
+    },
+    [user, role, topupRequests, batchDeliveries, budgetReviews]
   );
 
   const stats = useMemo(() => ({
@@ -319,7 +343,7 @@ const TpmMyRequests = () => {
           const t = typeConfig[r.type];
           const delta = r.approvedAmount != null ? r.approvedAmount - r.requestedAmount : null;
           return (
-            <div key={r.id} data-testid={`my-req-${r.id}`} className="bg-[#12121A] rounded-2xl border border-white/5 hover:border-fuchsia-500/25 transition-colors p-5">
+            <div key={r.id} data-testid={`my-req-${r.id}`} className="bg-[#12121A] rounded-2xl border border-white/5 hover:border-fuchsia-500/25 transition-colors p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -328,7 +352,7 @@ const TpmMyRequests = () => {
                     </span>
                     <StatusChip status={r.status} />
                   </div>
-                  <div className="mt-2 font-display font-semibold text-lg text-white">{r.title}</div>
+                  <div className="mt-2 font-display font-semibold text-base text-white">{r.title}</div>
                   <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-2 flex-wrap">
                     <span className="inline-flex items-center gap-1"><Layers className="w-3 h-3" /> {r.subtitle}</span>
                     <span>·</span>
@@ -337,18 +361,20 @@ const TpmMyRequests = () => {
                     <span className="tabular">{fmtDate(r.submittedAt)}</span>
                   </div>
                   {r.reason && (
-                    <div className="mt-2 text-xs text-zinc-300 leading-relaxed line-clamp-2">
+                    <div className="mt-1.5 text-xs text-zinc-400 leading-relaxed line-clamp-1">
                       <span className="text-fuchsia-200 font-semibold">{r.type === "Batch" ? "Client feedback: " : "Reason: "}</span>{r.reason}
                     </div>
                   )}
                 </div>
-                <div className="text-right flex-shrink-0">
+                <div className="flex items-center gap-5 flex-shrink-0 rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-right">
+                  <div>
                   <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Requested</div>
-                  <div className="font-display text-xl font-semibold text-white tabular">{fmtCurrency(r.requestedAmount, { compact: false })}</div>
+                  <div className="font-display text-lg font-semibold text-white tabular">{fmtCurrency(r.requestedAmount, { compact: false })}</div>
+                  </div>
                   {r.approvedAmount != null && (
-                    <>
-                      <div className="mt-1 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Approved</div>
-                      <div className={`text-sm font-semibold tabular ${r.approvedAmount === 0 ? "text-red-300" : "text-emerald-300"}`}>
+                    <div>
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Approved</div>
+                      <div className={`text-lg font-display font-semibold tabular ${r.approvedAmount === 0 ? "text-red-300" : "text-emerald-300"}`}>
                         {fmtCurrency(r.approvedAmount, { compact: false })}
                       </div>
                       {delta !== 0 && r.approvedAmount > 0 && (
@@ -356,17 +382,48 @@ const TpmMyRequests = () => {
                           {delta > 0 ? "+" : ""}{fmtCurrency(delta, { compact: false })} vs requested
                         </div>
                       )}
-                    </>
+                    </div>
                   )}
                 </div>
               </div>
 
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
+                <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                  <span className="uppercase tracking-widest font-semibold text-zinc-500">Approval progress</span>
+                  {r.decisions.length === 0 ? (
+                    <span className="text-amber-300">Awaiting approver action</span>
+                  ) : r.decisions.map((decision, index) => (
+                    <span key={`${decision.actor}-${index}`} className="inline-flex items-center gap-1 text-zinc-300">
+                      {index > 0 && <ChevronRight className="w-3 h-3 text-zinc-600" />}
+                      <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 font-semibold ${decision.decision === "reject" ? "border-red-500/25 bg-red-500/10 text-red-300" : decision.decision === "return" || decision.decision === "pending" ? "border-amber-500/25 bg-amber-500/10 text-amber-300" : "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"}`}>
+                        {decision.actor} ·
+                        {decision.label || (decision.decision === "approve" ? "Approved" : decision.decision === "partial" ? "Partially approved" : decision.decision === "reject" ? "Rejected" : decision.decision === "return" ? "Returned" : decision.decision === "modify" ? "Modified" : "Pending")}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setOpenRequestId((current) => current === r.id ? null : r.id)}
+                  aria-expanded={openRequestId === r.id}
+                  className="inline-flex flex-shrink-0 items-center gap-1 text-xs font-semibold text-fuchsia-300 hover:text-fuchsia-200"
+                  data-testid={`toggle-${r.id}`}
+                >
+                  {openRequestId === r.id ? "Hide details" : "View details"}
+                  <ChevronRight className={`w-3.5 h-3.5 transition-transform ${openRequestId === r.id ? "rotate-90" : ""}`} />
+                </button>
+              </div>
+
               {/* Comments timeline */}
-              {r.decisions.length > 0 && (
+              {openRequestId === r.id && (
                 <div className="mt-4 pt-3 border-t border-white/5 space-y-2" data-testid={`my-req-comments-${r.id}`}>
-                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 flex items-center gap-1">
-                    <MessageSquare className="w-3 h-3" /> Approver comments
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 flex items-center gap-1">
+                      <MessageSquare className="w-3 h-3" /> Approval status details
+                    </div>
+                    <StatusChip status={r.status} />
                   </div>
+                  {r.decisions.length === 0 && <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 text-xs text-amber-200">This request is awaiting its first approver decision.</div>}
                   {r.decisions.map((d, i) => {
                     const dIcon = d.decision === "reject"
                       ? { Icon: XCircle, cls: "text-red-300 bg-red-500/15 border-red-500/30" }
