@@ -2872,6 +2872,25 @@ export const AppProvider = ({ children }) => {
     return { ...target, status: nextStatus, clientComment: comment || "" };
   };
 
+  const recordBatchClientFeedback = (deliveryId, { comment }) => {
+    const target = batchDeliveries.find((delivery) => delivery.id === deliveryId && delivery.stage === "cfo-recovery");
+    if (!target) return null;
+    const at = new Date().toISOString();
+    setBatchDeliveries((current) => current.map((delivery) => delivery.id === deliveryId ? {
+      ...delivery,
+      clientComment: comment || "",
+      feedbackAt: at,
+      feedbackBy: user?.name || "TPM",
+      history: [{
+        at,
+        actor: `${user?.name || "TPM"} · ${user?.role || "TPM"}`,
+        action: "Recorded client feedback",
+        detail: comment || "No feedback note provided",
+      }, ...(delivery.history || [])],
+    } : delivery));
+    return { ...target, clientComment: comment || "", feedbackAt: at };
+  };
+
   const recordActualRecovery = (id, { actualRecovered, cfoNote }) => {
     const target = batchDeliveries.find((delivery) => delivery.id === id);
     const amount = Number(actualRecovered);
@@ -3721,6 +3740,7 @@ export const AppProvider = ({ children }) => {
     batchDeliveries,
     deliverBatch,
     recordRndBatchFeedback,
+    recordBatchClientFeedback,
     recordActualRecovery,
     // CTO budget review modifications
     budgetReviews,

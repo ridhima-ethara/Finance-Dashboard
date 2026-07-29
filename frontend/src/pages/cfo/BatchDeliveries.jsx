@@ -69,7 +69,7 @@ const CfoBatchDeliveries = () => {
         </div>
         <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Batch deliveries &amp; client recovery</h1>
         <p className="text-sm text-zinc-400 mt-1">
-          TPMs deliver phase batches with a proposed recoverable amount and client feedback · CFO records the actual amount recovered.
+          Project teams submit deliverable links and a proposed recoverable amount · CFO records the actual amount recovered.
         </p>
       </div>
 
@@ -141,8 +141,25 @@ const CfoBatchDeliveries = () => {
                 </div>
               </div>
 
-              {/* Client info panel */}
-              <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.02] p-3">
+              {/* Submitted model-wise costing */}
+              <div className="mt-4 overflow-x-auto rounded-xl border border-white/5 bg-white/[0.02]" data-testid={`bd-model-cost-${d.id}`}>
+                <div className="flex items-center justify-between gap-3 border-b border-white/5 px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Submitted task costing</div>
+                  <div className="text-xs text-zinc-400"><span className="text-white font-semibold tabular">{Number(d.tasks || d.rnd?.taskCount || 0).toLocaleString()}</span> tasks · Final cost <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(Number(d.finalCost ?? d.proposedAmount ?? 0), { compact: false })}</span></div>
+                </div>
+                {(d.modelTaskSummary || d.rnd?.modelTaskSummary || []).length ? <div className="min-w-[680px]">
+                  <div className="grid grid-cols-[1.5fr_.6fr_.8fr_.8fr_.8fr] gap-3 px-3 py-2 text-[9px] uppercase tracking-widest text-zinc-500"><span>Model</span><span className="text-right">Tasks</span><span className="text-right">Trajectories</span><span className="text-right">Cost / task</span><span className="text-right">Model cost</span></div>
+                  {(d.modelTaskSummary || d.rnd?.modelTaskSummary || []).map((model) => <div key={model.model} className="grid grid-cols-[1.5fr_.6fr_.8fr_.8fr_.8fr] gap-3 border-t border-white/[0.04] px-3 py-2.5 text-xs"><span className="truncate text-zinc-200">{model.model}</span><span className="text-right tabular text-zinc-300">{Number(model.tasks || 0).toLocaleString()}</span><span className="text-right tabular text-zinc-400">{Number(model.trajectories || 0).toLocaleString()}</span><span className="text-right tabular text-zinc-300">{fmtCurrency(Number(model.tasks || 0) > 0 ? Number(model.cost || 0) / Number(model.tasks) : 0, { compact: false })}</span><span className="text-right font-semibold tabular text-fuchsia-300">{fmtCurrency(Number(model.cost || 0), { compact: false })}</span></div>)}
+                </div> : <div className="px-3 py-5 text-center text-xs text-zinc-500">No model-wise task costing was submitted with this batch.</div>}
+              </div>
+
+              {(d.deliverableUrls || []).length > 0 && <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.02] p-3">
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300 mb-2">Deliverable links</div>
+                <div className="space-y-1">{d.deliverableUrls.map((url, index) => <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="block truncate text-xs text-sky-300 hover:text-sky-200">{url}</a>)}</div>
+              </div>}
+
+              {/* Client feedback is captured after delivery */}
+              {d.clientComment && <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.02] p-3">
                 <div className="text-[10px] uppercase tracking-widest font-semibold text-emerald-300 mb-1 flex items-center gap-1">
                   <MessageSquare className="w-3 h-3" /> Client feedback captured by TPM
                 </div>
@@ -152,7 +169,7 @@ const CfoBatchDeliveries = () => {
                     Client representative: <span className="text-zinc-300">{d.clientRepresentative}</span>
                   </div>
                 )}
-              </div>
+              </div>}
 
               {/* CFO action row */}
               <div className="mt-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.03] p-3">

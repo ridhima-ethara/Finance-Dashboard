@@ -1951,7 +1951,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                         >
                           <PackageCheck className="w-3 h-3" /> {delivery?.status === "changes-requested" ? "Deliver revised sample" : isSubmitted ? "Delivered" : getDeliverButtonLabel(isRndProject, delivery, p)}
                         </Button>
-                        {delivery?.status === "feedback-pending" && role === "R&D" && (
+                        {((delivery?.status === "feedback-pending" && role === "R&D") || (delivery?.stage === "cfo-recovery" && !delivery?.clientComment)) && (
                           <Button
                             size="sm"
                             onClick={() => setFeedbackDelivery({ phase: ph, delivery })}
@@ -2066,6 +2066,12 @@ const projectBudgetBuilderHref = useMemo(() => {
                           {delivery.clientComment && (
                             <div className="text-[10px] text-zinc-300 leading-relaxed pt-1 border-t border-white/5">
                               <span className="text-emerald-200 font-semibold">{delivery.stage === "rnd-review" ? "Notes: " : "Client: "}</span>{delivery.clientComment}
+                            </div>
+                          )}
+                          {(delivery.deliverableUrls || []).length > 0 && (
+                            <div className="pt-1 border-t border-white/5 space-y-1">
+                              <div className="text-[10px] font-semibold text-zinc-500">Deliverables</div>
+                              {delivery.deliverableUrls.map((url, index) => <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="block truncate text-[10px] text-sky-300 hover:text-sky-200">{url}</a>)}
                             </div>
                           )}
                           {delivery.stage === "rnd-review" && delivery.status === "changes-requested" && (

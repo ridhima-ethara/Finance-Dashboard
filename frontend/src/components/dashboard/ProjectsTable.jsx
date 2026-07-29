@@ -497,6 +497,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
   const trackPhase = activeBudgetTrack?.phases?.find((entry) => entry.id === phase.id || entry.name === phase.name) || null;
   const submittedPhaseBudget = Number(trackPhase?.budget || phase.estimated || 0);
   const delivery = batchDeliveries.find((d) => d.projectId === project.id && d.phaseId === phase.id) || null;
+  const canAddDeliveryFeedback = delivery?.status === "feedback-pending" || (delivery?.stage === "cfo-recovery" && !delivery?.clientComment);
   const phaseGate = buildProjectPhaseGate(project, batchDeliveries);
   const phaseState = phaseGate[phase.id] || {
     isLocked: false,
@@ -624,11 +625,11 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
           <Button
             onClick={() => setDeliverOpen(true)}
             variant="outline"
-            disabled={(!!delivery && delivery.status !== "feedback-pending") || isPhaseLocked}
+            disabled={(!!delivery && !canAddDeliveryFeedback) || isPhaseLocked}
             data-testid="drawer-btn-deliver"
             className="h-9 rounded-lg border-emerald-500/30 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-60 gap-1.5"
           >
-            <PackageCheck className="w-3.5 h-3.5" /> {delivery?.status === "feedback-pending" ? "Add client feedback" : delivery ? "Batch delivered" : "Deliver batch"}
+            <PackageCheck className="w-3.5 h-3.5" /> {canAddDeliveryFeedback ? "Add client feedback" : delivery ? "Batch delivered" : "Deliver batch"}
           </Button>
         </div>
       )}
@@ -896,7 +897,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         onOpenChange={setDeliverOpen}
         project={project}
         phase={phase}
-        delivery={delivery?.status === "feedback-pending" ? delivery : null}
+        delivery={canAddDeliveryFeedback ? delivery : null}
       />
     </>
   );
