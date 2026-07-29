@@ -1424,23 +1424,33 @@ export const AppProvider = ({ children }) => {
     return () => window.removeEventListener("focus", onFocus);
   }, [hydrated]);
 
-  const login = ({ email, password, role }) => {
-    if (role) {
-      const u = USERS.find((x) => x.role === role);
-      if (u) {
-        const safe = { id: u.id, name: u.name, role: u.role, title: u.title, email: u.email, avatarUrl: u.avatarUrl };
-        setUser(safe);
-        return { ok: true, user: safe };
+  const AUTH_TOKEN_KEY = "ethara.jwt.v1";
+  const login = async ({ email, password }) => {
+    try {
+      const res = await fetch(`${BACKEND_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: (email || "").trim().toLowerCase(), password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { ok: false, message: data?.detail || "Invalid email or password" };
       }
-      return { ok: false, message: "Role not found" };
+      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+      // Enrich with USERS directory metadata (avatar, id, title) so the rest of the app
+      // (which reads user.name/role/email) keeps working exactly as before.
+      const dir = USERS.find((x) => x.email.toLowerCase() === data.user.email.toLowerCase()) || {};
+      const safe = { id: dir.id || data.user.email, name: data.user.name, role: data.user.role, title: dir.title || data.user.role, email: data.user.email, avatarUrl: dir.avatarUrl };
+      setUser(safe);
+      return { ok: true, user: safe };
+    } catch (err) {
+      return { ok: false, message: err?.message || "Login failed" };
     }
-    const u = USERS.find((x) => x.email.toLowerCase() === email.toLowerCase() && x.password === password);
-    if (!u) return { ok: false, message: "Invalid email or password" };
-    const safe = { id: u.id, name: u.name, role: u.role, title: u.title, email: u.email, avatarUrl: u.avatarUrl };
-    setUser(safe);
-    return { ok: true, user: safe };
   };
-  const logout = () => setUser(null);
+  const logout = () => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+    setUser(null);
+  };
 
   const modelCatalog = useMemo(
     () => mergeModelCatalog(BEDROCK_MODELS, customModels),

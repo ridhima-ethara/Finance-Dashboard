@@ -77,14 +77,18 @@ const Login = () => {
   const nav = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showCreds, setShowCreds] = useState(false);
   const [busy, setBusy] = useState(false);
 
   if (isAuth) return <Navigate to="/" replace />;
 
-  const doLogin = (opts) => {
+  const doLogin = async (e) => {
+    e?.preventDefault();
+    if (!email || !password) {
+      toast.error("Enter your email and password");
+      return;
+    }
     setBusy(true);
-    const r = login(opts);
+    const r = await login({ email, password });
     setBusy(false);
     if (r.ok) {
       toast.success(`Welcome, ${r.user.name}`, { description: `Signed in as ${r.user.role}` });
@@ -116,93 +120,56 @@ const Login = () => {
           </div>
         </div>
 
-        {/* Quick logins */}
-        <div className="mt-12 sm:mt-16 w-full max-w-3xl">
+        <div className="mt-12 sm:mt-16 w-full max-w-md">
           <div className="text-center mb-5">
             <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-zinc-500 flex items-center justify-center gap-2">
               <ShieldCheck className="w-3 h-3" />
-              Sign in — choose your role
+              Sign in
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 max-w-5xl mx-auto">
-            {USERS.filter((u) => u.role !== "PL").map((u) => {
-              const a = roleAccent[u.role];
-              return (
-                <button
-                  key={u.id}
-                  data-testid={`quick-login-${u.role.toLowerCase().replace(/&/g, "n").replace(/[^a-z0-9-]/g, "-")}`}
-                  onClick={() => doLogin({ role: u.role })}
-                  className={`text-left p-4 rounded-2xl border ${a.border} bg-[#12121A]/60 backdrop-blur-sm hover:bg-[#12121A]/90 transition-all group ${a.glow}`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${a.dot}`} />
-                    <span className={`text-[10px] font-semibold uppercase tracking-[0.16em] ${a.text}`}>{roleDisplayName[u.role] || u.role}</span>
-                    <ArrowRight className="w-3 h-3 text-zinc-500 ml-auto group-hover:text-white transition-colors" />
-                  </div>
-                  <div className="mt-3 text-sm font-semibold text-white truncate">{u.name}</div>
-                  <div className="text-[11px] text-zinc-500 truncate">{roleLabel[u.role]}</div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Email/password toggle */}
-          <div className="mt-6 flex flex-col items-center gap-3">
-            {!showCreds ? (
-              <button
-                onClick={() => setShowCreds(true)}
-                data-testid="toggle-creds"
-                className="text-xs text-zinc-500 hover:text-fuchsia-300 transition-colors flex items-center gap-1.5"
-              >
-                <Lock className="w-3 h-3" />
-                Sign in with email &amp; password
-              </button>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  doLogin({ email, password });
-                }}
-                className="w-full max-w-md space-y-3 p-4 rounded-2xl border border-white/10 bg-[#12121A]/60"
-              >
-                <div className="relative">
-                  <Mail className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    data-testid="login-email"
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="cto@ethara.ai"
-                    className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                  />
-                </div>
-                <div className="relative">
-                  <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    data-testid="login-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter password"
-                    className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  disabled={busy}
-                  data-testid="login-submit"
-                  className="w-full h-10 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)] gap-2"
-                >
-                  Sign in
-                  <ArrowRight className="w-4 h-4" />
-                </Button>
-              </form>
-            )}
-          </div>
+          <form
+            onSubmit={doLogin}
+            className="w-full space-y-3 p-5 rounded-2xl border border-white/10 bg-[#12121A]/70 backdrop-blur-sm"
+          >
+            <div className="relative">
+              <Mail className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                data-testid="login-email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@ethara.ai"
+                autoComplete="email"
+                autoFocus
+                className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+              />
+            </div>
+            <div className="relative">
+              <Lock className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                data-testid="login-password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Password"
+                autoComplete="current-password"
+                className="w-full h-10 pl-9 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+              />
+            </div>
+            <Button
+              type="submit"
+              disabled={busy}
+              data-testid="login-submit"
+              className="w-full h-10 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)] gap-2 disabled:opacity-60"
+            >
+              {busy ? "Signing in…" : "Sign in"}
+              {!busy && <ArrowRight className="w-4 h-4" />}
+            </Button>
+          </form>
 
           <p className="mt-6 text-center text-[11px] text-zinc-600">
-            Role shortcut sign-in is available in this local workspace. Session stored in your browser.
+            Ethara.AI Financial Command Center — access is restricted to authorized team members.
           </p>
         </div>
       </div>
