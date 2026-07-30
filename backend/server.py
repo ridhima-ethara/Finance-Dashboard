@@ -1,14 +1,16 @@
-from fastapi import FastAPI, APIRouter, Body, HTTPException
+from fastapi import FastAPI, APIRouter, Body, HTTPException, Depends, Request
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 import os
 import logging
 import json
+import bcrypt
+import jwt
 from pathlib import Path
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 try:
     from motor.motor_asyncio import AsyncIOMotorClient
@@ -372,6 +374,103 @@ async def execute_gateway_request(payload: GatewayExecuteRequest):
             "content": f"Mock response routed to {record.get('provider')} {record.get('model')} through the internal gateway.",
         },
     }
+
+# -------------------------- Auth (JWT + bcrypt) --------------------------
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_TTL_MIN = 60 * 12  # 12 hours — matches a shared workspace day
+
+def _jwt_secret() -> str:
+    return os.environ["JWT_SECRET"]
+
+def _hash_password(pw: str) -> str:
+    return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+def _verify_password(pw: str, hashed: str) -> bool:
+    try:
+        return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
+    except Exception:
+        return False
+
+def _create_access_token(user_id: str, email: str, role: str) -> str:
+    payload = {
+        "sub": user_id,
+        "email": email,
+        "role": role,
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_TTL_MIN),
+        "type": "access",
+    }
+    return jwt.encode(payload, _jwt_secret(), algorithm=JWT_ALGORITHM)
+
+class LoginPayload(BaseModel):
+    email: EmailStr
+    password: str
+
+# Pre-seeded role users. Same password across all 5 role accounts by design (single-team
+# shared workspace) — users can rotate later via a password-change endpoint if needed.
+DEFAULT_PASSWORD = "Ethara@2026"
+SEED_USERS = [
+    {"email": "cto@ethara.ai", "name": "CTO Admin",   "role": "CTO"},
+    {"email": "cfo@ethara.ai", "name": "Shubham Garg","role": "CFO"},
+    {"email": "tpm@ethara.ai", "name": "TPM Lead",    "role": "TPM"},
+    {"email": "rd@ethara.ai",  "name": "R&D Lead 1",  "role": "R&D"},
+    {"email": "it@ethara.ai",  "name": "IT Admin",    "role": "IT"},
+]
+
+async def seed_role_users():
+    if db is None:
+        return
+    hashed = _hash_password(DEFAULT_PASSWORD)
+    for u in SEED_USERS:
+        existing = await db.users.find_one({"email": u["email"]})
+        if not existing:
+            await db.users.insert_one({**u, "password_hash": hashed, "created_at": datetime.now(timezone.utc).isoformat()})
+        elif not _verify_password(DEFAULT_PASSWORD, existing.get("password_hash", "")):
+            await db.users.update_one({"email": u["email"]}, {"$set": {"password_hash": hashed}})
+
+async def get_current_user(request: Request) -> Dict[str, Any]:
+    auth = request.headers.get("Authorization", "")
+    token = auth[7:] if auth.startswith("Bearer ") else None
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, _jwt_secret(), algorithms=[JWT_ALGORITHM])
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=401, detail="Invalid token type")
+    if db is not None:
+        user = await db.users.find_one({"email": payload.get("email")}, {"password_hash": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        user["_id"] = str(user.get("_id", ""))
+        return {"email": user["email"], "name": user["name"], "role": user["role"]}
+    return {"email": payload["email"], "name": payload.get("email"), "role": payload.get("role")}
+
+@api_router.post("/auth/login")
+async def login(payload: LoginPayload):
+    if db is None:
+        raise HTTPException(status_code=503, detail="Auth backend unavailable")
+    email = payload.email.lower().strip()
+    user = await db.users.find_one({"email": email})
+    if not user or not _verify_password(payload.password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    token = _create_access_token(str(user.get("_id", "")), user["email"], user["role"])
+    return {
+        "token": token,
+        "user": {"email": user["email"], "name": user["name"], "role": user["role"]},
+    }
+
+@api_router.get("/auth/me")
+async def me(current: Dict[str, Any] = Depends(get_current_user)):
+    return current
+
+@app.on_event("startup")
+async def _startup():
+    await seed_role_users()
+
+# ------------------------ end Auth ------------------------
 
 # Include the router in the main app
 app.include_router(api_router)
