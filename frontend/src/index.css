@@ -30,6 +30,7 @@ body {
 
 @layer base {
     :root {
+        color-scheme: dark;
         --background: 240 10% 4%;
         --foreground: 0 0% 96%;
         --card: 240 10% 8%;
@@ -71,6 +72,38 @@ body {
         min-height: 100vh;
         background: #08080c;
     }
+}
+
+/* Native <select> options — force dark background so browsers (Chrome/Safari) don't
+   render the dropdown list in the OS light theme on deployed HTTPS domains. */
+select,
+select option,
+select optgroup {
+    background-color: #12121a;
+    color: #f4f4f5;
+}
+select option:checked,
+select option:hover {
+    background-color: #1e1e28;
+    color: #ffffff;
+}
+select option:disabled {
+    color: #52525b;
+}
+
+/* Native date pickers — request the dark UA scheme */
+input[type="date"],
+input[type="datetime-local"],
+input[type="time"],
+input[type="month"],
+input[type="week"],
+input[type="number"],
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="search"],
+textarea {
+    color-scheme: dark;
 }
 
 /* Scrollbar */

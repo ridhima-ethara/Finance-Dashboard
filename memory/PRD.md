@@ -459,3 +459,31 @@ Migrated the entire workspace state layer from browser-only `localStorage` to a 
 - Modified: `frontend/src/context/AppContext.jsx` (~+140 lines net, per-slice localStorage writes retained as cache)
 
 **Deployment note:** After the user redeploys, the production URL will start persisting to the deployed MongoDB. Data entered on production is now permanent and shared across all sessions/devices/users on that URL.
+
+
+## What's Implemented (2026-02-10 · iteration 11) — Dark-Theme Fix, Quick Login, CSV Budget Import
+
+### 1. Dropdown / Native Select Dark Theme (P0 fix)
+- Root cause: native `<select>` and `<option>` on Chrome/Safari fall back to OS-level (light) rendering because the app did not declare `color-scheme: dark`. On deployed HTTPS domains this made dropdown text invisible on the dark background.
+- Fix: added `color-scheme: dark` at `:root` + `<html class="dark" style="color-scheme: dark">` and explicit CSS overrides for `select option`, `optgroup`, `input[type=...]`, `textarea` to force dark background + light text everywhere.
+- Files: `frontend/public/index.html`, `frontend/src/index.css`.
+
+### 2. Quick Login Chips Restored (still real JWT)
+- Chips (CTO · L3 · CFO · Projects · RL env · IT) reappear under the sign-in form on `/login`.
+- Chips call the **real** `POST /api/auth/login` with the seeded password (`Ethara@2026`) — no mock bypass, no client-side privilege escalation.
+- Password rotation on the backend cleanly fails the quick login with a toast telling the user to sign in manually.
+- Files: `frontend/src/pages/Login.jsx`.
+
+### 3. CSV / XLSX Budget Import in Budget Builder
+- New "Import CSV" button in the Budget Builder header (visible on all 3 steps for RL env / Production teams).
+- New `CsvBudgetImportDialog` — 3-step flow:
+  1. **Upload** — user picks any `.csv / .tsv / .xlsx / .xls` file (parsed via `xlsx`, already installed).
+  2. **Map columns** — user picks a target category (Models · Infra · Subscriptions · General) and then maps each budget field to any spreadsheet column. Fuzzy auto-mapping suggests columns from header names.
+  3. **Preview & apply** — first 30 generated lines are shown in a table; on Apply, lines are **appended** to the selected budget category state and Step 2 (Budget Items) is opened for review + edits.
+- Model / instance / subscription names are matched against the existing catalogs when possible; unknown names still import with the raw label preserved.
+- General-category imports flow into the phase-aware general budget table (default phase = current first phase).
+- Files: `frontend/src/components/CsvBudgetImportDialog.jsx` (new), `frontend/src/pages/tpm/BudgetBuilder.jsx` (button + handler).
+
+**Verified via screenshot on the preview URL:** login page renders chips, TPM chip signs in successfully, Budget Builder shows the button, dialog opens, and the Priority native `<select>` now opens with a dark background and readable options.
+
+**Deployment note:** User needs to redeploy the frontend for the dark-theme fix to appear on production (`https://budget-mgmt-preview.emergent.host`). Backend was not touched.
