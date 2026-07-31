@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { toast } from "sonner";
 import {
   ArrowLeft, Plus, Trash2, Send, Sparkles, ClipboardCheck, Cpu, Server, CreditCard,
-  CheckCircle2, ChevronRight, UserPlus, MessageSquareWarning, FileText, Lock,
+  CheckCircle2, ChevronRight, UserPlus, MessageSquareWarning, FileText, Lock, Upload,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -21,6 +21,7 @@ import { BUDGET_REVIEWS } from "../../data/mockTpm";
 import { isProjectInTpmLane, normalizeBudgetType } from "../../lib/projectMetrics";
 import { ADD_CUSTOM_MODEL_OPTION, buildModelOptionLabel, promptForCustomModel } from "../../lib/modelCatalog";
 import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
+import CsvBudgetImportDialog from "../../components/CsvBudgetImportDialog";
 import {
   calculateGeneralBudgetRowTotal,
   DEFAULT_GENERAL_BUDGET_HEADERS,
@@ -190,6 +191,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   const phaseFoundationPrefillAppliedRef = useRef(false);
 
   const [step, setStep] = useState(1); // 1=Details, 2=Budget Items, 3=Preview
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
 
   // Prefill from a returned review, if applicable
   const returnedReview = useMemo(() => {
@@ -946,6 +948,45 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     setSelectedTypes((state) => ({ ...state, [key]: !state[key] }));
   };
 
+  const handleCsvImport = ({ category, lines }) => {
+    if (!Array.isArray(lines) || !lines.length) return;
+    if (category === "models") {
+      setModels((rows) => [...rows, ...lines.map(({ _csvLabel, ...rest }) => rest)]);
+    } else if (category === "infra") {
+      setInfra((rows) => [...rows, ...lines.map(({ _csvLabel, ...rest }) => rest)]);
+    } else if (category === "subs") {
+      setSubs((rows) => [...rows, ...lines]);
+    } else if (category === "general") {
+      // Convert flat lines into general table rows (cells keyed by current headers)
+      const defaultPhase = generalPhaseOptions[0] || {};
+      const [labelHeader = DEFAULT_GENERAL_BUDGET_HEADERS[0], noteHeader = DEFAULT_GENERAL_BUDGET_HEADERS[1]] = generalTableHeaders;
+      const stableLabelKey = getGeneralBudgetColumnCellKey(0);
+      const stableNoteKey = getGeneralBudgetColumnCellKey(1);
+      setGeneralTableRows((rows) => [
+        ...rows,
+        ...lines.map((line) => ({
+          id: line.id,
+          phaseId: defaultPhase.id || "",
+          phaseName: defaultPhase.name || "",
+          estCost: Number(line.estCost || 0),
+          cells: {
+            [labelHeader]: line.label || "",
+            [stableLabelKey]: line.label || "",
+            [noteHeader]: line.note || "",
+            [stableNoteKey]: line.note || "",
+          },
+        })),
+      ]);
+      setGeneralMode("table");
+    }
+    setSelectedTypes((state) => ({ ...state, [category]: true }));
+    setActiveTab(category);
+    setStep((currentStep) => (currentStep === 1 ? 2 : currentStep));
+    toast.success(`Imported ${lines.length} ${category} line${lines.length === 1 ? "" : "s"}`, {
+      description: "Review and edit them in Step 2 · Budget Items before submitting.",
+    });
+  };
+
   const distributedPhases = useMemo(() => {
     const baseTotal = totals.models + totals.infra + totals.subs;
     if (deliveryMode === "single") {
@@ -1150,7 +1191,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   return (
     <div className="space-y-6" data-testid="page-budget-builder">
       {/* Header */}
-      <div>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
         <div>
           {!embeddedProjectId && (
             <Link to="/" className="text-xs text-zinc-500 hover:text-zinc-300 inline-flex items-center gap-1"><ArrowLeft className="w-3 h-3" /> Back</Link>
@@ -1165,6 +1206,16 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
             Running total <span className="text-fuchsia-300 font-semibold tabular">{fmtCurrency(totals.total, { compact: false })}</span> · {deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} · {isDirectCostBudget ? <span className="text-zinc-300">{formatBudgetTypeOptionLabel(effectiveBudgetType)} direct-cost estimate</span> : totalTrajectories > 0 ? <><span className="text-zinc-300 tabular">{totalTrajectories.toLocaleString()}</span> trajectories</> : <><span className="text-zinc-300 tabular">{totalTasks.toLocaleString()}</span> task-based estimate</>}
           </p>
         </div>
+        {!isToolingTeam && (
+          <Button
+            variant="outline"
+            onClick={() => setCsvImportOpen(true)}
+            data-testid="bb-open-csv-import"
+            className="h-9 rounded-lg border-fuchsia-500/30 bg-fuchsia-500/[0.06] text-fuchsia-200 hover:bg-fuchsia-500/10 gap-2"
+          >
+            <Upload className="w-3.5 h-3.5" /> Import CSV
+          </Button>
+        )}
       </div>
 
       {/* Returned review banner */}
@@ -2129,6 +2180,13 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
         </div>
       )}
       {user && null}
+      <CsvBudgetImportDialog
+        open={csvImportOpen}
+        onOpenChange={setCsvImportOpen}
+        onImport={handleCsvImport}
+        modelCatalog={modelCatalog}
+        defaultDays={budgetDurationDays}
+      />
     </div>
   );
 };

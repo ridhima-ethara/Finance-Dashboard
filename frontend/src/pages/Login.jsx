@@ -1,10 +1,20 @@
 import { useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useApp } from "../context/AppContext";
-import { USERS } from "../data/mockData";
 import { Button } from "../components/ui/button";
-import { ArrowRight, Lock, Mail, ShieldCheck } from "lucide-react";
+import { ArrowRight, Lock, Mail, ShieldCheck, Zap } from "lucide-react";
 import { toast } from "sonner";
+
+// Seeded role accounts on the backend (bcrypt-hashed with same password).
+// Kept in sync with /app/memory/test_credentials.md.
+const QUICK_LOGIN_ACCOUNTS = [
+  { role: "CTO", email: "cto@ethara.ai", name: "CTO" },
+  { role: "CFO", email: "cfo@ethara.ai", name: "L3 · CFO" },
+  { role: "TPM", email: "tpm@ethara.ai", name: "Projects" },
+  { role: "R&D", email: "rd@ethara.ai", name: "RL env" },
+  { role: "IT", email: "it@ethara.ai", name: "IT" },
+];
+const QUICK_LOGIN_PASSWORD = "Ethara@2026";
 
 const roleAccent = {
   CTO: { border: "border-fuchsia-500/40", text: "text-fuchsia-300", dot: "bg-fuchsia-400", glow: "hover:shadow-[0_0_24px_rgba(232,25,184,0.35)]" },
@@ -78,6 +88,7 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const [quickBusy, setQuickBusy] = useState("");
 
   if (isAuth) return <Navigate to="/" replace />;
 
@@ -95,6 +106,23 @@ const Login = () => {
       nav("/", { replace: true });
     } else {
       toast.error(r.message || "Login failed");
+    }
+  };
+
+  const doQuickLogin = async (account) => {
+    if (quickBusy) return;
+    setQuickBusy(account.role);
+    setEmail(account.email);
+    setPassword(QUICK_LOGIN_PASSWORD);
+    const r = await login({ email: account.email, password: QUICK_LOGIN_PASSWORD });
+    setQuickBusy("");
+    if (r.ok) {
+      toast.success(`Welcome, ${r.user.name}`, { description: `Signed in as ${r.user.role}` });
+      nav("/", { replace: true });
+    } else {
+      toast.error(r.message || "Quick login failed", {
+        description: "Seeded password may have been rotated. Sign in with your credentials instead.",
+      });
     }
   };
 
@@ -171,6 +199,41 @@ const Login = () => {
           <p className="mt-6 text-center text-[11px] text-zinc-600">
             Ethara.AI Financial Command Center — access is restricted to authorized team members.
           </p>
+
+          {/* Quick login chips — seeded role accounts (same JWT flow, auto-fills password) */}
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-px flex-1 bg-white/10" />
+              <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-zinc-500 flex items-center gap-1.5">
+                <Zap className="w-3 h-3 text-fuchsia-400" /> Quick login
+              </div>
+              <div className="h-px flex-1 bg-white/10" />
+            </div>
+            <div className="flex flex-wrap justify-center gap-2" data-testid="login-quick-chips">
+              {QUICK_LOGIN_ACCOUNTS.map((account) => {
+                const accent = roleAccent[account.role] || roleAccent.CTO;
+                const busyThis = quickBusy === account.role;
+                return (
+                  <button
+                    key={account.role}
+                    type="button"
+                    disabled={Boolean(quickBusy)}
+                    onClick={() => doQuickLogin(account)}
+                    data-testid={`login-quick-${account.role.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}
+                    className={`group inline-flex items-center gap-2 px-3 py-1.5 rounded-full border ${accent.border} bg-white/[0.03] text-xs font-medium ${accent.text} hover:bg-white/[0.06] transition-all ${accent.glow} disabled:opacity-50 disabled:cursor-not-allowed`}
+                    title={`Sign in as ${account.name} (${account.email})`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${accent.dot}`} />
+                    {busyThis ? "Signing in…" : account.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-center text-[10px] text-zinc-600">
+              Real JWT auth · seeded demo accounts · password{" "}
+              <span className="font-mono text-zinc-500">Ethara@2026</span>
+            </p>
+          </div>
         </div>
       </div>
     </div>
