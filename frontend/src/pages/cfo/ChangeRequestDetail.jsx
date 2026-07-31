@@ -132,7 +132,7 @@ const ChangeRequestDetail = () => {
   return (
     <div className="space-y-4" data-testid="page-cfo-change-request-detail">
       <button onClick={() => nav("/approval-queue")} className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white" data-testid="btn-back">
-        <ArrowLeft className="w-3.5 h-3.5" /> Approval Queue
+        <ArrowLeft className="w-3.5 h-3.5" /> Budget Review
       </button>
 
       <div className="flex items-center gap-3 flex-wrap">

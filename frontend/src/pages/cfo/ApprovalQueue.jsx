@@ -171,7 +171,7 @@ const ApprovalQueue = () => {
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
           <FileText className="w-3 h-3" /> CFO Portal
         </div>
-        <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Budget approvals</h1>
+        <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">Budget Review</h1>
       </div>
 
       {/* Type tabs */}

@@ -5,17 +5,10 @@ import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
 import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
 import { useApp } from "../../context/AppContext";
-import { areBudgetItemsEqual } from "../../lib/budgetReview";
-import {
-  buildDeliverableCostMetrics,
-  buildLoggedDailyRows,
-  summarizeItProjectActuals,
-} from "../../lib/projectMetrics";
 import {
   ArrowLeft,
   Check,
   X,
-  Sparkles,
   ShieldCheck,
   Lock,
   Cpu,
@@ -24,9 +17,9 @@ import {
   Flag,
   CheckCircle2,
   XCircle,
-  Percent,
   Clock3,
   FileText,
+  Percent,
 } from "lucide-react";
 
 const buildStatus = (review) => {
@@ -141,9 +134,9 @@ const ApprovalDetail = () => {
     taskLogs,
     cfoDecideBudgetReview,
     itProvisioningRequests,
-    itMonthlyActuals,
     applyBufferAction,
     bufferOverview,
+    batchDeliveries,
   } = useApp();
 
   const review = useMemo(
@@ -162,6 +155,7 @@ const ApprovalDetail = () => {
   const [decision, setDecision] = useState(buildStatus(review));
   const [comment, setComment] = useState(review?.cfoDecision?.comment || "");
   const [bufferPct, setBufferPct] = useState("");
+  const [partialAmount, setPartialAmount] = useState("");
 
   const initialItems = useMemo(() => buildEditableItems(review), [review]);
   const [editedItems, setEditedItems] = useState(initialItems);
@@ -170,6 +164,7 @@ const ApprovalDetail = () => {
     setDecision(buildStatus(review));
     setComment(review?.cfoDecision?.comment || "");
     setBufferPct("");
+    setPartialAmount("");
     setEditedItems(initialItems);
   }, [initialItems, review]);
 
@@ -178,6 +173,7 @@ const ApprovalDetail = () => {
     review?.modifiedTotal || review?.recommendedBudget || review?.requestedBudget || 0
   );
   const reviewPhases = review?.requestedPhases || [];
+  const approvalPhases = review?.modifiedPhases?.length ? review.modifiedPhases : reviewPhases;
   const phaseScopeLabel = reviewPhases.length === 1
     ? reviewPhases[0].name
     : `${reviewPhases.length || project?.phases?.length || 0} phases`;
@@ -208,12 +204,10 @@ const ApprovalDetail = () => {
   }), [editedItems]);
   const approvedAmountValue = itemTotals.total || ctoForwardAmount;
   const variance = approvedAmountValue - ctoForwardAmount;
+  const partialAmountValue = parseNumericInput(partialAmount);
   const bufferPctValue = parseNumericInput(bufferPct);
   const pendingDecision = decision === "pending";
-  const cfoEditedBreakdown = useMemo(
-    () => !areBudgetItemsEqual(editedItems, initialItems),
-    [editedItems, initialItems]
-  );
+  const canEditBreakdown = false; // CFO reviews and decides; CTO owns all phase and line-item edits.
 
   const itemSections = useMemo(() => ([
     {
@@ -264,72 +258,6 @@ const ApprovalDetail = () => {
       getDetail: (line) => line.note || line.detail || "Submitted general request line",
     },
   ]), [editedItems]);
-
-  const itActualSummary = useMemo(
-    () => summarizeItProjectActuals(project ? (itMonthlyActuals[project.id] || {}) : {}),
-    [itMonthlyActuals, project]
-  );
-  const loggedDailyRows = useMemo(
-    () => (project ? buildLoggedDailyRows([project], taskLogs) : []),
-    [project, taskLogs]
-  );
-  const dailyComparisonRows = useMemo(() => {
-    const byDate = new Map();
-
-    loggedDailyRows.forEach((row) => {
-      byDate.set(row.date, {
-        date: row.date,
-        loggedTasks: Number(row.tasks || 0),
-        loggedSpend: Number(row.spent || 0),
-        itModelActual: 0,
-        itInfraActual: 0,
-        itSubsActual: 0,
-        itTotalActual: 0,
-      });
-    });
-
-    (itActualSummary.dailyActuals || []).forEach((row) => {
-      const current = byDate.get(row.date) || {
-        date: row.date,
-        loggedTasks: 0,
-        loggedSpend: 0,
-        itModelActual: 0,
-        itInfraActual: 0,
-        itSubsActual: 0,
-        itTotalActual: 0,
-      };
-      current.itModelActual = Number(row.modelActual || 0);
-      current.itInfraActual = Number(row.infraActual || 0);
-      current.itSubsActual = Number(row.subsActual || 0);
-      current.itTotalActual = Number(row.total || 0);
-      byDate.set(row.date, current);
-    });
-
-    return Array.from(byDate.values())
-      .map((row) => ({
-        ...row,
-        variance: Number(row.itTotalActual || 0) - Number(row.loggedSpend || 0),
-      }))
-      .sort((left, right) => new Date(right.date || 0).getTime() - new Date(left.date || 0).getTime());
-  }, [itActualSummary.dailyActuals, loggedDailyRows]);
-  const costAuditMetrics = useMemo(
-    () => buildDeliverableCostMetrics({
-      totalBudgetRequested: approvedAmountValue || ctoForwardAmount,
-      totalTaskCount: Number(review?.tasks || 0),
-      completedDeliverables: loggedTasks,
-      totalAmountConsumed: Number(itActualSummary.totalActual || 0),
-    }),
-    [approvedAmountValue, ctoForwardAmount, review?.tasks, loggedTasks, itActualSummary.totalActual]
-  );
-  const latestItFiledAt = itActualSummary.updatedAt
-    ? new Date(itActualSummary.updatedAt).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : "Not filed yet";
 
   if (!review || !project) {
     return (
@@ -460,21 +388,21 @@ const ApprovalDetail = () => {
   };
 
   const partial = () => {
-    if (!approvedAmountValue || approvedAmountValue <= 0 || approvedAmountValue >= ctoForwardAmount) {
-      toast.error("Lower the edited breakdown below the CTO forwarded amount to submit a partial approval");
+    if (!partialAmountValue || partialAmountValue <= 0 || partialAmountValue >= ctoForwardAmount) {
+      toast.error("Enter a partial amount greater than $0 and below the CTO-forwarded total");
       return;
     }
     if (!requireComment("partially approve")) return;
     cfoDecideBudgetReview(review.id, {
       decision: "partial",
-      amount: approvedAmountValue,
+      amount: partialAmountValue,
       comment,
       reviewSeed: review,
       modifiedItems: cloneReviewItems(editedItems),
     });
     setDecision("partial");
     toast.success("Budget partially approved", {
-      description: `${fmtCurrency(approvedAmountValue, { compact: false })} routed to IT`,
+      description: `${fmtCurrency(partialAmountValue, { compact: false })} routed to IT`,
     });
   };
 
@@ -553,7 +481,7 @@ const ApprovalDetail = () => {
                   className="border-b border-white/5 last:border-b-0"
                 >
                   <td className="py-2 px-3">
-                    {pendingDecision ? (
+                    {canEditBreakdown ? (
                       <input
                         type="text"
                         value={getLineTitleValue(section.key, line)}
@@ -567,7 +495,7 @@ const ApprovalDetail = () => {
                     )}
                   </td>
                   <td className="py-2 px-3">
-                    {pendingDecision && section.key !== "subs" ? (
+                    {canEditBreakdown && section.key !== "subs" ? (
                       <input
                         type="text"
                         value={getLineDetailValue(section.key, line)}
@@ -582,7 +510,7 @@ const ApprovalDetail = () => {
                   </td>
                   {section.key === "subs" && (
                     <td className="py-2 px-3">
-                      {pendingDecision ? (
+                      {canEditBreakdown ? (
                         <input
                           type="number"
                           min="0"
@@ -601,7 +529,7 @@ const ApprovalDetail = () => {
                     </td>
                   )}
                   <td className="py-2 px-3">
-                    {pendingDecision ? (
+                    {canEditBreakdown ? (
                       <input
                         type="number"
                         min="0"
@@ -631,6 +559,23 @@ const ApprovalDetail = () => {
     </div>
   );
 
+  const budgetBreakdownPanel = (
+    <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="cost-breakdown">
+      <div className="mb-4">
+        <div className="font-display font-semibold text-[15px] text-white">Budget ask</div>
+        <div className="text-xs text-zinc-500 mt-1">
+          Models, infrastructure, and subscriptions approved by CTO for the active phase.
+        </div>
+      </div>
+      <div className="space-y-4">
+        {itemSections.filter((section) => section.key !== "misc" && section.lines.length > 0).map(renderBudgetSection)}
+      </div>
+      {itemSections.every((section) => section.key === "misc" || section.lines.length === 0) && (
+        <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-zinc-500">No model, infrastructure, or subscription lines were submitted.</div>
+      )}
+    </div>
+  );
+
   return (
     <div className="space-y-4" data-testid="page-approval-detail">
       <button
@@ -638,7 +583,7 @@ const ApprovalDetail = () => {
         className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white"
         data-testid="btn-back"
       >
-        <ArrowLeft className="w-3.5 h-3.5" /> Approval queue
+        <ArrowLeft className="w-3.5 h-3.5" /> Budget Review
       </button>
 
       <div className="flex items-center gap-3 flex-wrap">
@@ -650,6 +595,9 @@ const ApprovalDetail = () => {
         </span>
         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-300">
           {review.urgency}
+        </span>
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold border border-violet-500/25 bg-violet-500/10 text-violet-300" data-testid="cfo-project-type-tag">
+          {review.projectType || project.projectType || "Generalist"}
         </span>
       </div>
 
@@ -668,11 +616,8 @@ const ApprovalDetail = () => {
             className="bg-[#12121A] rounded-2xl border border-white/5 p-5"
             data-testid="meta-card"
           >
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              <Field label="Request ID" value={buildRequestId(review.id)} />
-              <Field label="Budget type" value={review.type} />
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-5">
               <Field label="Window" value={requestedWindow} />
-              <Field label="Priority" value={review.urgency} />
               <Field label="Scope" value={phaseScopeLabel} />
               <Field
                 label="Remaining tasks"
@@ -698,153 +643,74 @@ const ApprovalDetail = () => {
             </div>
           </div>
 
-          <div
-            className="bg-[#12121A] rounded-2xl border border-white/5 p-5"
-            data-testid="cost-breakdown"
-          >
-            <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
-              <div>
-                <div className="font-display font-semibold text-[15px] text-white">
-                  Budget breakdown
-                </div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  {pendingDecision
-                    ? "CFO can edit model, infrastructure, subscription, and general line items before approval."
-                    : "Final CFO-reviewed breakdown routed to IT and reflected in requester views."}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 min-w-[240px]">
-                <BreakdownCell icon={Cpu} label="Models" value={itemTotals.models} color="#E619B8" />
-                <BreakdownCell icon={Server} label="Infrastructure" value={itemTotals.infra} color="#3B82F6" />
-                <BreakdownCell icon={CreditCard} label="Subscriptions" value={itemTotals.subs} color="#10B981" />
-                <BreakdownCell icon={FileText} label="General" value={itemTotals.misc} color="#F59E0B" />
+          {budgetBreakdownPanel}
+
+          <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="cfo-phase-plan">
+            <div className="mb-4">
+              <div className="font-display font-semibold text-[15px] text-white">Phase plan</div>
+              <div className="text-xs text-zinc-500 mt-1">
+                Read-only phase scope approved by CTO. CFO can approve, return, or reject the active phase budget.
               </div>
             </div>
-
-            {pendingDecision && (
-              <div className="mb-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-3 text-xs text-zinc-200 leading-relaxed">
-                <span className="text-fuchsia-200 font-semibold">Edit mode: </span>
-                the total approval amount now follows the line items below. Reduce the breakdown for partial approval, or keep / increase it for full approval.
+            {approvalPhases.length > 1 && (
+              <div className="mb-3 rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/[0.06] px-3 py-2.5 text-xs text-zinc-300">
+                <span className="font-semibold text-fuchsia-200">Multiphase request:</span>{" "}
+                this approval raises the budget only for {approvalPhases.find((phase) => phase.id === review.activePhaseId)?.name || approvalPhases[0]?.name || "Phase 1"}. Remaining phases have not been raised yet.
               </div>
             )}
-
-            <div className="space-y-4">
-              {itemSections.map(renderBudgetSection)}
+            <div className="space-y-2">
+              {approvalPhases.map((phase, index) => {
+                const raised = (review.activePhaseId && phase.id === review.activePhaseId) || (!review.activePhaseId && index === 0);
+                const delivered = (batchDeliveries || []).find((entry) => entry.projectId === project.id && entry.phaseId === phase.id);
+                return (
+                  <div key={phase.id} className={`rounded-xl border p-3 ${delivered ? "border-emerald-500/25 bg-emerald-500/[0.05]" : raised ? "border-fuchsia-500/25 bg-fuchsia-500/[0.05]" : "border-white/5 bg-white/[0.02]"}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-white">
+                        {delivered ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : raised ? <Clock3 className="w-4 h-4 text-fuchsia-300" /> : <Lock className="w-4 h-4 text-zinc-500" />}
+                        {phase.name || `Phase ${index + 1}`}
+                      </div>
+                      <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${delivered ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : raised ? "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-300" : "border-white/10 bg-white/[0.03] text-zinc-500"}`}>
+                        {delivered ? "Delivered" : raised ? "Budget raised" : "Not raised yet"}
+                      </span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <ReadOnlyPhaseField label="Dates" value={phase.start && phase.end ? `${phase.start} → ${phase.end}` : "—"} />
+                      <ReadOnlyPhaseField label="Tasks" value={Number(phase.tasks || 0).toLocaleString()} />
+                      <ReadOnlyPhaseField label="Trajectories / task" value={Number(phase.trajectories || 0).toLocaleString()} />
+                      <ReadOnlyPhaseField label="Budget" value={raised || delivered ? fmtCurrency(phase.budget || delivered?.proposedAmount || 0, { compact: false }) : "Not estimated"} />
+                    </div>
+                    {delivered && (
+                      <div className="mt-3 border-t border-white/5 pt-3 text-xs text-zinc-300">
+                        <div>{Number(delivered.tasks || 0).toLocaleString()} delivered tasks · {Number(delivered.trajectories || 0).toLocaleString()} trajectories · recoverable {fmtCurrency(delivered.proposedAmount || 0, { compact: false })}</div>
+                        {(delivered.deliverableUrls || []).length > 0 && <div className="mt-1 flex flex-wrap gap-2">{delivered.deliverableUrls.map((url, urlIndex) => <a key={`${url}-${urlIndex}`} href={url} target="_blank" rel="noreferrer" className="text-fuchsia-300 underline">Deliverable {urlIndex + 1}</a>)}</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-
-            <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-xs text-zinc-500">
-                CTO forwarded{" "}
-                <span className="text-white font-semibold tabular">
-                  {fmtCurrency(ctoForwardAmount, { compact: false })}
-                </span>
-                {" "}· current CFO breakdown{" "}
-                <span className="text-fuchsia-300 font-semibold tabular">
-                  {fmtCurrency(approvedAmountValue, { compact: false })}
-                </span>
-              </div>
-              <div
-                className={`text-xs font-semibold ${
-                  variance < 0
-                    ? "text-amber-300"
-                    : variance > 0
-                      ? "text-emerald-300"
-                      : "text-zinc-400"
-                }`}
-              >
-                {variance === 0
-                  ? "No variance vs CTO forwarded total"
-                  : `${variance > 0 ? "+" : ""}${fmtCurrency(variance, { compact: false })} vs CTO forwarded`}
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="bg-[#12121A] rounded-2xl border border-white/5 p-5"
-            data-testid="daily-log-audit"
-          >
-            <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
-              <div>
-                <div className="font-display font-semibold text-[15px] text-white">
-                  Daily logs vs IT actuals
+            {(batchDeliveries || []).filter((entry) => entry.projectId === project.id && !approvalPhases.some((phase) => phase.id === entry.phaseId)).length > 0 && (
+              <div className="mt-4 border-t border-white/5 pt-4">
+                <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">Previously delivered phases</div>
+                <div className="space-y-2">
+                  {(batchDeliveries || []).filter((entry) => entry.projectId === project.id && !approvalPhases.some((phase) => phase.id === entry.phaseId)).map((delivery) => (
+                    <div key={delivery.id} className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-3">
+                      <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-white">{delivery.phaseName || "Delivered phase"}</span><span className="text-[10px] font-semibold text-emerald-300">Delivered</span></div>
+                      <div className="mt-1 text-xs text-zinc-400">Budget / recoverable {fmtCurrency(delivery.proposedAmount || delivery.finalCost || 0, { compact: false })} · {Number(delivery.tasks || 0).toLocaleString()} tasks · {Number(delivery.trajectories || 0).toLocaleString()} trajectories</div>
+                      {(delivery.deliverableUrls || []).length > 0 && <div className="mt-1 flex gap-2 flex-wrap">{delivery.deliverableUrls.map((url, index) => <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="text-fuchsia-300 underline">Deliverable {index + 1}</a>)}</div>}
+                    </div>
+                  ))}
                 </div>
-                <div className="text-xs text-zinc-500 mt-1">
-                  Daily execution logs are compared against the IT team&apos;s filed actuals for CFO review.
-                </div>
-              </div>
-              <div className="text-xs text-zinc-500">
-                Latest IT file: <span className="text-white font-medium">{latestItFiledAt}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-2 mb-4">
-              <AuditMetric label="Delivered tasks" value={loggedTasks.toLocaleString()} tone="text-emerald-300" />
-              <AuditMetric label="Claimed cost" value={fmtCurrency(costAuditMetrics.claimedCost, { compact: false })} tone="text-fuchsia-300" />
-              <AuditMetric label="IT actual" value={fmtCurrency(itActualSummary.totalActual, { compact: false })} tone="text-cyan-300" />
-              <AuditMetric
-                label="Variance"
-                value={fmtCurrency(costAuditMetrics.variance, { compact: false })}
-                tone={costAuditMetrics.variance > 0 ? "text-red-300" : costAuditMetrics.variance < 0 ? "text-emerald-300" : "text-white"}
-              />
-            </div>
-
-            {dailyComparisonRows.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] p-6 text-center text-xs text-zinc-500">
-                No daily execution logs or IT actual rows have been filed for this project yet.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-white/5">
-                <table className="w-full min-w-[760px] text-sm">
-                  <thead>
-                    <tr className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 border-b border-white/5 bg-white/[0.03]">
-                      <th className="text-left py-2.5 px-3">Date</th>
-                      <th className="text-right py-2.5 px-3">Logged tasks</th>
-                      <th className="text-right py-2.5 px-3">Logged spend</th>
-                      <th className="text-right py-2.5 px-3">IT model</th>
-                      <th className="text-right py-2.5 px-3">IT infra</th>
-                      <th className="text-right py-2.5 px-3">IT subs</th>
-                      <th className="text-right py-2.5 px-3">IT total</th>
-                      <th className="text-right py-2.5 px-3">Variance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dailyComparisonRows.slice(0, 10).map((row) => (
-                      <tr key={row.date} className="border-b border-white/5 last:border-b-0">
-                        <td className="py-2.5 px-3 text-zinc-200">{row.date || "—"}</td>
-                        <td className="py-2.5 px-3 text-right tabular text-white">{row.loggedTasks.toLocaleString()}</td>
-                        <td className="py-2.5 px-3 text-right tabular text-zinc-200">{fmtCurrency(row.loggedSpend, { compact: false })}</td>
-                        <td className="py-2.5 px-3 text-right tabular text-zinc-300">{fmtCurrency(row.itModelActual, { compact: false })}</td>
-                        <td className="py-2.5 px-3 text-right tabular text-zinc-300">{fmtCurrency(row.itInfraActual, { compact: false })}</td>
-                        <td className="py-2.5 px-3 text-right tabular text-zinc-300">{fmtCurrency(row.itSubsActual, { compact: false })}</td>
-                        <td className="py-2.5 px-3 text-right tabular text-white font-semibold">{fmtCurrency(row.itTotalActual, { compact: false })}</td>
-                        <td className={`py-2.5 px-3 text-right tabular font-semibold ${row.variance > 0 ? "text-red-300" : row.variance < 0 ? "text-emerald-300" : "text-zinc-400"}`}>
-                          {row.variance > 0 ? "+" : ""}
-                          {fmtCurrency(row.variance, { compact: false })}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             )}
           </div>
 
-          <GeneralBudgetTableCard
+          {editedItems.misc.length > 0 && <GeneralBudgetTableCard
             lines={editedItems.misc}
-            title="General budget table"
-            subtitle={pendingDecision
-              ? "General budget rows stay visible while CFO edits the section totals above."
-              : "Final general budget rows included in the approved handoff."}
+            title="General budget"
+            subtitle="CTO-approved general rows shown read-only."
             testid="approval-general-budget-table"
-          />
-
-          <div className="rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.05] p-4 flex items-start gap-3">
-            <Sparkles className="w-4 h-4 text-fuchsia-300 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-zinc-200 leading-relaxed">
-              <span className="text-fuchsia-200 font-semibold">Review note: </span>
-              CFO approval writes the final edited breakdown into the project baseline, IT handoff, and requester-side activity log so TPM/R&amp;D can see what changed.
-            </div>
-          </div>
+          />}
 
           {pendingDecision && (
             <div
@@ -913,11 +779,21 @@ const ApprovalDetail = () => {
                       {fmtCurrency(variance, { compact: false })}
                     </span>
                   </div>
-                  {cfoEditedBreakdown && (
-                    <div className="mt-2 text-[11px] text-cyan-200">
-                      Line-item edits detected. The requester log will capture these changes after you act.
-                    </div>
-                  )}
+                </div>
+
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">Partial approval amount</div>
+                  <input
+                    type="number"
+                    min="0"
+                    max={ctoForwardAmount}
+                    step="10"
+                    value={partialAmount}
+                    onChange={(event) => setPartialAmount(event.target.value)}
+                    placeholder={`Less than ${fmtCurrency(ctoForwardAmount, { compact: false })}`}
+                    data-testid="partial-approval-amount"
+                    className="w-full h-10 rounded-lg border border-white/10 bg-white/[0.04] px-3 text-sm text-white tabular placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                  />
                 </div>
 
                 <div>
@@ -925,7 +801,7 @@ const ApprovalDetail = () => {
                     Comment
                   </div>
                   <div className="text-[11px] text-zinc-500 mb-2">
-                    Required for approve, partial approve, return, and reject.
+                    Required for approve, partial approval, return, and reject.
                   </div>
                   <textarea
                     value={comment}
@@ -950,7 +826,7 @@ const ApprovalDetail = () => {
                     className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5"
                     data-testid="btn-partial"
                   >
-                    <Percent className="w-3.5 h-3.5" /> Partial
+                    <Percent className="w-3.5 h-3.5" /> Partial approval
                   </Button>
                   <Button
                     onClick={sendBack}
@@ -1037,27 +913,6 @@ const ApprovalDetail = () => {
                   { compact: false }
                 )}
               />
-              <SummaryRow
-                label="Claimed cost"
-                value={fmtCurrency(costAuditMetrics.claimedCost, { compact: false })}
-                valueClassName="text-fuchsia-300"
-              />
-              <SummaryRow
-                label="IT actual filed"
-                value={fmtCurrency(itActualSummary.totalActual, { compact: false })}
-                valueClassName="text-white"
-              />
-              <SummaryRow
-                label="Claimed vs IT actual"
-                value={fmtCurrency(costAuditMetrics.variance, { compact: false })}
-                valueClassName={
-                  costAuditMetrics.variance > 0
-                    ? "text-red-300"
-                    : costAuditMetrics.variance < 0
-                      ? "text-emerald-300"
-                      : "text-zinc-400"
-                }
-              />
             </div>
           </div>
 
@@ -1136,29 +991,10 @@ const Field = ({ label, value }) => (
   </div>
 );
 
-const BreakdownCell = ({ icon: Icon, label, value, color }) => (
-  <div className="rounded-lg bg-white/[0.03] border border-white/5 p-3">
-    <div className="flex items-center gap-2">
-      <div
-        className="w-6 h-6 rounded-md flex items-center justify-center"
-        style={{ background: `${color}22` }}
-      >
-        <Icon className="w-3 h-3" style={{ color }} />
-      </div>
-      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
-        {label}
-      </div>
-    </div>
-    <div className="text-lg font-display font-semibold text-white tabular mt-1">
-      {fmtCurrency(value, { compact: false })}
-    </div>
-  </div>
-);
-
-const AuditMetric = ({ label, value, tone = "text-white" }) => (
-  <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
-    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
-    <div className={`mt-1 text-base font-semibold tabular ${tone}`}>{value}</div>
+const ReadOnlyPhaseField = ({ label, value }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.025] p-2.5">
+    <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
+    <div className="mt-1 text-xs font-medium text-white tabular">{value}</div>
   </div>
 );
 

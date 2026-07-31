@@ -141,10 +141,12 @@ export const getTaskLogRecordedCost = (log) => {
   }
   const detailedRows = getDetailedTaskRows(log);
   if (detailedRows.length) {
-    return detailedRows.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+    const detailedCost = detailedRows.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+    if (detailedCost > 0) return detailedCost;
   }
   if (Array.isArray(log?.modelUsage) && log.modelUsage.length) {
-    return log.modelUsage.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+    const modelUsageCost = log.modelUsage.reduce((sum, entry) => sum + Number(entry.cost || 0), 0);
+    if (modelUsageCost > 0) return modelUsageCost;
   }
   return Number(log?.cost || 0);
 };

@@ -899,6 +899,7 @@ const buildBudgetReviewRecord = ({
     projectId: payload.projectId,
     projectName: payload.projectName || project?.name || payload.projectId,
     client: project?.client || project?.clientProjectName || "—",
+    projectType: project?.projectType || "Generalist",
     tpm: actorName || project?.tpm || "TPM",
     submittedAt: entry.submittedAt,
     urgency: mapPriorityToUrgency(payload.priority),
@@ -923,10 +924,13 @@ const buildBudgetReviewRecord = ({
     justification: `${formatBudgetTypeLabel(normalizedBudgetType)} budget submitted by ${actorName || "team"}${payload.teamType ? ` · ${payload.teamType} team` : ""} · ${Number(payload.totalTasks || 0).toLocaleString()} tasks${Number(payload.totalTrajectories || 0) ? ` · ${Number(payload.totalTrajectories || 0).toLocaleString()} trajectories` : ""}`,
     items: cloneBudgetItems(payload.items || {}),
     requestedPhases,
+    activePhaseId: payload.activePhaseId || requestedPhases.find((phase) => Number(phase.budget || 0) > 0)?.id || requestedPhases[0]?.id || null,
+    phaseBudgetPlan: clonePhases(payload.phaseBudgetPlan || []),
     baselineSnapshot,
     budgetType: normalizedBudgetType,
     sampleIteration: Number(payload.sampleIteration || 1),
     sourceDeliveryId: payload.sourceDeliveryId || null,
+    phaseContinuation: Boolean(payload.phaseContinuation),
     sourceBudgetId: entry.id,
     requesterRole: actorRole || project?.type || "TPM",
     history: [
@@ -947,19 +951,42 @@ const buildProjectBudgetStateFromReview = ({ projectEntry, review, approvedAmoun
   const scaledPhases = scalePhasesToAmount(phaseSource, baselineSnapshot.phases || projectEntry.phases || [], approvedAmount);
   const scaledItems = scaleBudgetItemsToAmount(review?.items || projectEntry.budgetItems || {}, approvedAmount);
   const workflowMeta = getApprovedWorkflowMeta(review?.budgetType || projectEntry.lastBudgetSubmission?.budgetType || projectEntry.type || "Production");
+  const isPhaseContinuation = Boolean(review?.phaseContinuation && review?.activePhaseId);
+  const approvedPhases = isPhaseContinuation
+    ? (() => {
+        const baselinePhases = clonePhases(baselineSnapshot.phases || projectEntry.phases || []);
+        const approvedPhase = scaledPhases.find((phase) => phase.id === review.activePhaseId) || scaledPhases[0];
+        if (!approvedPhase) return baselinePhases;
+        const existingIndex = baselinePhases.findIndex((phase) => phase.id === review.activePhaseId);
+        if (existingIndex < 0) return [...baselinePhases, approvedPhase];
+        return baselinePhases.map((phase, index) => index === existingIndex ? { ...phase, ...approvedPhase } : phase);
+      })()
+    : (scaledPhases.length ? scaledPhases : clonePhases(baselineSnapshot.phases || []));
+  const approvedBudget = isPhaseContinuation
+    ? Number(baselineSnapshot.approvedBudget || 0) + Number(approvedAmount || 0)
+    : approvedAmount;
+  const approvedItems = isPhaseContinuation
+    ? {
+        models: [...cloneLines(baselineSnapshot.budgetItems?.models || []), ...cloneLines(scaledItems.models || [])],
+        infra: [...cloneLines(baselineSnapshot.budgetItems?.infra || []), ...cloneLines(scaledItems.infra || [])],
+        subs: [...cloneLines(baselineSnapshot.budgetItems?.subs || []), ...cloneLines(scaledItems.subs || [])],
+        misc: [...cloneLines(baselineSnapshot.budgetItems?.misc || []), ...cloneLines(scaledItems.misc || [])],
+      }
+    : scaledItems;
   return {
-    approvedBudget: approvedAmount,
-    estimatedBudget: approvedAmount,
-    remaining: approvedAmount - Number(projectEntry.actualSpend || 0),
-    utilization: approvedAmount > 0 ? Math.round((Number(projectEntry.actualSpend || 0) / approvedAmount) * 100) : 0,
-    phases: scaledPhases.length ? scaledPhases : clonePhases(baselineSnapshot.phases || []),
-    budgetItems: scaledItems,
-    totalTasks: Number(review?.tasks || baselineSnapshot.totalTasks || projectEntry.totalTasks || 0),
+    approvedBudget,
+    estimatedBudget: approvedBudget,
+    remaining: approvedBudget - Number(projectEntry.actualSpend || 0),
+    utilization: approvedBudget > 0 ? Math.round((Number(projectEntry.actualSpend || 0) / approvedBudget) * 100) : 0,
+    phases: approvedPhases,
+    budgetItems: approvedItems,
+    totalTasks: Number(isPhaseContinuation ? baselineSnapshot.totalTasks || projectEntry.totalTasks || 0 : review?.tasks || baselineSnapshot.totalTasks || projectEntry.totalTasks || 0),
     lastBudgetSubmission: {
       ...(projectEntry.lastBudgetSubmission || {}),
       budgetType: review?.budgetType || projectEntry.lastBudgetSubmission?.budgetType || "Budget",
       sampleIteration: Number(review?.sampleIteration || projectEntry.lastBudgetSubmission?.sampleIteration || 1),
       sourceDeliveryId: review?.sourceDeliveryId || projectEntry.lastBudgetSubmission?.sourceDeliveryId || null,
+      activePhaseId: review?.activePhaseId || projectEntry.lastBudgetSubmission?.activePhaseId || null,
     },
     status: workflowMeta.status,
     type: workflowMeta.type,
@@ -2108,6 +2135,7 @@ export const AppProvider = ({ children }) => {
     const proj = {
       id,
       name: payload.internalName,
+      projectType: payload.projectType === "Technical" ? "Technical" : "Generalist",
       clientProjectName: payload.clientProjectName,
       client: payload.clientProjectName || "New Engagement",
       createdBy: payload.createdBy || "CTO",
@@ -2626,6 +2654,8 @@ export const AppProvider = ({ children }) => {
         status: "pending-cto",
         items: cloneBudgetItems(payload.items || {}),
         phases: clonePhases(payload.phases || []),
+        activePhaseId: payload.activePhaseId || null,
+        phaseBudgetPlan: clonePhases(payload.phaseBudgetPlan || []),
         sourceDeliveryId: payload.sourceDeliveryId || null,
         sampleIteration: payload.sampleIteration || 1,
         reviewId,
@@ -2669,6 +2699,8 @@ export const AppProvider = ({ children }) => {
           sourceDeliveryId: payload.sourceDeliveryId || null,
           total: Number(payload.totals?.total || 0),
           stage: "pending-cto",
+          activePhaseId: payload.activePhaseId || null,
+          phaseBudgetPlan: clonePhases(payload.phaseBudgetPlan || []),
         },
         kickoffMail: project.kickoffMail
           ? { ...project.kickoffMail, recipients: mergeTeamMembers(project.kickoffMail.recipients || [], additionalMembers) }

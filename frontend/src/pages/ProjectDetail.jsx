@@ -112,6 +112,10 @@ const ProjectDetail = () => {
   const [topupOpen, setTopupOpen] = useState(false);
   const [topupPhaseId, setTopupPhaseId] = useState("");
   const [budgetBatchFilter, setBudgetBatchFilter] = useState("all"); // Budget tab · Allocation Ledger batch filter
+  const [phaseBatchView, setPhaseBatchView] = useState("draft");
+  const [noActiveBatchOpen, setNoActiveBatchOpen] = useState(false);
+  const [draftPhasePickerOpen, setDraftPhasePickerOpen] = useState(false);
+  const [taskViewPhaseId, setTaskViewPhaseId] = useState("");
   const [deliverPhase, setDeliverPhase] = useState(null); // {project, phase} or null
   const [feedbackDelivery, setFeedbackDelivery] = useState(null);
   const [taskLogPhase, setTaskLogPhase] = useState(null); // phase for log dialog
@@ -305,19 +309,50 @@ const ProjectDetail = () => {
     const filtered = phases.filter((phase) => trackedPhaseIds.has(phase.id));
     return filtered.length ? filtered : phases.slice(0, 1);
   }, [budgetTracks, currentRndTrackKey, isRndProject, p?.phases]);
-  const visibleTaskLogs = useMemo(() => {
-    if (!isRndProject) return allLogs;
-    const visiblePhaseIds = new Set(batchPhases.map((phase) => phase.id));
-    if (!visiblePhaseIds.size) return allLogs;
-    return allLogs.filter((log) => visiblePhaseIds.has(log.phaseId));
-  }, [allLogs, batchPhases, isRndProject]);
+  const phaseScopedBudgets = useMemo(
+    () => budgets.filter((budget) => (
+      budget.projectId === id
+      && ["approved", "partial"].includes(budget.status)
+      && Array.isArray(budget.phases)
+      && budget.phases.some((phase) => phase.id && Number(phase.budget || phase.estimated || 0) > 0)
+    )),
+    [budgets, id]
+  );
+  const raisedPhaseIds = useMemo(() => new Set(
+    phaseScopedBudgets.flatMap((budget) => {
+      const raisedPhaseId = budget.activePhaseId
+        || budget.phases.find((phase) => Number(phase.budget || phase.estimated || 0) > 0)?.id;
+      if (!raisedPhaseId) return [];
+      const phaseIndex = batchPhases.findIndex((phase) => phase.id === raisedPhaseId);
+      if (phaseIndex <= 0) return [raisedPhaseId];
+      const previousPhase = batchPhases[phaseIndex - 1];
+      const previousDelivery = projectBatches.find((delivery) => (
+        delivery.phaseId === previousPhase?.id && delivery.status !== "changes-requested"
+      ));
+      if (!previousDelivery) return [];
+      const budgetRaisedAt = new Date(budget.submittedAt || budget.cfoDecision?.at || 0).getTime();
+      const previousDeliveredAt = new Date(previousDelivery.deliveredAt || previousDelivery.createdAt || 0).getTime();
+      return budgetRaisedAt >= previousDeliveredAt ? [raisedPhaseId] : [];
+    })
+  ), [batchPhases, phaseScopedBudgets, projectBatches]);
   const activeBatchPhaseId = useMemo(() => {
     const editable = batchPhases.find((phase) => {
       const delivery = projectBatches.find((entry) => entry.phaseId === phase.id);
-      return !delivery || delivery.status === "changes-requested";
+      const budgetRaised = raisedPhaseIds.size > 0
+        ? raisedPhaseIds.has(phase.id)
+        : phase === batchPhases[0] && Number(phase.estimated || phase.budget || p?.approvedBudget || 0) > 0;
+      return budgetRaised && (!delivery || delivery.status === "changes-requested");
     });
     return editable?.id || null;
-  }, [batchPhases, projectBatches]);
+  }, [batchPhases, p?.approvedBudget, projectBatches, raisedPhaseIds]);
+  useEffect(() => {
+    if (batchPhases.some((phase) => phase.id === taskViewPhaseId)) return;
+    setTaskViewPhaseId(activeBatchPhaseId || batchPhases[0]?.id || "");
+  }, [activeBatchPhaseId, batchPhases, taskViewPhaseId]);
+  const visibleTaskLogs = useMemo(
+    () => (taskViewPhaseId ? allLogs.filter((log) => log.phaseId === taskViewPhaseId) : []),
+    [allLogs, taskViewPhaseId]
+  );
 const latestBudgetReview = projectBudgetReviews[0] || null;
 const latestBudgetReviewMeta = latestBudgetReview ? getBudgetReviewMeta(latestBudgetReview.status) : null;
 const hasBudgetRejection = Boolean(p?.budgetRejection);
@@ -342,10 +377,16 @@ const canManageExecution = isExecutionOwner && executionUnlocked;
     () => batchPhases.find((phase) => phase.id === activeBatchPhaseId) || batchPhases[0] || null,
     [activeBatchPhaseId, batchPhases]
   );
-  const isTaskLogDisabled = !canManageExecution || !activeBatchPhaseId;
+  const taskViewPhase = useMemo(
+    () => batchPhases.find((phase) => phase.id === taskViewPhaseId) || taskLogTargetPhase,
+    [batchPhases, taskLogTargetPhase, taskViewPhaseId]
+  );
+  const isTaskLogDisabled = !canManageExecution || !activeBatchPhaseId || taskViewPhaseId !== activeBatchPhaseId;
   const approvalLockMessage = getWorkflowLockMessage({ project: p, workflowStage, latestBudgetReviewMeta, role });
   const taskLogDisabledReason = !activeBatchPhaseId && batchPhases.length
     ? "Tasks for this batch have already been submitted."
+    : taskViewPhaseId !== activeBatchPhaseId
+      ? "Select the active batch to log tasks. Other phases are view-only."
     : !canManageExecution
       ? approvalLockMessage
       : "";
@@ -524,6 +565,11 @@ const projectBudgetBuilderHref = useMemo(() => {
               <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${p.type === "R&D" ? "bg-fuchsia-500/10 text-fuchsia-300 border-fuchsia-500/30" : "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"}`}>
                 <Circle className="w-1.5 h-1.5 fill-current" /> {p.type === "R&D" ? "R&D" : "Production"}
               </span>
+              {p.projectType && (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border border-violet-500/25 bg-violet-500/10 text-violet-300" data-testid="project-type-tag">
+                  {p.projectType}
+                </span>
+              )}
             </div>
             <div className="mt-1 text-xs text-zinc-500 tabular">
               {prjCode} · Started {startDate} · {team.length} team members{isCFO && p.client ? ` · Client ${p.client}` : ""}
@@ -1583,6 +1629,88 @@ const projectBudgetBuilderHref = useMemo(() => {
                   </div>
                 )}
 
+                <div className="grid grid-cols-1 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.6fr)] gap-4 items-stretch" data-testid="phase-ledger-row">
+                {(p.phases || []).length > 0 && (
+                  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="phase-budget-status-card">
+                    <div className="flex items-start justify-between gap-3 flex-wrap mb-4">
+                      <div>
+                        <div className="text-[15px] font-semibold text-white font-display">Phase &amp; draft batches</div>
+                        <div className="text-xs text-zinc-500 mt-0.5">Only the current phase is editable. Later batches unlock after the preceding phase is delivered.</div>
+                      </div>
+                      <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.025] p-1 text-[11px]" data-testid="phase-batch-tabs">
+                        <button
+                          type="button"
+                          onClick={() => setPhaseBatchView("completed")}
+                          className={`rounded-md px-2.5 py-1.5 font-medium transition-colors ${phaseBatchView === "completed" ? "bg-emerald-500/15 text-emerald-300" : "text-zinc-500 hover:text-zinc-300"}`}
+                          data-testid="phase-tab-completed"
+                        >
+                          Completed ({projectBatches.filter((batch) => batch.status !== "changes-requested").length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPhaseBatchView("draft")}
+                          className={`rounded-md px-2.5 py-1.5 font-medium transition-colors ${phaseBatchView === "draft" ? "bg-fuchsia-500/15 text-fuchsia-300" : "text-zinc-500 hover:text-zinc-300"}`}
+                          data-testid="phase-tab-draft"
+                        >
+                          Draft ({Math.max(0, (p.phases || []).length - projectBatches.filter((batch) => batch.status !== "changes-requested").length)})
+                        </button>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      {(p.phases || []).filter((phase) => {
+                        const delivery = projectBatches.find((batch) => batch.phaseId === phase.id);
+                        const completed = Boolean(delivery && delivery.status !== "changes-requested");
+                        return phaseBatchView === "completed" ? completed : !completed;
+                      }).map((phase) => {
+                        const index = (p.phases || []).findIndex((entry) => entry.id === phase.id);
+                        const delivery = projectBatches.find((batch) => batch.phaseId === phase.id);
+                        const completed = Boolean(delivery && delivery.status !== "changes-requested");
+                        const current = !completed && phase.id === activeBatchPhaseId;
+                        const precedingPhasesCompleted = (p.phases || []).slice(0, index).every((priorPhase) => {
+                          const priorDelivery = projectBatches.find((batch) => batch.phaseId === priorPhase.id);
+                          return Boolean(priorDelivery && priorDelivery.status !== "changes-requested");
+                        });
+                        const canRaisePhaseBudget = isExecutionOwner && !activeBatchPhaseId && !hasPendingBudgetSubmission && !completed && precedingPhasesCompleted;
+                        const status = completed ? "Completed" : current ? "Budget raised" : canRaisePhaseBudget ? "Draft · select to raise budget" : "Draft · locked";
+                        return (
+                          <div key={phase.id} className={`w-full rounded-xl border px-3 py-3 text-left ${completed ? "border-emerald-500/20 bg-emerald-500/[0.05]" : current ? "border-fuchsia-500/25 bg-fuchsia-500/[0.06]" : canRaisePhaseBudget ? "border-sky-500/25 bg-sky-500/[0.06]" : "border-white/5 bg-white/[0.02] opacity-70"}`} data-testid={`phase-budget-action-${phase.id}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-sm font-medium text-white">{phase.name || `Phase ${index + 1}`}</div>
+                              {completed ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : current ? <Clock3 className="w-4 h-4 text-fuchsia-300" /> : <Lock className="w-4 h-4 text-zinc-500" />}
+                            </div>
+                            <div className={`mt-1 text-[11px] ${completed ? "text-emerald-300" : current ? "text-fuchsia-300" : canRaisePhaseBudget ? "text-sky-300" : "text-zinc-500"}`}>{status}</div>
+                            <div className="mt-2 flex items-end justify-between gap-3">
+                              <div className="text-[10px] text-zinc-500 tabular">
+                                {Number(phase.totalTasks || phase.tasks || 0).toLocaleString()} tasks · {Number(phase.trajectoriesPerTask || phase.trajectories || 0).toLocaleString()} trajectories/task
+                              </div>
+                              {canRaisePhaseBudget && (
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => nav(buildProjectBudgetBuilderHref(p.id, { phaseId: phase.id, phaseContinuation: 1 }))}
+                                  className="h-7 shrink-0 bg-sky-500/15 px-2.5 text-[11px] text-sky-200 hover:bg-sky-500/25"
+                                  data-testid={`start-phase-${phase.id}`}
+                                >
+                                  Start phase <ChevronRight className="ml-1 h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {(p.phases || []).filter((phase) => {
+                        const delivery = projectBatches.find((batch) => batch.phaseId === phase.id);
+                        const completed = Boolean(delivery && delivery.status !== "changes-requested");
+                        return phaseBatchView === "completed" ? completed : !completed;
+                      }).length === 0 && (
+                        <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center text-xs text-zinc-500">
+                          No {phaseBatchView} phases yet.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Allocation Ledger */}
                 {allocationLedger.length > 0 && (
                   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="budget-allocation-ledger">
@@ -1630,6 +1758,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                     </div>
                   </div>
                 )}
+                </div>
               </>
             );
           })()}
@@ -1650,6 +1779,20 @@ const projectBudgetBuilderHref = useMemo(() => {
                     : "Logged by the owning execution team · visible to CTO & CFO"}
                 </div>
               </div>
+              <div className="flex items-center gap-2 flex-wrap">
+              <select
+                value={taskViewPhaseId}
+                onChange={(event) => setTaskViewPhaseId(event.target.value)}
+                className="h-8 min-w-[180px] rounded-lg border border-white/10 bg-[#191921] px-3 text-xs text-zinc-200 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                data-testid="task-phase-filter"
+              >
+                {batchPhases.map((phase) => {
+                  const delivery = projectBatches.find((batch) => batch.phaseId === phase.id);
+                  const completed = Boolean(delivery && delivery.status !== "changes-requested");
+                  const status = completed ? "Completed" : phase.id === activeBatchPhaseId ? "Active" : "Draft";
+                  return <option key={phase.id} value={phase.id}>{phase.name} · {status}</option>;
+                })}
+              </select>
               {isExecutionOwner && taskLogTargetPhase && (
                 <Button
                   size="sm"
@@ -1666,6 +1809,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                   <Plus className="w-3.5 h-3.5" /> Log task
                 </Button>
               )}
+              </div>
             </div>
             {!executionUnlocked && isExecutionOwner && (
               <div className="mb-4 rounded-lg border border-amber-500/20 bg-amber-500/[0.05] px-3 py-2 text-[11px] text-amber-200">
@@ -1683,10 +1827,10 @@ const projectBudgetBuilderHref = useMemo(() => {
               </div>
             ) : (
               <>
-              {/* Phase-wise progress bars */}
-              {batchPhases.some((ph) => Number(ph.totalTasks || ph.tasks || 0) > 0) && (
-                <div className="mb-4 grid grid-cols-1 md:grid-cols-2 gap-2" data-testid="phase-progress-grid">
-                  {batchPhases.map((ph) => {
+              {/* Current batch progress */}
+              {taskViewPhase && Number(taskViewPhase.totalTasks || taskViewPhase.tasks || 0) > 0 && (
+                <div className="mb-4 grid grid-cols-1 gap-2" data-testid="phase-progress-grid">
+                  {[taskViewPhase].map((ph) => {
                     const planned = Number(ph.totalTasks || ph.tasks || 0);
                     if (planned <= 0) return null;
                     const logs = getPhaseLogs(p.id, ph.id);
@@ -1723,7 +1867,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                   </thead>
                   <tbody>
                     {visibleTaskLogs.map((l) => {
-                      const editable = isTaskEditable(l);
+                      const editable = l.phaseId === activeBatchPhaseId && isTaskEditable(l);
                       const delivery = projectBatches.find((batch) => batch.phaseId === l.phaseId) || null;
                       const approval = getTaskApprovalState(l, delivery);
                       return (
@@ -1837,13 +1981,31 @@ const projectBudgetBuilderHref = useMemo(() => {
                 {approvalLockMessage}
               </div>
             )}
-            {batchPhases.map((ph) => {
+            {!activeBatchPhaseId && batchPhases.some((phase) => {
+              const delivery = projectBatches.find((batch) => batch.phaseId === phase.id);
+              return !delivery || delivery.status === "changes-requested";
+            }) && isExecutionOwner && !hasPendingBudgetSubmission && (
+              <div className="flex flex-col gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/[0.05] p-5 sm:flex-row sm:items-center sm:justify-between" data-testid="no-active-batch-panel">
+                <div>
+                  <div className="text-sm font-semibold text-white">No current batch is active</div>
+                  <div className="mt-1 text-xs text-zinc-400">View the draft phase list and select the next available phase to build its budget.</div>
+                </div>
+                <Button type="button" onClick={() => setDraftPhasePickerOpen(true)} className="shrink-0 border border-sky-500/30 bg-sky-500/15 text-sky-100 hover:bg-sky-500/25" data-testid="view-draft-phases">
+                  View drafts <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              </div>
+            )}
+            {batchPhases.filter((phase) => {
+              const delivery = projectBatches.find((batch) => batch.phaseId === phase.id);
+              const submitted = Boolean(delivery && delivery.status !== "changes-requested");
+              return submitted || phase.id === activeBatchPhaseId;
+            }).map((ph) => {
               const deliveriesForPhase = projectBatches.filter((batch) => batch.phaseId === ph.id);
               const delivery = deliveriesForPhase[0] || null;
               const isRevisableDelivery = delivery?.status === "changes-requested";
               const isSubmitted = !!delivery && !isRevisableDelivery;
-              const isActivePhase = activeBatchPhaseId ? activeBatchPhaseId === ph.id : (!delivery || isRevisableDelivery);
-              const isLockedPhase = !isSubmitted && !isActivePhase && role !== "R&D";
+              const isActivePhase = activeBatchPhaseId === ph.id;
+              const isLockedPhase = !isSubmitted && !isActivePhase;
               const lockedByApproval = !executionUnlocked;
               const changesForPhase = projectChangeRequests.filter((request) => matchesPhaseLabel(request.affectedPhase, ph));
               const logs = getPhaseLogs(p.id, ph.id);
@@ -1951,7 +2113,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                         >
                           <PackageCheck className="w-3 h-3" /> {delivery?.status === "changes-requested" ? "Deliver revised sample" : isSubmitted ? "Delivered" : getDeliverButtonLabel(isRndProject, delivery, p)}
                         </Button>
-                        {((delivery?.status === "feedback-pending" && role === "R&D") || (delivery?.stage === "cfo-recovery" && !delivery?.clientComment)) && (
+                        {delivery && delivery.status !== "changes-requested" && !delivery.clientComment && (
                           <Button
                             size="sm"
                             onClick={() => setFeedbackDelivery({ phase: ph, delivery })}
@@ -1976,7 +2138,7 @@ const projectBudgetBuilderHref = useMemo(() => {
 
                   <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-3">
                     <RequestSummaryCard
-                      title={`Changes (${changesForPhase.length})`}
+                      title={`AR (${changesForPhase.length})`}
                       icon={Shield}
                       empty="No additional requests raised for this phase."
                       testid={`sub-changes-${ph.id}`}
@@ -2210,7 +2372,92 @@ const projectBudgetBuilderHref = useMemo(() => {
         project={p}
         phase={feedbackDelivery?.phase || deliverPhase}
         delivery={feedbackDelivery?.delivery || null}
+        onDelivered={() => {
+          setPhaseBatchView("draft");
+          setNoActiveBatchOpen(true);
+        }}
       />
+      <AlertDialog open={noActiveBatchOpen} onOpenChange={setNoActiveBatchOpen}>
+        <AlertDialogContent className="border-white/10 bg-[#12121A] text-zinc-100">
+          <AlertDialogHeader>
+            <AlertDialogTitle>No current batch is active</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              This phase has been submitted. Select the next phase from Draft batches to review the foundational budget, make any required changes, and send it through the same approval flow. Additional requests from the completed phase will not be copied.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setNoActiveBatchOpen(false);
+                setDraftPhasePickerOpen(true);
+              }}
+              className="bg-fuchsia-500 text-white hover:bg-fuchsia-600"
+            >
+              View drafts
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Sheet open={draftPhasePickerOpen} onOpenChange={setDraftPhasePickerOpen}>
+        <SheetContent className="w-full overflow-y-auto border-white/10 bg-[#12121A] text-zinc-100 sm:max-w-lg" data-testid="draft-phase-picker">
+          <SheetHeader>
+            <SheetTitle className="text-white">Select the next phase</SheetTitle>
+            <SheetDescription className="text-zinc-400">
+              Viewing drafts does not activate them. Select the available phase to open its prefilled foundational budget.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-5 space-y-2">
+            {(p.phases || []).filter((phase) => {
+              const delivery = projectBatches.find((batch) => batch.phaseId === phase.id);
+              return !delivery || delivery.status === "changes-requested";
+            }).map((phase) => {
+              const index = (p.phases || []).findIndex((entry) => entry.id === phase.id);
+              const precedingPhasesCompleted = (p.phases || []).slice(0, index).every((priorPhase) => {
+                const priorDelivery = projectBatches.find((batch) => batch.phaseId === priorPhase.id);
+                return Boolean(priorDelivery && priorDelivery.status !== "changes-requested");
+              });
+              const selectable = isExecutionOwner && !activeBatchPhaseId && !hasPendingBudgetSubmission && precedingPhasesCompleted;
+              return (
+                <div key={phase.id} className={`rounded-xl border p-4 ${selectable ? "border-sky-500/25 bg-sky-500/[0.06]" : "border-white/5 bg-white/[0.02] opacity-65"}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-semibold text-white">{phase.name || `Phase ${index + 1}`}</div>
+                      <div className="mt-1 text-xs text-zinc-500">
+                        {Number(phase.totalTasks || phase.tasks || 0).toLocaleString()} tasks · {Number(phase.trajectoriesPerTask || phase.trajectories || 0).toLocaleString()} trajectories/task
+                      </div>
+                    </div>
+                    <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${selectable ? "border-sky-500/25 bg-sky-500/10 text-sky-300" : "border-white/10 bg-white/[0.03] text-zinc-500"}`}>
+                      {selectable ? "Available" : "Locked"}
+                    </span>
+                  </div>
+                  {selectable && (
+                    <Button
+                      type="button"
+                      onClick={() => {
+                        setDraftPhasePickerOpen(false);
+                        nav(buildProjectBudgetBuilderHref(p.id, { phaseId: phase.id, phaseContinuation: 1 }));
+                      }}
+                      className="mt-4 h-9 w-full border border-sky-500/30 bg-sky-500/15 text-sky-100 hover:bg-sky-500/25"
+                      data-testid={`build-draft-phase-${phase.id}`}
+                    >
+                      Build {phase.name || `Phase ${index + 1}`} budget <ChevronRight className="ml-1 h-4 w-4" />
+                    </Button>
+                  )}
+                  {!selectable && index > 0 && (
+                    <div className="mt-3 text-[11px] text-zinc-500">Complete and deliver the preceding phase first.</div>
+                  )}
+                </div>
+              );
+            })}
+            {(p.phases || []).every((phase) => projectBatches.some((batch) => batch.phaseId === phase.id && batch.status !== "changes-requested")) && (
+              <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-zinc-500">All phases have been delivered.</div>
+            )}
+          </div>
+          <SheetFooter className="mt-6">
+            <Button variant="outline" onClick={() => setDraftPhasePickerOpen(false)} className="border-white/10 bg-white/[0.03] text-zinc-300">Close</Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
       <TpmTaskLogDialog
         open={!!taskLogPhase}
         onOpenChange={(o) => { if (!o) { setTaskLogPhase(null); setEditingLog(null); } }}

@@ -51,7 +51,7 @@ const TopupRequestDetail = () => {
   const nav = useNavigate();
   const { topupRequests, projects, role, ctoDecideTopup, cfoDecideTopup, getPhaseLogs } = useApp();
   const backHref = isTpmView(role) ? "/approvals" : "/approval-queue";
-  const backLabel = isTpmView(role) ? "My Requests" : "Approval Queue";
+  const backLabel = isTpmView(role) ? "My Requests" : "Budget Review";
 
   const req = useMemo(() => topupRequests.find((request) => request.id === id), [topupRequests, id]);
   const project = useMemo(() => req && projects.find((entry) => entry.id === req.projectId), [projects, req]);

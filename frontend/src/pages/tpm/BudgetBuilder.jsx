@@ -7,7 +7,7 @@ import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMe
 import { toast } from "sonner";
 import {
   ArrowLeft, Plus, Trash2, Send, Sparkles, ClipboardCheck, Cpu, Server, CreditCard,
-  CheckCircle2, ChevronRight, UserPlus, MessageSquareWarning, FileText,
+  CheckCircle2, ChevronRight, UserPlus, MessageSquareWarning, FileText, Lock,
 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -181,11 +181,13 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   const requestedProjectId = embeddedProjectId || params.get("projectId") || params.get("project") || "";
   const requestedBudgetType = normalizeBudgetType(params.get("budgetType") || "");
   const requestedPhaseId = params.get("phaseId") || "";
+  const isPhaseContinuation = params.get("phaseContinuation") === "1";
   const requestedSampleIteration = Math.max(Number(params.get("sampleIteration") || 1), 1);
   const requestedSourceDeliveryId = params.get("sourceDeliveryId") || null;
   const { visibleProjects: allVisibleProjects, submitBudget, budgetReviews, budgets, role, user, modelCatalog, addCustomModel } = useApp();
   const isRnd = role === "R&D";
   const testingInfraPrefillAppliedRef = useRef(false);
+  const phaseFoundationPrefillAppliedRef = useRef(false);
 
   const [step, setStep] = useState(1); // 1=Details, 2=Budget Items, 3=Preview
 
@@ -221,6 +223,10 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   );
   const [priority, setPriority] = useState("Medium");
   const [teamType, setTeamType] = useState(normalizeTeamType(returnedReview?.teamType || (isRnd ? "RL env" : "Production")));
+  const staticTeamType = isRnd ? "RL env" : "Production";
+  useEffect(() => {
+    setTeamType(staticTeamType);
+  }, [staticTeamType]);
   const showReworkOption = requestedBudgetType === "Rework" || normalizeBudgetType(returnedReview?.budgetType) === "Rework";
   // Budget-type dropdown options — both RL env and Production teams get the same options:
   // "RFP" (which has a subtype: Testing / Sampling) and "Production". Rework is only surfaced
@@ -451,6 +457,10 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
   }, [returnedReview, visibleProjects, modelCatalog, modelProviderOptions, budgetTypeOptions, initialBudgetType]);
 
   const project = visibleProjects.find((p) => p.id === projectId);
+  const requestedProjectPhase = useMemo(
+    () => (project?.phases || []).find((phase) => phase.id === requestedPhaseId) || null,
+    [project?.phases, requestedPhaseId]
+  );
   const budgetRetryAt = project?.budgetRetryAvailableAt || project?.budgetRejection?.retryAt || "";
   const budgetRetryAtTs = budgetRetryAt ? new Date(budgetRetryAt).getTime() : 0;
   const budgetRetryLockActive = Boolean(project?.budgetRejection) && Number.isFinite(budgetRetryAtTs) && budgetRetryAtTs > Date.now();
@@ -503,6 +513,48 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     if (phaseStart) setSingleStart(phaseStart);
     if (phaseEnd) setSingleEnd(phaseEnd);
   }, [project, requestedPhaseId, returnedReview]);
+
+  useEffect(() => {
+    if (!isPhaseContinuation || returnedReview || !project || !requestedProjectPhase || phaseFoundationPrefillAppliedRef.current) return;
+    const approvedProjectBudgets = [...budgets]
+      .filter((entry) => entry.projectId === project.id && ["approved", "partial"].includes(entry.status))
+      .sort((left, right) => new Date(left.cfoDecision?.at || left.submittedAt || 0).getTime() - new Date(right.cfoDecision?.at || right.submittedAt || 0).getTime());
+    const phaseOneId = project.phases?.[0]?.id;
+    const sourceBudget = approvedProjectBudgets.find((entry) => (
+      entry.activePhaseId === phaseOneId
+      && entry.items
+      && (entry.items.models?.length || entry.items.infra?.length || entry.items.subs?.length)
+    )) || approvedProjectBudgets.find((entry) => entry.items && (entry.items.models?.length || entry.items.infra?.length || entry.items.subs?.length));
+    const sourceItems = sourceBudget?.items || project.budgetItems || {};
+    const modelLines = Array.isArray(sourceItems.models) ? sourceItems.models : [];
+    const infraLines = Array.isArray(sourceItems.infra) ? sourceItems.infra : [];
+    const subLines = Array.isArray(sourceItems.subs) ? sourceItems.subs : [];
+    if (modelLines.length) setModels(modelLines.map((line) => ({
+      ...line,
+      id: uid(),
+      modelId: line.modelId || line.meta?.id || modelCatalog[0]?.id || "",
+      provider: line.platform || line.provider || getModelPlatform(line.meta || {}) || modelProviderOptions[0] || "",
+      costPerTask: Number(line.costPerTask || seedCostPerTask(line.meta || modelCatalog[0])),
+      estCost: Number(line.estCost || line.amount || 0),
+    })));
+    if (infraLines.length) setInfra(infraLines.map((line) => ({
+      ...line,
+      id: uid(),
+      provider: line.provider || line.meta?.provider || getInfraProvider(line.meta || EC2_INSTANCES[0]),
+      instance: line.instance || line.meta?.code || EC2_INSTANCES[0].code,
+      instanceCount: getInfraInstanceCount(line.instanceCount || line.meta?.instanceCount || 1),
+      monthlyCost: Number(line.monthlyCost || line.meta?.monthlyCost || line.estCost || line.amount || 0),
+      estCost: Number(line.estCost || line.amount || 0),
+    })));
+    if (subLines.length) setSubs(subLines.map((line) => ({ ...line, id: uid(), estCost: Number(line.estCost || line.amount || 0) })));
+    setSelectedTypes({ models: modelLines.length > 0, infra: infraLines.length > 0, subs: subLines.length > 0, general: false });
+    setActiveTab(modelLines.length ? "models" : infraLines.length ? "infra" : "subs");
+    setDeliveryMode("single");
+    phaseFoundationPrefillAppliedRef.current = true;
+    toast.info(`${requestedProjectPhase.name || "Next phase"} foundational budget loaded`, {
+      description: "Review and edit the Phase 1 models, infrastructure, and subscriptions. Additional requests were not copied.",
+    });
+  }, [budgets, infraProviderOptions, isPhaseContinuation, modelCatalog, modelProviderOptions, project, requestedProjectPhase, returnedReview]);
 
   useEffect(() => {
     if (returnedReview || effectiveBudgetType !== "RnD" || !requestedSourceDeliveryId || !projectId || testingInfraPrefillAppliedRef.current) return;
@@ -898,8 +950,8 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
     const baseTotal = totals.models + totals.infra + totals.subs;
     if (deliveryMode === "single") {
       return [{
-        id: "p1",
-        name: isDirectCostBudget ? `${formatBudgetTypeOptionLabel(effectiveBudgetType)} budget` : "Delivery",
+        id: requestedProjectPhase?.id || "p1",
+        name: requestedProjectPhase?.name || (isDirectCostBudget ? `${formatBudgetTypeOptionLabel(effectiveBudgetType)} budget` : "Delivery"),
         start: singleStart,
         end: singleEnd,
         budget: baseTotal + totals.general,
@@ -907,27 +959,19 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
         trajectories: isDirectCostBudget ? 0 : Number(singlePhase.trajectories),
       }];
     }
-    const tablePhaseTotals = Object.fromEntries(generalPhaseTotals.map((entry) => [entry.phaseId, entry.total]));
-    const totalTraj = phases.reduce((sum, phase) => {
-      const weightedTraj = Number(phase.tasks || 0) * Number(phase.trajectories || 0);
-      return sum + (weightedTraj > 0 ? weightedTraj : Number(phase.tasks || 0) || 1);
-    }, 0) || 1;
-    let distributedBase = 0;
-    return phases.map((p, index) => {
-      const traj = Number(p.tasks || 0) * Number(p.trajectories || 0);
-      const shareUnits = traj > 0 ? traj : Number(p.tasks || 0) || 1;
-      const baseBudget = index === phases.length - 1
-        ? Math.max(0, Math.round((baseTotal - distributedBase) * 100) / 100)
-        : Math.max(0, Math.round(((shareUnits / totalTraj) * baseTotal) * 100) / 100);
-      distributedBase += baseBudget;
-      return { ...p, budget: baseBudget + Number(tablePhaseTotals[p.id] || 0) };
-    });
+    // Multiphase submissions raise only the first phase. Later phases retain their task plan,
+    // dates, and ordering, but intentionally carry no estimate until their own budget cycle.
+    return phases.map((p, index) => ({
+      ...p,
+      budget: index === 0 ? baseTotal + totals.general : 0,
+      budgetStatus: index === 0 ? "raised" : "not-estimated",
+    }));
   }, [
     deliveryMode,
     effectiveBudgetType,
-    generalPhaseTotals,
     isDirectCostBudget,
     phases,
+    requestedProjectPhase,
     singleEnd,
     singlePhase,
     singleStart,
@@ -979,11 +1023,16 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       toast.error("Tooling budgets coming soon", { description: "Pick RL env or Production to continue." });
       return;
     }
+    const activePhase = distributedPhases[0] || null;
+    const activeItemPhase = isPhaseContinuation && activePhase
+      ? { phaseId: activePhase.id, phaseName: activePhase.name }
+      : {};
     const items = {
       models: selectedTypes.models ? models.map((m) => {
         const meta = modelCatalog.find((x) => x.id === m.modelId);
         return {
           ...m,
+          ...activeItemPhase,
           platform: m.provider,
           meta: meta ? { ...meta, platform: getModelPlatform(meta) } : meta,
         };
@@ -992,6 +1041,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
         const meta = EC2_INSTANCES.find((x) => x.code === i.instance) || EC2_INSTANCES[0];
         return {
           ...i,
+          ...activeItemPhase,
           provider: i.provider || getInfraProvider(meta),
           days: budgetDurationDays,
           meta: {
@@ -1003,8 +1053,14 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
           },
         };
       }) : [],
-      subs: selectedTypes.subs ? subs.map((entry) => ({ ...entry, days: Number(entry.days ?? budgetDurationDays) })) : [],
-      misc: selectedTypes.general ? generalTablePreviewLines : [],
+      subs: selectedTypes.subs ? subs.map((entry) => ({ ...entry, ...activeItemPhase, days: Number(entry.days ?? budgetDurationDays) })) : [],
+      misc: selectedTypes.general
+        ? generalTablePreviewLines.map((line) => (
+            deliveryMode === "multiple" && activePhase
+              ? { ...line, phaseId: activePhase.id, phaseName: activePhase.name }
+              : line
+          ))
+        : [],
     };
     submitBudget({
       projectId,
@@ -1012,15 +1068,29 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       budgetType: effectiveBudgetType,
       priority,
       teamType,
-      totalTasks: Number(totalTasks),
-      totalTrajectories,
+      totalTasks: Number(deliveryMode === "multiple" ? activePhase?.tasks || 0 : totalTasks),
+      totalTrajectories: Number(deliveryMode === "multiple"
+        ? Number(activePhase?.tasks || 0) * Number(activePhase?.trajectories || 0)
+        : totalTrajectories),
       delivery: { mode: deliveryMode, singleStart, singleEnd },
       phases: distributedPhases,
+      activePhaseId: deliveryMode === "multiple" ? activePhase?.id || null : null,
+      phaseBudgetPlan: distributedPhases.map((phase, index) => ({
+        phaseId: phase.id,
+        phaseName: phase.name,
+        status: index === 0 ? "raised" : "draft",
+        editable: index === 0,
+        taskRecord: {
+          tasks: Number(phase.tasks || phase.totalTasks || 0),
+          trajectories: Number(phase.trajectories || phase.trajectoriesPerTask || 0),
+        },
+      })),
       items,
       totals,
       resubmitOfReviewId: returnedReview?.id || null,
       sampleIteration: isReworkBudget ? requestedSampleIteration : 1,
       sourceDeliveryId: requestedSourceDeliveryId,
+      phaseContinuation: isPhaseContinuation,
     });
     toast.success(returnedReview ? "Budget resubmitted to CTO" : "Request sent to CTO", {
       description: `${project?.name || "Project"} · ${fmtCurrency(totals.total, { compact: false })} · awaiting review before tasks and delivery unlock`,
@@ -1140,13 +1210,13 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
               </select>
             </Field>
             <Field label="Team type *" hint="Which delivery pool this budget belongs to">
-              <select value={teamType} onChange={(e) => setTeamType(e.target.value)} data-testid="bb-team-type" className={ipStyle}>
-                {TEAM_TYPE_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option === "RL env" ? "RL Environment" : option === "Production" ? "Projects" : "Tooling"}
-                  </option>
-                ))}
-              </select>
+              <div
+                data-testid="bb-team-type"
+                className={`${ipStyle} flex items-center justify-between bg-white/[0.025] text-zinc-200 cursor-default`}
+              >
+                <span>{staticTeamType === "RL env" ? "RL Environment" : "Projects"}</span>
+                <span className="text-[10px] uppercase tracking-wider text-zinc-500">Department standard</span>
+              </div>
             </Field>
           </div>
           <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1336,6 +1406,33 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
       {/* Step 2 — Budget Items */}
       {step === 2 && (
         <Card title="2. Budget Items" subtitle={isDirectCostBudget ? `${formatBudgetTypeOptionLabel(effectiveBudgetType)} estimate · direct model, infra, and subscription costing` : `${modelPricingUnits.toLocaleString()} pricing units · costs auto-update from step 1`} testid="bb-step-items">
+          {deliveryMode === "multiple" && !isDirectCostBudget && (
+            <div className="mb-5 rounded-xl border border-fuchsia-500/30 bg-fuchsia-500/[0.07] px-4 py-3" data-testid="multiphase-first-budget-indicator">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg border border-fuchsia-500/30 bg-fuchsia-500/15">
+                  <ClipboardCheck className="h-4 w-4 text-fuchsia-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold text-fuchsia-200">
+                    Budget is being raised for {phases[0]?.name || "Phase 1"} only
+                  </div>
+                  <div className="mt-1 text-xs leading-relaxed text-zinc-400">
+                    Add the models, infrastructure, subscriptions, and other asks required for the first phase. The remaining {Math.max(phases.length - 1, 0)} phase{phases.length - 1 === 1 ? "" : "s"} will be saved as locked drafts and will follow the same approval flow after the preceding phase is completed.
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-md border border-fuchsia-500/25 bg-fuchsia-500/10 px-2 py-1 text-[10px] font-semibold text-fuchsia-300">
+                      <CheckCircle2 className="h-3 w-3" /> {phases[0]?.name || "Phase 1"} · Budget raised
+                    </span>
+                    {phases.slice(1).map((phase) => (
+                      <span key={phase.id} className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-semibold text-zinc-500">
+                        <Lock className="h-3 w-3" /> {phase.name} · Draft
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           <div>
             <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Budget types</div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -1930,10 +2027,10 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
           <Card title="3. Preview & Submit" subtitle="Final review before submitting" testid="bb-step-preview">
             <div className={`grid grid-cols-2 ${isDirectCostBudget ? "md:grid-cols-4" : "md:grid-cols-5"} gap-3 mb-4`}>
               <MiniStat label="Total budget" value={fmtCurrency(totals.total, { compact: false })} tone="magenta" />
-              {!isDirectCostBudget && <MiniStat label="Trajectories" value={totalTrajectories.toLocaleString()} />}
-              <MiniStat label={isDirectCostBudget ? "Budget type" : "Tasks"} value={isDirectCostBudget ? formatBudgetTypeOptionLabel(effectiveBudgetType) : totalTasks.toLocaleString()} />
+              {!isDirectCostBudget && <MiniStat label="Trajectories" value={(deliveryMode === "multiple" ? Number(phases[0]?.tasks || 0) * Number(phases[0]?.trajectories || 0) : totalTrajectories).toLocaleString()} />}
+              <MiniStat label={isDirectCostBudget ? "Budget type" : "Tasks"} value={isDirectCostBudget ? formatBudgetTypeOptionLabel(effectiveBudgetType) : (deliveryMode === "multiple" ? Number(phases[0]?.tasks || 0) : totalTasks).toLocaleString()} />
               <MiniStat label="Team type" value={teamType} />
-              <MiniStat label="Delivery" value={deliveryMode === "single" ? "Single phase" : `${phases.length} phases`} />
+              <MiniStat label="Delivery" value={deliveryMode === "single" ? "Single phase" : `Phase 1 of ${phases.length}`} />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <BudgetCategoryAccordion
@@ -1995,7 +2092,12 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
                   } : null,
                 ].filter(Boolean)}
               />
-              <SummaryCard title="Phase summary" rows={distributedPhases.map((p) => ({ id: p.id, k: `${p.name} · ${p.start || ""} → ${p.end || ""}`, v: p.budget }))} />
+              <SummaryCard title="Phase summary" rows={distributedPhases.map((p, index) => ({
+                id: p.id,
+                k: `${p.name} · ${p.start || ""} → ${p.end || ""} · ${index === 0 ? "Budget raised" : "Draft (locked)"}`,
+                v: index === 0 ? p.budget : null,
+                displayValue: index === 0 ? null : "Not estimated",
+              }))} />
             </div>
             {selectedTypes.general && generalMode === "table" && (
               <div className="mt-4">
@@ -2126,7 +2228,9 @@ const SummaryCard = ({ title, rows }) => (
       {rows.map((r, i) => (
         <div key={r.id || `${r.k}-${i}`} className="flex items-center justify-between text-xs">
           <span className="text-zinc-300 truncate flex-1 mr-2">{r.k}</span>
-          <span className="text-white font-semibold tabular">{fmtCurrency(r.v, { compact: false })}</span>
+          <span className={`font-semibold tabular ${r.displayValue ? "text-zinc-500" : "text-white"}`}>
+            {r.displayValue || fmtCurrency(r.v, { compact: false })}
+          </span>
         </div>
       ))}
     </div>

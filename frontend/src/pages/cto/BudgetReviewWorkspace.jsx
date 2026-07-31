@@ -3,10 +3,12 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { fmtCurrency } from "../../lib/format";
 import { toast } from "sonner";
 import { Button } from "../../components/ui/button";
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuLabel, DropdownMenuTrigger } from "../../components/ui/dropdown-menu";
 import GeneralBudgetTableCard from "../../components/budget/GeneralBudgetTableCard";
 import { useApp } from "../../context/AppContext";
 import { areBudgetItemsEqual, areBudgetPhasesEqual } from "../../lib/budgetReview";
 import { buildProjectBudgetBuilderHref } from "../../lib/projectBudgetRoute";
+import { EC2_INSTANCES, SUBSCRIPTION_CATALOG } from "../../data/mockCatalog";
 import {
   ArrowLeft,
   X,
@@ -21,6 +23,8 @@ import {
   Edit3,
   FileText,
   Undo2,
+  Lock,
+  CheckCircle2,
 } from "lucide-react";
 
 const cloneLines = (lines = []) => lines.map((line) => ({
@@ -28,6 +32,13 @@ const cloneLines = (lines = []) => lines.map((line) => ({
   meta: line?.meta ? { ...line.meta } : line?.meta,
   members: Array.isArray(line?.members) ? [...line.members] : line?.members,
 }));
+
+const getSelectedMemberNames = (line = {}) => {
+  const source = line.members || line.selectedMembers || line.memberNames || line.allocatedMembers || [];
+  return (Array.isArray(source) ? source : [])
+    .map((member) => typeof member === "string" ? member : member?.name || member?.label || "")
+    .filter(Boolean);
+};
 
 const cloneReviewItems = (items = {}) => ({
   models: cloneLines(items.models || []),
@@ -44,9 +55,22 @@ const sumLineItems = (lines = []) => (Array.isArray(lines) ? lines : []).reduce(
 const BudgetReviewWorkspace = () => {
   const { id } = useParams();
   const nav = useNavigate();
-  const { ctoModifyBudgetReview, ctoRejectBudgetReview, ctoReturnBudgetReview, budgetReviews, projects, role, user } = useApp();
+  const { ctoModifyBudgetReview, ctoRejectBudgetReview, ctoReturnBudgetReview, budgetReviews, projects, role, user, batchDeliveries, modelCatalog } = useApp();
   const review = useMemo(() => budgetReviews.find((r) => r.id === id) || null, [budgetReviews, id]);
   const project = useMemo(() => projects.find((p) => p.id === review?.projectId) || null, [projects, review]);
+  const projectMemberOptions = useMemo(() => {
+    const members = [
+      ...(project?.teamMembers || []),
+      ...(project?.kickoffMail?.recipients || []),
+    ];
+    const seen = new Set();
+    return members.filter((member) => {
+      const key = String(member.email || member.id || member.name || "").trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [project]);
   const priorModification = useMemo(
     () => (review ? budgetReviews.find((r) => r.id === review.id) : null),
     [budgetReviews, review]
@@ -56,19 +80,24 @@ const BudgetReviewWorkspace = () => {
   const amount = review?.recommendedBudget || review?.requestedBudget || 0;
   const [comment, setComment] = useState("");
 
-  const phases = project?.phases || [];
+  const phases = review?.requestedPhases?.length ? review.requestedPhases : (project?.phases || []);
   const buildInitialPhases = () => {
     if (!review) return [];
     if (priorModification?.modifiedPhases?.length) return priorModification.modifiedPhases;
-    const denom = phases.reduce((s, p) => s + p.estimated, 0) || 1;
-    return phases.map((p) => {
-      const weight = p.estimated / denom;
+    return phases.map((p, index) => {
+      const isRaisedPhase = (review.activePhaseId && p.id === review.activePhaseId) || (!review.activePhaseId && index === 0);
       return {
         id: p.id,
         name: p.name,
-        infra: Math.round(Number(review.infraCost || 0) * weight),
-        model: Math.round(Number(review.aiCost || 0) * weight),
-        subs: Math.round(Number(review.subsCost || 0) * weight),
+        start: p.start || "",
+        end: p.end || "",
+        tasks: Number(p.tasks || p.totalTasks || 0),
+        trajectories: Number(p.trajectories || p.trajectoriesPerTask || 0),
+        budget: isRaisedPhase ? Number(p.budget || review.requestedBudget || 0) : 0,
+        budgetStatus: isRaisedPhase ? "raised" : "not-estimated",
+        infra: isRaisedPhase ? Number(review.infraCost || 0) : 0,
+        model: isRaisedPhase ? Number(review.aiCost || 0) : 0,
+        subs: isRaisedPhase ? Number(review.subsCost || 0) : 0,
       };
     });
   };
@@ -168,32 +197,46 @@ const BudgetReviewWorkspace = () => {
       amount: Number(val) || 0,
     }));
   };
+  const updatePhase = (phaseId, key, value) => {
+    setModifiedPhases((entries) => entries.map((phase) => (
+      phase.id === phaseId
+        ? { ...phase, [key]: ["tasks", "trajectories"].includes(key) ? Math.max(0, Number(value) || 0) : value }
+        : phase
+    )));
+  };
   const updateItemTitle = (bucket, itemId, val) => {
     const nextValue = String(val || "");
     updateItem(bucket, itemId, (line) => {
       if (bucket === "models") {
+        const selectedModel = (modelCatalog || []).find((model) => model.name === nextValue || model.id === nextValue);
         return {
           ...line,
-          label: nextValue,
-          modelName: nextValue,
-          meta: { ...(line.meta || {}), name: nextValue },
+          modelId: selectedModel?.id || line.modelId,
+          label: selectedModel?.name || nextValue,
+          modelName: selectedModel?.name || nextValue,
+          provider: selectedModel?.provider || line.provider,
+          meta: { ...(line.meta || {}), ...(selectedModel || {}), name: selectedModel?.name || nextValue },
         };
       }
       if (bucket === "infra") {
+        const selectedInstance = EC2_INSTANCES.find((instance) => instance.code === nextValue);
         return {
           ...line,
           label: nextValue,
           optionLabel: nextValue,
           instance: nextValue,
-          meta: { ...(line.meta || {}), code: nextValue },
+          provider: selectedInstance?.provider || line.provider,
+          meta: { ...(line.meta || {}), ...(selectedInstance || {}), code: nextValue },
         };
       }
       if (bucket === "subs") {
+        const selectedSubscription = SUBSCRIPTION_CATALOG.find((subscription) => subscription.name === nextValue);
         return {
           ...line,
           label: nextValue,
           optionLabel: nextValue,
           subscription: nextValue,
+          pricePerSeat: selectedSubscription?.monthly || line.pricePerSeat,
         };
       }
       return {
@@ -216,7 +259,6 @@ const BudgetReviewWorkspace = () => {
       if (bucket === "infra") {
         return {
           ...line,
-          provider: nextValue,
           meta: { ...(line.meta || {}), family: nextValue },
         };
       }
@@ -233,6 +275,18 @@ const BudgetReviewWorkspace = () => {
       seats: Math.max(0, Number(val) || 0),
     }));
   };
+  const updateSubscriptionMembers = (itemId, members) => {
+    updateItem("subs", itemId, (line) => ({ ...line, members }));
+  };
+  const toggleSubscriptionMember = (itemId, currentMembers, memberName) => {
+    const selected = Array.isArray(currentMembers) ? currentMembers : [];
+    updateSubscriptionMembers(
+      itemId,
+      selected.includes(memberName)
+        ? selected.filter((name) => name !== memberName)
+        : [...selected, memberName]
+    );
+  };
   const getEditableTitleValue = (bucket, line) => {
     if (bucket === "models") return line.meta?.name || line.modelName || line.label || "";
     if (bucket === "infra") return line.meta?.code || line.instance || line.optionLabel || line.label || "";
@@ -243,6 +297,23 @@ const BudgetReviewWorkspace = () => {
     if (bucket === "models") return line.meta?.provider || line.provider || "";
     if (bucket === "infra") return line.meta?.family || line.provider || "";
     return line.note || line.detail || "";
+  };
+  const getTitleOptions = (bucket) => {
+    if (bucket === "models") return (modelCatalog || []).map((model) => model.name);
+    if (bucket === "infra") return EC2_INSTANCES.map((instance) => instance.code);
+    if (bucket === "subs") return SUBSCRIPTION_CATALOG.map((subscription) => subscription.name);
+    return [];
+  };
+  const getDetailOptions = (bucket, line) => {
+    if (bucket === "models") return Array.from(new Set((modelCatalog || []).map((model) => model.provider).filter(Boolean)));
+    if (bucket === "infra") {
+      const selected = EC2_INSTANCES.find((instance) => instance.code === (line.instance || line.meta?.code));
+      return Array.from(new Set(EC2_INSTANCES
+        .filter((instance) => !selected?.provider || instance.provider === selected.provider)
+        .map((instance) => instance.family)
+        .filter(Boolean)));
+    }
+    return [];
   };
   const resetToOriginal = () => {
     setModifiedPhases(buildInitialPhases());
@@ -259,7 +330,11 @@ const BudgetReviewWorkspace = () => {
         model: modifiedModel,
         subs: modifiedSubs,
       }]
-    : phaseTotals.map((p) => ({ id: p.id, name: p.name, infra: p.infra, model: p.model, subs: p.subs }));
+    : phaseTotals.map((p) => ({
+        id: p.id, name: p.name, start: p.start, end: p.end, tasks: p.tasks,
+        trajectories: p.trajectories, budget: p.budget, budgetStatus: p.budgetStatus,
+        infra: p.infra, model: p.model, subs: p.subs,
+      }));
   const itemSections = [
     {
       key: "models",
@@ -292,7 +367,7 @@ const BudgetReviewWorkspace = () => {
       lines: modifiedItems.subs,
       fallback: "No subscription line submitted.",
       getTitle: (line) => line.subscription || line.optionLabel || line.label || "Subscription allocation",
-      getDetail: (line) => Array.isArray(line.members) && line.members.length ? line.members.join(", ") : "Submitted subscription line",
+      getDetail: (line) => getSelectedMemberNames(line).length ? getSelectedMemberNames(line).join(", ") : "No members selected",
     },
     {
       key: "misc",
@@ -330,28 +405,58 @@ const BudgetReviewWorkspace = () => {
                 <tr key={line.id || `${section.key}-${index + 1}`} className="border-b border-white/5 last:border-b-0">
                   <td className="py-2 px-3">
                     {canEdit ? (
-                      <input
-                        type="text"
-                        value={getEditableTitleValue(section.key, line)}
-                        onChange={(e) => updateItemTitle(section.key, line.id, e.target.value)}
-                        disabled={!canEdit}
-                        data-testid={`modify-${section.key}-title-${line.id || index}`}
-                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
-                      />
+                      section.key === "misc" ? (
+                        <input
+                          type="text"
+                          value={getEditableTitleValue(section.key, line)}
+                          onChange={(e) => updateItemTitle(section.key, line.id, e.target.value)}
+                          data-testid={`modify-${section.key}-title-${line.id || index}`}
+                          className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                        />
+                      ) : (
+                        <select
+                          value={getEditableTitleValue(section.key, line)}
+                          onChange={(e) => updateItemTitle(section.key, line.id, e.target.value)}
+                          data-testid={`modify-${section.key}-title-${line.id || index}`}
+                          className="w-full h-9 px-3 rounded-md bg-[#191921] border border-white/10 text-sm text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                        >
+                          {!getTitleOptions(section.key).includes(getEditableTitleValue(section.key, line)) && <option value={getEditableTitleValue(section.key, line)}>{getEditableTitleValue(section.key, line)}</option>}
+                          {getTitleOptions(section.key).map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      )
                     ) : (
                       <div className="text-white font-medium">{section.getTitle(line)}</div>
                     )}
                   </td>
                   <td className="py-2 px-3">
-                    {canEdit && section.key !== "subs" ? (
-                      <input
-                        type="text"
-                        value={getEditableDetailValue(section.key, line)}
-                        onChange={(e) => updateItemDetail(section.key, line.id, e.target.value)}
-                        disabled={!canEdit}
-                        data-testid={`modify-${section.key}-detail-${line.id || index}`}
-                        className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 disabled:opacity-60 disabled:cursor-not-allowed text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                    {canEdit && section.key === "subs" ? (
+                      <SubscriptionMemberPicker
+                        lineId={line.id}
+                        testId={`modify-subs-members-${line.id || index}`}
+                        selectedMembers={getSelectedMemberNames(line)}
+                        memberOptions={projectMemberOptions}
+                        onToggle={(memberName) => toggleSubscriptionMember(line.id, getSelectedMemberNames(line), memberName)}
                       />
+                    ) : canEdit && section.key !== "subs" ? (
+                      section.key === "misc" ? (
+                        <input
+                          type="text"
+                          value={getEditableDetailValue(section.key, line)}
+                          onChange={(e) => updateItemDetail(section.key, line.id, e.target.value)}
+                          data-testid={`modify-${section.key}-detail-${line.id || index}`}
+                          className="w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                        />
+                      ) : (
+                        <select
+                          value={getEditableDetailValue(section.key, line)}
+                          onChange={(e) => updateItemDetail(section.key, line.id, e.target.value)}
+                          data-testid={`modify-${section.key}-detail-${line.id || index}`}
+                          className="w-full h-9 px-3 rounded-md bg-[#191921] border border-white/10 text-xs text-zinc-100 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
+                        >
+                          {!getDetailOptions(section.key, line).includes(getEditableDetailValue(section.key, line)) && <option value={getEditableDetailValue(section.key, line)}>{getEditableDetailValue(section.key, line)}</option>}
+                          {getDetailOptions(section.key, line).map((option) => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      )
                     ) : (
                       <div className="text-xs text-zinc-500">{section.getDetail(line)}</div>
                     )}
@@ -448,21 +553,90 @@ const BudgetReviewWorkspace = () => {
   };
 
   const overviewFields = [
-    { label: "Client project name", value: review.client || project.clientProjectName || project.client || "—" },
-    { label: "Requested by", value: `${isRndReview ? "R&D" : "TPM"} · ${review.tpm}` },
     { label: "Team type", value: review.teamType || "—" },
-    { label: "Timeline", value: review.timeline },
     ...(!isTestingBudget(review?.budgetType) ? [{ label: "Tasks", value: String(review.tasks) }] : []),
     { label: "Phases", value: String(review.phases) },
   ];
   const coreOverviewPanels = (
     <>
       <Panel testid="overview-project" title="Project overview">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {overviewFields.map((field) => (
             <InfoField key={field.label} label={field.label} value={field.value} />
           ))}
         </div>
+      </Panel>
+      <Panel
+        testid="approval-phase-plan"
+        title="Phase plan"
+        subtitle={modifiedPhases.length > 1
+          ? `${modifiedPhases.find((phase) => phase.id === review.activePhaseId)?.name || modifiedPhases[0]?.name || "Phase 1"} is being raised now. Remaining phases are not raised yet.`
+          : "Phase included in this budget request."}
+      >
+        {modifiedPhases.length > 1 && (
+          <div className="mb-3 rounded-xl border border-fuchsia-500/25 bg-fuchsia-500/[0.06] px-3 py-2.5 text-xs text-zinc-300">
+            <span className="font-semibold text-fuchsia-200">Multiphase request:</span>{" "}
+            budget approval applies only to {modifiedPhases.find((phase) => phase.id === review.activePhaseId)?.name || modifiedPhases[0]?.name || "Phase 1"}. Draft phases retain their schedule and task plan but have no estimate yet.
+          </div>
+        )}
+        <div className="space-y-2">
+          {modifiedPhases.map((phase, index) => {
+            const raised = (review.activePhaseId && phase.id === review.activePhaseId) || (!review.activePhaseId && index === 0);
+            const delivered = (batchDeliveries || []).find((entry) => entry.projectId === project.id && entry.phaseId === phase.id);
+            return (
+              <div key={phase.id} className={`rounded-xl border p-3 ${delivered ? "border-emerald-500/25 bg-emerald-500/[0.05]" : raised ? "border-fuchsia-500/25 bg-fuchsia-500/[0.05]" : "border-white/5 bg-white/[0.02]"}`}>
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-2">
+                    {delivered ? <CheckCircle2 className="w-4 h-4 text-emerald-300" /> : raised ? <ClipboardCheck className="w-4 h-4 text-fuchsia-300" /> : <Lock className="w-4 h-4 text-zinc-500" />}
+                    <span className="text-sm font-semibold text-white">{phase.name || `Phase ${index + 1}`}</span>
+                  </div>
+                  <span className={`rounded-md border px-2 py-0.5 text-[10px] font-semibold ${delivered ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : raised ? "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-300" : "border-white/10 bg-white/[0.03] text-zinc-500"}`}>
+                    {delivered ? "Delivered" : raised ? "Budget raised" : "Not raised yet"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                  <PhaseInput label="Start date" type="date" value={phase.start || ""} editable={canEdit && raised && !delivered} onChange={(value) => updatePhase(phase.id, "start", value)} />
+                  <PhaseInput label="End date" type="date" value={phase.end || ""} editable={canEdit && raised && !delivered} onChange={(value) => updatePhase(phase.id, "end", value)} />
+                  <PhaseInput label="Tasks" type="number" value={phase.tasks || 0} editable={canEdit && raised && !delivered} onChange={(value) => updatePhase(phase.id, "tasks", value)} />
+                  <PhaseInput label="Trajectories / task" type="number" value={phase.trajectories || 0} editable={canEdit && raised && !delivered} onChange={(value) => updatePhase(phase.id, "trajectories", value)} />
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-3 text-[11px]">
+                  <span className="text-zinc-500">Budget</span>
+                  <span className={raised || delivered ? "text-white font-semibold tabular" : "text-zinc-500 font-semibold"}>
+                    {raised || delivered ? fmtCurrency(phase.budget || delivered?.proposedAmount || 0, { compact: false }) : "Not estimated"}
+                  </span>
+                </div>
+                {delivered && (
+                  <div className="mt-3 border-t border-white/5 pt-3">
+                    <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">Delivered output</div>
+                    <div className="mt-1 text-xs text-zinc-300">
+                      {Number(delivered.tasks || 0).toLocaleString()} tasks · {Number(delivered.trajectories || 0).toLocaleString()} trajectories · recoverable {fmtCurrency(delivered.proposedAmount || 0, { compact: false })}
+                    </div>
+                    {(delivered.deliverableUrls || []).length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {delivered.deliverableUrls.map((url, urlIndex) => <a key={`${url}-${urlIndex}`} href={url} target="_blank" rel="noreferrer" className="text-[11px] text-fuchsia-300 hover:text-fuchsia-200 underline">Deliverable {urlIndex + 1}</a>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {(batchDeliveries || []).filter((entry) => entry.projectId === project.id && !modifiedPhases.some((phase) => phase.id === entry.phaseId)).length > 0 && (
+          <div className="mt-4 border-t border-white/5 pt-4">
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">Previously delivered phases</div>
+            <div className="space-y-2">
+              {(batchDeliveries || []).filter((entry) => entry.projectId === project.id && !modifiedPhases.some((phase) => phase.id === entry.phaseId)).map((delivery) => (
+                <div key={delivery.id} className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-3">
+                  <div className="flex items-center justify-between gap-3"><span className="text-sm font-semibold text-white">{delivery.phaseName || "Delivered phase"}</span><span className="text-[10px] font-semibold text-emerald-300">Delivered</span></div>
+                  <div className="mt-1 text-xs text-zinc-400">Budget / recoverable {fmtCurrency(delivery.proposedAmount || delivery.finalCost || 0, { compact: false })} · {Number(delivery.tasks || 0).toLocaleString()} tasks · {Number(delivery.trajectories || 0).toLocaleString()} trajectories</div>
+                  {(delivery.deliverableUrls || []).length > 0 && <div className="mt-1 flex gap-2 flex-wrap">{delivery.deliverableUrls.map((url, index) => <a key={`${url}-${index}`} href={url} target="_blank" rel="noreferrer" className="text-[11px] text-fuchsia-300 underline">Deliverable {index + 1}</a>)}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </Panel>
       <Panel testid="overview-justification" title="Justification">
         <div className="text-sm text-zinc-200 leading-relaxed">{review.justification}</div>
@@ -528,6 +702,11 @@ const BudgetReviewWorkspace = () => {
             <ClipboardCheck className="w-3 h-3" /> {review.type} · {review.urgency} urgency
           </div>
           <h1 className="mt-1 font-display font-semibold text-3xl tracking-tight text-white">{review.projectName}</h1>
+          <div className="mt-2">
+            <span className="inline-flex items-center rounded-full border border-violet-500/25 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-300" data-testid="review-project-type-tag">
+              {review.projectType || project.projectType || "Generalist"}
+            </span>
+          </div>
           <p className="text-sm text-zinc-400 mt-1 flex items-center gap-3 flex-wrap">
             <span className="inline-flex items-center gap-1"><User className="w-3 h-3" /> {isRndReview ? "R&D" : "TPM"}: {review.tpm}</span>
             <span>·</span>
@@ -661,6 +840,61 @@ const InfoField = ({ label, value }) => (
   <div className="rounded-lg bg-white/[0.03] border border-white/5 p-3">
     <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
     <div className="text-sm text-white font-medium mt-0.5">{value}</div>
+  </div>
+);
+
+const SubscriptionMemberPicker = ({ testId, selectedMembers = [], memberOptions = [], onToggle }) => (
+  <div className="space-y-2">
+    <div className="flex flex-wrap gap-1.5 min-h-6">
+      {selectedMembers.map((name) => (
+        <span key={name} className="inline-flex items-center rounded-md border border-emerald-500/20 bg-emerald-500/[0.08] px-2 py-1 text-[10px] font-medium text-emerald-200">
+          {name}
+        </span>
+      ))}
+      {selectedMembers.length === 0 && <span className="text-[11px] text-zinc-500">No members selected</span>}
+    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-testid={testId} className="w-full h-9 rounded-md border border-white/10 bg-[#191921] px-3 text-left text-xs text-fuchsia-300 hover:bg-white/[0.06] focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40">
+          {selectedMembers.length ? `Edit members (${selectedMembers.length})` : "Add members"}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-72 max-h-72 overflow-y-auto border-white/10 bg-[#191921] text-zinc-100">
+        <DropdownMenuLabel className="text-[10px] uppercase tracking-widest text-zinc-500">Allocated project members</DropdownMenuLabel>
+        {memberOptions.map((member) => (
+          <DropdownMenuCheckboxItem
+            key={member.id || member.email || member.name}
+            checked={selectedMembers.includes(member.name)}
+            onCheckedChange={() => onToggle(member.name)}
+            onSelect={(event) => event.preventDefault()}
+            className="text-xs focus:bg-fuchsia-500/10 focus:text-fuchsia-200"
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-zinc-100">{member.name}</span>
+              <span className="block truncate text-[10px] text-zinc-500">{member.role || "Member"}{member.email ? ` · ${member.email}` : ""}</span>
+            </span>
+          </DropdownMenuCheckboxItem>
+        ))}
+        {memberOptions.length === 0 && <div className="px-2 py-3 text-xs text-zinc-500">No members are allocated to this project.</div>}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </div>
+);
+
+const PhaseInput = ({ label, value, type = "text", editable, onChange }) => (
+  <div className="rounded-lg border border-white/5 bg-white/[0.025] p-2.5">
+    <div className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">{label}</div>
+    {editable ? (
+      <input
+        type={type}
+        min={type === "number" ? "0" : undefined}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-8 w-full rounded-md border border-white/10 bg-white/[0.04] px-2 text-xs text-white tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 [color-scheme:dark]"
+      />
+    ) : (
+      <div className="text-xs font-medium text-white tabular">{value || "—"}</div>
+    )}
   </div>
 );
 

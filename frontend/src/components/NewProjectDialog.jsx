@@ -32,6 +32,7 @@ const ETHARA_EMAIL_REGEX = /^[a-z0-9._%+-]+@ethara\.ai$/i;
 const buildEmptyForm = (today, user) => ({
   clientProjectName: "",
   internalName: "",
+  projectType: "Generalist",
   goal: "",
   startDate: today,
   docUrl: "",
@@ -328,6 +329,28 @@ const NewProjectDialog = ({ open, onOpenChange }) => {
                 data-testid="input-internal-name"
                 className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40"
               />
+            </Field>
+
+            <Field label="Project type" hint="Used to classify the kickoff and budget workflow">
+              <div className="grid grid-cols-2 gap-2" data-testid="project-type-options">
+                {["Generalist", "Technical"].map((type) => {
+                  const selected = form.projectType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => update("projectType", type)}
+                      data-testid={`project-type-${type.toLowerCase()}`}
+                      className={`h-10 rounded-lg border text-sm font-medium transition-colors ${selected
+                        ? "border-fuchsia-500/60 bg-fuchsia-500/15 text-fuchsia-200"
+                        : "border-white/10 bg-white/[0.04] text-zinc-400 hover:bg-white/[0.07] hover:text-zinc-200"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  );
+                })}
+              </div>
             </Field>
 
             <Field label="Project Goal" hint="Shared with kickoff recipients">
