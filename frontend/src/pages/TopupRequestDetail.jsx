@@ -17,6 +17,7 @@ import {
   Cpu,
   Server,
   CreditCard,
+  DollarSign,
   Layers,
 } from "lucide-react";
 
@@ -91,6 +92,14 @@ const TopupRequestDetail = () => {
   const projectedRemaining = finalized ? Number(project?.remaining || 0) : Number(project?.remaining || 0) + (stageAmount || 0);
 
   const breakdownSections = [
+    {
+      key: "budget",
+      title: "Direct budget",
+      icon: DollarSign,
+      color: "fuchsia",
+      entry: req.breakdown?.budget || null,
+      helper: "A separately entered amount supported by the request justification.",
+    },
     {
       key: "models",
       title: "Models",

@@ -1664,20 +1664,23 @@ export const AppProvider = ({ children }) => {
     let list = projects.filter((project) => !project?.archived && !project?.deleted);
     if (user.role === "TPM") {
       list = list.filter((p) =>
-        p.tpm === user.name
+        p.sharedAcrossProfiles === true
+        || p.tpm === user.name
         || p.createdBy === user.name
         || (p.teamMembers || []).some((member) => member.name === user.name && member.role === "TPM")
       );
     } else if (user.role === "PL") {
       list = list.filter((p) =>
-        p.pl === user.name
+        p.sharedAcrossProfiles === true
+        || p.pl === user.name
         || (p.plMembers || []).includes(user.name)
         || (p.qlMembers || []).includes(user.name)
         || (p.teamMembers || []).some((member) => member.name === user.name && (member.role === "PL / QL" || member.role === "Project Lead" || member.role === "QL" || member.role === "Quality Lead"))
       );
     } else if (user.role === "R&D") {
       list = list.filter((p) =>
-        p.createdBy === user.name
+        p.sharedAcrossProfiles === true
+        || p.createdBy === user.name
         || (p.rndMembers || []).includes(user.name)
         || p.rnd === user.name
         || (p.teamMembers || []).some((member) => member.name === user.name)
@@ -3335,7 +3338,9 @@ export const AppProvider = ({ children }) => {
       ...entry,
       billingUnit: entry.billingUnit || "per month",
     }));
+    const budgetEntries = normalizeBreakdownEntries(breakdown?.budget, "Direct additional budget");
     const normalizedBreakdown = {
+      budget: buildNormalizedBreakdownSection(budgetEntries),
       models: buildNormalizedBreakdownSection(modelEntries),
       infra: buildNormalizedBreakdownSection(infraEntries),
       subs: buildNormalizedBreakdownSection(subEntries, { billingUnit: "per month" }),
@@ -3344,6 +3349,7 @@ export const AppProvider = ({ children }) => {
       (normalizedBreakdown.models?.amount || 0)
       + (normalizedBreakdown.infra?.amount || 0)
       + (normalizedBreakdown.subs?.amount || 0)
+      + (normalizedBreakdown.budget?.amount || 0)
     );
     const entry = normalizeChangeRequest({
       id,

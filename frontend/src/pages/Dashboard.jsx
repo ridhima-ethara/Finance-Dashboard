@@ -11,7 +11,7 @@ import {
 import ProjectsTable from "../components/dashboard/ProjectsTable";
 import CostPerTaskView from "../components/dashboard/CostPerTaskView";
 import { Button } from "../components/ui/button";
-import { Download, RefreshCw, Plus, ClipboardCheck, GitPullRequest, AlertTriangle, ChevronRight, ShieldCheck, Receipt, Wallet, ArrowUpRightSquare, Lock, PackageCheck } from "lucide-react";
+import { Download, RefreshCw, Plus, ClipboardCheck, GitPullRequest, AlertTriangle, ChevronRight, ShieldCheck, Wallet, ArrowUpRightSquare, Lock, PackageCheck } from "lucide-react";
 import { useApp } from "../context/AppContext";
 import { useState, useMemo } from "react";
 import { isTpmView } from "../lib/roles";
@@ -306,16 +306,6 @@ const Dashboard = () => {
             </div>
             <ChevronRight className="w-4 h-4 text-amber-300" />
           </Link>
-          <Link to="/recovery" data-testid="cfo-tile-recovery" className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/[0.06] hover:bg-fuchsia-500/[0.10] transition-colors p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-fuchsia-500/15 border border-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
-              <Receipt className="w-4 h-4 text-fuchsia-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-300">Outstanding recovery</div>
-              <div className="text-white font-display font-semibold text-xl tabular">{fmtCurrency(outstandingRecovery)}</div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-fuchsia-300" />
-          </Link>
           <Link to="/buffer" data-testid="cfo-tile-buffer" className="rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-colors p-4 flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
               <Lock className="w-4 h-4 text-zinc-300" />
@@ -331,8 +321,9 @@ const Dashboard = () => {
               <PackageCheck className="w-4 h-4 text-sky-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300">Batch deliveries</div>
+              <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300">Batch delivery &amp; recovery</div>
               <div className="text-white font-display font-semibold text-xl tabular">{pendingBatchDeliveries} awaiting</div>
+              <div className="mt-0.5 text-[10px] text-zinc-400">{fmtCurrency(outstandingRecovery)} outstanding</div>
             </div>
             {pendingBatchDeliveries > 0 && (
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-400 animate-pulse" title="New pending" />

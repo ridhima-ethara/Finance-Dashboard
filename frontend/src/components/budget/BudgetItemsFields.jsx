@@ -108,7 +108,7 @@ const ACCENTS = {
 const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null, accent = "fuchsia", onChange }) => {
   const { modelCatalog, addCustomModel } = useApp();
   const ac = ACCENTS[accent] || ACCENTS.fuchsia;
-  const rowInp = `h-8 px-2 rounded-md bg-white/[0.04] border border-white/10 text-xs text-zinc-100 focus:outline-none ${ac.ring1}`;
+  const rowInp = `min-w-0 w-full h-8 px-2 rounded-md bg-white/[0.04] border border-white/10 text-xs text-zinc-100 focus:outline-none ${ac.ring1}`;
   const sizeInp = `w-full h-9 px-3 rounded-md bg-white/[0.04] border border-white/10 text-sm text-zinc-100 focus:outline-none ${ac.ring2}`;
 
   const onChangeRef = useRef(onChange);
@@ -123,7 +123,8 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
     []
   );
 
-  const [sizing, setSizing] = useState({ tasks: 500, trajectories: 3, days: 30 });
+  const [sizing, setSizing] = useState({ tasks: "", trajectories: "", days: 30 });
+  const [manualBudgetAmount, setManualBudgetAmount] = useState("");
   const [selectedTypes, setSelectedTypes] = useState({ models: true, infra: false, subs: false });
   const [models, setModels] = useState(() => [emptyModelItem(modelCatalog)]);
   const [infra, setInfra] = useState(() => [emptyInfraItem()]);
@@ -136,7 +137,8 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
     const openedNow = open && !wasOpenRef.current;
     const projectChangedWhileOpen = open && wasOpenRef.current && lastResetKeyRef.current !== resetKey;
     if (openedNow || projectChangedWhileOpen) {
-      setSizing({ tasks: 500, trajectories: 3, days: 30 });
+      setSizing({ tasks: "", trajectories: "", days: 30 });
+      setManualBudgetAmount("");
       setSelectedTypes({ models: true, infra: false, subs: false });
       setModels([emptyModelItem(modelCatalog)]);
       setInfra([emptyInfraItem()]);
@@ -179,7 +181,8 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
   const modelsTotal = selectedTypes.models ? models.reduce((sum, line) => sum + modelEstCost(line, modelPricingUnits), 0) : 0;
   const infraTotal = selectedTypes.infra ? infra.reduce((sum, line) => sum + infraEstCost(line, durationDays), 0) : 0;
   const subsTotal = selectedTypes.subs ? subs.reduce((sum, line) => sum + subEstCost(line, durationDays), 0) : 0;
-  const total = Math.round((modelsTotal + infraTotal + subsTotal) * 100) / 100;
+  const directBudgetTotal = Math.max(0, Number(manualBudgetAmount || 0));
+  const total = Math.round((modelsTotal + infraTotal + subsTotal + directBudgetTotal) * 100) / 100;
 
   const buildSection = (entries, extra = {}) => {
     const kept = entries.filter((entry) => entry.amount > 0 || entry.optionLabel);
@@ -239,11 +242,18 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
       : [];
     return {
       total,
+      budget: directBudgetTotal > 0 ? buildSection([{
+        id: "direct-budget-amount",
+        optionId: "direct-budget-amount",
+        optionLabel: "Direct additional budget amount",
+        note: "Manual amount requested with the submitted justification",
+        amount: directBudgetTotal,
+      }]) : null,
       models: buildSection(modelEntries),
       infra: buildSection(infraEntries),
       subs: buildSection(subEntries, { billingUnit: "per month" }),
     };
-  }, [selectedTypes, models, infra, subs, modelPricingUnits, durationDays, modelCatalog, total]);
+  }, [selectedTypes, models, infra, subs, modelPricingUnits, durationDays, modelCatalog, directBudgetTotal, total]);
 
   useEffect(() => {
     onChangeRef.current?.({ breakdown, total });
@@ -317,23 +327,39 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
   const toggleType = (key) => setSelectedTypes((state) => ({ ...state, [key]: !state[key] }));
 
   return (
-    <div className="space-y-3" data-testid="budget-items-fields">
+    <div className="min-w-0 max-w-full space-y-3 overflow-x-hidden" data-testid="budget-items-fields">
       <div>
         <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Sizing for cost estimate</div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-          <SizeField label="Tasks">
-            <input type="number" min="0" value={sizing.tasks} onChange={(e) => setSizing((s) => ({ ...s, tasks: e.target.value }))} data-testid="bif-tasks" className={sizeInp + " tabular"} />
+          <SizeField label="Tasks (optional)">
+            <input type="number" min="0" value={sizing.tasks} onChange={(e) => setSizing((s) => ({ ...s, tasks: e.target.value }))} placeholder="Optional" data-testid="bif-tasks" className={sizeInp + " tabular"} />
           </SizeField>
-          <SizeField label="Trajectories / task">
-            <input type="number" min="0" value={sizing.trajectories} onChange={(e) => setSizing((s) => ({ ...s, trajectories: e.target.value }))} data-testid="bif-trajectories" className={sizeInp + " tabular"} />
+          <SizeField label="Trajectories / task (optional)">
+            <input type="number" min="0" value={sizing.trajectories} onChange={(e) => setSizing((s) => ({ ...s, trajectories: e.target.value }))} placeholder="Optional" data-testid="bif-trajectories" className={sizeInp + " tabular"} />
           </SizeField>
           <SizeField label="Duration (days)">
             <input type="number" min="0" value={sizing.days} onChange={(e) => setSizing((s) => ({ ...s, days: e.target.value }))} data-testid="bif-days" className={sizeInp + " tabular"} />
           </SizeField>
         </div>
         <div className="mt-1.5 text-[11px] text-zinc-500">
-          Model cost = cost/task × <span className={ac.text}>{modelPricingUnits.toLocaleString()}</span> pricing units · infra & subscriptions prorated over <span className={ac.text}>{durationDays.toLocaleString()}</span> days.
+          Tasks and trajectories are optional. When supplied, model cost = cost/task × <span className={ac.text}>{modelPricingUnits.toLocaleString()}</span> pricing units · infra & subscriptions prorated over <span className={ac.text}>{durationDays.toLocaleString()}</span> days.
         </div>
+      </div>
+
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <SizeField label="Separate additional budget amount (USD)">
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={manualBudgetAmount}
+            onChange={(event) => setManualBudgetAmount(event.target.value)}
+            placeholder="Enter a direct amount without task or trajectory sizing"
+            data-testid="bif-direct-budget-amount"
+            className={sizeInp + " tabular"}
+          />
+        </SizeField>
+        <div className="mt-1.5 text-[11px] text-zinc-500">This amount is added separately to the resource asks and will use the request justification entered below.</div>
       </div>
 
       {/* Models */}
@@ -346,7 +372,7 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
           {models.map((r) => {
             const providerModels = getModelsForProvider(modelCatalog, r.provider || modelProviderOptions[0] || "");
             return (
-              <div key={r.id} data-testid={`bif-models-row-${r.id}`} className="grid grid-cols-1 md:grid-cols-[.9fr_1.3fr_1fr_1fr_1fr_28px] gap-2 items-center py-1">
+              <div key={r.id} data-testid={`bif-models-row-${r.id}`} className="grid min-w-0 grid-cols-1 md:grid-cols-[.9fr_1.3fr_1fr_1fr_1fr_28px] gap-2 items-center py-1">
                 <select value={r.provider || modelProviderOptions[0] || ""} onChange={(e) => updateModelRow(r.id, "provider", e.target.value)} data-testid={`bif-models-provider-${r.id}`} className={rowInp}>
                   {modelProviderOptions.map((provider) => <option key={provider} value={provider} className="bg-[#12121A]">{provider}</option>)}
                 </select>
@@ -376,8 +402,8 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
             const storageOptions = getStorageTypesForProvider(r.provider);
             const perDay = Math.round(getDailyRateFromMonthly(Number(r.monthlyCost || 0)) * getInfraInstanceCount(r.instanceCount) * 100) / 100;
             return (
-              <div key={r.id} data-testid={`bif-infra-row-${r.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-                <div className="grid grid-cols-1 md:grid-cols-[.85fr_1.6fr_.9fr_.7fr_28px] gap-2 items-end">
+              <div key={r.id} data-testid={`bif-infra-row-${r.id}`} className="min-w-0 max-w-full overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                <div className="grid min-w-0 grid-cols-1 md:grid-cols-[.85fr_1.6fr_.9fr_.7fr_28px] gap-2 items-end">
                   <CompactField label="Provider">
                     <select value={r.provider || infraProviderOptions[0] || ""} onChange={(e) => updateInfraRow(r.id, "provider", e.target.value)} data-testid={`bif-infra-provider-${r.id}`} className={`${rowInp} w-full`}>
                       {infraProviderOptions.map((option) => <option key={option} value={option} className="bg-[#12121A]">{option}</option>)}
@@ -398,7 +424,7 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
                     <RemoveBtn onClick={() => removeRow(setInfra)(r.id)} testid={`bif-infra-remove-${r.id}`} />
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_.65fr_.8fr_.85fr] gap-2 items-end">
+                <div className="mt-3 grid min-w-0 grid-cols-1 md:grid-cols-[1fr_1fr_.65fr_.8fr_.85fr] gap-2 items-end">
                   <CompactField label="Storage type">
                     <select value={normalizeStorageTypeForProvider(r.provider, r.storageType || "")} onChange={(e) => updateInfraRow(r.id, "storageType", e.target.value)} data-testid={`bif-infra-storage-type-${r.id}`} className={`${rowInp} w-full`}>
                       {storageOptions.map((option) => <option key={option} value={option} className="bg-[#12121A]">{option}</option>)}
@@ -431,8 +457,8 @@ const BudgetItemsFields = ({ open = true, resetKey = "", selectedProject = null,
             <span>Subscription</span><span className="text-right">Price ($)</span><span className="text-right">Seats</span><span className="text-right">Days</span><span className="text-right">Est. cost</span><span>Members</span><span />
           </div>
           {subs.map((r) => (
-            <div key={r.id} data-testid={`bif-subs-row-${r.id}`} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <div className="grid grid-cols-1 md:grid-cols-[1.25fr_.78fr_.55fr_.72fr_.9fr_1.35fr_28px] gap-2 items-start">
+            <div key={r.id} data-testid={`bif-subs-row-${r.id}`} className="min-w-0 max-w-full overflow-hidden rounded-xl border border-white/10 bg-white/[0.02] p-3">
+              <div className="grid min-w-0 grid-cols-1 md:grid-cols-[1.25fr_.78fr_.55fr_.72fr_.9fr_1.35fr_28px] gap-2 items-start">
                 <select value={r.subscription} onChange={(e) => updateSubRow(r.id, "subscription", e.target.value)} data-testid={`bif-subs-select-${r.id}`} className={rowInp}>
                   {SUBSCRIPTION_CATALOG.map((s) => <option key={s.id} value={s.name} className="bg-[#12121A]">{s.name}</option>)}
                 </select>
@@ -496,7 +522,7 @@ const SizeField = ({ label, children }) => (
 );
 
 const CompactField = ({ label, children }) => (
-  <div>
+  <div className="min-w-0">
     <div className="mb-1 text-[10px] uppercase tracking-widest font-semibold text-zinc-500">{label}</div>
     {children}
   </div>
@@ -509,7 +535,7 @@ const RemoveBtn = ({ onClick, testid }) => (
 );
 
 const SectionCard = ({ ac, icon: Icon, title, helper, enabled, onToggle, subtotal, addLabel, onAdd, testidPrefix, children }) => (
-  <div className={`rounded-xl border p-3 ${enabled ? ac.cardOn : "border-white/5 bg-white/[0.02]"}`} data-testid={`${testidPrefix}-card`}>
+  <div className={`min-w-0 max-w-full overflow-hidden rounded-xl border p-3 ${enabled ? ac.cardOn : "border-white/5 bg-white/[0.02]"}`} data-testid={`${testidPrefix}-card`}>
     <div className="flex items-start justify-between gap-3 flex-wrap">
       <div className="flex items-center gap-3">
         <button type="button" onClick={onToggle} data-testid={`${testidPrefix}-toggle`} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${enabled ? ac.toggleOn : "border-white/20 bg-transparent"}`}>

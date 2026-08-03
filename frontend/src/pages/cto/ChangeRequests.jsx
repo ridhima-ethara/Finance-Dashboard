@@ -22,6 +22,7 @@ import {
   Cpu,
   Server,
   CreditCard,
+  DollarSign,
 } from "lucide-react";
 
 const stageColor = {
@@ -290,6 +291,15 @@ const ChangeRequests = () => {
 };
 
 const getBreakdownSections = (cr) => [
+  {
+    key: "budget",
+    label: "Direct budget",
+    amount: Number(cr.breakdown?.budget?.amount || 0),
+    detail: cr.breakdown?.budget?.optionLabel || "No direct budget amount captured.",
+    note: cr.breakdown?.budget?.note || "No budget note added.",
+    icon: DollarSign,
+    tone: "fuchsia",
+  },
   {
     key: "models",
     label: "Models",

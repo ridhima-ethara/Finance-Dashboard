@@ -11,7 +11,7 @@ import { getTaskLogRecordedCost, normalizeBudgetType } from "../lib/projectMetri
 import { buildProjectBudgetBuilderHref } from "../lib/projectBudgetRoute";
 
 // Deliver batch dialog.
-//   TPM view : proposed recoverable amount + client comment (no Client representative field).
+//   TPM view : estimated recoverable amount + deliverable links.
 //   R&D view : task count submitted, estimated $ per task, trajectories, models used, client
 //              comments, plus Reject / Accept / Changes-requested mark. Once R&D marks
 //              "Accept", the TPM is notified that this is the correct estimate.
@@ -195,7 +195,7 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase, delivery = nul
       costPerTask: finalCostPerTask,
     });
     toast.success("Batch delivered to CFO", {
-      description: `${project.name} · ${phase.name} · proposed ${fmtCurrency(proposedRecoverableAmount, { compact: false })}`,
+      description: `${project.name} · ${phase.name} · estimated recoverable ${fmtCurrency(proposedRecoverableAmount, { compact: false })}`,
     });
     onDelivered?.({ project, phase });
     onOpenChange(false);
@@ -385,7 +385,7 @@ const DeliverBatchDialog = ({ open, onOpenChange, project, phase, delivery = nul
               </div>
             )}
 
-            <Field label="Proposed recoverable amount for CFO">
+            <Field label="Estimated recoverable amount for CFO">
               <div className="mb-2 grid grid-cols-2 gap-2 rounded-lg border border-white/10 bg-white/[0.025] p-1">
                 {[{ value: "amount", label: "Amount (USD)", icon: DollarSign }, { value: "percentage", label: "Percentage", icon: Percent }].map((option) => (
                   <button key={option.value} type="button" onClick={() => setRecoveryMode(option.value)} className={`flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors ${recoveryMode === option.value ? "bg-fuchsia-500/20 text-fuchsia-200" : "text-zinc-500 hover:text-zinc-300"}`}>

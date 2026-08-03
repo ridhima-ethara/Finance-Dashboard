@@ -67,7 +67,7 @@ const ChangeRequestDialog = ({ open, onOpenChange, projectId: lockedProjectId = 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[860px] max-h-[92vh] overflow-y-auto bg-[#12121A] border border-white/10 text-zinc-100" data-testid="cr-dialog">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[860px] max-h-[92vh] overflow-x-hidden overflow-y-auto overscroll-contain bg-[#12121A] border border-white/10 text-zinc-100" data-testid="cr-dialog">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-amber-500/15 flex items-center justify-center border border-amber-500/30">
@@ -82,7 +82,7 @@ const ChangeRequestDialog = ({ open, onOpenChange, projectId: lockedProjectId = 
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-w-0 space-y-4 py-2">
           <Field label="Project">
             {lockedProjectId ? (
               <div className="w-full h-10 px-3 rounded-lg bg-white/[0.02] border border-white/10 text-sm text-zinc-100 flex items-center" data-testid="cr-project-locked">

@@ -141,7 +141,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[860px] max-h-[92vh] overflow-y-auto bg-[#12121A] border border-white/10 text-zinc-100" data-testid="topup-dialog">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[860px] max-h-[92vh] overflow-x-hidden overflow-y-auto overscroll-contain bg-[#12121A] border border-white/10 text-zinc-100" data-testid="topup-dialog">
         <DialogHeader>
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-fuchsia-500/15 flex items-center justify-center border border-fuchsia-500/30">
@@ -156,7 +156,7 @@ const TopupRequestDialog = ({ open, onOpenChange, project, defaultPhaseId }) => 
           </div>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-w-0 space-y-4 py-2">
           {!project && (
             <Field label="Project">
               <select

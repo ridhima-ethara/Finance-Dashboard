@@ -31,7 +31,6 @@ import TopupRequestDetail from "./pages/TopupRequestDetail";
 import CfoBatchDeliveries from "./pages/cfo/BatchDeliveries";
 import FinancialMonitoring from "./pages/cfo/FinancialMonitoring";
 import Buffer from "./pages/cfo/Buffer";
-import Recovery from "./pages/cfo/Recovery";
 import EarlyWarning from "./pages/cfo/EarlyWarning";
 import MonthlyForecast from "./pages/cfo/MonthlyForecast";
 import { Toaster } from "./components/ui/sonner";
@@ -104,7 +103,7 @@ function App() {
                   </RoleProtected>
                 )}
               />
-              <Route path="/recovery" element={<Recovery />} />
+              <Route path="/recovery" element={<Navigate to="/batch-deliveries?view=recovery" replace />} />
               <Route path="/early-warning" element={<EarlyWarning />} />
               <Route path="/monthly-forecast" element={<MonthlyForecast />} />
               <Route path="/settings" element={<Settings />} />

@@ -13,6 +13,7 @@ import {
   Cpu,
   Server,
   CreditCard,
+  DollarSign,
   Sparkles,
   Undo2,
   Check,
@@ -68,6 +69,15 @@ const ChangeRequestDetail = () => {
           : "Pending";
 
   const breakdown = [
+    {
+      key: "budget",
+      title: "Direct budget",
+      icon: DollarSign,
+      tone: "fuchsia",
+      amount: Number(request.breakdown?.budget?.amount || 0),
+      detail: request.breakdown?.budget?.optionLabel || "No direct budget amount captured",
+      note: request.breakdown?.budget?.note || "",
+    },
     {
       key: "models",
       title: "Models",

@@ -170,7 +170,7 @@ const emptyPhase = (n, start, end) => ({
   id: `p${n}`,
   name: `Phase ${n}`,
   tasks: 100,
-  trajectories: 3,
+  trajectories: "",
   start: start || todayISO(),
   end: end || plusDaysISO(14),
 });
@@ -258,7 +258,7 @@ const BudgetBuilder = ({ embeddedProjectId = "", onClose = null, onSubmitted = n
 
   const [singleStart, setSingleStart] = useState(todayISO());
   const [singleEnd, setSingleEnd] = useState(plusDaysISO(30));
-  const [singlePhase, setSinglePhase] = useState({ tasks: 500, trajectories: 3 });
+  const [singlePhase, setSinglePhase] = useState({ tasks: 500, trajectories: "" });
   const [phases, setPhases] = useState([
     { ...emptyPhase(1), start: todayISO(), end: plusDaysISO(15) },
     { ...emptyPhase(2), start: plusDaysISO(16), end: plusDaysISO(30) },

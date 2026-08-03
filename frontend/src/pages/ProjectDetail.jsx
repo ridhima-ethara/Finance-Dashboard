@@ -2854,6 +2854,7 @@ const ChangeRequestCard = ({ request }) => {
           </div>
           <div className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{request.reason}</div>
           {hasBreakdown && <div className="mt-2 flex flex-wrap gap-1.5">
+              <TopupBreakdownPill label="Budget" value={breakdown.budget} />
               <TopupBreakdownPill label="Models" value={breakdown.models} />
               <TopupBreakdownPill label="Infra" value={breakdown.infra} />
               <TopupBreakdownPill label="Subs" value={breakdown.subs} />
@@ -2902,6 +2903,7 @@ const TopupRequestCard = ({ request }) => {
           </div>
           <div className="mt-1 text-[10px] text-zinc-500 line-clamp-2">{request.reason}</div>
           {hasBreakdown && <div className="mt-2 flex flex-wrap gap-1.5">
+              <TopupBreakdownPill label="Budget" value={breakdown.budget} />
               <TopupBreakdownPill label="Models" value={breakdown.models} />
               <TopupBreakdownPill label="Infra" value={breakdown.infra} />
               <TopupBreakdownPill label="Subs" value={breakdown.subs} />
@@ -3376,12 +3378,14 @@ const sumBreakdownEntryAmount = (entry) => {
 };
 
 const getTopupBreakdownAmounts = (request) => ({
+  budget: sumBreakdownEntryAmount(request.breakdown?.budget),
   models: sumBreakdownEntryAmount(request.breakdown?.models),
   infra: sumBreakdownEntryAmount(request.breakdown?.infra),
   subs: sumBreakdownEntryAmount(request.breakdown?.subs),
 });
 
 const getChangeBreakdownAmounts = (request) => ({
+  budget: Number(request.breakdown?.budget?.amount || 0),
   models: Number(request.breakdown?.models?.amount || 0),
   infra: Number(request.breakdown?.infra?.amount || 0),
   subs: Number(request.breakdown?.subs?.amount || 0),
@@ -3427,6 +3431,7 @@ const getLogModelNames = (log) => {
 const getTopupBreakdownSelections = (request) => {
   const amounts = getTopupBreakdownAmounts(request);
   return [
+    request.breakdown?.budget ? `Budget ${fmtCurrency(amounts.budget, { compact: false })}: ${formatBreakdownEntry(request.breakdown.budget)}` : null,
     request.breakdown?.models ? `Models ${fmtCurrency(amounts.models, { compact: false })}: ${formatBreakdownEntry(request.breakdown.models)}` : null,
     request.breakdown?.infra ? `Infra ${fmtCurrency(amounts.infra, { compact: false })}: ${formatBreakdownEntry(request.breakdown.infra)}` : null,
     request.breakdown?.subs ? `Subs ${fmtCurrency(amounts.subs, { compact: false })}: ${formatBreakdownEntry(request.breakdown.subs)}` : null,
@@ -3436,6 +3441,7 @@ const getTopupBreakdownSelections = (request) => {
 const getChangeBreakdownSelections = (request) => {
   const amounts = getChangeBreakdownAmounts(request);
   return [
+    request.breakdown?.budget ? `Budget ${fmtCurrency(amounts.budget, { compact: false })}: ${formatBreakdownEntry(request.breakdown.budget)}` : null,
     request.breakdown?.models ? `Models ${fmtCurrency(amounts.models, { compact: false })}: ${formatBreakdownEntry(request.breakdown.models)}` : null,
     request.breakdown?.infra ? `Infra ${fmtCurrency(amounts.infra, { compact: false })}: ${formatBreakdownEntry(request.breakdown.infra)}` : null,
     request.breakdown?.subs ? `Subs ${fmtCurrency(amounts.subs, { compact: false })}: ${formatBreakdownEntry(request.breakdown.subs)}` : null,
