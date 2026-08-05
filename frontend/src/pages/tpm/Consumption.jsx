@@ -154,7 +154,7 @@ const Consumption = () => {
     .reverse();
 
   return (
-    <div className="space-y-6" data-testid="page-consumption">
+    <div className="mx-auto max-w-[1180px] space-y-4" data-testid="page-consumption">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">

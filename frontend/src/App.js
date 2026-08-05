@@ -34,6 +34,7 @@ import Buffer from "./pages/cfo/Buffer";
 import EarlyWarning from "./pages/cfo/EarlyWarning";
 import MonthlyForecast from "./pages/cfo/MonthlyForecast";
 import { Toaster } from "./components/ui/sonner";
+import { ThemeProvider } from "next-themes";
 
 const Protected = ({ children }) => {
   const { isAuth } = useApp();
@@ -51,6 +52,7 @@ const RoleProtected = ({ roles = [], children }) => {
 function App() {
   return (
     <div className="App">
+      <ThemeProvider attribute="class" defaultTheme="dark" enableSystem storageKey="finance-dashboard-theme">
       <AppProvider>
         <BrowserRouter>
           <Routes>
@@ -114,8 +116,9 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
-        <Toaster position="bottom-right" theme="dark" />
+        <Toaster position="bottom-right" />
       </AppProvider>
+      </ThemeProvider>
     </div>
   );
 }

@@ -8,13 +8,14 @@ import { toast } from "sonner";
 import {
   PackageCheck, DollarSign, MessageSquare, User as UserIcon, Receipt, Send,
   CheckCircle2, Clock3, AlertTriangle, Building2, Layers, Save, TrendingUp, TrendingDown,
-  Server, CreditCard, ListChecks, Wallet, ChevronDown,
+  Server, CreditCard, ListChecks, Wallet, ChevronDown, Lock,
 } from "lucide-react";
 
 const statusMap = {
   "pending-cfo": { label: "Pending", cls: "bg-amber-500/15 text-amber-300 border-amber-500/30", Icon: Clock3 },
   recovered: { label: "Received · full", cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30", Icon: CheckCircle2 },
   "partial-recovered": { label: "Received · partial", cls: "bg-emerald-500/10 text-emerald-300 border-emerald-500/25", Icon: AlertTriangle },
+  "no-payment": { label: "No payment received", cls: "bg-red-500/10 text-red-300 border-red-500/25", Icon: AlertTriangle },
   "non-recoverable": { label: "Non-recoverable", cls: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30", Icon: AlertTriangle },
 };
 
@@ -23,7 +24,7 @@ const CfoBatchDeliveries = () => {
   const [searchParams] = useSearchParams();
   const [drafts, setDrafts] = useState({}); // { [id]: { amount, note } }
   const [filter, setFilter] = useState("all");
-  const [activeView, setActiveView] = useState(searchParams.get("view") === "recovery" ? "recovery" : "deliveries");
+  const [activeView, setActiveView] = useState(searchParams.get("view") === "deliveries" || searchParams.get("filter") ? "deliveries" : "recovery");
   const financeDeliveries = useMemo(
     () => batchDeliveries.filter((delivery) => delivery.stage !== "rnd-review"),
     [batchDeliveries]
@@ -32,14 +33,14 @@ const CfoBatchDeliveries = () => {
   const stats = useMemo(() => {
     const proposed = financeDeliveries.reduce((s, d) => s + Number(d.proposedAmount || 0), 0);
     const recovered = financeDeliveries.reduce((s, d) => s + (d.actualRecovered || 0), 0);
-    const pending = financeDeliveries.filter((d) => d.status === "pending-cfo").length;
+    const pending = financeDeliveries.filter((d) => ["pending-cfo", "partial-recovered", "no-payment"].includes(d.status)).length;
     return { total: financeDeliveries.length, pending, proposed, recovered };
   }, [financeDeliveries]);
 
   const filtered = useMemo(() => {
     if (filter === "all") return financeDeliveries;
-    if (filter === "pending") return financeDeliveries.filter((d) => d.status === "pending-cfo");
-    if (filter === "recovered") return financeDeliveries.filter((d) => d.status === "recovered" || d.status === "partial-recovered");
+    if (filter === "pending") return financeDeliveries.filter((d) => ["pending-cfo", "partial-recovered", "no-payment"].includes(d.status));
+    if (filter === "recovered") return financeDeliveries.filter((d) => d.status === "recovered");
     return financeDeliveries;
   }, [filter, financeDeliveries]);
 
@@ -52,10 +53,12 @@ const CfoBatchDeliveries = () => {
   }, [searchParams]);
   const save = (d) => {
     const draft = drafts[d.id] || {};
-    const amt = draft.amount != null ? Number(draft.amount) : d.actualRecovered ?? d.proposedAmount;
+    const paymentStatus = draft.paymentStatus || d.paymentStatus || (d.actualRecovered == null ? "full" : d.actualRecovered >= d.proposedAmount ? "full" : d.actualRecovered > 0 ? "partial" : "none");
+    const amt = paymentStatus === "full" ? Number(d.proposedAmount || 0) : paymentStatus === "none" ? 0 : Number(draft.amount != null ? draft.amount : d.actualRecovered || 0);
     if (!amt && amt !== 0) { toast.error("Enter the actual recovered amount"); return; }
     if (amt < 0) { toast.error("Actual amount cannot be negative"); return; }
-    recordActualRecovery(d.id, { actualRecovered: amt, cfoNote: draft.note ?? d.cfoNote });
+    if (paymentStatus === "partial" && (amt <= 0 || amt >= Number(d.proposedAmount || 0))) { toast.error("Partial payment must be greater than zero and less than the estimated recovery"); return; }
+    recordActualRecovery(d.id, { actualRecovered: amt, cfoNote: draft.note ?? d.cfoNote, paymentStatus });
     toast.success("Actual recovery recorded", {
       description: `${d.projectName} · ${d.phaseName} · $${amt.toLocaleString()} (estimated $${d.proposedAmount.toLocaleString()})`,
     });
@@ -78,8 +81,8 @@ const CfoBatchDeliveries = () => {
 
       <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.025] p-1" data-testid="batch-recovery-tabs">
         {[
-          { id: "deliveries", label: "Batch deliveries" },
           { id: "recovery", label: "Client recovery dashboard" },
+          { id: "deliveries", label: "Batch deliveries" },
         ].map((tab) => <button
           key={tab.id}
           type="button"
@@ -112,7 +115,7 @@ const CfoBatchDeliveries = () => {
                 : "bg-transparent text-zinc-400 border-white/15 hover:text-zinc-100 hover:border-white/25"
             }`}
           >
-            {f === "recovered" ? "received" : f}
+            {f === "recovered" ? "received in full" : f === "pending" ? "pending payment" : f}
           </button>
         ))}
       </div>
@@ -152,9 +155,13 @@ const CfoBatchDeliveries = () => {
           const subscriptionItems = resourceItems.subs || [];
           const stCfg = statusMap[d.status] || statusMap["pending-cfo"];
           const draft = drafts[d.id] || {};
+          const paymentStatus = draft.paymentStatus || d.paymentStatus || (d.actualRecovered == null ? "full" : d.actualRecovered >= d.proposedAmount ? "full" : d.actualRecovered > 0 ? "partial" : "none");
+          const recoveryAmount = paymentStatus === "full" ? Number(d.proposedAmount || 0) : paymentStatus === "none" ? 0 : (draft.amount != null ? Number(draft.amount) : Number(d.actualRecovered || 0));
           const isPending = d.status === "pending-cfo";
           const isNonRecoverable = d.isRecoverable === false;
-          const delta = (draft.amount != null ? Number(draft.amount) : d.actualRecovered) - d.proposedAmount;
+          const isPaymentLocked = d.status === "recovered" || d.status === "no-payment";
+          const canEditPayment = canEdit && !isPaymentLocked;
+          const delta = recoveryAmount - d.proposedAmount;
           return (
             <div key={d.id} data-testid={`bd-card-${d.id}`} className="bg-[#12121A] rounded-2xl border border-white/5 p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -241,24 +248,51 @@ const CfoBatchDeliveries = () => {
                   </div>
                 ) : (
                   <>
+                    {!isPaymentLocked && <>
+                    <div className="mb-3">
+                      <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-zinc-500">Payment received</div>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" data-testid={`bd-payment-options-${d.id}`}>
+                        {[
+                          { id: "full", label: "Full payment", detail: fmtCurrency(d.proposedAmount, { compact: false }) },
+                          { id: "partial", label: "Partial payment", detail: "Enter amount received" },
+                          { id: "none", label: "No payment received", detail: fmtCurrency(0, { compact: false }) },
+                        ].map((option) => <button
+                          key={option.id}
+                          type="button"
+                          disabled={!canEditPayment}
+                          onClick={() => {
+                            setDraft(d.id, "paymentStatus", option.id);
+                            setDraft(d.id, "amount", option.id === "full" ? Number(d.proposedAmount || 0) : option.id === "none" ? 0 : (d.actualRecovered > 0 && d.actualRecovered < d.proposedAmount ? d.actualRecovered : ""));
+                          }}
+                          className={`rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-default ${paymentStatus === option.id ? "border-fuchsia-500/40 bg-fuchsia-500/10" : "border-white/10 bg-white/[0.025] hover:border-white/20"}`}
+                          data-testid={`bd-payment-${option.id}-${d.id}`}
+                        >
+                          <div className={`text-xs font-semibold ${paymentStatus === option.id ? "text-fuchsia-300" : "text-zinc-300"}`}>{option.label}</div>
+                          <div className="mt-0.5 text-[10px] text-zinc-500">{option.detail}</div>
+                        </button>)}
+                      </div>
+                      {paymentStatus === "partial" && <div className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.06] px-3 py-2 text-[11px] text-amber-200">
+                        Enter the cumulative amount received so far. You can return to this batch and update the amount when another payment is received.
+                      </div>}
+                    </div>
                     <div className="grid grid-cols-1 items-end gap-3 md:grid-cols-[minmax(220px,.7fr)_minmax(300px,1.5fr)_auto]">
                       <div>
-                        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Actual amount recovered</div>
+                        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Amount received</div>
                         <div className="relative">
                           <DollarSign className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                           <input
                             type="number"
                             min="0"
                             step="50"
-                            value={draft.amount != null ? draft.amount : (d.actualRecovered ?? "")}
+                            value={recoveryAmount}
                             onChange={(e) => setDraft(d.id, "amount", e.target.value)}
-                            disabled={!canEdit}
+                            disabled={!canEditPayment || paymentStatus !== "partial"}
                             data-testid={`bd-actual-${d.id}`}
-                            placeholder={isPending ? "Enter recovered amount" : ""}
+                            placeholder={isPending ? "Enter amount received" : ""}
                             className="w-full h-10 pl-8 pr-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 tabular focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 disabled:opacity-60"
                           />
                         </div>
-                        {(draft.amount != null || d.actualRecovered != null) && (
+                        {(paymentStatus !== "partial" || draft.amount != null || d.actualRecovered != null) && (
                           <div className="mt-1 text-[10px] tabular flex items-center gap-1">
                             {delta >= 0 ? (
                               <><TrendingUp className="w-3 h-3 text-emerald-300" /><span className="text-emerald-300">+{fmtCurrency(delta, { compact: false })} vs estimated</span></>
@@ -273,13 +307,13 @@ const CfoBatchDeliveries = () => {
                         <input
                           value={draft.note != null ? draft.note : d.cfoNote || ""}
                           onChange={(e) => setDraft(d.id, "note", e.target.value)}
-                          disabled={!canEdit}
+                          disabled={!canEditPayment}
                           data-testid={`bd-note-${d.id}`}
                           placeholder="Payment terms, invoice ref, etc."
                           className="w-full h-10 px-3 rounded-lg bg-white/[0.04] border border-white/10 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-fuchsia-500/40 disabled:opacity-60"
                         />
                       </div>
-                      {canEdit && (
+                      {canEditPayment && (
                         <Button
                           onClick={() => save(d)}
                           data-testid={`bd-save-${d.id}`}
@@ -289,6 +323,13 @@ const CfoBatchDeliveries = () => {
                         </Button>
                       )}
                     </div>
+                    </>}
+                    {isPaymentLocked && (
+                      <div className={`mt-2 flex items-center gap-2 rounded-lg border px-3 py-2 text-[11px] ${d.status === "recovered" ? "border-emerald-500/20 bg-emerald-500/[0.06] text-emerald-300" : "border-zinc-500/20 bg-white/[0.025] text-zinc-400"}`} data-testid={`bd-payment-locked-${d.id}`}>
+                        <Lock className="h-3.5 w-3.5 flex-shrink-0" />
+                        {d.status === "recovered" ? "Full payment has been completed. This recovery record is locked." : "No payment will be received for this batch. This recovery record is locked."}
+                      </div>
+                    )}
                     {d.cfoAt && (
                       <div className="mt-2 text-[10px] text-zinc-500 tabular">
                         Last updated {new Date(d.cfoAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} · by {d.cfoBy}

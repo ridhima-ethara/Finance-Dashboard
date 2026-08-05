@@ -127,7 +127,7 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#0A0A0F] relative overflow-hidden" data-testid="page-login">
+    <div className="dark-only min-h-screen bg-[#0A0A0F] relative overflow-hidden" data-testid="page-login">
       <Backdrop />
 
       <div className="relative min-h-screen flex flex-col items-center justify-center px-6 py-10">

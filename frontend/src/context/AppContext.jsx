@@ -2936,7 +2936,7 @@ export const AppProvider = ({ children }) => {
     return { ...target, clientComment: comment || "", feedbackAt: at };
   };
 
-  const recordActualRecovery = (id, { actualRecovered, cfoNote }) => {
+  const recordActualRecovery = (id, { actualRecovered, cfoNote, paymentStatus }) => {
     const target = batchDeliveries.find((delivery) => delivery.id === id);
     const amount = Number(actualRecovered);
     setBatchDeliveries((arr) => arr.map((d) => (
@@ -2944,17 +2944,18 @@ export const AppProvider = ({ children }) => {
         ? {
             ...d,
             actualRecovered: amount,
+            paymentStatus: paymentStatus || (amount >= Number(d.proposedAmount || 0) ? "full" : amount > 0 ? "partial" : "none"),
             recoveryVariance: amount - Number(d.proposedAmount || 0),
             cfoNote: cfoNote || "",
             cfoAt: new Date().toISOString(),
             cfoBy: user?.name || "CFO",
-            status: amount >= d.proposedAmount ? "recovered" : "partial-recovered",
+            status: paymentStatus === "none" || amount === 0 ? "no-payment" : amount >= d.proposedAmount ? "recovered" : "partial-recovered",
             history: [
               {
                 at: new Date().toISOString(),
                 actor: `${user?.name || "CFO"} · CFO`,
-                action: "Recorded actual recovery",
-                detail: `$${amount.toLocaleString()} vs proposed $${Number(d.proposedAmount || 0).toLocaleString()}`,
+                action: paymentStatus === "none" || amount === 0 ? "Recorded no payment received" : "Recorded actual recovery",
+                detail: `$${amount.toLocaleString()} vs estimated $${Number(d.proposedAmount || 0).toLocaleString()}`,
               },
               ...(d.history || []),
             ],

@@ -32,10 +32,12 @@ const statusTone = {
   "partial-recovered": "bg-amber-500/15 text-amber-300",
   "pending-cfo": "bg-fuchsia-500/15 text-fuchsia-300",
   "non-recoverable": "bg-zinc-500/15 text-zinc-300",
+  "no-payment": "bg-red-500/15 text-red-300",
 };
 
-const formatMonth = (value) =>
-  new Date(value).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+const formatDate = (value) => value
+  ? new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })
+  : "—";
 
 const Recovery = ({ embedded = false }) => {
   const { projects, batchDeliveries } = useApp();
@@ -54,7 +56,7 @@ const Recovery = ({ embedded = false }) => {
         const actualSpend = Number(project.cfoActualSpend || project.actualSpend || 0);
         const proposed = deliveries.reduce((sum, delivery) => sum + Number(delivery.proposedAmount || 0), 0);
         const recovered = deliveries.reduce((sum, delivery) => sum + Number(delivery.actualRecovered || 0), 0);
-        const outstanding = Math.max(0, actualSpend - recovered);
+        const outstanding = Math.max(0, proposed - recovered);
         const phaseRows = deliveries.map((delivery) => {
           const phase = (project.phases || []).find((entry) => entry.id === delivery.phaseId || entry.name === delivery.phaseName);
           const phaseActual = Number(phase?.actual || phase?.estimated || delivery.proposedAmount || 0);
@@ -72,6 +74,8 @@ const Recovery = ({ embedded = false }) => {
             deliveryNote: delivery.clientComment || "No TPM delivery note recorded.",
             cfoNote: delivery.cfoNote || "No Finance note recorded yet.",
             closureDate: delivery.deliveredAt,
+            raisedAt: delivery.deliveredAt,
+            recoveredAt: delivery.cfoAt || null,
             clientRepresentative: delivery.clientRepresentative || "—",
             deliveredBy: delivery.deliveredBy || project.tpm || "TPM",
             isRecoverable: delivery.isRecoverable !== false,
@@ -115,18 +119,27 @@ const Recovery = ({ embedded = false }) => {
   }, [recoveryProjects]);
 
   const trend = useMemo(() => {
-    const byMonth = new Map();
-    financeDeliveries.forEach((delivery) => {
-      const date = (delivery.cfoAt || delivery.deliveredAt || "").slice(0, 7);
-      if (!date) return;
-      const current = byMonth.get(date) || { month: date, recovered: 0, outstanding: 0 };
-      const proposed = Number(delivery.proposedAmount || 0);
-      const actual = Number(delivery.actualRecovered || 0);
-      current.recovered += actual;
-      current.outstanding += Math.max(0, proposed - actual);
-      byMonth.set(date, current);
-    });
-    return Array.from(byMonth.values()).sort((left, right) => left.month.localeCompare(right.month));
+    const recoverableDeliveries = financeDeliveries.filter((delivery) => delivery.isRecoverable !== false);
+    const totalEstimated = recoverableDeliveries.reduce((sum, delivery) => sum + Number(delivery.proposedAmount || 0), 0);
+    let cumulativeReceived = 0;
+    return [...recoverableDeliveries]
+      .sort((left, right) => new Date(left.cfoAt || left.deliveredAt || 0) - new Date(right.cfoAt || right.deliveredAt || 0))
+      .map((delivery) => {
+        const received = Number(delivery.actualRecovered || 0);
+        cumulativeReceived += received;
+        return {
+          date: delivery.cfoAt || delivery.deliveredAt,
+          projectName: delivery.projectName,
+          client: delivery.client,
+          phaseName: delivery.phaseName,
+          estimated: Number(delivery.proposedAmount || 0),
+          receivedForProject: received,
+          raisedAt: delivery.deliveredAt,
+          recoveredAt: delivery.cfoAt || null,
+          received: cumulativeReceived,
+          outstanding: Math.max(totalEstimated - cumulativeReceived, 0),
+        };
+      });
   }, [financeDeliveries]);
 
   const byClient = useMemo(() => {
@@ -144,7 +157,7 @@ const Recovery = ({ embedded = false }) => {
       current.recoverable += project.actualSpend;
       current.invoiced += project.proposed;
       current.received += project.recovered;
-      current.phases.push(...project.phaseRows.map((phase) => ({ ...phase, projectName: project.name })));
+      current.phases.push(...project.phaseRows.filter((phase) => phase.isRecoverable).map((phase) => ({ ...phase, projectName: project.name })));
       map.set(project.client, current);
     });
     return Array.from(map.values()).map((entry) => ({
@@ -153,6 +166,9 @@ const Recovery = ({ embedded = false }) => {
       variance: entry.received - entry.invoiced,
     }));
   }, [recoveryProjects]);
+
+  const pendingByClient = useMemo(() => byClient.filter((entry) => entry.outstanding > 0), [byClient]);
+  const recoveryClients = useMemo(() => byClient.filter((entry) => entry.phases.length > 0), [byClient]);
 
   const toggle = (id) => setExpanded((current) => ({ ...current, [id]: !current[id] }));
 
@@ -176,41 +192,40 @@ const Recovery = ({ embedded = false }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Panel testid="chart-trend" title="Recovery trend" subtitle="Received vs outstanding · live deliveries">
+        <Panel testid="chart-trend" title="Recovery trend" subtitle="Cumulative received rises as outstanding recovery falls · hover for project details">
           <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trend}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={formatMonth} />
+                <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={formatDate} />
                 <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-                <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(value) => fmtCurrency(value)} labelFormatter={formatMonth} />
+                <Tooltip content={<RecoveryTrendTooltip />} />
                 <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
-                <Line type="monotone" dataKey="recovered" name="Received" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
+                <Line type="monotone" dataKey="received" name="Received" stroke="#10B981" strokeWidth={2} dot={{ r: 3 }} />
                 <Line type="monotone" dataKey="outstanding" name="Outstanding" stroke="#F59E0B" strokeWidth={2} strokeDasharray="4 4" dot={{ r: 3 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </Panel>
 
-        <Panel testid="chart-by-client" title="Recovery by client" subtitle="Recoverable · received · outstanding">
+        <Panel testid="chart-by-client" title="Recovery by client" subtitle="Pending clients only · estimated recovery and remaining amount">
           <div className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byClient}>
+              <BarChart data={pendingByClient}>
                 <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
                 <XAxis dataKey="client" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
                 <Tooltip contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }} formatter={(value) => fmtCurrency(value)} />
                 <Legend iconType="square" wrapperStyle={{ fontSize: 10 }} />
-                <Bar dataKey="recoverable" name="Recoverable" fill="#E619B8" radius={[3, 3, 0, 0]} maxBarSize={22} />
-                <Bar dataKey="received" name="Received" fill="#10B981" radius={[3, 3, 0, 0]} maxBarSize={22} />
-                <Bar dataKey="outstanding" name="Outstanding" fill="#F59E0B" radius={[3, 3, 0, 0]} maxBarSize={22} />
+                <Bar dataKey="invoiced" name="Estimated recovery" fill="#E619B8" radius={[3, 3, 0, 0]} maxBarSize={22} />
+                <Bar dataKey="outstanding" name="Remaining" fill="#F59E0B" radius={[3, 3, 0, 0]} maxBarSize={22} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </Panel>
       </div>
 
-      <Panel testid="client-table" title="Per-client recovery status" subtitle="Estimated recovery, received amount, outstanding, and variance">
+      <Panel testid="client-table" title="Project and phase recovery status" subtitle="Recoverable and received phases with raised and recovery timelines, grouped by client">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -224,7 +239,7 @@ const Recovery = ({ embedded = false }) => {
               </tr>
             </thead>
             <tbody>
-              {byClient.map((client) => {
+              {recoveryClients.map((client) => {
                 const clientKey = `client-${client.client}`;
                 const isOpen = Boolean(expanded[clientKey]);
                 return <Fragment key={client.client}>
@@ -243,16 +258,19 @@ const Recovery = ({ embedded = false }) => {
                 {isOpen && <tr className="border-b border-white/5 bg-white/[0.015]" data-testid={`client-phases-${client.client.toLowerCase().replace(/\s+/g, "-")}`}>
                   <td colSpan={6} className="px-4 py-3">
                     {client.phases.length ? <div className="overflow-x-auto rounded-lg border border-white/5">
-                      <div className="grid min-w-[720px] grid-cols-[1.2fr_1fr_repeat(4,.8fr)] gap-3 bg-white/[0.025] px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
-                        <span>Project</span><span>Phase</span><span className="text-right">Estimated recovery</span><span className="text-right">Received</span><span className="text-right">Outstanding</span><span className="text-right">Variance</span>
+                      <div className="grid min-w-[1100px] grid-cols-[1.2fr_1fr_.8fr_repeat(4,.8fr)_1fr_1fr] gap-3 bg-white/[0.025] px-3 py-2 text-[9px] font-semibold uppercase tracking-widest text-zinc-500">
+                        <span>Project</span><span>Phase</span><span>Status</span><span className="text-right">Estimated recovery</span><span className="text-right">Received</span><span className="text-right">Outstanding</span><span className="text-right">Variance</span><span>Raised</span><span>Recovered</span>
                       </div>
-                      {client.phases.map((phase) => <div key={`${phase.projectName}-${phase.id}`} className="grid min-w-[720px] grid-cols-[1.2fr_1fr_repeat(4,.8fr)] gap-3 border-t border-white/[0.04] px-3 py-2.5 text-xs">
+                      {client.phases.map((phase) => <div key={`${phase.projectName}-${phase.id}`} className="grid min-w-[1100px] grid-cols-[1.2fr_1fr_.8fr_repeat(4,.8fr)_1fr_1fr] items-center gap-3 border-t border-white/[0.04] px-3 py-2.5 text-xs">
                         <span className="truncate text-zinc-300">{phase.projectName}</span>
                         <span className="truncate text-white">{phase.phaseName}</span>
+                        <span className={`w-fit rounded-md px-1.5 py-0.5 text-[9px] font-semibold ${statusTone[phase.status] || statusTone["pending-cfo"]}`}>{phase.received >= phase.recoverable ? "Received" : phase.received > 0 ? "Partial" : "Pending"}</span>
                         <span className="text-right tabular text-fuchsia-300">{fmtCurrency(phase.recoverable, { compact: false })}</span>
                         <span className="text-right tabular text-emerald-300">{fmtCurrency(phase.received, { compact: false })}</span>
                         <span className="text-right tabular text-amber-300">{fmtCurrency(Math.max(phase.recoverable - phase.received, 0), { compact: false })}</span>
                         <span className={`text-right font-semibold tabular ${phase.received - phase.recoverable >= 0 ? "text-emerald-300" : "text-red-300"}`}>{phase.received - phase.recoverable >= 0 ? "+" : ""}{fmtCurrency(phase.received - phase.recoverable, { compact: false })}</span>
+                        <span className="text-zinc-400 tabular">{formatDate(phase.raisedAt)}</span>
+                        <span className="text-zinc-400 tabular">{phase.recoveredAt ? formatDate(phase.recoveredAt) : "Pending"}</span>
                       </div>)}
                     </div> : <div className="py-3 text-center text-xs text-zinc-500">No phase-wise recovery has been recorded for this client.</div>}
                   </td>
@@ -375,6 +393,25 @@ const Recovery = ({ embedded = false }) => {
     </div>
   );
 };
+
+const RecoveryTrendTooltip = ({ active, payload }) => {
+  if (!active || !payload?.length) return null;
+  const point = payload[0]?.payload;
+  if (!point) return null;
+  return <div className="min-w-[230px] rounded-xl border border-white/10 bg-[#12121A] p-3 shadow-xl">
+    <div className="text-sm font-semibold text-white">{point.projectName}</div>
+    <div className="mt-0.5 text-[11px] text-zinc-500">{point.client} · {point.phaseName}</div>
+    <div className="mt-2 space-y-1 border-t border-white/5 pt-2 text-xs">
+      <TooltipRow label="Estimated recovery" value={fmtCurrency(point.estimated, { compact: false })} valueClass="text-fuchsia-300" />
+      <TooltipRow label="Received for phase" value={fmtCurrency(point.receivedForProject, { compact: false })} valueClass="text-emerald-300" />
+      <TooltipRow label="Cumulative received" value={fmtCurrency(point.received, { compact: false })} />
+      <TooltipRow label="Outstanding" value={fmtCurrency(point.outstanding, { compact: false })} valueClass="text-amber-300" />
+    </div>
+    <div className="mt-2 border-t border-white/5 pt-2 text-[10px] text-zinc-500">Raised {formatDate(point.raisedAt)} · {point.recoveredAt ? `Received ${formatDate(point.recoveredAt)}` : "Recovery pending"}</div>
+  </div>;
+};
+
+const TooltipRow = ({ label, value, valueClass = "text-white" }) => <div className="flex items-center justify-between gap-4"><span className="text-zinc-500">{label}</span><span className={`font-semibold tabular ${valueClass}`}>{value}</span></div>;
 
 const Panel = ({ title, subtitle, children, testid }) => testid === "recoverable-projects" ? null : (
   <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid={testid}>

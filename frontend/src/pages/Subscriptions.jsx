@@ -70,7 +70,7 @@ const Subscriptions = () => {
     });
 
   return (
-    <div className="space-y-6" data-testid="page-subscriptions">
+    <div className="mx-auto max-w-[1180px] space-y-4" data-testid="page-subscriptions">
       <div>
         <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-400">
           <CreditCard className="w-3 h-3" /> Subscription Tracker

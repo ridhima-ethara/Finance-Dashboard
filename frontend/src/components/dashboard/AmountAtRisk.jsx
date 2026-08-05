@@ -33,7 +33,7 @@ const AmountAtRisk = ({ projectsOverride = null }) => {
   return (
     <div
       data-testid="hero-amount-at-risk"
-      className="relative h-full overflow-hidden rounded-2xl p-5 sm:p-6 grain min-h-[190px] card-hover"
+      className="amount-risk-card relative h-full overflow-hidden rounded-2xl p-5 sm:p-6 grain min-h-[190px] card-hover"
       style={{
         background:
           "radial-gradient(120% 140% at 0% 0%, rgba(232,25,184,0.25) 0%, rgba(232,25,184,0.05) 40%, rgba(0,0,0,0) 70%), linear-gradient(135deg, #1A0A16 0%, #12080F 50%, #0D0509 100%)",
@@ -42,7 +42,7 @@ const AmountAtRisk = ({ projectsOverride = null }) => {
       }}
     >
       {/* Wireframe grid backdrop */}
-      <div className="absolute inset-0 opacity-40 pointer-events-none"
+      <div className="amount-risk-grid absolute inset-0 opacity-40 pointer-events-none"
         style={{
           backgroundImage:
             "linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)",

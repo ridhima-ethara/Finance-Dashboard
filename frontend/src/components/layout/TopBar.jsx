@@ -1,4 +1,5 @@
-import { Search, Bell, LogOut, ChevronDown } from "lucide-react";
+import { Search, Bell, LogOut, ChevronDown, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import {
@@ -15,6 +16,7 @@ import { roleDisplayName } from "../../lib/roles";
 
 const TopBar = () => {
   const { user, setNotifOpen, logout } = useApp();
+  const { resolvedTheme, setTheme } = useTheme();
   const nav = useNavigate();
   const unread = NOTIFICATIONS.filter((n) => !n.read).length;
   if (!user) return null;
@@ -30,6 +32,16 @@ const TopBar = () => {
         />
       </div>
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          data-testid="theme-toggle"
+          onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
+          className="relative w-10 h-10 rounded-lg border border-white/10 bg-white/[0.04] hover:bg-white/[0.08] flex items-center justify-center transition-colors"
+          aria-label={`Switch to ${resolvedTheme === "light" ? "dark" : "light"} theme`}
+          title={`Switch to ${resolvedTheme === "light" ? "dark" : "light"} theme`}
+        >
+          {resolvedTheme === "light" ? <Moon className="w-[18px] h-[18px] text-zinc-600" /> : <Sun className="w-[18px] h-[18px] text-zinc-300" />}
+        </button>
         <button
           data-testid="btn-notifications"
           onClick={() => setNotifOpen(true)}

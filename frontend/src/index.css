@@ -57,6 +57,29 @@ body {
         --chart-5: 280 82% 62%;
         --radius: 1rem;
     }
+
+    .light {
+        color-scheme: light;
+        --background: 240 20% 98%;
+        --foreground: 240 10% 10%;
+        --card: 0 0% 100%;
+        --card-foreground: 240 10% 10%;
+        --popover: 0 0% 100%;
+        --popover-foreground: 240 10% 10%;
+        --primary: 316 78% 46%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 240 12% 94%;
+        --secondary-foreground: 240 10% 16%;
+        --muted: 240 12% 94%;
+        --muted-foreground: 240 5% 42%;
+        --accent: 316 65% 94%;
+        --accent-foreground: 316 75% 32%;
+        --destructive: 0 72% 48%;
+        --destructive-foreground: 0 0% 100%;
+        --border: 240 10% 86%;
+        --input: 240 10% 86%;
+        --ring: 316 78% 46%;
+    }
 }
 
 @layer base {
@@ -72,7 +95,172 @@ body {
         min-height: 100vh;
         background: #08080c;
     }
+
+    html.light,
+    html.light body,
+    html.light #root {
+        background: hsl(var(--background));
+    }
 }
+
+/* Light-theme compatibility for legacy dark utility surfaces used across the
+   dashboards. This keeps every existing module legible without duplicating
+   page markup, while semantic status/action colours remain unchanged. */
+.light [class*="bg-[#08080C]"],
+.light [class*="bg-[#0B0B12]"],
+.light [class*="bg-[#0F0F16]"],
+.light [class*="bg-[#0F0F17]"],
+.light [class*="bg-[#101018]"],
+.light [class*="bg-[#111119]"],
+.light [class*="bg-[#12121A]"],
+.light [class*="bg-[#13131C]"],
+.light [class*="bg-[#15151F]"],
+.light [class*="bg-[#181820]"] {
+    background-color: #ffffff !important;
+}
+
+.light [class*="bg-white/[0.0"] {
+    background-color: rgba(15, 23, 42, 0.035) !important;
+}
+.light [class~="bg-white/5"],
+.light [class~="bg-white/10"] {
+    background-color: rgba(15, 23, 42, 0.045) !important;
+}
+
+.light .text-white,
+.light .text-zinc-100,
+.light .text-zinc-200 {
+    color: #18181b !important;
+}
+.light .text-zinc-300 { color: #3f3f46 !important; }
+.light .text-zinc-400,
+.light .text-zinc-500 { color: #52525b !important; }
+.light .text-zinc-600 { color: #71717a !important; }
+
+/* Dark-theme accent shades are intentionally pale; use their accessible
+   counterparts on light surfaces so statuses and parameter names stay clear. */
+.light .text-fuchsia-100,
+.light .text-fuchsia-200,
+.light .text-fuchsia-300,
+.light .text-fuchsia-400 { color: #a21caf !important; }
+.light .text-emerald-200,
+.light .text-emerald-300,
+.light .text-emerald-400 { color: #047857 !important; }
+.light .text-amber-100,
+.light .text-amber-200,
+.light .text-amber-300,
+.light .text-amber-400 { color: #a16207 !important; }
+.light .text-red-100,
+.light .text-red-200,
+.light .text-red-300,
+.light .text-red-400 { color: #b91c1c !important; }
+.light .text-sky-100,
+.light .text-sky-200,
+.light .text-sky-300,
+.light .text-sky-400 { color: #0369a1 !important; }
+.light .text-cyan-100,
+.light .text-cyan-200,
+.light .text-cyan-300 { color: #0e7490 !important; }
+.light .text-violet-300 { color: #6d28d9 !important; }
+.light .text-orange-200,
+.light .text-orange-300 { color: #c2410c !important; }
+
+.light [class*="border-white/"],
+.light [class*="border-white["] {
+    border-color: rgba(24, 24, 27, 0.12) !important;
+}
+
+.light .bg-fuchsia-500.text-white,
+.light .bg-fuchsia-600.text-white,
+.light .bg-red-500.text-white,
+.light .bg-emerald-500.text-white,
+.light .bg-sky-500.text-white,
+.light [class*="bg-gradient"].text-white,
+.light button[class*="bg-fuchsia"] .text-white {
+    color: #ffffff !important;
+}
+
+.light input,
+.light textarea,
+.light select {
+    color-scheme: light;
+}
+.light input::placeholder,
+.light textarea::placeholder {
+    color: #71717a !important;
+    opacity: 1;
+}
+.light select,
+.light select option,
+.light select optgroup {
+    background-color: #ffffff;
+    color: #18181b;
+}
+.light select option:checked,
+.light select option:hover {
+    background-color: #f4e8f1;
+    color: #18181b;
+}
+.light select option:disabled { color: #a1a1aa; }
+
+.light .recharts-default-tooltip {
+    background: #ffffff !important;
+    border-color: #e4e4e7 !important;
+    box-shadow: 0 16px 35px rgba(24, 24, 27, 0.12) !important;
+    color: #18181b !important;
+}
+.light .recharts-cartesian-grid line { stroke: #e4e4e7; }
+.light .recharts-text { fill: #71717a; }
+
+.light .mesh-bg {
+    background-image:
+        linear-gradient(to right, rgba(24, 24, 27, 0.045) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(24, 24, 27, 0.045) 1px, transparent 1px);
+}
+.light .mesh-dots {
+    background-image: radial-gradient(rgba(24, 24, 27, 0.09) 1px, transparent 1px);
+}
+.light .amount-risk-card {
+    background:
+        radial-gradient(120% 140% at 0% 0%, rgba(232, 25, 184, 0.13) 0%, rgba(232, 25, 184, 0.035) 42%, transparent 70%),
+        linear-gradient(135deg, #ffffff 0%, #fdf8fc 52%, #faf5f9 100%) !important;
+    border-color: rgba(190, 24, 137, 0.22) !important;
+    color: #18181b !important;
+    box-shadow: 0 14px 35px rgba(112, 26, 88, 0.08);
+}
+.light .amount-risk-grid {
+    background-image:
+        linear-gradient(to right, rgba(113, 113, 122, 0.10) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(113, 113, 122, 0.10) 1px, transparent 1px) !important;
+}
+.light ::-webkit-scrollbar-thumb { background: #d4d4d8; }
+.light ::-webkit-scrollbar-thumb:hover { background: #a1a1aa; }
+
+/* Authentication intentionally remains dark regardless of the saved app
+   preference. The preference itself is untouched and resumes after sign-in. */
+.light .dark-only [class*="bg-[#12121A]"] { background-color: rgba(18, 18, 26, 0.70) !important; }
+.light .dark-only [class*="bg-white/[0.0"] { background-color: rgba(255, 255, 255, 0.04) !important; }
+.light .dark-only [class~="bg-white/5"] { background-color: rgba(255, 255, 255, 0.05) !important; }
+.light .dark-only [class~="bg-white/10"] { background-color: rgba(255, 255, 255, 0.10) !important; }
+.light .dark-only [class*="border-white/"] { border-color: rgba(255, 255, 255, 0.10) !important; }
+.light .dark-only .text-white { color: #ffffff !important; }
+.light .dark-only .text-zinc-100 { color: #f4f4f5 !important; }
+.light .dark-only .text-zinc-300 { color: #d4d4d8 !important; }
+.light .dark-only .text-zinc-400 { color: #a1a1aa !important; }
+.light .dark-only .text-zinc-500 { color: #71717a !important; }
+.light .dark-only .text-zinc-600 { color: #52525b !important; }
+.light .dark-only .text-fuchsia-200 { color: #f5d0fe !important; }
+.light .dark-only .text-fuchsia-300 { color: #f0abfc !important; }
+.light .dark-only .text-fuchsia-400 { color: #e879f9 !important; }
+.light .dark-only .text-emerald-300 { color: #6ee7b7 !important; }
+.light .dark-only .text-sky-300 { color: #7dd3fc !important; }
+.light .dark-only .text-violet-300 { color: #c4b5fd !important; }
+.light .dark-only .text-cyan-300 { color: #67e8f9 !important; }
+.light .dark-only input {
+    color-scheme: dark;
+    color: #f4f4f5 !important;
+}
+.light .dark-only input::placeholder { color: #52525b !important; }
 
 /* Native <select> options — force dark background so browsers (Chrome/Safari) don't
    render the dropdown list in the OS light theme on deployed HTTPS domains. */

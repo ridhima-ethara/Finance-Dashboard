@@ -171,6 +171,23 @@ const TpmDashboard = () => {
   }));
   const pendingActions = APPROVALS.filter((a) => a.requester === user?.name).slice(0, 3);
 
+  if (isRnd) {
+    return <RndPortalOverview
+      user={user}
+      projects={dashboardProjects}
+      projectUsage={projectUsage}
+      approved={approved}
+      logged={logged}
+      remaining={remaining}
+      util={util}
+      targetTasks={targetTasks}
+      doneTasks={doneTasks}
+      health={health}
+      hasLogs={dailyRows.length > 0}
+      usageOptions={usageOptions}
+    />;
+  }
+
   return (
     <div className="space-y-4" data-testid="page-tpm-dashboard">
       {/* Header */}
@@ -419,6 +436,83 @@ const TpmDashboard = () => {
       <RequestBudgetDialog open={requestOpen} onOpenChange={setRequestOpen} />
     </div>
   );
+};
+
+const RndPortalOverview = ({
+  user, projects, projectUsage, approved, logged, remaining, util,
+  targetTasks, doneTasks, health, hasLogs, usageOptions,
+}) => {
+  const attention = projectUsage.filter(({ project, usage }) => Number(project.approvedBudget || 0) <= 0 || usage.utilization >= 75);
+  const healthTone = health === "Green" ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/25" : health === "Amber" ? "text-amber-300 bg-amber-500/10 border-amber-500/25" : "text-red-300 bg-red-500/10 border-red-500/25";
+  return <div className="mx-auto max-w-[1180px] space-y-4" data-testid="page-tpm-dashboard">
+    <div className="flex items-end justify-between gap-4 flex-wrap">
+      <div>
+        <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] font-semibold text-fuchsia-300">
+          <span className="h-2 w-2 rounded-[3px] bg-fuchsia-500" /> RL Environment Portal
+        </div>
+        <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-white">Welcome back, {user?.name?.split(" ")[0] || "R&D"}</h1>
+        <p className="mt-1 text-xs text-zinc-400">{projects.length} active project{projects.length === 1 ? "" : "s"} · Live approved budget and logged task activity</p>
+      </div>
+      <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${healthTone}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-current" /> Budget health: {health}
+      </span>
+    </div>
+
+    {!hasLogs && <div className="flex items-center gap-3 rounded-2xl border border-fuchsia-500/20 bg-fuchsia-500/[0.06] p-3.5" data-testid="rnd-consumption-banner">
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-fuchsia-500 text-white"><Edit3 className="h-4 w-4" /></div>
+      <div className="min-w-0 flex-1"><div className="text-sm font-semibold text-white">No consumption logged yet</div><div className="mt-0.5 text-xs text-zinc-400">Log today’s tasks to unlock burn rate, model usage, and daily trends.</div></div>
+      <Button asChild className="h-9 flex-shrink-0 rounded-lg bg-fuchsia-500 text-white hover:bg-fuchsia-600"><Link to="/consumption">Log today’s consumption</Link></Button>
+    </div>}
+
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <OverviewKpi label="Total budget" value={fmtCurrency(approved, { compact: false })} note={`across ${projects.length} projects`} />
+      <OverviewKpi label="Logged spend" value={fmtCurrency(logged, { compact: false })} note={`${fmtPct(util)} utilization`} tone="magenta" />
+      <OverviewKpi label="Remaining" value={fmtCurrency(remaining, { compact: false })} note={`${fmtPct(Math.max(0, 100 - util))} of budget left`} tone={remaining >= 0 ? "positive" : "negative"} />
+      <OverviewKpi label="Task progress" value={`${doneTasks.toLocaleString()} / ${targetTasks.toLocaleString()}`} note="target tasks completed" />
+    </div>
+
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <Panel title="Budget vs logged, per project" subtitle="Live allocation and task-log consumption" testid="rnd-budget-bars">
+        <div className="space-y-3">
+          {projectUsage.map(({ project, usage }) => {
+            const budget = Number(project.approvedBudget || 0);
+            const pct = budget > 0 ? Math.round((usage.loggedSpend / budget) * 100) : 0;
+            return <Link to={`/projects/${project.id}`} key={project.id} className="block rounded-lg px-2 py-1.5 hover:bg-white/[0.03]">
+              <div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-zinc-200">{project.name}</span><span className="tabular text-zinc-400">{fmtCurrency(usage.loggedSpend, { compact: false })} / {fmtCurrency(budget, { compact: false })}</span></div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className={`h-full rounded-full ${pct >= 100 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-fuchsia-500"}`} style={{ width: `${Math.min(pct, 100)}%` }} /></div>
+            </Link>;
+          })}
+          {!projectUsage.length && <div className="py-8 text-center text-xs text-zinc-500">No active project budgets available.</div>}
+        </div>
+      </Panel>
+
+      <Panel title="Needs attention" subtitle="Budget and allocation health flags" testid="rnd-attention">
+        <div className="space-y-2">
+          {attention.slice(0, 6).map(({ project, usage }) => {
+            const noBudget = Number(project.approvedBudget || 0) <= 0;
+            const tone = noBudget ? "text-zinc-400 bg-white/[0.05]" : usage.utilization >= 100 ? "text-red-300 bg-red-500/10" : "text-amber-300 bg-amber-500/10";
+            return <Link key={project.id} to={`/projects/${project.id}`} className="flex items-start gap-3 rounded-xl border border-white/5 p-3 hover:border-fuchsia-500/25">
+              <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${tone}`}>{noBudget ? "Info" : usage.utilization >= 100 ? "Over" : "Watch"}</span>
+              <div className="min-w-0 flex-1"><div className="text-sm font-semibold text-white">{project.name}</div><div className="mt-0.5 text-xs text-zinc-500">{noBudget ? "No approved budget yet. Build and submit a budget to begin tracking." : `${fmtPct(usage.utilization)} utilized · ${fmtCurrency(usage.remainingBudget, { compact: false })} remaining.`}</div></div>
+              <ChevronRight className="mt-1 h-3.5 w-3.5 text-zinc-500" />
+            </Link>;
+          })}
+          {!attention.length && <div className="flex min-h-[130px] flex-col items-center justify-center text-center"><Heart className="h-7 w-7 text-emerald-300" /><div className="mt-2 text-sm font-semibold text-white">All projects are healthy</div><div className="mt-1 text-xs text-zinc-500">There are no budget or allocation flags right now.</div></div>}
+        </div>
+      </Panel>
+    </div>
+
+    <ProjectsTable projectsOverride={projects} usageOptions={usageOptions} />
+  </div>;
+};
+
+const OverviewKpi = ({ label, value, note, tone = "neutral" }) => {
+  const valueTone = tone === "positive" ? "text-emerald-300" : tone === "negative" ? "text-red-300" : tone === "magenta" ? "text-fuchsia-300" : "text-white";
+  return <div className="rounded-2xl border border-white/5 bg-[#12121A] p-4">
+    <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
+    <div className={`mt-1.5 font-display text-2xl font-semibold tabular ${valueTone}`}>{value}</div>
+    <div className="mt-0.5 text-[11px] text-zinc-500">{note}</div>
+  </div>;
 };
 
 export default TpmDashboard;
