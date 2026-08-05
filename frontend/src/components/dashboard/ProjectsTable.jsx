@@ -1,13 +1,13 @@
 import { Fragment, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, ChevronDown, User, Calendar, Cpu, Layers, Plus, ArrowUpRightSquare, Pencil, Trash2, Lock, FileText, PackageCheck } from "lucide-react";
+import { ChevronRight, ChevronDown, User, Calendar, Cpu, Layers, ArrowUpRightSquare, Lock, FileText, PackageCheck } from "lucide-react";
 import { fmtCurrency, fmtPct, healthColor, varianceColor, utilColor } from "../../lib/format";
 import { useApp } from "../../context/AppContext";
 import { isTpmView } from "../../lib/roles";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "../ui/sheet";
 import { Button } from "../ui/button";
 import { getPhaseTasks } from "../../data/mockTpm";
-import TpmTaskLogDialog from "../TpmTaskLogDialog";
+import DailyTaskApiDialog from "../DailyTaskApiDialog";
 import TopupRequestDialog from "../TopupRequestDialog";
 import DeliverBatchDialog from "../DeliverBatchDialog";
 import { toast } from "sonner";
@@ -478,7 +478,7 @@ const ProjectsTable = ({ projectsOverride = null, usageOptions = {} }) => {
 };
 
 const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
-  const { role, getPhaseLogs, deletePhaseTask, isTaskEditable, batchDeliveries, budgets, topupRequests, changeRequests } = useApp();
+  const { role, getPhaseLogs, batchDeliveries, budgets, topupRequests, changeRequests } = useApp();
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
 
@@ -554,40 +554,11 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
     .join(" – ");
 
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [editingLog, setEditingLog] = useState(null);
   const [topupOpen, setTopupOpen] = useState(false);
   const [deliverOpen, setDeliverOpen] = useState(false);
 
-  const openEdit = (log) => {
-    if (!canEdit) {
-      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
-        description: phaseLockMessage,
-      });
-      return;
-    }
-    setEditingLog(log);
-    setTaskDialogOpen(true);
-  };
   const openNew = () => {
-    if (!canEdit) {
-      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
-        description: phaseLockMessage,
-      });
-      return;
-    }
-    setEditingLog(null);
     setTaskDialogOpen(true);
-  };
-  const onDelete = (log) => {
-    if (!canEdit) {
-      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
-        description: phaseLockMessage,
-      });
-      return;
-    }
-    if (!isTaskEditable(log)) { toast.error("Task log is locked (>24h)"); return; }
-    deletePhaseTask(project.id, phase.id, log.id);
-    toast.success("Task log deleted");
   };
 
   return (
@@ -608,11 +579,10 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         <div className="mt-4 flex items-center gap-2 flex-wrap">
           <Button
             onClick={openNew}
-            disabled={!canEdit}
             data-testid="drawer-btn-log-task"
             className="h-9 rounded-lg bg-fuchsia-500 hover:bg-fuchsia-600 text-white gap-1.5 shadow-[0_0_20px_rgba(232,25,184,0.35)]"
           >
-            <Plus className="w-3.5 h-3.5" /> Log daily task
+            <Calendar className="w-3.5 h-3.5" /> Add daily task log
           </Button>
           <Button
             onClick={() => setTopupOpen(true)}
@@ -817,10 +787,9 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
               <tbody>
                 {tpmLogs.length === 0 ? (
                   <tr><td colSpan="9" className="py-4 text-center text-zinc-500">
-                    {isTPM ? "No tasks logged yet — use Log daily task above." : "No TPM logs for this phase yet."}
+                    {isTPM ? "No synchronized task activity is available yet." : "No TPM activity for this phase yet."}
                   </td></tr>
                 ) : tpmLogs.map((log) => {
-                  const editable = isTaskEditable(log);
                   const modelLabel = Array.isArray(log.modelUsage) && log.modelUsage.length
                     ? log.modelUsage.map((usage) => usage.modelName).join(", ")
                     : log.modelName || "—";
@@ -843,30 +812,7 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
                       <td className="py-2 px-2 text-right tabular text-zinc-300">
                         {(Number(log.inputTokens || 0) + Number(log.outputTokens || 0)).toLocaleString()}
                       </td>
-                      <td className="py-2 px-1 text-right">
-                        {canEdit && editable ? (
-                          <div className="inline-flex items-center gap-0.5">
-                            <button
-                              onClick={() => openEdit(log)}
-                              data-testid={`daily-log-edit-${log.id}`}
-                              className="w-5 h-5 rounded hover:bg-fuchsia-500/15 text-zinc-500 hover:text-fuchsia-300 flex items-center justify-center"
-                              title="Edit (within 24h)"
-                            >
-                              <Pencil className="w-2.5 h-2.5" />
-                            </button>
-                            <button
-                              onClick={() => onDelete(log)}
-                              data-testid={`daily-log-delete-${log.id}`}
-                              className="w-5 h-5 rounded hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center"
-                              title="Delete (within 24h)"
-                            >
-                              <Trash2 className="w-2.5 h-2.5" />
-                            </button>
-                          </div>
-                        ) : isTPM ? (
-                          <Lock className="w-2.5 h-2.5 text-zinc-600 inline" />
-                        ) : null}
-                      </td>
+                      <td className="py-2 px-1 text-right"><Lock className="w-2.5 h-2.5 text-zinc-600 inline" /></td>
                     </tr>
                   );
                 })}
@@ -879,12 +825,11 @@ const PhaseDrawerContent = ({ project, phase, logLane = "all" }) => {
         </div>
       </div>
 
-      <TpmTaskLogDialog
+      <DailyTaskApiDialog
         open={taskDialogOpen}
-        onOpenChange={(o) => { setTaskDialogOpen(o); if (!o) setEditingLog(null); }}
+        onOpenChange={setTaskDialogOpen}
         project={project}
         phase={phase}
-        editingLog={editingLog}
       />
       <TopupRequestDialog
         open={topupOpen}

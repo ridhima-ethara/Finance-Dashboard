@@ -212,6 +212,65 @@ body {
 .light .recharts-cartesian-grid line { stroke: #e4e4e7; }
 .light .recharts-text { fill: #71717a; }
 
+/* RL daily-consumption heatmap: no-activity cells need an explicit surface in
+   both themes; transparent white cells disappear against the light canvas. */
+.consumption-heat-cell.no-activity {
+    background: rgba(255, 255, 255, 0.045);
+    border-color: rgba(255, 255, 255, 0.10);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.015);
+}
+.light .consumption-heat-cell.no-activity {
+    background: #eef0f5 !important;
+    border-color: #d8dce6 !important;
+    box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.025);
+}
+.light .consumption-heat-cell.has-activity {
+    box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.08), 0 1px 2px rgba(24, 24, 27, 0.08);
+}
+.light .consumption-legend-chip {
+    box-shadow: inset 0 0 0 1px rgba(24, 24, 27, 0.10);
+}
+.light { --rl-chart-grid: #e4e4e7; }
+
+/* Project budget control center: keep secondary financial labels and chart
+   metadata readable on the light canvas instead of inheriting pale dark-mode
+   accent opacity. */
+.budget-cap-label,
+.budget-consumption-label {
+    opacity: 0.82;
+}
+.light .project-budget-summary {
+    background: linear-gradient(135deg, #fdf4ff 0%, #faf5ff 55%, #ffffff 100%) !important;
+    border-color: rgba(192, 38, 211, 0.30) !important;
+}
+.light .project-budget-summary .budget-cap-label,
+.light .project-budget-summary .budget-consumption-label {
+    color: #86198f !important;
+    opacity: 1;
+}
+.light .project-budget-summary .budget-summary-track {
+    background: #e4e4e7 !important;
+}
+.light .project-budget-chart .recharts-text {
+    fill: #3f3f46 !important;
+    font-weight: 500;
+}
+.light .project-budget-chart .recharts-cartesian-grid line {
+    stroke: #d4d4d8 !important;
+}
+.light .project-budget-chart .recharts-default-tooltip,
+.light .project-budget-chart .recharts-tooltip-wrapper {
+    color: #18181b !important;
+}
+.light .budget-low-balance-alert {
+    background: #fffbeb !important;
+    border-color: #fbbf24 !important;
+}
+.light .budget-low-balance-alert .budget-low-balance-message {
+    color: #92400e !important;
+    opacity: 1;
+}
+
 .light .mesh-bg {
     background-image:
         linear-gradient(to right, rgba(24, 24, 27, 0.045) 1px, transparent 1px),

@@ -12,7 +12,6 @@ import {
   Cpu,
   Server,
   User,
-  Plus,
   Filter,
   ChevronRight,
   Sparkles,
@@ -20,15 +19,12 @@ import {
   TrendingDown,
   TrendingUp,
   ArrowUpRightSquare,
-  Pencil,
-  Trash2,
   Lock,
   FileText,
 } from "lucide-react";
 import { Button } from "../../components/ui/button";
-import TpmTaskLogDialog from "../../components/TpmTaskLogDialog";
+import DailyTaskApiDialog from "../../components/DailyTaskApiDialog";
 import TopupRequestDialog from "../../components/TopupRequestDialog";
-import { toast } from "sonner";
 import { isTpmView } from "../../lib/roles";
 import { buildProjectPhaseGate } from "../../lib/projectMetrics";
 
@@ -41,10 +37,9 @@ const statusStyles = {
 const PhaseWorkspace = () => {
   const { id, phaseId } = useParams();
   const nav = useNavigate();
-  const { visibleProjects, role, getPhaseLogs, isTaskEditable, deletePhaseTask, batchDeliveries } = useApp();
+  const { visibleProjects, role, getPhaseLogs, batchDeliveries } = useApp();
   const [statusFilter, setStatusFilter] = useState("all");
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
-  const [editingLog, setEditingLog] = useState(null);
   const [topupOpen, setTopupOpen] = useState(false);
   const isTPM = isTpmView(role);
   const isCFO = role === "CFO";
@@ -95,36 +90,8 @@ const PhaseWorkspace = () => {
   const completion = tasks.length ? Math.round((doneCount / tasks.length) * 100) : 0;
   const utilization = phase.estimated ? Math.round((phase.actual / phase.estimated) * 100) : 0;
 
-  const openEditLog = (log) => {
-    if (!canMutatePhase) {
-      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
-        description: phaseLockMessage,
-      });
-      return;
-    }
-    setEditingLog(log);
-    setTaskDialogOpen(true);
-  };
   const openNewLog = () => {
-    if (!canMutatePhase) {
-      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
-        description: phaseLockMessage,
-      });
-      return;
-    }
-    setEditingLog(null);
     setTaskDialogOpen(true);
-  };
-  const removeLog = (log) => {
-    if (!canMutatePhase) {
-      toast.error(isPhaseLocked ? "This phase is locked" : "Batch already submitted", {
-        description: phaseLockMessage,
-      });
-      return;
-    }
-    if (!isTaskEditable(log)) { toast.error("Task log is locked (>24h)"); return; }
-    deletePhaseTask(id, phaseId, log.id);
-    toast.success("Task log deleted");
   };
 
   return (
@@ -155,11 +122,10 @@ const PhaseWorkspace = () => {
               <Button
                 onClick={openNewLog}
                 variant="outline"
-                disabled={!canMutatePhase}
                 className="h-9 rounded-lg border-white/10 bg-white/[0.04] text-zinc-200 gap-2"
                 data-testid="btn-add-task"
               >
-                <Plus className="w-3.5 h-3.5" /> Log daily task
+                <FileText className="w-3.5 h-3.5" /> Add daily task log
               </Button>
               <Button
                 onClick={() => setTopupOpen(true)}
@@ -358,7 +324,7 @@ const PhaseWorkspace = () => {
               <span className="text-xs text-zinc-500 font-normal">({tpmLogs.length})</span>
               {isCFO && <span className="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-white/[0.04] border border-white/10 text-zinc-400"><Lock className="w-2.5 h-2.5" /> Read-only</span>}
             </div>
-            <div className="text-xs text-zinc-500 mt-0.5">Daily task entries · editable within 24h</div>
+            <div className="text-xs text-zinc-500 mt-0.5">Daily task activity · synchronized from the analytics API</div>
           </div>
           {isTPM && (
             <Button
@@ -379,7 +345,6 @@ const PhaseWorkspace = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {tpmLogs.map((log) => {
-              const editable = isTaskEditable(log);
               return (
                 <div key={log.id} data-testid={`ws-log-${log.id}`} className="p-3 rounded-lg border border-white/5 bg-white/[0.02]">
                   <div className="flex items-start justify-between gap-2">
@@ -399,28 +364,7 @@ const PhaseWorkspace = () => {
                       <div className="text-sm text-white tabular font-semibold">{fmtCurrency(log.cost, { compact: false })}</div>
                       {isTPM && (
                         <div className="flex items-center gap-0.5 justify-end mt-1">
-                          {editable && canMutatePhase ? (
-                            <>
-                              <button
-                                onClick={() => openEditLog(log)}
-                                data-testid={`ws-log-edit-${log.id}`}
-                                className="w-6 h-6 rounded-md hover:bg-fuchsia-500/15 text-zinc-500 hover:text-fuchsia-300 flex items-center justify-center"
-                                title="Edit (within 24h)"
-                              >
-                                <Pencil className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => removeLog(log)}
-                                data-testid={`ws-log-delete-${log.id}`}
-                                className="w-6 h-6 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center"
-                                title="Delete (within 24h)"
-                              >
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            </>
-                          ) : (
-                            <span className="text-[9px] text-zinc-600 inline-flex items-center gap-0.5"><Lock className="w-2.5 h-2.5" /> locked</span>
-                          )}
+                          <span className="text-[9px] text-zinc-600 inline-flex items-center gap-0.5"><Lock className="w-2.5 h-2.5" /> API managed</span>
                         </div>
                       )}
                     </div>
@@ -459,12 +403,11 @@ const PhaseWorkspace = () => {
         </div>
       </div>
 
-      <TpmTaskLogDialog
+      <DailyTaskApiDialog
         open={taskDialogOpen}
-        onOpenChange={(o) => { setTaskDialogOpen(o); if (!o) setEditingLog(null); }}
+        onOpenChange={setTaskDialogOpen}
         project={project}
         phase={phase}
-        editingLog={editingLog}
       />
       <TopupRequestDialog
         open={topupOpen}

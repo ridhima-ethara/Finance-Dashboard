@@ -66,8 +66,8 @@ const KpiCard = ({ label, value, sublabel, details = [], icon: Icon, tone = "neu
   );
 };
 
-const Panel = ({ title, subtitle, right, children, testid }) => (
-  <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid={testid}>
+const Panel = ({ title, subtitle, right, children, testid, hidden = false, id }) => (
+  <div id={id} className={`${hidden ? "hidden" : ""} bg-[#12121A] rounded-2xl border border-white/5 p-5`} data-testid={testid}>
     <div className="flex items-start justify-between gap-2 mb-3">
       <div>
         <div className="font-display font-semibold text-[15px] text-white">{title}</div>
@@ -184,6 +184,7 @@ const TpmDashboard = () => {
       doneTasks={doneTasks}
       health={health}
       hasLogs={dailyRows.length > 0}
+      dailyRows={dailyRows}
       usageOptions={usageOptions}
     />;
   }
@@ -206,35 +207,47 @@ const TpmDashboard = () => {
             {" · June 2026"}
           </p>
         </div>
+        <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold ${health === "Green" ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300" : health === "Amber" ? "border-amber-500/25 bg-amber-500/10 text-amber-300" : "border-red-500/25 bg-red-500/10 text-red-300"}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />Budget health: {health}</span>
       </div>
+
+      {underRndProjects.length > 0 && <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] p-3.5" data-testid="tpm-pipeline-banner"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-300"><Clock3 className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="text-sm font-semibold text-white">{underRndProjects.length} project{underRndProjects.length === 1 ? " is" : "s are"} waiting on RL Environment acceptance</div><div className="mt-0.5 text-xs text-zinc-400">Budget building unlocks after RL sample acceptance and kickoff setup.</div></div><Button variant="outline" className="h-9 border-white/10 bg-white/[0.03]" onClick={() => document.getElementById("tpm-rnd-pipeline")?.scrollIntoView({ behavior: "smooth" })}>Review pipeline</Button></div>}
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
         <KpiCard testid="kpi-active-projects" label="Active projects" value={String(dashboardProjects.length)} icon={FolderKanban} tone="magenta" />
-        <KpiCard testid="kpi-pending-approvals" label="Pending approvals" value={String(pendingActions.length)} icon={ShieldCheck} tone="warning" />
-        <KpiCard testid="kpi-util" label="Budget utilization" value={fmtPct(util)} icon={Gauge} tone={util >= 90 ? "negative" : util >= 75 ? "warning" : "positive"} />
-        <KpiCard
-          testid="kpi-today-consumption"
-          label="Log today's consumption"
-          value={fmtCurrency(today?.spend || 0, { compact: false })}
-          icon={Calendar}
-          tone="magenta"
-          sublabel="Tap to submit"
-          details={[
-            { label: "Logged spent", value: fmtCurrency(logged, { compact: false }), tone: "magenta" },
-            { label: "Total remaining", value: fmtCurrency(remaining, { compact: false }), tone: remaining > 0 ? "positive" : "negative" },
-          ]}
-          to="/consumption"
-        />
-        <KpiCard testid="kpi-pending-cr" label="Pending additional requests" value={String(changeRequests.filter((request) => request.stage === "CTO Review").length)} icon={GitPullRequest} tone="warning" />
-        <KpiCard testid="kpi-health" label="Budget health" value={health} icon={Heart} tone={health === "Green" ? "positive" : health === "Amber" ? "warning" : "negative"} sublabel={fmtPct(util)} />
-        <KpiCard testid="kpi-burn-rate" label="Burn rate" value={fmtCurrency(burnRate, { compact: false })} icon={Flame} sublabel="Logged avg / day" />
-        <KpiCard testid="kpi-over" label="Target progress" value={targetTasks > 0 ? `${doneTasks}/${targetTasks}` : `${doneTasks}`} icon={AlertTriangle} tone={doneTasks >= targetTasks && targetTasks > 0 ? "positive" : "warning"} />
+        <KpiCard testid="kpi-rnd-pipeline" label="In R&D pipeline" value={String(underRndProjects.length)} icon={Clock3} tone="warning" sublabel={underRndProjects.slice(0, 2).map((project) => project.name).join(" · ") || "No projects waiting"} />
+        <KpiCard testid="kpi-budget-allocated" label="Budget allocated" value={fmtCurrency(approved, { compact: false })} icon={Gauge} tone="magenta" sublabel={approved > 0 ? `${fmtPct(util)} utilized` : "Unlocks after acceptance"} />
+        <KpiCard testid="kpi-pending-items" label="Pending items" value={String(pendingActions.length + changeRequests.filter((request) => request.stage === "CTO Review").length)} icon={ShieldCheck} tone="warning" sublabel="Approvals & additional requests" />
       </div>
+
+      {dashboardProjects.length === 0 && (
+        <Panel
+          id="tpm-rnd-pipeline"
+          title="Projects under RL Environment"
+          subtitle="These projects become budgetable after RL sample acceptance and kickoff setup."
+          testid="tpm-empty-portfolio-pipeline"
+          right={<span className="inline-flex items-center gap-1.5 rounded-full border border-sky-500/25 bg-sky-500/10 px-2.5 py-1 text-[10px] font-semibold text-sky-300"><span className="h-1.5 w-1.5 rounded-full bg-sky-400" />{underRndProjects.length} waiting</span>}
+        >
+          <div className="grid gap-3 lg:grid-cols-2">
+            {underRndProjects.map((project) => {
+              const recipients = project.kickoffMail?.recipients || project.teamMembers || [];
+              const requirements = project.kickoffMail?.requirements || project.docs || [];
+              const goal = project.goal || project.kickoffMail?.goal || "Project goal has not been added yet.";
+              return <Link key={project.id} to={`/projects/${project.id}`} className="group rounded-xl border border-white/5 bg-white/[0.025] p-4 transition-colors hover:border-sky-500/30 hover:bg-sky-500/[0.04]">
+                <div className="flex items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-semibold text-white">{project.name}</div><div className="mt-0.5 text-[11px] text-zinc-500">{project.client || project.clientProjectName || "Client project"}</div></div><span className="whitespace-nowrap rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-[9px] font-semibold text-amber-300">Awaiting RL acceptance</span></div>
+                <p className="mt-3 line-clamp-2 text-xs leading-5 text-zinc-400">{goal}</p>
+                <div className="mt-3 grid grid-cols-2 gap-2"><div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5"><div className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">Kickoff members</div><div className="mt-1 text-sm font-semibold tabular text-zinc-200">{recipients.length}</div></div><div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5"><div className="text-[9px] font-semibold uppercase tracking-widest text-zinc-500">Requirements</div><div className="mt-1 text-sm font-semibold tabular text-zinc-200">{requirements.length}</div></div></div>
+                <div className="mt-3 flex items-center justify-between border-t border-white/5 pt-3 text-[11px]"><span className="text-zinc-500">Budget builder unlocks after acceptance</span><span className="inline-flex items-center gap-1 font-semibold text-sky-300">View project <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" /></span></div>
+              </Link>;
+            })}
+            {underRndProjects.length === 0 && <div className="lg:col-span-2 rounded-xl border border-dashed border-white/10 bg-white/[0.02] py-10 text-center"><Sparkles className="mx-auto h-6 w-6 text-zinc-600" /><div className="mt-2 text-sm font-semibold text-zinc-300">No projects are waiting in the R&D pipeline</div><div className="mt-1 text-xs text-zinc-500">Budgetable projects will appear here after kickoff and RL assignment.</div></div>}
+          </div>
+        </Panel>
+      )}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Panel testid="chart-claimed-actual" title="Budget vs logged vs remaining" subtitle="per project · owned consumption only" >
+        <Panel hidden testid="chart-claimed-actual" title="Budget vs logged vs remaining" subtitle="per project · owned consumption only" >
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={projectBarData} barGap={2}>
@@ -251,7 +264,7 @@ const TpmDashboard = () => {
           </div>
         </Panel>
 
-        <Panel testid="chart-daily-spend" title="Daily logged spend vs daily budget" subtitle="last 14 days">
+        <Panel hidden={dashboardProjects.length === 0} testid="chart-daily-spend" title="Daily logged spend vs daily budget" subtitle="last 14 days">
           <div className="h-[240px]">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={dailySpendData}>
@@ -266,7 +279,7 @@ const TpmDashboard = () => {
           </div>
         </Panel>
 
-        <Panel testid="chart-model-dist" title="Model usage distribution" subtitle="% of logged model spend">
+        <Panel hidden={dashboardProjects.length === 0} testid="chart-model-dist" title="Model usage distribution" subtitle="% of logged model spend">
           <div className="flex items-center gap-3 h-[240px]">
             <div className="w-40 h-40">
               <ResponsiveContainer width="100%" height="100%">
@@ -289,7 +302,7 @@ const TpmDashboard = () => {
           </div>
         </Panel>
 
-        <Panel testid="chart-util-per-project" title="Budget utilization" subtitle="per project · thresholds 50/75/90/100%">
+        <Panel hidden testid="chart-util-per-project" title="Budget utilization" subtitle="per project · thresholds 50/75/90/100%">
           <div className="space-y-2.5">
             {projectUsage.map(({ project, usage }) => {
               const color = usage.utilization >= 100 ? "#EF4444" : usage.utilization >= 90 ? "#F59E0B" : usage.utilization >= 75 ? "#F59E0B" : usage.utilization >= 50 ? "#E619B8" : "#10B981";
@@ -312,7 +325,7 @@ const TpmDashboard = () => {
         </Panel>
 
         <div className={isRnd ? "lg:col-span-2" : ""}>
-          <Panel testid="chart-infra" title="Task completion by project" subtitle="logged tasks vs target tasks">
+          <Panel hidden={dashboardProjects.length === 0} testid="chart-infra" title="Task completion by project" subtitle="logged tasks vs target tasks">
             <div className="h-[240px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={completionByProject}>
@@ -375,6 +388,8 @@ const TpmDashboard = () => {
 
       {!isRnd && (
         <Panel
+          id={dashboardProjects.length === 0 ? undefined : "tpm-rnd-pipeline"}
+          hidden={dashboardProjects.length === 0}
           testid="widget-under-rnd-projects"
           title="Projects under RL Environment currently"
           subtitle="Assigned Projects members can track kickoff context here. These become budgetable after RL Environment sample acceptance."
@@ -440,10 +455,28 @@ const TpmDashboard = () => {
 
 const RndPortalOverview = ({
   user, projects, projectUsage, approved, logged, remaining, util,
-  targetTasks, doneTasks, health, hasLogs, usageOptions,
+  targetTasks, doneTasks, health, hasLogs, dailyRows, usageOptions,
 }) => {
   const attention = projectUsage.filter(({ project, usage }) => Number(project.approvedBudget || 0) <= 0 || usage.utilization >= 75);
   const healthTone = health === "Green" ? "text-emerald-300 bg-emerald-500/10 border-emerald-500/25" : health === "Amber" ? "text-amber-300 bg-amber-500/10 border-amber-500/25" : "text-red-300 bg-red-500/10 border-red-500/25";
+  const dailyTrend = Array.from((dailyRows || []).reduce((map, row) => {
+    const current = map.get(row.date) || { date: row.date, logged: 0, budget: 0 };
+    current.logged += Number(row.spent || 0);
+    current.budget += Number(row.approvedDaily || 0);
+    map.set(row.date, current);
+    return map;
+  }, new Map()).values()).slice(-14);
+  const modelMap = new Map();
+  projectUsage.forEach(({ usage }) => usage.models.forEach((model) => {
+    const current = modelMap.get(model.modelName) || 0;
+    modelMap.set(model.modelName, current + Number(model.cost || 0));
+  }));
+  const modelData = [...modelMap.entries()].map(([name, value], index) => ({ name, value, color: ["#E619B8", "#3B82F6", "#10B981", "#F59E0B", "#F97316"][index % 5] }));
+  const taskCompletion = projectUsage.map(({ project, usage }) => ({
+    name: project.name.split(" ")[0],
+    done: Number(usage.loggedTasks || 0),
+    remaining: Math.max(Number(usage.targetTasks || 0) - Number(usage.loggedTasks || 0), 0),
+  }));
   return <div className="mx-auto max-w-[1180px] space-y-4" data-testid="page-tpm-dashboard">
     <div className="flex items-end justify-between gap-4 flex-wrap">
       <div>
@@ -502,9 +535,44 @@ const RndPortalOverview = ({
       </Panel>
     </div>
 
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+      <Panel title="Daily logged spend vs daily budget" subtitle="Latest 14 days · synchronized task activity" testid="rnd-daily-trend">
+        <div className="h-[220px]">
+          {dailyTrend.length ? <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={dailyTrend}>
+              <CartesianGrid vertical={false} strokeDasharray="3 4" stroke="var(--rl-chart-grid, #27272a)" />
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(date) => date.slice(-2)} />
+              <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${Math.round(value)}`} />
+              <Tooltip formatter={(value) => fmtCurrency(value, { compact: false })} />
+              <Legend iconType="square" wrapperStyle={{ fontSize: 11 }} />
+              <Line type="monotone" dataKey="logged" name="Logged" stroke="#E619B8" strokeWidth={2.5} dot={{ r: 2 }} />
+              <Line type="monotone" dataKey="budget" name="Daily budget" stroke="#3B82F6" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+            </LineChart>
+          </ResponsiveContainer> : <ChartEmpty label="Daily spend appears after synchronized task activity is available." />}
+        </div>
+      </Panel>
+
+      <Panel title="Model usage distribution" subtitle="Share of logged model cost" testid="rnd-model-usage">
+        <div className="flex h-[220px] items-center gap-4">
+          {modelData.length ? <>
+            <div className="h-40 w-40 flex-shrink-0"><ResponsiveContainer width="100%" height="100%"><PieChart><Pie data={modelData} dataKey="value" innerRadius={46} outerRadius={70} paddingAngle={2} stroke="none">{modelData.map((model) => <Cell key={model.name} fill={model.color} />)}</Pie></PieChart></ResponsiveContainer></div>
+            <div className="min-w-0 flex-1 space-y-2">{modelData.map((model) => <div key={model.name} className="flex items-center justify-between gap-2 text-xs"><span className="flex min-w-0 items-center gap-2 text-zinc-400"><i className="h-2.5 w-2.5 flex-shrink-0 rounded-[3px]" style={{ background: model.color }} /><span className="truncate">{model.name}</span></span><b className="tabular text-zinc-200">{fmtCurrency(model.value, { compact: false })}</b></div>)}</div>
+          </> : <ChartEmpty label="Model usage appears after API task activity is synchronized." />}
+        </div>
+      </Panel>
+    </div>
+
+    <Panel title="Task completion by project" subtitle="Completed tasks against the approved target" testid="rnd-task-completion">
+      <div className="h-[220px]">
+        {taskCompletion.length ? <ResponsiveContainer width="100%" height="100%"><BarChart data={taskCompletion}><CartesianGrid vertical={false} strokeDasharray="3 4" stroke="var(--rl-chart-grid, #27272a)" /><XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} /><YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} allowDecimals={false} /><Tooltip /><Legend iconType="square" wrapperStyle={{ fontSize: 11 }} /><Bar dataKey="done" name="Done" stackId="tasks" fill="#10B981" radius={[0, 0, 3, 3]} maxBarSize={28} /><Bar dataKey="remaining" name="Remaining" stackId="tasks" fill="#71717A" radius={[3, 3, 0, 0]} maxBarSize={28} /></BarChart></ResponsiveContainer> : <ChartEmpty label="No project task targets are available." />}
+      </div>
+    </Panel>
+
     <ProjectsTable projectsOverride={projects} usageOptions={usageOptions} />
   </div>;
 };
+
+const ChartEmpty = ({ label }) => <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-5 text-center text-xs text-zinc-500">{label}</div>;
 
 const OverviewKpi = ({ label, value, note, tone = "neutral" }) => {
   const valueTone = tone === "positive" ? "text-emerald-300" : tone === "negative" ? "text-red-300" : tone === "magenta" ? "text-fuchsia-300" : "text-white";

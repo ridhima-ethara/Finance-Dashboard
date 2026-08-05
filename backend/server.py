@@ -4,6 +4,7 @@ from starlette.middleware.cors import CORSMiddleware
 import os
 import logging
 import json
+import requests as http_requests
 import bcrypt
 import jwt
 from pathlib import Path
@@ -138,6 +139,56 @@ def find_gateway_token(state: Dict[str, Any], token: str) -> Optional[Tuple[int,
 @api_router.get("/")
 async def root():
     return {"message": "Hello World"}
+
+
+@api_router.get("/task-log/analytics")
+def task_log_analytics(request: Request):
+    """Proxy the serving team's automated daily task analytics contract.
+
+    TASK_LOG_API_URL may be either the full analytics endpoint or the upstream
+    service base URL. The dashboard never writes task activity manually.
+    """
+    project_id = request.query_params.get("project_id")
+    if not project_id:
+        raise HTTPException(status_code=422, detail="project_id is required")
+    configured_url = str(os.environ.get("TASK_LOG_API_URL") or "").strip()
+    if not configured_url:
+        raise HTTPException(
+            status_code=503,
+            detail="Task log API is not configured. Set TASK_LOG_API_URL on the backend.",
+        )
+    upstream_url = configured_url.rstrip("/")
+    if not upstream_url.endswith("/task-log/analytics"):
+        upstream_url = f"{upstream_url}/task-log/analytics"
+    params = {
+        key: request.query_params.get(key)
+        for key in ("project_id", "phase_id", "from", "to")
+        if request.query_params.get(key)
+    }
+    headers = {"Accept": "application/json"}
+    configured_token = str(os.environ.get("TASK_LOG_API_TOKEN") or "").strip()
+    incoming_auth = request.headers.get("Authorization")
+    if configured_token:
+        headers["Authorization"] = f"Bearer {configured_token}"
+    elif incoming_auth:
+        headers["Authorization"] = incoming_auth
+    try:
+        response = http_requests.get(upstream_url, params=params, headers=headers, timeout=20)
+        response.raise_for_status()
+        return response.json()
+    except http_requests.Timeout as exc:
+        raise HTTPException(status_code=504, detail="Task log API timed out") from exc
+    except http_requests.RequestException as exc:
+        status_code = getattr(exc.response, "status_code", None) or 502
+        detail = "Task log API request failed"
+        if getattr(exc, "response", None) is not None:
+            try:
+                detail = exc.response.json().get("detail") or detail
+            except (ValueError, AttributeError):
+                detail = exc.response.text[:300] or detail
+        raise HTTPException(status_code=status_code, detail=detail) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="Task log API returned invalid JSON") from exc
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):

@@ -34,7 +34,7 @@ const buildDateRange = (startDate, endDate) => {
 
 // Heat intensity helper — % of approved daily budget consumed
 const heatColor = (pct) => {
-  if (pct === null || pct === undefined) return { bg: "rgba(255,255,255,0.03)", border: "rgba(255,255,255,0.05)" };
+  if (pct === null || pct === undefined) return null;
   if (pct >= 120) return { bg: "rgba(239,68,68,0.85)", border: "rgba(239,68,68,0.95)" };
   if (pct >= 100) return { bg: "rgba(239,68,68,0.55)", border: "rgba(239,68,68,0.7)" };
   if (pct >= 80) return { bg: "rgba(245,158,11,0.55)", border: "rgba(245,158,11,0.7)" };
@@ -251,12 +251,12 @@ const Consumption = () => {
                     </td>
                     {heatmap.dates.map((date) => {
                       const cell = cellFor(projectId, date);
-                      const { bg, border } = heatColor(cell?.pct);
+                      const heat = heatColor(cell?.pct);
                       return (
                         <td key={date}>
                           <div
-                            className="w-7 h-7 rounded-md border cursor-default relative group"
-                            style={{ background: bg, borderColor: border }}
+                            className={`consumption-heat-cell w-7 h-7 rounded-md border cursor-default relative group ${cell ? "has-activity" : "no-activity"}`}
+                            style={heat ? { background: heat.bg, borderColor: heat.border } : undefined}
                             title={cell ? `${date} · ${cell.pct}% (${fmtCurrency(cell.spent, { compact: false })} of ${fmtCurrency(cell.approvedDaily, { compact: false })}) · ${cell.tasks} tasks / ${cell.trajectories} trajectories${cell.actualAlert ? " · IT actuals are higher than the claimed day burn" : ""}` : date}
                           >
                             {cell && (cell.pct >= 100 || cell.actualAlert) && (
@@ -283,11 +283,12 @@ const Consumption = () => {
             <div className="text-xs text-zinc-500 mt-0.5">Daily budget allocation compared against task-log spend per project for the chosen dates</div>
           </div>
         </div>
-        <div className="h-[260px]">
+        <div className="overflow-x-auto pb-1">
+          <div className="h-[320px]" style={{ minWidth: `${Math.max(760, perProject.length * 105)}px` }}>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={perProject}>
               <CartesianGrid vertical={false} strokeDasharray="3 3" stroke="#1F1F2A" />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} interval={0} height={56} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} interval={0} angle={-32} textAnchor="end" height={82} tickMargin={8} />
               <YAxis tick={{ fontSize: 10, fill: "#71717A" }} axisLine={false} tickLine={false} tickFormatter={(value) => `$${(value / 1000).toFixed(1)}k`} />
               <Tooltip
                 contentStyle={{ background: "#12121A", border: "1px solid #26262F", borderRadius: 12 }}
@@ -298,6 +299,7 @@ const Consumption = () => {
               <Bar dataKey="logged" name="Logged" fill="#E619B8" radius={[3, 3, 0, 0]} maxBarSize={22} />
             </BarChart>
           </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
@@ -362,7 +364,7 @@ const Consumption = () => {
 
 const LegendChip = ({ color, label }) => (
   <span className="inline-flex items-center gap-1">
-    <span className="w-3 h-3 rounded-sm border" style={{ background: color, borderColor: color }} />
+    <span className="consumption-legend-chip w-3 h-3 rounded-sm border" style={{ background: color, borderColor: color }} />
     {label}
   </span>
 );

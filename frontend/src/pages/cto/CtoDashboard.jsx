@@ -34,6 +34,9 @@ import { summarizeLoggedProject } from "../../lib/projectMetrics";
 const CtoDashboard = () => {
   const { visibleProjects, taskLogs, budgetReviews, changeRequests, topupRequests, batchDeliveries } = useApp();
   const [newProjectOpen, setNewProjectOpen] = useState(false);
+  const [projectSearch, setProjectSearch] = useState("");
+  const [projectSort, setProjectSort] = useState("budget");
+  const [projectPage, setProjectPage] = useState(1);
 
   const projectUsage = useMemo(
     () => visibleProjects.map((project) => ({ project, usage: summarizeLoggedProject(project, taskLogs) })),
@@ -74,7 +77,9 @@ const CtoDashboard = () => {
         name: project.name.split(" ")[0],
         budget: project.approvedBudget || 0,
         logged: usage.loggedSpend || 0,
-      })),
+      }))
+      .sort((left, right) => right.budget - left.budget)
+      .slice(0, 10),
     [projectUsage]
   );
   const cmpReqApp = useMemo(
@@ -83,10 +88,12 @@ const CtoDashboard = () => {
         .filter((p) => (p.approvedBudget || 0) > 0)
         .map((p) => ({
           name: p.name.split(" ")[0],
-          requested: Math.round((p.approvedBudget || 0) * 1.1),
+          requested: budgetReviews.filter((review) => review.projectId === p.id).reduce((sum, review) => sum + Number(review.requestedBudget || 0), 0) || p.approvedBudget || 0,
           approved: p.approvedBudget || 0,
-        })),
-    [visibleProjects]
+        }))
+        .sort((left, right) => right.requested - left.requested)
+        .slice(0, 10),
+    [visibleProjects, budgetReviews]
   );
   const watchlistProjects = useMemo(
     () => projectUsage
@@ -94,9 +101,18 @@ const CtoDashboard = () => {
       .sort((left, right) => right.usage.utilization - left.usage.utilization),
     [projectUsage]
   );
-  const scrollToMonitoring = () => {
-    document.getElementById("cto-project-monitoring")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const monitoringProjects = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase();
+    return projectUsage.filter(({ project }) => !query || [project.name, project.client, project.tpm, project.status].some((value) => String(value || "").toLowerCase().includes(query))).sort((left, right) => {
+      if (projectSort === "name") return left.project.name.localeCompare(right.project.name);
+      if (projectSort === "health") return right.usage.utilization - left.usage.utilization;
+      return Number(right.project.approvedBudget || 0) - Number(left.project.approvedBudget || 0);
+    });
+  }, [projectSearch, projectSort, projectUsage]);
+  const pageSize = 10;
+  const projectPageCount = Math.max(1, Math.ceil(monitoringProjects.length / pageSize));
+  const safeProjectPage = Math.min(projectPage, projectPageCount);
+  const pagedMonitoringProjects = monitoringProjects.slice((safeProjectPage - 1) * pageSize, safeProjectPage * pageSize);
 
   return (
     <div className="space-y-6" data-testid="page-cto-dashboard">
@@ -127,7 +143,7 @@ const CtoDashboard = () => {
       </div>
 
       {/* CTO alert strip */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3" data-testid="cto-alert-strip">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3" data-testid="cto-alert-strip">
         <Link to="/budget-reviews" data-testid="cto-tile-reviews" className="rounded-2xl border border-fuchsia-500/25 bg-fuchsia-500/[0.06] hover:bg-fuchsia-500/[0.10] transition-colors p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-fuchsia-500/15 border border-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
             <ClipboardCheck className="w-4 h-4 text-fuchsia-300" />
@@ -138,65 +154,29 @@ const CtoDashboard = () => {
           </div>
           <ChevronRight className="w-4 h-4 text-fuchsia-300" />
         </Link>
-        <Link to="/change-requests" data-testid="cto-tile-crs" className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.06] hover:bg-amber-500/[0.10] transition-colors p-4 flex items-center gap-3">
+        <Link to="/budget-reviews?tab=additional" data-testid="cto-tile-crs" className="rounded-2xl border border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.10] transition-colors p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center flex-shrink-0">
-            <GitPullRequest className="w-4 h-4 text-amber-300" />
+            <GitPullRequest className="w-4 h-4 text-sky-300" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">Additional requests</div>
-            <div className="text-white font-display font-semibold text-xl tabular">{pendingCRs} pending</div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300">Additional requests in projects</div>
+            <div className="text-white font-display font-semibold text-xl tabular">{pendingCRs + pendingTopups} pending</div>
           </div>
-          <ChevronRight className="w-4 h-4 text-amber-300" />
+          <ChevronRight className="w-4 h-4 text-sky-300" />
         </Link>
-          <Link to="/projects" data-testid="cto-tile-topups" className="rounded-2xl border border-sky-500/25 bg-sky-500/[0.06] hover:bg-sky-500/[0.10] transition-colors p-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-sky-500/15 border border-sky-500/30 flex items-center justify-center flex-shrink-0">
-              <ArrowUpRightSquare className="w-4 h-4 text-sky-300" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[10px] uppercase tracking-widest font-semibold text-sky-300">Additional requests in projects</div>
-              <div className="text-white font-display font-semibold text-xl tabular">{pendingTopups} pending</div>
-            </div>
-            <ChevronRight className="w-4 h-4 text-sky-300" />
-        </Link>
-        <Link to="/approvals" data-testid="cto-tile-testing-submitted" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] hover:bg-emerald-500/[0.10] transition-colors p-4 flex items-center gap-3">
+        <div data-testid="cto-tile-all-clear" className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center flex-shrink-0">
             <PackageCheck className="w-4 h-4 text-emerald-300" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-emerald-300">Testing submitted</div>
-            <div className="text-white font-display font-semibold text-xl tabular">{pendingTestingSamples}</div>
+            <div className="text-[10px] uppercase tracking-widest font-semibold text-emerald-300">Portfolio signals</div>
+            <div className="text-xs text-zinc-400 mt-1">{pendingTestingSamples} testing submitted · {highRisk} high-risk · {overBudget} over budget</div>
           </div>
-          <ChevronRight className="w-4 h-4 text-emerald-300" />
-        </Link>
-        <button
-          type="button"
-          onClick={scrollToMonitoring}
-          data-testid="cto-tile-highrisk"
-          className="rounded-2xl border border-red-500/25 bg-red-500/[0.06] hover:bg-red-500/[0.10] transition-colors p-4 flex items-center gap-3 text-left"
-        >
-          <div className="w-10 h-10 rounded-xl bg-red-500/15 border border-red-500/30 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle className="w-4 h-4 text-red-300" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-red-300">High-risk projects</div>
-            <div className="text-white font-display font-semibold text-xl tabular">{highRisk}</div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-red-300" />
-        </button>
-        <Link to="/projects" data-testid="cto-tile-overbudget" className="rounded-2xl border border-white/10 bg-white/[0.04] hover:bg-white/[0.06] transition-colors p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0">
-            <AlertTriangle className="w-4 h-4 text-zinc-300" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-400">Over budget</div>
-            <div className="text-white font-display font-semibold text-xl tabular">{overBudget}</div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-zinc-400" />
-        </Link>
+        </div>
       </div>
 
       {/* CTO KPIs (operational, not financial totals) */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 overflow-hidden rounded-2xl border border-white/5 bg-[#12121A] md:grid-cols-3 lg:grid-cols-6">
         <Stat label="Active projects" value={String(visibleProjects.length)} icon={FolderKanban} tone="magenta" testid="cto-kpi-active" />
         <Stat label="In execution" value={String(inExecution)} icon={Activity} tone="positive" testid="cto-kpi-exec" />
         <Stat label="In discovery" value={String(inDiscovery)} icon={Cpu} testid="cto-kpi-discovery" />
@@ -207,6 +187,7 @@ const CtoDashboard = () => {
 
       {/* Project monitoring */}
       <Panel
+        hidden
         testid="cto-util-bars"
         title="Project monitoring snapshot"
         subtitle="Logged spend as % of approved budget · click to drill into the live project"
@@ -253,6 +234,7 @@ const CtoDashboard = () => {
       </Panel>
 
       <Panel
+        hidden
         testid="cto-watchlist"
         title="Projects needing attention"
         subtitle="Project monitoring is consolidated here so L2 can track risk, logged burn, and delivery progress without a separate tab."
@@ -312,7 +294,7 @@ const CtoDashboard = () => {
 
       {/* Comparison charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Panel testid="cto-cmp-est-actual" title="Budget vs Logged" subtitle="Per project · submitted budget vs logged usage">
+        <Panel testid="cto-cmp-est-actual" title="Budget vs logged — top 10 by budget" subtitle="Largest approved project budgets and their logged usage">
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cmpEstActual}>
@@ -328,7 +310,7 @@ const CtoDashboard = () => {
           </div>
         </Panel>
 
-        <Panel testid="cto-cmp-req-approved" title="Requested vs Approved" subtitle="Per project · TPM ask vs CTO-approved">
+        <Panel testid="cto-cmp-req-approved" title="Requested vs approved — top 10" subtitle="Actual submitted ask vs CTO-approved amount">
           <div className="h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={cmpReqApp}>
@@ -350,8 +332,12 @@ const CtoDashboard = () => {
         id="cto-project-monitoring"
         testid="cto-projects-list"
         title="Project monitoring"
-        subtitle="Logged usage, run rate, remaining budget, and delivery target for each active project."
+        subtitle="Utilization, risk, logged burn, and delivery progress consolidated in one view."
       >
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <input value={projectSearch} onChange={(event) => { setProjectSearch(event.target.value); setProjectPage(1); }} placeholder="Search projects…" className="h-9 min-w-[220px] rounded-lg border border-white/10 bg-white/[0.03] px-3 text-xs text-zinc-200" />
+          <select value={projectSort} onChange={(event) => { setProjectSort(event.target.value); setProjectPage(1); }} className="h-9 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-xs text-zinc-200"><option value="budget">Budget high → low</option><option value="name">Name A → Z</option><option value="health">Health worst first</option></select>
+        </div>
         <div className="overflow-x-auto -mx-1">
           <table className="w-full text-sm">
             <thead>
@@ -371,7 +357,7 @@ const CtoDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {projectUsage.map(({ project, usage }) => {
+              {pagedMonitoringProjects.map(({ project, usage }) => {
                 return (
                   <tr key={project.id} data-testid={`cto-row-${project.id}`} className="border-b border-white/5 hover:bg-white/[0.03]">
                     <td className="py-3 px-3">
@@ -408,6 +394,7 @@ const CtoDashboard = () => {
             </tbody>
           </table>
         </div>
+        <div className="mt-4 flex items-center justify-between gap-3 text-xs text-zinc-500"><span>Showing {monitoringProjects.length ? (safeProjectPage - 1) * pageSize + 1 : 0}–{Math.min(safeProjectPage * pageSize, monitoringProjects.length)} of {monitoringProjects.length}</span><div className="flex gap-2"><Button variant="outline" size="sm" disabled={safeProjectPage <= 1} onClick={() => setProjectPage((page) => Math.max(1, page - 1))}>Previous</Button><Button variant="outline" size="sm" disabled={safeProjectPage >= projectPageCount} onClick={() => setProjectPage((page) => Math.min(projectPageCount, page + 1))}>Next</Button></div></div>
       </Panel>
 
       <NewProjectDialog open={newProjectOpen} onOpenChange={setNewProjectOpen} />
@@ -415,8 +402,8 @@ const CtoDashboard = () => {
   );
 };
 
-const Panel = ({ title, subtitle, children, testid, id }) => (
-  <div id={id} className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid={testid}>
+const Panel = ({ title, subtitle, children, testid, id, hidden = false }) => (
+  <div id={id} className={`${hidden ? "hidden" : ""} bg-[#12121A] rounded-2xl border border-white/5 p-5`} data-testid={testid}>
     <div className="mb-3">
       <div className="font-display font-semibold text-[15px] text-white">{title}</div>
       {subtitle && <div className="text-xs text-zinc-500 mt-0.5">{subtitle}</div>}
@@ -428,7 +415,7 @@ const Panel = ({ title, subtitle, children, testid, id }) => (
 const Stat = ({ label, value, icon: Icon, tone = "neutral", testid }) => {
   const tones = { positive: "text-emerald-300", negative: "text-red-300", warning: "text-amber-300", neutral: "text-white", magenta: "text-fuchsia-300" };
   return (
-    <div className="bg-[#12121A] rounded-2xl border border-white/5 p-4" data-testid={testid}>
+    <div className="border-r border-b border-white/5 p-4 last:border-r-0" data-testid={testid}>
       <div className="flex items-center justify-between">
         <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-500">{label}</div>
         {Icon && (

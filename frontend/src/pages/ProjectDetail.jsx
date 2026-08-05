@@ -28,7 +28,7 @@ import { PROJECT_MEMBER_DIRECTORY, findProjectDirectoryMember, normalizeDirector
 import { getPhaseTasks } from "../data/mockTpm";
 import TopupRequestDialog from "../components/TopupRequestDialog";
 import DeliverBatchDialog from "../components/DeliverBatchDialog";
-import TpmTaskLogDialog from "../components/TpmTaskLogDialog";
+import DailyTaskApiDialog from "../components/DailyTaskApiDialog";
 import EditProjectDialog from "../components/EditProjectDialog";
 import { DAILY_ACTIVITY } from "../data/mockAi";
 import { ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
@@ -95,7 +95,7 @@ const ProjectDetail = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const {
     projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
-    removeProjectTeamMember, getPhaseLogs, isTaskEditable, deletePhaseTask, taskLogs, changeRequests,
+    removeProjectTeamMember, getPhaseLogs, taskLogs, changeRequests,
     modelKeyRecords, itProvisioningRequests, provisionModelKeys,
     addProjectTeamMembers, updateProjectCoreMembers, archiveProject, deleteProject,
   } = useApp();
@@ -119,7 +119,7 @@ const ProjectDetail = () => {
   const [deliverPhase, setDeliverPhase] = useState(null); // {project, phase} or null
   const [feedbackDelivery, setFeedbackDelivery] = useState(null);
   const [taskLogPhase, setTaskLogPhase] = useState(null); // phase for log dialog
-  const [editingLog, setEditingLog] = useState(null);
+  const [taskLogDate, setTaskLogDate] = useState("");
   const [teamSearch, setTeamSearch] = useState("");
   const [selectedPhaseId, setSelectedPhaseId] = useState("");
   const [revealedProjectKeys, setRevealedProjectKeys] = useState({});
@@ -381,15 +381,7 @@ const canManageExecution = isExecutionOwner && executionUnlocked;
     () => batchPhases.find((phase) => phase.id === taskViewPhaseId) || taskLogTargetPhase,
     [batchPhases, taskLogTargetPhase, taskViewPhaseId]
   );
-  const isTaskLogDisabled = !canManageExecution || !activeBatchPhaseId || taskViewPhaseId !== activeBatchPhaseId;
   const approvalLockMessage = getWorkflowLockMessage({ project: p, workflowStage, latestBudgetReviewMeta, role });
-  const taskLogDisabledReason = !activeBatchPhaseId && batchPhases.length
-    ? "Tasks for this batch have already been submitted."
-    : taskViewPhaseId !== activeBatchPhaseId
-      ? "Select the active batch to log tasks. Other phases are view-only."
-    : !canManageExecution
-      ? approvalLockMessage
-      : "";
   const requestedTab = searchParams.get("tab");
   const activeProjectTab = ["team", "models", "budget", "tasks", "batch", "logs"].includes(requestedTab)
     ? requestedTab
@@ -1341,12 +1333,12 @@ const projectBudgetBuilderHref = useMemo(() => {
                 </div>
 
                 {cap > 0 && remainingPct <= 20 && (
-                  <div className="flex items-center justify-between gap-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3" data-testid="budget-low-balance-alert">
+                  <div className="budget-low-balance-alert flex items-center justify-between gap-4 rounded-xl border border-amber-500/25 bg-amber-500/[0.07] px-4 py-3" data-testid="budget-low-balance-alert">
                     <div className="flex items-start gap-3">
                       <Wallet className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-300" />
                       <div>
-                        <div className="text-xs font-semibold text-amber-200">Budget is running low</div>
-                        <div className="mt-0.5 text-[11px] text-amber-200/60">Only {remainingPct}% remains at the current spend rate.</div>
+                        <div className="text-xs font-semibold text-amber-200">Approved budget is running low</div>
+                        <div className="budget-low-balance-message mt-0.5 text-[11px] text-amber-200">Only {remainingPct}% of the approved budget remains at the current spend rate.</div>
                       </div>
                     </div>
                     <div className="text-sm font-semibold tabular text-amber-200">{fmtCurrency(remaining, { compact: false })}</div>
@@ -1356,24 +1348,24 @@ const projectBudgetBuilderHref = useMemo(() => {
                 {/* Primary budget summary */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[2fr_repeat(3,minmax(0,1fr))] gap-3">
                   <div
-                    className="relative overflow-hidden rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-500/[0.18] via-violet-500/[0.07] to-transparent p-4 flex flex-col justify-between min-h-[132px] sm:col-span-2 lg:col-span-1"
+                    className="project-budget-summary relative overflow-hidden rounded-2xl border border-fuchsia-500/30 bg-gradient-to-br from-fuchsia-500/[0.18] via-violet-500/[0.07] to-transparent p-4 flex flex-col justify-between min-h-[132px] sm:col-span-2 lg:col-span-1"
                     data-testid="budget-kpi-spent-cap"
                   >
                     <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-fuchsia-500/10 blur-3xl" />
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-200">{spendLabel}</span>
+                        <span className="text-[10px] uppercase tracking-widest font-semibold text-fuchsia-200">{isCFO ? "Actual spend / approved budget" : "Logged spend / approved budget"}</span>
                         {cap === 0 && (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[9px] font-semibold bg-fuchsia-500/20 text-fuchsia-200 border border-fuchsia-500/30">No Budget</span>
                         )}
                       </div>
                       <div className="mt-3 flex items-baseline gap-2 whitespace-nowrap font-display font-semibold text-white text-3xl tabular leading-tight">
                         {fmtCurrency(spent, { compact: false })}
-                        <span className="text-fuchsia-200/55 text-base">of {fmtCurrency(cap, { compact: false })}</span>
+                        <span className="budget-cap-label text-fuchsia-200 text-base">of {fmtCurrency(cap, { compact: false })}</span>
                       </div>
                     </div>
                     <div className="mt-4">
-                      <div className="h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
+                      <div className="budget-summary-track h-1.5 rounded-full bg-white/[0.08] overflow-hidden">
                         <div
                           className={`h-full transition-all ${utilPct >= 100 ? "bg-red-400" : utilPct >= 90 ? "bg-amber-400" : "bg-fuchsia-400"}`}
                           style={{ width: `${Math.min(utilPct, 100)}%` }}
@@ -1381,7 +1373,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                         />
                       </div>
                       <div className="mt-2 flex items-center justify-between gap-3 text-[11px]">
-                        <span className="text-fuchsia-200/70">{cap === 0
+                        <span className="budget-consumption-label text-fuchsia-200">{cap === 0
                             ? "awaiting budget setup"
                             : `${utilPct}% consumed · ${remaining >= 0 ? `${fmtCurrency(remaining, { compact: false })} left` : `${fmtCurrency(Math.abs(remaining), { compact: false })} over cap`}`}</span>
                         {isCFO && <span className="whitespace-nowrap text-zinc-500">Total logged <span className="font-semibold tabular text-zinc-300">{fmtCurrency(projectUsage.loggedSpend || 0, { compact: false })}</span></span>}
@@ -1390,18 +1382,18 @@ const projectBudgetBuilderHref = useMemo(() => {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:col-span-2 lg:contents">
-                    <MiniKpi testid="budget-kpi-remaining" label="Remaining" value={fmtCurrency(remaining, { compact: false })} sub={`${remainingPct}% available`} accent={remaining >= 0 ? "text-emerald-300" : "text-red-300"} />
-                    <MiniKpi testid="budget-kpi-runway" label="Runway" value={`${runwayDays} days`} sub={burnRate > 0 ? "at current burn" : "No active burn"} />
-                    <MiniKpi testid="budget-kpi-burn-rate" label={isCFO ? "Daily burn" : "Daily log rate"} value={fmtCurrency(burnRate, { compact: false })} sub={cap > 0 ? `${Math.round((burnRate / cap) * 10000) / 100}% of cap/day` : "0% of cap"} />
+                    <MiniKpi testid="budget-kpi-remaining" label="Remaining budget" value={fmtCurrency(remaining, { compact: false })} sub={`${remainingPct}% of the approved budget available`} accent={remaining >= 0 ? "text-emerald-300" : "text-red-300"} />
+                    <MiniKpi testid="budget-kpi-runway" label="Estimated runway" value={`${runwayDays} days`} sub={burnRate > 0 ? "Based on the current daily burn" : "No active daily burn"} />
+                    <MiniKpi testid="budget-kpi-burn-rate" label={isCFO ? "Average daily burn" : "Average daily log rate"} value={fmtCurrency(burnRate, { compact: false })} sub={cap > 0 ? `${Math.round((burnRate / cap) * 10000) / 100}% of approved budget per day` : "0% of approved budget"} />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                 {/* Budget Added & Consumption Over Time */}
-                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="budget-consumption-chart">
+                <div className="project-budget-chart bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="budget-consumption-chart">
                   <div className="mb-3">
-                    <div className="font-display font-semibold text-[15px] text-white">Budget Added &amp; Consumption Over Time</div>
-                    <div className="text-xs text-zinc-500 mt-0.5">Available budget vs cumulative consumption</div>
+                    <div className="font-display font-semibold text-[15px] text-white">Budget and consumption over time</div>
+                    <div className="text-xs text-zinc-500 mt-0.5">Available approved budget compared with cumulative logged spend</div>
                   </div>
                   <div className="h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
@@ -1426,21 +1418,21 @@ const projectBudgetBuilderHref = useMemo(() => {
                     </ResponsiveContainer>
                   </div>
                   <div className="mt-2 flex items-center gap-4 text-[10px] text-zinc-400">
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-violet-400" /> Available (Additional requests + initial)</span>
-                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Consumption</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-violet-400" /> Available budget (initial + approved additional requests)</span>
+                    <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-400" /> Cumulative logged spend</span>
                   </div>
                 </div>
 
                 {/* Daily Burn rate chart */}
-                <div className="bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="daily-burn-rate-chart">
+                <div className="project-budget-chart bg-[#12121A] rounded-2xl border border-white/5 p-5" data-testid="daily-burn-rate-chart">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <div className="font-display font-semibold text-[15px] text-white">{isCFO ? "Daily Burn rate" : "Daily logged spend"}</div>
-                      <div className="text-xs text-zinc-500 mt-0.5">Last 15 days · per-project activity</div>
+                      <div className="font-display font-semibold text-[15px] text-white">{isCFO ? "Daily burn rate" : "Daily logged spend"}</div>
+                      <div className="text-xs text-zinc-500 mt-0.5">Daily activity recorded during the last 15 days</div>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-zinc-400">
                       <span className="w-2 h-2 rounded-full bg-fuchsia-400" />
-                      Total
+                      Total daily spend
                     </div>
                   </div>
                   <div className="h-[220px]">
@@ -1796,17 +1788,11 @@ const projectBudgetBuilderHref = useMemo(() => {
               {isExecutionOwner && taskLogTargetPhase && (
                 <Button
                   size="sm"
-                  disabled={isTaskLogDisabled}
-                  title={taskLogDisabledReason}
-                  onClick={() => { setEditingLog(null); setTaskLogPhase(taskLogTargetPhase); }}
+                  onClick={() => { setTaskLogDate(""); setTaskLogPhase(taskLogTargetPhase); }}
                   data-testid="btn-log-task"
-                  className={`h-8 rounded-lg gap-1.5 ${
-                    isTaskLogDisabled
-                      ? "bg-white/[0.04] text-zinc-500 border border-white/10 shadow-none"
-                      : "bg-fuchsia-500 hover:bg-fuchsia-600 text-white shadow-[0_0_20px_rgba(232,25,184,0.35)]"
-                  }`}
+                  className="h-8 rounded-lg gap-1.5 border border-white/10 bg-white/[0.04] text-zinc-200 hover:bg-white/[0.08]"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Log task
+                  <FileText className="w-3.5 h-3.5" /> Add daily task log
                 </Button>
               )}
               </div>
@@ -1867,7 +1853,6 @@ const projectBudgetBuilderHref = useMemo(() => {
                   </thead>
                   <tbody>
                     {visibleTaskLogs.map((l) => {
-                      const editable = l.phaseId === activeBatchPhaseId && isTaskEditable(l);
                       const delivery = projectBatches.find((batch) => batch.phaseId === l.phaseId) || null;
                       const approval = getTaskApprovalState(l, delivery);
                       return (
@@ -1892,32 +1877,7 @@ const projectBudgetBuilderHref = useMemo(() => {
                           <td className="py-3 px-3 text-xs text-zinc-400 tabular">{l.date}</td>
                           {isTPM && (
                             <td className="py-3 px-3 text-right">
-                              {editable ? (
-                                <div className="inline-flex items-center gap-0.5 justify-end">
-                                  <button
-                                    onClick={() => { setEditingLog(l); setTaskLogPhase(p.phases.find((ph) => ph.id === l.phaseId)); }}
-                                    data-testid={`task-edit-${l.id}`}
-                                    className="w-7 h-7 rounded-md hover:bg-fuchsia-500/15 text-zinc-500 hover:text-fuchsia-300 flex items-center justify-center"
-                                    title="Edit (within 24h)"
-                                  >
-                                    <Pencil className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      if (!isTaskEditable(l)) { toast.error("Task log is locked (>24h)"); return; }
-                                      deletePhaseTask(p.id, l.phaseId, l.id);
-                                      toast.success("Task log deleted");
-                                    }}
-                                    data-testid={`task-delete-${l.id}`}
-                                    className="w-7 h-7 rounded-md hover:bg-red-500/15 text-zinc-500 hover:text-red-300 flex items-center justify-center"
-                                    title="Delete (within 24h)"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <span className="text-[10px] text-zinc-600 inline-flex items-center gap-0.5"><Lock className="w-2.5 h-2.5" /> locked</span>
-                              )}
+                              <button onClick={() => { setTaskLogDate(l.date || ""); setTaskLogPhase(p.phases.find((ph) => ph.id === l.phaseId)); }} className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] text-zinc-400 hover:text-fuchsia-300"><Eye className="h-3 w-3" /> API view</button>
                             </td>
                           )}
                         </tr>
@@ -2088,12 +2048,11 @@ const projectBudgetBuilderHref = useMemo(() => {
                       <div className="flex items-center gap-2 flex-wrap">
                         <Button
                           size="sm"
-                          onClick={() => { setEditingLog(null); setTaskLogPhase(ph); }}
-                          disabled={lockedByApproval || isLockedPhase || isSubmitted}
+                          onClick={() => { setTaskLogDate(""); setTaskLogPhase(ph); }}
                           data-testid={`btn-log-task-${ph.id}`}
                           className="h-8 rounded-md bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 text-xs gap-1"
                         >
-                          <Plus className="w-3 h-3" /> Log task
+                          <FileText className="w-3 h-3" /> Add daily task log
                         </Button>
                         <Button
                           size="sm"
@@ -2458,12 +2417,12 @@ const projectBudgetBuilderHref = useMemo(() => {
           </SheetFooter>
         </SheetContent>
       </Sheet>
-      <TpmTaskLogDialog
+      <DailyTaskApiDialog
         open={!!taskLogPhase}
-        onOpenChange={(o) => { if (!o) { setTaskLogPhase(null); setEditingLog(null); } }}
+        onOpenChange={(o) => { if (!o) { setTaskLogPhase(null); setTaskLogDate(""); } }}
         project={p}
         phase={taskLogPhase}
-        editingLog={editingLog}
+        initialDate={taskLogDate}
       />
       <ProjectProvisionKeysDialog
         open={!!activeProvisionRequest}
