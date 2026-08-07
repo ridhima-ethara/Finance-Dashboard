@@ -97,6 +97,7 @@ const ProjectDetail = () => {
     projects, role, topupRequests, batchDeliveries, budgets, budgetReviews, teamRemovals,
     removeProjectTeamMember, getPhaseLogs, taskLogs, changeRequests,
     modelKeyRecords, itProvisioningRequests, provisionModelKeys,
+    subscriptionRequests,
     addProjectTeamMembers, updateProjectCoreMembers, archiveProject, deleteProject,
   } = useApp();
   const p = projects.find((x) => x.id === id);
@@ -254,7 +255,14 @@ const ProjectDetail = () => {
     [budgetTracks]
   );
   const projectUsage = useMemo(() => summarizeLoggedProject(p, taskLogs), [p, taskLogs]);
-  const projectSubscriptions = useMemo(() => getProjectSubscriptions(p), [p]);
+  const projectSubscriptions = useMemo(() => {
+    const tracked = getProjectSubscriptions(p);
+    const approved = (subscriptionRequests || []).filter((request) => request.project_id === p?.id && request.status === "active").flatMap((request) => (request.lines || []).flatMap((line) => {
+      const allocatedMembers = line.members?.length ? line.members : [{ id: `${line.id}-unassigned`, name: "Unassigned seat", email: "" }];
+      return allocatedMembers.map((member) => ({ project: p?.name, projectId: p?.id, phase: request.phase_name, phaseId: request.phase_id, sub: line.subscription, provider: line.provider, name: member.name, email: member.email, emp: member.id, amount: Number(line.total || 0) / Math.max(Number(line.seats || 0), 1), started: line.start_date, ended: line.end_date, status: "Active", requestId: request.id }));
+    }));
+    return [...tracked, ...approved];
+  }, [p, subscriptionRequests]);
   const trackerSubscriptionsByPhase = useMemo(() => {
     const map = new Map();
     (p?.phases || []).forEach((phase, index) => {

@@ -18,6 +18,7 @@ import { isTpmView } from "../lib/roles";
 import { Link } from "react-router-dom";
 import RequestBudgetDialog from "../components/RequestBudgetDialog";
 import TpmDashboard from "./tpm/TpmDashboard";
+import SubscriptionsDashboardCard from "../components/dashboard/SubscriptionsDashboardCard";
 import CtoDashboard from "./cto/CtoDashboard";
 import { fmtCurrency, fmtPct } from "../lib/format";
 import { summarizeLoggedProject } from "../lib/projectMetrics";
@@ -220,6 +221,8 @@ const Dashboard = () => {
           </Button>
         </div>
       </div>
+
+      <SubscriptionsDashboardCard />
 
       {/* CTO alert strip — pending reviews, CRs, high-risk projects */}
       {isCTO && (

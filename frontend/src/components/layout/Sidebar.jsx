@@ -34,12 +34,11 @@ const NAV_CFO = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/approval-queue", label: "Budget Review", icon: ClipboardCheck, testid: "nav-approval-queue" },
-  { to: "/financial-monitoring", label: "Financial Monitoring", icon: Activity, testid: "nav-financial-monitoring" },
   { to: "/early-warning", label: "Early Warning", icon: Bell, testid: "nav-early-warning" },
   { to: "/monthly-forecast", label: "Monthly Forecast", icon: Activity, testid: "nav-monthly-forecast" },
   { to: "/buffer", label: "Contingency Buffer", icon: ShieldCheck, testid: "nav-buffer" },
   { to: "/batch-deliveries", label: "Batch Delivery & Recovery", icon: PackageCheck, testid: "nav-batch-deliveries" },
-  { to: "/l3-subscriptions", label: "Subscription Oversight", icon: CreditCard, testid: "nav-l3-subscriptions" },
+  { to: "/subscriptions", label: "Subscription Requests", icon: CreditCard, testid: "nav-subscription-requests" },
   { to: "/audit", label: "Audit Log", icon: History, testid: "nav-audit" },
   { to: "/settings", label: "Settings", icon: Settings, testid: "nav-settings" },
 ];
@@ -56,6 +55,7 @@ const NAV_PL = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
   { to: "/daily", label: "Daily", icon: Calendar, testid: "nav-daily" },
+  { to: "/subscriptions", label: "Subscriptions", icon: CreditCard, testid: "nav-subscriptions" },
   { to: "/approvals", label: "Approvals", icon: ShieldCheck, testid: "nav-approvals" },
   { to: "/reimbursements", label: "Reimbursements", icon: Receipt, testid: "nav-reimb" },
   { to: "/tasks", label: "Tasks", icon: ListChecks, testid: "nav-tasks" },
@@ -64,6 +64,7 @@ const NAV_PL = [
 const NAV_IT = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard", end: true },
   { to: "/projects", label: "Projects", icon: FolderKanban, testid: "nav-projects" },
+  { to: "/subscriptions", label: "Subscription Fulfilment", icon: CreditCard, testid: "nav-subscription-fulfilment" },
 ];
 
 const pickNav = (role) => {

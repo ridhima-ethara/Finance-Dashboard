@@ -35,6 +35,7 @@ import { getProjectSubscriptionBudget } from "../lib/subscriptionTracker";
 // See backend/server.py — GET/PUT /api/workspace endpoints.
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
 const WORKSPACE_ENDPOINT = `${BACKEND_URL}/api/workspace`;
+const SUBSCRIPTION_REQUESTS_ENDPOINT = `${BACKEND_URL}/api/subscription-requests`;
 
 // Keys inside the workspace state doc. Order does not matter.
 const WORKSPACE_SLICE_KEYS = [
@@ -1099,6 +1100,7 @@ export const AppProvider = ({ children }) => {
       .map(normalizeItProvisioningRequest)
   ));
   const [itMonthlyActuals, setItMonthlyActuals] = useState(() => readJSON(IT_MONTHLY_ACTUALS_KEY, DEMO_IT_MONTHLY_ACTUALS));
+  const [subscriptionRequests, setSubscriptionRequests] = useState([]);
 
   // Hydration + backend sync bookkeeping
   const [hydrated, setHydrated] = useState(false);
@@ -1127,6 +1129,20 @@ export const AppProvider = ({ children }) => {
   useEffect(() => localStorage.setItem(MODEL_KEYS_KEY, JSON.stringify(modelKeyRecords)), [modelKeyRecords]);
   useEffect(() => localStorage.setItem(IT_PROVISIONING_KEY, JSON.stringify(itProvisioningRequests)), [itProvisioningRequests]);
   useEffect(() => localStorage.setItem(IT_MONTHLY_ACTUALS_KEY, JSON.stringify(itMonthlyActuals)), [itMonthlyActuals]);
+
+  const refreshSubscriptionRequests = async () => {
+    try {
+      const response = await fetch(SUBSCRIPTION_REQUESTS_ENDPOINT, { headers: { "Content-Type": "application/json" } });
+      if (!response.ok) throw new Error(`Subscription request fetch failed: ${response.status}`);
+      const payload = await response.json();
+      setSubscriptionRequests(Array.isArray(payload) ? payload : []);
+      return payload;
+    } catch (error) {
+      console.error("[subscriptions] refresh failed", error);
+      return [];
+    }
+  };
+  useEffect(() => { refreshSubscriptionRequests(); }, []);
 
   // Apply a snapshot returned from the backend into every local state slice.
   const applyWorkspaceSnapshot = (snapshot) => {
@@ -1545,6 +1561,12 @@ export const AppProvider = ({ children }) => {
         finalizedChangesByProject[request.projectId] = (finalizedChangesByProject[request.projectId] || 0) + finalAmount;
       }
     });
+    const approvedSubscriptionRequestsByProject = {};
+    subscriptionRequests.forEach((request) => {
+      if (!["fulfilment-pending", "active", "expiring"].includes(request.status)) return;
+      const amount = Number(request.approved_amount ?? request.requested_amount ?? 0);
+      approvedSubscriptionRequestsByProject[request.project_id] = (approvedSubscriptionRequestsByProject[request.project_id] || 0) + amount;
+    });
     const latestApprovedBudgetByProject = {};
     const trackApprovedBudget = (projectId, amount, at) => {
       if (!projectId || amount <= 0) return;
@@ -1613,7 +1635,8 @@ export const AppProvider = ({ children }) => {
         ...changeRequests.filter((entry) => entry.projectId === p.id && (entry.status === "approved" || entry.status === "partial" || entry.stage === "Approved")).flatMap((entry) => entry.breakdown?.subs?.entries || []),
       ];
       const subscriptionBudget = getProjectSubscriptionBudget(p, approvedSubscriptionItems);
-      const approvedBudget = baseApprovedBudget + topupBonus + changeBonus + subscriptionBudget.addition;
+      const standaloneSubscriptionBudget = Number(approvedSubscriptionRequestsByProject[p.id] || 0);
+      const approvedBudget = baseApprovedBudget + topupBonus + changeBonus + subscriptionBudget.addition + standaloneSubscriptionBudget;
       const estimatedBudget = Math.max(Number(p.estimatedBudget || 0), baseApprovedBudget || 0);
       const generalActualSpend = Number(generalActualSpendByProject[p.id] || 0);
       const actualSpend = Number(p.actualSpend || 0) + generalActualSpend;
@@ -1645,7 +1668,8 @@ export const AppProvider = ({ children }) => {
         topupsTotal: (p.topupsTotal || 0) + topupBonus,
         changeRequestsTotal: (p.changeRequestsTotal || 0) + changeBonus,
         subscriptionBudget: subscriptionBudget.total,
-        subscriptionBudgetAddition: subscriptionBudget.addition,
+        subscriptionBudgetAddition: subscriptionBudget.addition + standaloneSubscriptionBudget,
+        subscriptionRequestBudget: standaloneSubscriptionBudget,
         remaining: approvedBudget - actualSpend,
         utilization: approvedBudget > 0 ? Math.round((actualSpend / approvedBudget) * 100) : 0,
         itActuals,
@@ -1657,7 +1681,7 @@ export const AppProvider = ({ children }) => {
         cfoTopModel: itActuals.modelUsage[0]?.modelName || p.topModel || "—",
       };
     });
-  }, [buffers, recoveries, customProjects, topupRequests, changeRequests, budgets, budgetReviews, batchDeliveries, itMonthlyActuals, taskLogs]);
+  }, [buffers, recoveries, customProjects, topupRequests, changeRequests, budgets, budgetReviews, batchDeliveries, itMonthlyActuals, taskLogs, subscriptionRequests]);
 
   const visibleProjects = useMemo(() => {
     if (!user) return [];
@@ -3806,6 +3830,8 @@ export const AppProvider = ({ children }) => {
     provisionModelKeys,
     itMonthlyActuals,
     saveItMonthlyActual,
+    subscriptionRequests,
+    refreshSubscriptionRequests,
     refreshAppData,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

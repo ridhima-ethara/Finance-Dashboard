@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import SubscriptionsDashboardCard from "../../components/dashboard/SubscriptionsDashboardCard";
 import { Link } from "react-router-dom";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency, fmtPct } from "../../lib/format";
@@ -141,6 +142,8 @@ const CtoDashboard = () => {
           </Button>
         </div>
       </div>
+
+      <SubscriptionsDashboardCard />
 
       {/* CTO alert strip */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3" data-testid="cto-alert-strip">

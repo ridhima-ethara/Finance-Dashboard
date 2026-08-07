@@ -4044,5 +4044,1390 @@
     "updatedAt": "2026-07-24T09:19:16.510468+00:00",
     "itProvisioningRequests": [],
     "modelKeyRecords": []
-  }
+  },
+  "subscription_requests": [
+    {
+      "id": "demo-subreq-10",
+      "request_number": "SUB-20260801-DUPB",
+      "project_id": "p-mrt8ry5b",
+      "project_name": "Tron",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "Second Claude Max raised before the first expired.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai"
+        },
+        {
+          "id": "emp-0425",
+          "name": "Kshitiz Mehta",
+          "email": "kshitiz.mehta@ethara.ai"
+        },
+        {
+          "id": "emp-0547",
+          "name": "Piyush Chandra",
+          "email": "piyush.chandra@ethara.ai"
+        },
+        {
+          "id": "emp-0776",
+          "name": "Shubhi Khandelwal",
+          "email": "shubhi.khandelwal@ethara.ai"
+        },
+        {
+          "id": "emp-0897",
+          "name": "Viksit Kumar Chauhan",
+          "email": "viksit.chauhan@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-10-line",
+          "plan_id": "claude-max",
+          "model": "Claude Opus 4.8 \u00b7 Anthropic",
+          "seats": 1,
+          "start_date": "2026-10-10T10:00:00+00:00",
+          "end_date": "2027-03-29T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0080",
+              "name": "Akash Kumar",
+              "email": "akash.kumar@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "Anthropic",
+          "subscription": "Claude Max",
+          "plan": "Max",
+          "unit_cost": 400.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 171,
+          "subtotal": 2280.0,
+          "tax_amount": 0.0,
+          "total": 2280.0
+        }
+      ],
+      "documents": [
+        {
+          "id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "name": "invoice-2026-08.pdf",
+          "type": "invoice",
+          "content_type": "application/pdf",
+          "size": 48,
+          "uploaded_at": "2026-08-31T10:00:00+00:00",
+          "data": "data:application/pdf;base64,REVNTyBJTlZPSUNFIOKAlCBpbnZvaWNlLTIwMjYtMDgucGRm"
+        }
+      ],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 2280.0,
+      "currency": "USD",
+      "status": "active",
+      "purchase_mode": "company",
+      "activated_at": "2026-10-12T10:00:00+00:00",
+      "tracker_entries": [
+        {
+          "id": "track-demo-subreq-10-line-emp-0080",
+          "line_id": "demo-subreq-10-line",
+          "employee_code": "EMP-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai",
+          "amount_usd": 2280.0,
+          "amount_inr": 189240.0,
+          "amount_paid": 2280.0,
+          "total_amount": 2280.0,
+          "difference": 0.0,
+          "reimbursement_verified": "Not Verified",
+          "reimbursement_status": "N/A \u2014 company card",
+          "comments": "Company-billed",
+          "account_number": "",
+          "ifsc_code": "",
+          "subscription_type": "Claude Max",
+          "model": "Claude Opus 4.8 \u00b7 Anthropic",
+          "phase": "Delivery",
+          "status": "Active",
+          "date": "2026-10-10T10:00:00+00:00",
+          "month": "Oct 2026",
+          "started": "2026-10-10T10:00:00+00:00",
+          "ended": "2027-03-29T10:00:00+00:00",
+          "invoice_document_id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "receipt_document_id": "",
+          "screenshot_document_id": ""
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-10-05T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-10-06T10:00:00+00:00",
+          "action": "CTO approve",
+          "actor": {
+            "role": "CTO"
+          }
+        },
+        {
+          "at": "2026-10-08T10:00:00+00:00",
+          "action": "CFO approve",
+          "actor": {
+            "role": "CFO"
+          }
+        },
+        {
+          "at": "2026-10-12T10:00:00+00:00",
+          "action": "Fulfilment recorded",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          },
+          "purchase_mode": "company"
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-09",
+      "request_number": "SUB-20260801-DUPA",
+      "project_id": "p-mrt8ry5b",
+      "project_name": "Tron",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "Claude Max for lead engineer.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai"
+        },
+        {
+          "id": "emp-0425",
+          "name": "Kshitiz Mehta",
+          "email": "kshitiz.mehta@ethara.ai"
+        },
+        {
+          "id": "emp-0547",
+          "name": "Piyush Chandra",
+          "email": "piyush.chandra@ethara.ai"
+        },
+        {
+          "id": "emp-0776",
+          "name": "Shubhi Khandelwal",
+          "email": "shubhi.khandelwal@ethara.ai"
+        },
+        {
+          "id": "emp-0897",
+          "name": "Viksit Kumar Chauhan",
+          "email": "viksit.chauhan@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-09-line",
+          "plan_id": "claude-max",
+          "model": "Claude Opus 4.8 \u00b7 Anthropic",
+          "seats": 1,
+          "start_date": "2026-08-02T10:00:00+00:00",
+          "end_date": "2026-11-29T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0080",
+              "name": "Akash Kumar",
+              "email": "akash.kumar@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "Anthropic",
+          "subscription": "Claude Max",
+          "plan": "Max",
+          "unit_cost": 400.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 120,
+          "subtotal": 1600.0,
+          "tax_amount": 0.0,
+          "total": 1600.0
+        }
+      ],
+      "documents": [
+        {
+          "id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "name": "invoice-2026-08.pdf",
+          "type": "invoice",
+          "content_type": "application/pdf",
+          "size": 48,
+          "uploaded_at": "2026-08-31T10:00:00+00:00",
+          "data": "data:application/pdf;base64,REVNTyBJTlZPSUNFIOKAlCBpbnZvaWNlLTIwMjYtMDgucGRm"
+        }
+      ],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 1600.0,
+      "currency": "USD",
+      "status": "active",
+      "purchase_mode": "company",
+      "activated_at": "2026-08-07T10:00:00+00:00",
+      "tracker_entries": [
+        {
+          "id": "track-demo-subreq-09-line-emp-0080",
+          "line_id": "demo-subreq-09-line",
+          "employee_code": "EMP-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai",
+          "amount_usd": 1600.0,
+          "amount_inr": 132800.0,
+          "amount_paid": 1600.0,
+          "total_amount": 1600.0,
+          "difference": 0.0,
+          "reimbursement_verified": "Verified",
+          "reimbursement_status": "Reimbursed",
+          "comments": "Company-billed",
+          "account_number": "",
+          "ifsc_code": "",
+          "subscription_type": "Claude Max",
+          "model": "Claude Opus 4.8 \u00b7 Anthropic",
+          "phase": "Delivery",
+          "status": "Active",
+          "date": "2026-08-02T10:00:00+00:00",
+          "month": "Aug 2026",
+          "started": "2026-08-02T10:00:00+00:00",
+          "ended": "2026-11-29T10:00:00+00:00",
+          "invoice_document_id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "receipt_document_id": "",
+          "screenshot_document_id": ""
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-08-02T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-08-03T10:00:00+00:00",
+          "action": "CTO approve",
+          "actor": {
+            "role": "CTO"
+          }
+        },
+        {
+          "at": "2026-08-05T10:00:00+00:00",
+          "action": "CFO approve",
+          "actor": {
+            "role": "CFO"
+          }
+        },
+        {
+          "at": "2026-08-07T10:00:00+00:00",
+          "action": "Fulfilment recorded",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          },
+          "purchase_mode": "company"
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-08",
+      "request_number": "SUB-20260801-SELF",
+      "project_id": "p-mrt8ry5b",
+      "project_name": "Tron",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "Cursor Pro purchased by member \u2014 reimbursement pending.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai"
+        },
+        {
+          "id": "emp-0425",
+          "name": "Kshitiz Mehta",
+          "email": "kshitiz.mehta@ethara.ai"
+        },
+        {
+          "id": "emp-0547",
+          "name": "Piyush Chandra",
+          "email": "piyush.chandra@ethara.ai"
+        },
+        {
+          "id": "emp-0776",
+          "name": "Shubhi Khandelwal",
+          "email": "shubhi.khandelwal@ethara.ai"
+        },
+        {
+          "id": "emp-0897",
+          "name": "Viksit Kumar Chauhan",
+          "email": "viksit.chauhan@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-08-line",
+          "plan_id": "cursor-pro",
+          "model": "",
+          "seats": 1,
+          "start_date": "2026-08-04T10:00:00+00:00",
+          "end_date": "2027-02-17T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0776",
+              "name": "Shubhi Khandelwal",
+              "email": "shubhi.khandelwal@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "Cursor",
+          "subscription": "Cursor Pro",
+          "plan": "Pro",
+          "unit_cost": 40.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 198,
+          "subtotal": 264.0,
+          "tax_amount": 0.0,
+          "total": 264.0
+        }
+      ],
+      "documents": [
+        {
+          "id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "name": "invoice-2026-08.pdf",
+          "type": "invoice",
+          "content_type": "application/pdf",
+          "size": 48,
+          "uploaded_at": "2026-08-31T10:00:00+00:00",
+          "data": "data:application/pdf;base64,REVNTyBJTlZPSUNFIOKAlCBpbnZvaWNlLTIwMjYtMDgucGRm"
+        },
+        {
+          "id": "demo-subreq-doc-receipt-receipt-2026-08.pdf",
+          "name": "receipt-2026-08.pdf",
+          "type": "receipt",
+          "content_type": "application/pdf",
+          "size": 48,
+          "uploaded_at": "2026-08-31T10:00:00+00:00",
+          "data": "data:application/pdf;base64,REVNTyBSRUNFSVBUIOKAlCByZWNlaXB0LTIwMjYtMDgucGRm"
+        },
+        {
+          "id": "demo-subreq-doc-screenshot-payment-2026-08.pdf",
+          "name": "payment-2026-08.pdf",
+          "type": "screenshot",
+          "content_type": "application/pdf",
+          "size": 52,
+          "uploaded_at": "2026-08-31T10:00:00+00:00",
+          "data": "data:application/pdf;base64,REVNTyBTQ1JFRU5TSE9UIOKAlCBwYXltZW50LTIwMjYtMDgucGRm"
+        }
+      ],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 264.0,
+      "currency": "USD",
+      "status": "active",
+      "purchase_mode": "self",
+      "fulfilment_status": "submitted",
+      "activated_at": "2026-08-10T10:00:00+00:00",
+      "fulfilled_at": "2026-08-10T10:00:00+00:00",
+      "tracker_entries": [
+        {
+          "id": "track-demo-subreq-08-line-emp-0776",
+          "line_id": "demo-subreq-08-line",
+          "employee_code": "EMP-0776",
+          "name": "Shubhi Khandelwal",
+          "email": "shubhi.khandelwal@ethara.ai",
+          "amount_usd": 264.0,
+          "amount_inr": 21912.0,
+          "amount_paid": 250.8,
+          "total_amount": 264.0,
+          "difference": 13.2,
+          "reimbursement_verified": "Not Verified",
+          "reimbursement_status": "Pending",
+          "comments": "Employee reimbursement",
+          "account_number": "50100XXXX2291",
+          "ifsc_code": "HDFC0001234",
+          "subscription_type": "Cursor Pro",
+          "model": "",
+          "phase": "Delivery",
+          "status": "Active",
+          "date": "2026-08-04T10:00:00+00:00",
+          "month": "Aug 2026",
+          "started": "2026-08-04T10:00:00+00:00",
+          "ended": "2027-02-17T10:00:00+00:00",
+          "invoice_document_id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "receipt_document_id": "demo-subreq-doc-receipt-receipt-2026-08.pdf",
+          "screenshot_document_id": "demo-subreq-doc-screenshot-payment-2026-08.pdf"
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-08-02T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-08-03T10:00:00+00:00",
+          "action": "CTO approve",
+          "actor": {
+            "role": "CTO"
+          }
+        },
+        {
+          "at": "2026-08-05T10:00:00+00:00",
+          "action": "CFO approve",
+          "actor": {
+            "role": "CFO"
+          }
+        },
+        {
+          "at": "2026-08-10T10:00:00+00:00",
+          "action": "Fulfilment recorded",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          },
+          "purchase_mode": "self"
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-07",
+      "request_number": "SUB-20260801-ACTV",
+      "project_id": "p-mrt792c6",
+      "project_name": "Zoro",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "Linear Standard for issue tracking.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0268",
+          "name": "Dhawal Bathre",
+          "email": "dhawal.bathre@ethara.ai"
+        },
+        {
+          "id": "emp-0493",
+          "name": "Mumukshu Panchal",
+          "email": "mumukshu.panchal@ethara.ai"
+        },
+        {
+          "id": "emp-0424",
+          "name": "Kshitij Sharma",
+          "email": "kshitij.sharma@ethara.ai"
+        },
+        {
+          "id": "emp-0016",
+          "name": "Abhay Haldia",
+          "email": "abhay.haldiya@ethara.ai"
+        },
+        {
+          "id": "emp-0772",
+          "name": "Shubham Chaturvedi",
+          "email": "shubham.chaturvedi@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-07-line",
+          "plan_id": "linear-standard",
+          "model": "",
+          "seats": 2,
+          "start_date": "2026-08-03T10:00:00+00:00",
+          "end_date": "2027-02-27T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0268",
+              "name": "Dhawal Bathre",
+              "email": "dhawal.bathre@ethara.ai"
+            },
+            {
+              "id": "emp-0493",
+              "name": "Mumukshu Panchal",
+              "email": "mumukshu.panchal@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "Linear",
+          "subscription": "Linear Standard",
+          "plan": "Standard",
+          "unit_cost": 12.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 209,
+          "subtotal": 167.2,
+          "tax_amount": 0.0,
+          "total": 167.2
+        }
+      ],
+      "documents": [
+        {
+          "id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "name": "invoice-2026-08.pdf",
+          "type": "invoice",
+          "content_type": "application/pdf",
+          "size": 48,
+          "uploaded_at": "2026-08-31T10:00:00+00:00",
+          "data": "data:application/pdf;base64,REVNTyBJTlZPSUNFIOKAlCBpbnZvaWNlLTIwMjYtMDgucGRm"
+        },
+        {
+          "id": "demo-subreq-doc-receipt-receipt-2026-08.pdf",
+          "name": "receipt-2026-08.pdf",
+          "type": "receipt",
+          "content_type": "application/pdf",
+          "size": 48,
+          "uploaded_at": "2026-08-31T10:00:00+00:00",
+          "data": "data:application/pdf;base64,REVNTyBSRUNFSVBUIOKAlCByZWNlaXB0LTIwMjYtMDgucGRm"
+        }
+      ],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 167.2,
+      "currency": "USD",
+      "status": "active",
+      "purchase_mode": "company",
+      "fulfilment_status": "submitted",
+      "activated_at": "2026-08-09T10:00:00+00:00",
+      "fulfilled_at": "2026-08-09T10:00:00+00:00",
+      "tracker_entries": [
+        {
+          "id": "track-demo-subreq-07-line-emp-0268",
+          "line_id": "demo-subreq-07-line",
+          "employee_code": "EMP-0268",
+          "name": "Dhawal Bathre",
+          "email": "dhawal.bathre@ethara.ai",
+          "amount_usd": 83.6,
+          "amount_inr": 6938.8,
+          "amount_paid": 83.6,
+          "total_amount": 83.6,
+          "difference": 0.0,
+          "reimbursement_verified": "Verified",
+          "reimbursement_status": "Reimbursed",
+          "comments": "Company-billed",
+          "account_number": "",
+          "ifsc_code": "",
+          "subscription_type": "Linear Standard",
+          "model": "",
+          "phase": "Delivery",
+          "status": "Active",
+          "date": "2026-08-03T10:00:00+00:00",
+          "month": "Aug 2026",
+          "started": "2026-08-03T10:00:00+00:00",
+          "ended": "2027-02-27T10:00:00+00:00",
+          "invoice_document_id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "receipt_document_id": "demo-subreq-doc-receipt-receipt-2026-08.pdf",
+          "screenshot_document_id": ""
+        },
+        {
+          "id": "track-demo-subreq-07-line-emp-0493",
+          "line_id": "demo-subreq-07-line",
+          "employee_code": "EMP-0493",
+          "name": "Mumukshu Panchal",
+          "email": "mumukshu.panchal@ethara.ai",
+          "amount_usd": 83.6,
+          "amount_inr": 6938.8,
+          "amount_paid": 83.6,
+          "total_amount": 83.6,
+          "difference": 0.0,
+          "reimbursement_verified": "Verified",
+          "reimbursement_status": "Reimbursed",
+          "comments": "Company-billed",
+          "account_number": "",
+          "ifsc_code": "",
+          "subscription_type": "Linear Standard",
+          "model": "",
+          "phase": "Delivery",
+          "status": "Active",
+          "date": "2026-08-03T10:00:00+00:00",
+          "month": "Aug 2026",
+          "started": "2026-08-03T10:00:00+00:00",
+          "ended": "2027-02-27T10:00:00+00:00",
+          "invoice_document_id": "demo-subreq-doc-invoice-invoice-2026-08.pdf",
+          "receipt_document_id": "demo-subreq-doc-receipt-receipt-2026-08.pdf",
+          "screenshot_document_id": ""
+        }
+      ],
+      "history": [
+        {
+          "at": "2026-08-02T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-08-03T10:00:00+00:00",
+          "action": "CTO approve",
+          "actor": {
+            "role": "CTO"
+          }
+        },
+        {
+          "at": "2026-08-05T10:00:00+00:00",
+          "action": "CFO approve",
+          "actor": {
+            "role": "CFO"
+          }
+        },
+        {
+          "at": "2026-08-09T10:00:00+00:00",
+          "action": "Fulfilment recorded",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          },
+          "purchase_mode": "company"
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-06",
+      "request_number": "SUB-20260801-FULF",
+      "project_id": "p-mrt8ry5b",
+      "project_name": "Tron",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "ChatGPT Team \u2014 partially approved pending renewal review.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai"
+        },
+        {
+          "id": "emp-0425",
+          "name": "Kshitiz Mehta",
+          "email": "kshitiz.mehta@ethara.ai"
+        },
+        {
+          "id": "emp-0547",
+          "name": "Piyush Chandra",
+          "email": "piyush.chandra@ethara.ai"
+        },
+        {
+          "id": "emp-0776",
+          "name": "Shubhi Khandelwal",
+          "email": "shubhi.khandelwal@ethara.ai"
+        },
+        {
+          "id": "emp-0897",
+          "name": "Viksit Kumar Chauhan",
+          "email": "viksit.chauhan@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-06-line",
+          "plan_id": "chatgpt-team",
+          "model": "",
+          "seats": 2,
+          "start_date": "2026-08-07T10:00:00+00:00",
+          "end_date": "2027-02-27T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0425",
+              "name": "Kshitiz Mehta",
+              "email": "kshitiz.mehta@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "OpenAI",
+          "subscription": "ChatGPT Team",
+          "plan": "Team",
+          "unit_cost": 300.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 205,
+          "subtotal": 4100.0,
+          "tax_amount": 0.0,
+          "total": 4100.0
+        }
+      ],
+      "documents": [],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 4100.0,
+      "currency": "USD",
+      "status": "fulfilment-pending",
+      "approved_amount": 2460.0,
+      "cfo_decision": "partial",
+      "cto_forwarded_amount": 4100.0,
+      "history": [
+        {
+          "at": "2026-08-02T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-08-03T10:00:00+00:00",
+          "action": "CTO approve",
+          "actor": {
+            "role": "CTO"
+          }
+        },
+        {
+          "at": "2026-08-04T10:00:00+00:00",
+          "action": "CFO partial",
+          "actor": {
+            "role": "CFO"
+          },
+          "comment": "Approved 60% for this cycle.",
+          "approved_amount": 2460.0
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-05",
+      "request_number": "SUB-20260801-REJT",
+      "project_id": "p-mrt792c6",
+      "project_name": "Zoro",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "Notion Plus for documentation.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0268",
+          "name": "Dhawal Bathre",
+          "email": "dhawal.bathre@ethara.ai"
+        },
+        {
+          "id": "emp-0493",
+          "name": "Mumukshu Panchal",
+          "email": "mumukshu.panchal@ethara.ai"
+        },
+        {
+          "id": "emp-0424",
+          "name": "Kshitij Sharma",
+          "email": "kshitij.sharma@ethara.ai"
+        },
+        {
+          "id": "emp-0016",
+          "name": "Abhay Haldia",
+          "email": "abhay.haldiya@ethara.ai"
+        },
+        {
+          "id": "emp-0772",
+          "name": "Shubham Chaturvedi",
+          "email": "shubham.chaturvedi@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-05-line",
+          "plan_id": "notion-plus",
+          "model": "",
+          "seats": 2,
+          "start_date": "2026-08-06T10:00:00+00:00",
+          "end_date": "2026-12-29T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0016",
+              "name": "Abhay Haldia",
+              "email": "abhay.haldiya@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "Notion",
+          "subscription": "Notion Plus",
+          "plan": "Plus",
+          "unit_cost": 15.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 146,
+          "subtotal": 146.0,
+          "tax_amount": 0.0,
+          "total": 146.0
+        }
+      ],
+      "documents": [],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 146.0,
+      "currency": "USD",
+      "status": "rejected",
+      "history": [
+        {
+          "at": "2026-08-02T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-08-03T10:00:00+00:00",
+          "action": "CTO approve",
+          "actor": {
+            "role": "CTO"
+          }
+        },
+        {
+          "at": "2026-08-04T10:00:00+00:00",
+          "action": "CFO reject",
+          "actor": {
+            "role": "CFO"
+          },
+          "comment": "Not budgeted this quarter."
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-04",
+      "request_number": "SUB-20260801-RETN",
+      "project_id": "p-mrt8ry5b",
+      "project_name": "Tron",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "Figma Organization for design reviews.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai"
+        },
+        {
+          "id": "emp-0425",
+          "name": "Kshitiz Mehta",
+          "email": "kshitiz.mehta@ethara.ai"
+        },
+        {
+          "id": "emp-0547",
+          "name": "Piyush Chandra",
+          "email": "piyush.chandra@ethara.ai"
+        },
+        {
+          "id": "emp-0776",
+          "name": "Shubhi Khandelwal",
+          "email": "shubhi.khandelwal@ethara.ai"
+        },
+        {
+          "id": "emp-0897",
+          "name": "Viksit Kumar Chauhan",
+          "email": "viksit.chauhan@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-04-line",
+          "plan_id": "figma-org",
+          "model": "",
+          "seats": 2,
+          "start_date": "2026-08-06T10:00:00+00:00",
+          "end_date": "2027-01-08T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0425",
+              "name": "Kshitiz Mehta",
+              "email": "kshitiz.mehta@ethara.ai"
+            },
+            {
+              "id": "emp-0776",
+              "name": "Shubhi Khandelwal",
+              "email": "shubhi.khandelwal@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "Figma",
+          "subscription": "Figma Organization",
+          "plan": "Organization",
+          "unit_cost": 45.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 156,
+          "subtotal": 468.0,
+          "tax_amount": 0.0,
+          "total": 468.0
+        }
+      ],
+      "documents": [],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 468.0,
+      "currency": "USD",
+      "status": "returned-to-requester",
+      "history": [
+        {
+          "at": "2026-08-02T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-08-03T10:00:00+00:00",
+          "action": "CTO return",
+          "actor": {
+            "role": "CTO"
+          },
+          "comment": "Reduce to 1 seat and add cost justification."
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-03",
+      "request_number": "SUB-20260801-CFOR",
+      "project_id": "p-mrt792c6",
+      "project_name": "Zoro",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "GitHub Enterprise seats for the Zoro squad.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0268",
+          "name": "Dhawal Bathre",
+          "email": "dhawal.bathre@ethara.ai"
+        },
+        {
+          "id": "emp-0493",
+          "name": "Mumukshu Panchal",
+          "email": "mumukshu.panchal@ethara.ai"
+        },
+        {
+          "id": "emp-0424",
+          "name": "Kshitij Sharma",
+          "email": "kshitij.sharma@ethara.ai"
+        },
+        {
+          "id": "emp-0016",
+          "name": "Abhay Haldia",
+          "email": "abhay.haldiya@ethara.ai"
+        },
+        {
+          "id": "emp-0772",
+          "name": "Shubham Chaturvedi",
+          "email": "shubham.chaturvedi@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-03-line",
+          "plan_id": "github-enterprise",
+          "model": "",
+          "seats": 3,
+          "start_date": "2026-08-05T10:00:00+00:00",
+          "end_date": "2027-02-17T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0268",
+              "name": "Dhawal Bathre",
+              "email": "dhawal.bathre@ethara.ai"
+            },
+            {
+              "id": "emp-0493",
+              "name": "Mumukshu Panchal",
+              "email": "mumukshu.panchal@ethara.ai"
+            },
+            {
+              "id": "emp-0424",
+              "name": "Kshitij Sharma",
+              "email": "kshitij.sharma@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "GitHub",
+          "subscription": "GitHub Enterprise",
+          "plan": "Enterprise",
+          "unit_cost": 21.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 197,
+          "subtotal": 413.7,
+          "tax_amount": 0.0,
+          "total": 413.7
+        }
+      ],
+      "documents": [],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 413.7,
+      "currency": "USD",
+      "status": "cfo-review",
+      "cto_forwarded_amount": 413.7,
+      "history": [
+        {
+          "at": "2026-08-02T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-08-03T10:00:00+00:00",
+          "action": "CTO approve",
+          "actor": {
+            "role": "CTO"
+          },
+          "comment": "Technically justified \u2014 forwarding to CFO."
+        }
+      ],
+      "snapshots": [
+        {
+          "at": "2026-08-07T11:34:48.698002+00:00",
+          "stage": "Submitted",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          },
+          "requested_amount": 413.7,
+          "approved_amount": null,
+          "lines": [
+            {
+              "id": "demo-subreq-03-line",
+              "subscription": "GitHub Enterprise",
+              "plan": "Enterprise",
+              "model": "",
+              "seats": 3,
+              "start_date": "2026-08-05T10:00:00+00:00",
+              "end_date": "2027-02-17T10:00:00+00:00",
+              "total": 413.7,
+              "members": [
+                {
+                  "name": "Dhawal Bathre",
+                  "email": "dhawal.bathre@ethara.ai",
+                  "id": "emp-0268"
+                },
+                {
+                  "name": "Mumukshu Panchal",
+                  "email": "mumukshu.panchal@ethara.ai",
+                  "id": "emp-0493"
+                },
+                {
+                  "name": "Kshitij Sharma",
+                  "email": "kshitij.sharma@ethara.ai",
+                  "id": "emp-0424"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "at": "2026-08-07T11:34:48.698244+00:00",
+          "stage": "CTO approve",
+          "actor": {
+            "role": "CTO"
+          },
+          "requested_amount": 413.7,
+          "approved_amount": null,
+          "lines": [
+            {
+              "id": "demo-subreq-03-line",
+              "subscription": "GitHub Enterprise",
+              "plan": "Enterprise",
+              "model": "",
+              "seats": 3,
+              "start_date": "2026-08-05T10:00:00+00:00",
+              "end_date": "2027-02-17T10:00:00+00:00",
+              "total": 413.7,
+              "members": [
+                {
+                  "name": "Dhawal Bathre",
+                  "email": "dhawal.bathre@ethara.ai",
+                  "id": "emp-0268"
+                },
+                {
+                  "name": "Mumukshu Panchal",
+                  "email": "mumukshu.panchal@ethara.ai",
+                  "id": "emp-0493"
+                },
+                {
+                  "name": "Kshitij Sharma",
+                  "email": "kshitij.sharma@ethara.ai",
+                  "id": "emp-0424"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-02",
+      "request_number": "SUB-20260801-CTOR",
+      "project_id": "p-mrt8ry5b",
+      "project_name": "Tron",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "ChatGPT Team for research support.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai"
+        },
+        {
+          "id": "emp-0425",
+          "name": "Kshitiz Mehta",
+          "email": "kshitiz.mehta@ethara.ai"
+        },
+        {
+          "id": "emp-0547",
+          "name": "Piyush Chandra",
+          "email": "piyush.chandra@ethara.ai"
+        },
+        {
+          "id": "emp-0776",
+          "name": "Shubhi Khandelwal",
+          "email": "shubhi.khandelwal@ethara.ai"
+        },
+        {
+          "id": "emp-0897",
+          "name": "Viksit Kumar Chauhan",
+          "email": "viksit.chauhan@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-02-line",
+          "plan_id": "chatgpt-team",
+          "model": "",
+          "seats": 2,
+          "start_date": "2026-08-04T10:00:00+00:00",
+          "end_date": "2027-02-07T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0547",
+              "name": "Piyush Chandra",
+              "email": "piyush.chandra@ethara.ai"
+            },
+            {
+              "id": "emp-0776",
+              "name": "Shubhi Khandelwal",
+              "email": "shubhi.khandelwal@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "OpenAI",
+          "subscription": "ChatGPT Team",
+          "plan": "Team",
+          "unit_cost": 300.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 188,
+          "subtotal": 3760.0,
+          "tax_amount": 0.0,
+          "total": 3760.0
+        }
+      ],
+      "documents": [],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 3760.0,
+      "currency": "USD",
+      "status": "cto-review",
+      "history": [
+        {
+          "at": "2026-08-01T10:00:00+00:00",
+          "action": "Draft created",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        },
+        {
+          "at": "2026-08-02T10:00:00+00:00",
+          "action": "Submitted for CTO review",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        }
+      ]
+    },
+    {
+      "id": "demo-subreq-01",
+      "request_number": "SUB-20260801-DRAF",
+      "project_id": "p-mrt8ry5b",
+      "project_name": "Tron",
+      "phase_id": "p1",
+      "phase_name": "Delivery",
+      "request_type": "initial",
+      "justification": "Cursor Pro for two delivery engineers.",
+      "requester": {
+        "name": "TPM Lead",
+        "email": "tpm@ethara.ai",
+        "role": "TPM"
+      },
+      "eligible_members": [
+        {
+          "id": "emp-0080",
+          "name": "Akash Kumar",
+          "email": "akash.kumar@ethara.ai"
+        },
+        {
+          "id": "emp-0425",
+          "name": "Kshitiz Mehta",
+          "email": "kshitiz.mehta@ethara.ai"
+        },
+        {
+          "id": "emp-0547",
+          "name": "Piyush Chandra",
+          "email": "piyush.chandra@ethara.ai"
+        },
+        {
+          "id": "emp-0776",
+          "name": "Shubhi Khandelwal",
+          "email": "shubhi.khandelwal@ethara.ai"
+        },
+        {
+          "id": "emp-0897",
+          "name": "Viksit Kumar Chauhan",
+          "email": "viksit.chauhan@ethara.ai"
+        }
+      ],
+      "lines": [
+        {
+          "id": "demo-subreq-01-line",
+          "plan_id": "cursor-pro",
+          "model": "",
+          "seats": 2,
+          "start_date": "2026-08-03T10:00:00+00:00",
+          "end_date": "2027-01-28T10:00:00+00:00",
+          "members": [
+            {
+              "id": "emp-0425",
+              "name": "Kshitiz Mehta",
+              "email": "kshitiz.mehta@ethara.ai"
+            },
+            {
+              "id": "emp-0547",
+              "name": "Piyush Chandra",
+              "email": "piyush.chandra@ethara.ai"
+            }
+          ],
+          "tax_pct": 0,
+          "discount": 0.0,
+          "justification": "Team tooling for delivery.",
+          "provider": "Cursor",
+          "subscription": "Cursor Pro",
+          "plan": "Pro",
+          "unit_cost": 40.0,
+          "currency": "USD",
+          "billing_cycle": "monthly",
+          "duration_days": 179,
+          "subtotal": 477.33,
+          "tax_amount": 0.0,
+          "total": 477.33
+        }
+      ],
+      "documents": [],
+      "created_at": "2026-08-01T10:00:00+00:00",
+      "updated_at": "2026-08-06T10:00:00+00:00",
+      "requested_amount": 477.33,
+      "currency": "USD",
+      "status": "draft",
+      "history": [
+        {
+          "at": "2026-08-01T10:00:00+00:00",
+          "action": "Draft created",
+          "actor": {
+            "name": "TPM Lead",
+            "email": "tpm@ethara.ai",
+            "role": "TPM"
+          }
+        }
+      ]
+    }
+  ]
 }

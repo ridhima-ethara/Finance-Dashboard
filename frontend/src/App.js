@@ -29,7 +29,6 @@ import ApprovalDetail from "./pages/cfo/ApprovalDetail";
 import ChangeRequestDetail from "./pages/cfo/ChangeRequestDetail";
 import TopupRequestDetail from "./pages/TopupRequestDetail";
 import CfoBatchDeliveries from "./pages/cfo/BatchDeliveries";
-import FinancialMonitoring from "./pages/cfo/FinancialMonitoring";
 import Buffer from "./pages/cfo/Buffer";
 import EarlyWarning from "./pages/cfo/EarlyWarning";
 import MonthlyForecast from "./pages/cfo/MonthlyForecast";
@@ -96,7 +95,7 @@ function App() {
               <Route path="/approval-queue/change-request/:id" element={<ChangeRequestDetail />} />
               <Route path="/topup-requests/:id" element={<TopupRequestDetail />} />
               <Route path="/batch-deliveries" element={<CfoBatchDeliveries />} />
-              <Route path="/financial-monitoring" element={<FinancialMonitoring />} />
+              <Route path="/financial-monitoring" element={<Navigate to="/" replace />} />
               <Route
                 path="/buffer"
                 element={(

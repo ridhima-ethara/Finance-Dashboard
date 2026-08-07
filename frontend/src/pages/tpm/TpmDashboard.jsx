@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import SubscriptionsDashboardCard from "../../components/dashboard/SubscriptionsDashboardCard";
 import { useApp } from "../../context/AppContext";
 import { fmtCurrency, fmtPct } from "../../lib/format";
 import { NOTIFICATIONS, APPROVALS, THRESHOLDS } from "../../data/mockData";
@@ -211,6 +212,8 @@ const TpmDashboard = () => {
       </div>
 
       {underRndProjects.length > 0 && <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-sky-500/20 bg-sky-500/[0.06] p-3.5" data-testid="tpm-pipeline-banner"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-300"><Clock3 className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="text-sm font-semibold text-white">{underRndProjects.length} project{underRndProjects.length === 1 ? " is" : "s are"} waiting on RL Environment acceptance</div><div className="mt-0.5 text-xs text-zinc-400">Budget building unlocks after RL sample acceptance and kickoff setup.</div></div><Button variant="outline" className="h-9 border-white/10 bg-white/[0.03]" onClick={() => document.getElementById("tpm-rnd-pipeline")?.scrollIntoView({ behavior: "smooth" })}>Review pipeline</Button></div>}
+
+      <SubscriptionsDashboardCard />
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">

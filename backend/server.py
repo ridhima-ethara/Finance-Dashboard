@@ -5,6 +5,7 @@ import os
 import logging
 import json
 import requests as http_requests
+import base64
 import bcrypt
 import jwt
 from pathlib import Path
@@ -12,6 +13,7 @@ from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import Any, Dict, List, Optional, Tuple
 import uuid
 from datetime import datetime, timezone, timedelta
+from fastapi.responses import Response
 
 try:
     from motor.motor_asyncio import AsyncIOMotorClient
@@ -189,6 +191,450 @@ def task_log_analytics(request: Request):
         raise HTTPException(status_code=status_code, detail=detail) from exc
     except ValueError as exc:
         raise HTTPException(status_code=502, detail="Task log API returned invalid JSON") from exc
+
+
+# ---------------------------------------------------------------------------
+# Subscription catalogue and request workflow
+# ---------------------------------------------------------------------------
+SUBSCRIPTION_REQUESTS_LOCAL_SECTION = "subscription_requests"
+SUBSCRIPTION_PLANS = [
+    {"id": "claude-max", "provider": "Anthropic", "subscription": "Claude Max", "plan": "Max", "unit_cost": 400.0, "currency": "USD", "billing_cycle": "monthly", "effective_from": "2026-01-01", "effective_to": None},
+    {"id": "chatgpt-team", "provider": "OpenAI", "subscription": "ChatGPT Team", "plan": "Team", "unit_cost": 300.0, "currency": "USD", "billing_cycle": "monthly", "effective_from": "2026-01-01", "effective_to": None},
+    {"id": "cursor-pro", "provider": "Cursor", "subscription": "Cursor Pro", "plan": "Pro", "unit_cost": 40.0, "currency": "USD", "billing_cycle": "monthly", "effective_from": "2026-01-01", "effective_to": None},
+    {"id": "github-enterprise", "provider": "GitHub", "subscription": "GitHub Enterprise", "plan": "Enterprise", "unit_cost": 21.0, "currency": "USD", "billing_cycle": "monthly", "effective_from": "2026-01-01", "effective_to": None},
+    {"id": "figma-org", "provider": "Figma", "subscription": "Figma Organization", "plan": "Organization", "unit_cost": 45.0, "currency": "USD", "billing_cycle": "monthly", "effective_from": "2026-01-01", "effective_to": None},
+    {"id": "notion-plus", "provider": "Notion", "subscription": "Notion Plus", "plan": "Plus", "unit_cost": 15.0, "currency": "USD", "billing_cycle": "monthly", "effective_from": "2026-01-01", "effective_to": None},
+    {"id": "linear-standard", "provider": "Linear", "subscription": "Linear Standard", "plan": "Standard", "unit_cost": 12.0, "currency": "USD", "billing_cycle": "monthly", "effective_from": "2026-01-01", "effective_to": None},
+]
+
+
+async def read_subscription_requests() -> List[Dict[str, Any]]:
+    if db is not None:
+        return await db.subscription_requests.find({}, {"_id": 0}).sort("updated_at", -1).to_list(5000)
+    return read_local_section(SUBSCRIPTION_REQUESTS_LOCAL_SECTION, []) or []
+
+
+async def write_subscription_request(record: Dict[str, Any]) -> None:
+    if db is not None:
+        await db.subscription_requests.replace_one({"id": record["id"]}, record, upsert=True)
+        return
+    records = await read_subscription_requests()
+    next_records = [record, *[entry for entry in records if entry.get("id") != record["id"]]]
+    write_local_section(SUBSCRIPTION_REQUESTS_LOCAL_SECTION, next_records)
+
+
+async def delete_subscription_request_record(request_id: str) -> None:
+    if db is not None:
+        await db.subscription_requests.delete_one({"id": request_id})
+        return
+    records = await read_subscription_requests()
+    write_local_section(SUBSCRIPTION_REQUESTS_LOCAL_SECTION, [entry for entry in records if entry.get("id") != request_id])
+
+
+def subscription_plan(plan_id: str) -> Optional[Dict[str, Any]]:
+    return next((plan for plan in SUBSCRIPTION_PLANS if plan["id"] == str(plan_id or "").strip()), None)
+
+
+def subscription_date(value: Any) -> Optional[datetime]:
+    try:
+        return datetime.fromisoformat(str(value or "").strip()[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def ranges_overlap(start_a: Any, end_a: Any, start_b: Any, end_b: Any) -> bool:
+    a_start, a_end = subscription_date(start_a), subscription_date(end_a)
+    b_start, b_end = subscription_date(start_b), subscription_date(end_b)
+    if not all((a_start, a_end, b_start, b_end)):
+        return False
+    return a_start <= b_end and b_start <= a_end
+
+
+def public_subscription_request(record: Dict[str, Any]) -> Dict[str, Any]:
+    safe = dict(record)
+    safe["documents"] = [
+        {key: value for key, value in document.items() if key != "data"}
+        for document in (record.get("documents") or [])
+    ]
+    return safe
+
+
+def calculate_subscription_request(payload: Dict[str, Any], existing: List[Dict[str, Any]], submitting: bool = False) -> Tuple[Dict[str, Any], List[str]]:
+    errors: List[str] = []
+    project_id = str(payload.get("project_id") or "").strip()
+    phase_id = str(payload.get("phase_id") or "").strip()
+    if not project_id:
+        errors.append("Project is required")
+    if not phase_id:
+        errors.append("Phase is required")
+    if submitting and not str(payload.get("justification") or "").strip():
+        errors.append("Business justification is required")
+    eligible = {
+        str(value).strip().lower()
+        for member in (payload.get("eligible_members") or [])
+        for value in (member.get("id"), member.get("name"), member.get("email"))
+        if str(value or "").strip()
+    }
+    normalized_lines = []
+    documents = []
+    for document in payload.get("documents") or []:
+        size = int(document.get("size") or 0)
+        if size > 5 * 1024 * 1024:
+            errors.append(f"{document.get('name') or 'Document'} exceeds the 5 MB limit")
+            continue
+        documents.append({
+            **document,
+            "id": str(document.get("id") or f"sub-doc-{uuid.uuid4().hex[:8]}"),
+            "name": str(document.get("name") or "Subscription document")[:180],
+            "content_type": str(document.get("content_type") or "application/octet-stream")[:120],
+            "size": size,
+        })
+    for index, raw_line in enumerate(payload.get("lines") or []):
+        plan = subscription_plan(raw_line.get("plan_id"))
+        prefix = f"Subscription {index + 1}"
+        if not plan:
+            errors.append(f"{prefix}: valid catalogue plan is required")
+            continue
+        seats = max(int(raw_line.get("seats") or 0), 0)
+        if seats < 1:
+            errors.append(f"{prefix}: seats must be at least 1")
+        start = subscription_date(raw_line.get("start_date"))
+        end = subscription_date(raw_line.get("end_date"))
+        if not start or not end or end < start:
+            errors.append(f"{prefix}: valid start and end dates are required")
+            duration_days = 0
+        else:
+            duration_days = (end - start).days + 1
+        members = raw_line.get("members") or []
+        if len(members) > seats:
+            errors.append(f"{prefix}: selected members cannot exceed requested seats")
+        for member in members:
+            member_values = {str(member.get(key) or "").strip().lower() for key in ("id", "name", "email") if str(member.get(key) or "").strip()}
+            if eligible and not member_values.intersection(eligible):
+                errors.append(f"{prefix}: {member.get('name') or member.get('email') or 'member'} is not allocated to this project")
+            for previous in existing:
+                if previous.get("id") == payload.get("id") or previous.get("status") not in {"fulfilment-pending", "active", "expiring"}:
+                    continue
+                for previous_line in previous.get("lines") or []:
+                    if previous_line.get("plan_id") != plan["id"] or not ranges_overlap(raw_line.get("start_date"), raw_line.get("end_date"), previous_line.get("start_date"), previous_line.get("end_date")):
+                        continue
+                    previous_member_keys = {
+                        str(item.get("email") or item.get("id") or item.get("name") or "").strip().lower()
+                        for item in (previous_line.get("members") or [])
+                    }
+                    key = str(member.get("email") or member.get("id") or member.get("name") or "").strip().lower()
+                    if key and key in previous_member_keys:
+                        errors.append(f"{prefix}: {member.get('name') or key} already has this active subscription for an overlapping period")
+        unit_cost = float(plan["unit_cost"])
+        subtotal = unit_cost * seats * (duration_days / 30 if duration_days else 0)
+        tax_pct = max(float(raw_line.get("tax_pct") or 0), 0)
+        discount = max(float(raw_line.get("discount") or 0), 0)
+        tax = subtotal * tax_pct / 100
+        total = max(subtotal + tax - discount, 0)
+        normalized_lines.append({
+            **raw_line,
+            "id": str(raw_line.get("id") or f"sub-line-{uuid.uuid4().hex[:8]}"),
+            "plan_id": plan["id"],
+            "provider": plan["provider"],
+            "subscription": plan["subscription"],
+            "plan": plan["plan"],
+            "unit_cost": unit_cost,
+            "currency": plan["currency"],
+            "billing_cycle": plan["billing_cycle"],
+            "seats": seats,
+            "duration_days": duration_days,
+            "subtotal": round(subtotal, 2),
+            "tax_amount": round(tax, 2),
+            "discount": round(discount, 2),
+            "total": round(total, 2),
+        })
+    if submitting and not normalized_lines:
+        errors.append("Add at least one subscription")
+    calculated = {
+        **payload,
+        "lines": normalized_lines,
+        "documents": documents,
+        "requested_amount": round(sum(float(line.get("total") or 0) for line in normalized_lines), 2),
+        "currency": normalized_lines[0]["currency"] if normalized_lines else "USD",
+    }
+    return calculated, list(dict.fromkeys(errors))
+
+
+@api_router.get("/subscription-plans")
+async def get_subscription_plans() -> List[Dict[str, Any]]:
+    return SUBSCRIPTION_PLANS
+
+
+@api_router.get("/subscription-requests")
+async def get_subscription_requests(request: Request) -> List[Dict[str, Any]]:
+    records = await read_subscription_requests()
+    project_id = request.query_params.get("project_id")
+    requester_email = request.query_params.get("requester_email")
+    status = request.query_params.get("status")
+    if project_id:
+        records = [entry for entry in records if entry.get("project_id") == project_id]
+    if requester_email:
+        records = [entry for entry in records if str(entry.get("requester", {}).get("email") or "").lower() == requester_email.lower()]
+    if status:
+        records = [entry for entry in records if entry.get("status") == status]
+    return [public_subscription_request(entry) for entry in records]
+
+
+@api_router.get("/subscription-requests/{request_id}")
+async def get_subscription_request(request_id: str) -> Dict[str, Any]:
+    record = next((entry for entry in await read_subscription_requests() if entry.get("id") == request_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="Subscription request not found")
+    return public_subscription_request(record)
+
+
+@api_router.post("/subscription-requests")
+async def create_subscription_request(payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    now = datetime.now(timezone.utc).isoformat()
+    record = {
+        **payload,
+        "id": str(payload.get("id") or f"subreq-{uuid.uuid4().hex[:10]}"),
+        "request_number": str(payload.get("request_number") or f"SUB-{datetime.now(timezone.utc).strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"),
+        "status": "draft",
+        "created_at": now,
+        "updated_at": now,
+        "history": [{"at": now, "action": "Draft created", "actor": payload.get("requester") or {}}],
+    }
+    record, errors = calculate_subscription_request(record, await read_subscription_requests())
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    await write_subscription_request(record)
+    return public_subscription_request(record)
+
+
+def subscription_snapshot(record: Dict[str, Any], stage: str, actor: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Preserve the full request state (lines, members, amounts) at a decision point."""
+    return {
+        "at": datetime.now(timezone.utc).isoformat(),
+        "stage": stage,
+        "actor": actor or {},
+        "requested_amount": record.get("requested_amount"),
+        "approved_amount": record.get("approved_amount"),
+        "lines": [
+            {
+                "id": line.get("id"),
+                "subscription": line.get("subscription"),
+                "plan": line.get("plan"),
+                "model": line.get("model"),
+                "seats": line.get("seats"),
+                "start_date": line.get("start_date"),
+                "end_date": line.get("end_date"),
+                "total": line.get("total"),
+                "members": [{"name": m.get("name"), "email": m.get("email"), "id": m.get("id")} for m in (line.get("members") or [])],
+            }
+            for line in (record.get("lines") or [])
+        ],
+    }
+
+
+@api_router.put("/subscription-requests/{request_id}")
+async def update_subscription_request(request_id: str, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    records = await read_subscription_requests()
+    current = next((entry for entry in records if entry.get("id") == request_id), None)
+    if not current:
+        raise HTTPException(status_code=404, detail="Subscription request not found")
+    editor_role = str(payload.get("editor_role") or "").upper()
+    payload = {key: value for key, value in payload.items() if key != "editor_role"}
+    is_cto_edit = current.get("status") == "cto-review" and editor_role == "CTO"
+    if current.get("status") not in {"draft", "returned-to-requester"} and not is_cto_edit:
+        raise HTTPException(status_code=409, detail="Only draft or returned requests can be edited")
+    current_documents = {entry.get("id"): entry for entry in (current.get("documents") or [])}
+    incoming_documents = []
+    for document in payload.get("documents", current.get("documents") or []):
+        previous = current_documents.get(document.get("id"), {})
+        incoming_documents.append({**previous, **document, "data": document.get("data") or previous.get("data")})
+    # A CTO technical edit must never change the workflow stage — it stays in cto-review.
+    record = {**current, **payload, "documents": incoming_documents, "id": request_id, "status": current.get("status"), "updated_at": datetime.now(timezone.utc).isoformat()}
+    record, errors = calculate_subscription_request(record, records)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    if is_cto_edit:
+        now = record["updated_at"]
+        record["history"] = [*(record.get("history") or []), {"at": now, "action": "CTO technical edit", "actor": payload.get("actor") or {"role": "CTO"}, "comment": str(payload.get("comment") or "").strip()}]
+        record["snapshots"] = [*(record.get("snapshots") or []), subscription_snapshot(record, "CTO technical edit", payload.get("actor") or {"role": "CTO"})]
+    await write_subscription_request(record)
+    return public_subscription_request(record)
+
+
+@api_router.delete("/subscription-requests/{request_id}")
+async def delete_subscription_request(request_id: str) -> Dict[str, Any]:
+    record = next((entry for entry in await read_subscription_requests() if entry.get("id") == request_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="Subscription request not found")
+    if record.get("status") != "draft":
+        raise HTTPException(status_code=409, detail="Only draft requests can be deleted")
+    await delete_subscription_request_record(request_id)
+    return {"ok": True}
+
+
+@api_router.post("/subscription-requests/{request_id}/submit")
+async def submit_subscription_request(request_id: str) -> Dict[str, Any]:
+    records = await read_subscription_requests()
+    current = next((entry for entry in records if entry.get("id") == request_id), None)
+    if not current:
+        raise HTTPException(status_code=404, detail="Subscription request not found")
+    if current.get("status") not in {"draft", "returned-to-requester"}:
+        raise HTTPException(status_code=409, detail="Request has already been submitted")
+    record, errors = calculate_subscription_request(current, records, submitting=True)
+    if errors:
+        raise HTTPException(status_code=422, detail=errors)
+    now = datetime.now(timezone.utc).isoformat()
+    record.update({"status": "cto-review", "submitted_at": now, "updated_at": now})
+    record["history"] = [*(record.get("history") or []), {"at": now, "action": "Submitted for CTO review", "actor": record.get("requester") or {}}]
+    record["snapshots"] = [*(record.get("snapshots") or []), subscription_snapshot(record, "Submitted", record.get("requester") or {})]
+    await write_subscription_request(record)
+    return public_subscription_request(record)
+
+
+@api_router.post("/subscription-requests/{request_id}/decision")
+async def decide_subscription_request(request_id: str, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    records = await read_subscription_requests()
+    record = next((entry for entry in records if entry.get("id") == request_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="Subscription request not found")
+    role = str(payload.get("role") or "").upper()
+    decision = str(payload.get("decision") or "").lower()
+    current_status = record.get("status")
+    transitions = {
+        ("CTO", "cto-review", "approve"): "cfo-review",
+        ("CTO", "cto-review", "return"): "returned-to-requester",
+        ("CTO", "cto-review", "reject"): "rejected",
+        ("CFO", "cfo-review", "approve"): "fulfilment-pending",
+        ("CFO", "cfo-review", "partial"): "fulfilment-pending",
+        ("CFO", "cfo-review", "return"): "returned-to-requester",
+        ("CFO", "cfo-review", "reject"): "rejected",
+        ("IT", "fulfilment-pending", "activate"): "active",
+    }
+    next_status = transitions.get((role, current_status, decision))
+    if not next_status:
+        raise HTTPException(status_code=409, detail="Decision is not valid for the current stage and role")
+    now = datetime.now(timezone.utc).isoformat()
+    approved_amount = float(payload.get("approved_amount") or record.get("requested_amount") or 0) if role == "CFO" and decision in {"approve", "partial"} else record.get("approved_amount")
+    updates = {"status": next_status, "updated_at": now, "approved_amount": round(approved_amount, 2) if approved_amount is not None else None}
+    if role == "CFO" and decision in {"approve", "partial"}:
+        updates["cfo_decision"] = decision
+    if role == "CTO" and decision == "approve":
+        updates["cto_forwarded_amount"] = record.get("requested_amount")
+    record.update(updates)
+    record["history"] = [*(record.get("history") or []), {"at": now, "action": f"{role} {decision}", "actor": payload.get("actor") or {"role": role}, "comment": str(payload.get("comment") or "").strip(), "approved_amount": approved_amount}]
+    record["snapshots"] = [*(record.get("snapshots") or []), subscription_snapshot(record, f"{role} {decision}", payload.get("actor") or {"role": role})]
+    if next_status == "active":
+        record["activated_at"] = now
+    await write_subscription_request(record)
+    return public_subscription_request(record)
+
+
+@api_router.get("/subscription-requests/{request_id}/documents/{document_id}")
+async def download_subscription_document(request_id: str, document_id: str) -> Response:
+    record = next((entry for entry in await read_subscription_requests() if entry.get("id") == request_id), None)
+    document = next((entry for entry in (record or {}).get("documents") or [] if entry.get("id") == document_id), None)
+    if not document or not document.get("data"):
+        raise HTTPException(status_code=404, detail="Document not found")
+    raw = str(document["data"])
+    encoded = raw.split(",", 1)[1] if "," in raw else raw
+    try:
+        content = base64.b64decode(encoded)
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail="Stored document is invalid") from exc
+    headers = {"Content-Disposition": f'attachment; filename="{str(document.get("name") or "subscription-document").replace(chr(34), "")}"'}
+    return Response(content=content, media_type=document.get("content_type") or "application/octet-stream", headers=headers)
+
+
+def normalize_tracker_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalise a post-approval tracker row (one per allocated member/seat)."""
+    amount_usd = round(max(float(entry.get("amount_usd") or 0), 0), 2)
+    amount_inr = round(max(float(entry.get("amount_inr") or 0), 0), 2)
+    amount_paid = round(max(float(entry.get("amount_paid") or 0), 0), 2)
+    total_amount = round(float(entry.get("total_amount") or amount_usd or amount_paid or 0), 2)
+    return {
+        **entry,
+        "id": str(entry.get("id") or f"track-{uuid.uuid4().hex[:8]}"),
+        "line_id": str(entry.get("line_id") or "").strip(),
+        "employee_code": str(entry.get("employee_code") or "").strip(),
+        "name": str(entry.get("name") or "").strip(),
+        "email": str(entry.get("email") or "").strip(),
+        "amount_usd": amount_usd,
+        "amount_inr": amount_inr,
+        "amount_paid": amount_paid,
+        "total_amount": total_amount,
+        "difference": round(total_amount - amount_paid, 2),
+        "reimbursement_verified": str(entry.get("reimbursement_verified") or "Not Verified").strip(),
+        "reimbursement_status": str(entry.get("reimbursement_status") or "").strip(),
+        "comments": str(entry.get("comments") or "").strip(),
+        "account_number": str(entry.get("account_number") or "").strip(),
+        "ifsc_code": str(entry.get("ifsc_code") or "").strip(),
+        "subscription_type": str(entry.get("subscription_type") or "").strip(),
+        "model": str(entry.get("model") or "").strip(),
+        "phase": str(entry.get("phase") or "").strip(),
+        "status": str(entry.get("status") or "Active").strip(),
+        "date": str(entry.get("date") or "").strip(),
+        "month": str(entry.get("month") or "").strip(),
+        "started": str(entry.get("started") or "").strip(),
+        "ended": str(entry.get("ended") or "").strip(),
+        "invoice_document_id": str(entry.get("invoice_document_id") or "").strip(),
+        "receipt_document_id": str(entry.get("receipt_document_id") or "").strip(),
+        "screenshot_document_id": str(entry.get("screenshot_document_id") or "").strip(),
+    }
+
+
+@api_router.post("/subscription-requests/{request_id}/fulfilment")
+async def submit_subscription_fulfilment(request_id: str, payload: Dict[str, Any] = Body(...)) -> Dict[str, Any]:
+    """Record post-approval fulfilment: purchase mode, per-member tracker rows and evidence documents."""
+    records = await read_subscription_requests()
+    record = next((entry for entry in records if entry.get("id") == request_id), None)
+    if not record:
+        raise HTTPException(status_code=404, detail="Subscription request not found")
+    if record.get("status") not in {"fulfilment-pending", "active"}:
+        raise HTTPException(status_code=409, detail="Fulfilment can only be recorded after CFO approval")
+    purchase_mode = str(payload.get("purchase_mode") or "company").strip().lower()
+    if purchase_mode not in {"self", "company"}:
+        raise HTTPException(status_code=422, detail="Purchase mode must be 'self' or 'company'")
+    entries = [normalize_tracker_entry(entry) for entry in (payload.get("tracker_entries") or [])]
+    existing_documents = {document.get("id"): document for document in (record.get("documents") or [])}
+    for document in payload.get("documents") or []:
+        if int(document.get("size") or 0) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=422, detail=f"{document.get('name') or 'Document'} exceeds the 5 MB limit")
+        doc_id = str(document.get("id") or f"sub-doc-{uuid.uuid4().hex[:8]}")
+        previous = existing_documents.get(doc_id, {})
+        existing_documents[doc_id] = {
+            **previous,
+            **document,
+            "id": doc_id,
+            "name": str(document.get("name") or previous.get("name") or "Fulfilment document")[:180],
+            "type": str(document.get("type") or previous.get("type") or "document")[:40],
+            "content_type": str(document.get("content_type") or previous.get("content_type") or "application/octet-stream")[:120],
+            "data": document.get("data") or previous.get("data"),
+        }
+    now = datetime.now(timezone.utc).isoformat()
+    was_pending = record.get("status") == "fulfilment-pending"
+    record.update({
+        "purchase_mode": purchase_mode,
+        "tracker_entries": entries,
+        "documents": list(existing_documents.values()),
+        "fulfilment_status": "submitted",
+        "fulfilled_at": record.get("fulfilled_at") or now,
+        "status": "active",
+        "activated_at": record.get("activated_at") or now,
+        "updated_at": now,
+    })
+    record["history"] = [
+        *(record.get("history") or []),
+        {
+            "at": now,
+            "action": "Fulfilment recorded" if was_pending else "Fulfilment updated",
+            "actor": payload.get("actor") or record.get("requester") or {},
+            "comment": str(payload.get("comment") or "").strip(),
+            "purchase_mode": purchase_mode,
+        },
+    ]
+    await write_subscription_request(record)
+    return public_subscription_request(record)
+
 
 @api_router.post("/status", response_model=StatusCheck)
 async def create_status_check(input: StatusCheckCreate):
